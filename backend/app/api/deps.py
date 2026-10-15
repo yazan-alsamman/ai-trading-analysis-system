@@ -4,10 +4,10 @@ from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.security import credentials_exception, decode_token
-from app.db.session import get_session
+from app.db.session import SessionLocal, get_session
 from app.models.user import User, UserRole
 from app.services import market_service
 
@@ -15,6 +15,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
 get_db = get_session
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """For long-lived handlers (WebSockets) that open short sessions instead of holding one."""
+    return SessionLocal
 
 
 async def get_current_user(

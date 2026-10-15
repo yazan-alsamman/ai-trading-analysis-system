@@ -5,14 +5,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import ws
 from app.api.v1 import api_router
 from app.core.config import get_settings
+from app.core.logging import install_token_redaction
+from app.core.redis import close_redis, get_redis
 from app.db.session import SessionLocal
+from app.realtime.hub import HubConfig, WebSocketHub
 from app.services import user_service
 
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+install_token_redaction()  # /ws/market?token=... must not end up in access logs
 
 
 async def bootstrap_first_admin() -> None:
@@ -29,12 +34,19 @@ async def bootstrap_first_admin() -> None:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         await bootstrap_first_admin()
     except Exception:
         logger.exception("Could not bootstrap the first admin")
-    yield
+    hub = WebSocketHub(get_redis(), HubConfig.from_settings(settings))
+    await hub.start()
+    app.state.hub = hub
+    try:
+        yield
+    finally:
+        await hub.stop()
+        await close_redis()
 
 
 app = FastAPI(title="AI Trading Platform API", version="0.1.0", lifespan=lifespan)
@@ -48,3 +60,4 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(ws.router)  # /ws/market, at the root: Nginx proxies /ws/ with Upgrade headers
