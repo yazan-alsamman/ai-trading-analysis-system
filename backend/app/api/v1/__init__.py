@@ -8,6 +8,7 @@ from app.api.v1 import (
     admin_realtime,
     api_keys,
     auth,
+    backtests,
     health,
     indicators,
     market,
@@ -31,6 +32,7 @@ limited_router.include_router(strategies.router)
 limited_router.include_router(api_keys.router)
 limited_router.include_router(workspaces.router)
 limited_router.include_router(workspaces.shared_router)
+limited_router.include_router(backtests.router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)

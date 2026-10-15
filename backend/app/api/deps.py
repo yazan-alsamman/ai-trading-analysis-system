@@ -128,6 +128,7 @@ MarketReader = Annotated[Principal, Depends(require_scope(Scope.market_read))]
 IndicatorsReader = Annotated[Principal, Depends(require_scope(Scope.indicators_read))]
 StrategiesReader = Annotated[Principal, Depends(require_scope(Scope.strategies_read))]
 SignalsReader = Annotated[Principal, Depends(require_scope(Scope.signals_read))]
+BacktestsReader = Annotated[Principal, Depends(require_scope(Scope.backtests_read))]
 
 
 async def deny_api_keys(request: Request) -> None:

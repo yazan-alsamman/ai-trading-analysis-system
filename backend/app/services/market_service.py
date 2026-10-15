@@ -219,6 +219,40 @@ async def get_candles(
     return [CandleRow(*row) for row in rows]
 
 
+async def count_candles(
+    session: AsyncSession,
+    instrument_id: uuid.UUID,
+    timeframe: Timeframe,
+    start: datetime,
+    end: datetime,
+) -> int:
+    """Bars in ``[start, end]`` (both inclusive)."""
+    rel = _RELATIONS[timeframe]
+    return await session.scalar(
+        select(func.count())
+        .select_from(rel)
+        .where(rel.c.instrument_id == instrument_id, rel.c.ts >= start, rel.c.ts <= end)
+    )
+
+
+async def candle_range(
+    session: AsyncSession,
+    instrument_id: uuid.UUID,
+    timeframe: Timeframe,
+    start: datetime,
+    end: datetime,
+) -> list[tuple]:
+    """Every candle in ``[start, end]`` as ``(ts, open, high, low, close, volume)`` tuples,
+    ascending, without the API's row limit (for backtests; the caller bounds the range)."""
+    rel = _RELATIONS[timeframe]
+    result = await session.execute(
+        select(rel.c.ts, rel.c.open, rel.c.high, rel.c.low, rel.c.close, rel.c.volume)
+        .where(rel.c.instrument_id == instrument_id, rel.c.ts >= start, rel.c.ts <= end)
+        .order_by(rel.c.ts.asc())
+    )
+    return [tuple(row) for row in result.all()]
+
+
 async def get_latest_candle(
     session: AsyncSession, instrument_id: uuid.UUID, timeframe: Timeframe
 ) -> CandleRow | None:
