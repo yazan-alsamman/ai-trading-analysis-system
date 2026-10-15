@@ -10,6 +10,7 @@
 | `mobile/` | تطبيق Flutter | Batoul |
 | `infra/` | إعدادات Nginx والنشر | Yazan |
 | `libs/indicators/` | مكتبة المؤشرات الفنية المشتركة (`trading-indicators`) للـ backend والاستراتيجيات وفريق الذكاء | Yazan |
+| `libs/strategies/` | الاستراتيجيات العامة (`trading-strategies`، نمط Strategy) | Yazan |
 
 ## التشغيل محلياً
 
@@ -30,7 +31,7 @@ docker compose up --build
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -e ../libs/indicators   # المكتبة المحلية أولاً (pip لا يدعم مسارات نسبية في pyproject)
+pip install -e ../libs/indicators -e ../libs/strategies   # المكتبات المحلية أولاً (pip لا يدعم مسارات نسبية في pyproject)
 pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
@@ -122,6 +123,20 @@ pip install "git+https://github.com/yazan-alsamman/ai-trading-analysis-system@ma
 في الـ API: `GET /api/v1/indicators` (الكتالوج) و `POST /api/v1/market/instruments/{id}/indicators`
 بجسم `{"timeframe": "1h", "limit": 500, "indicators": [{"name": "rsi", "params": {"length": 14}}, {"name": "macd"}]}`
 يعيد لكل output نقاط `{time, value}` جاهزة لـ Lightweight Charts، مع تحميل تاريخ الإحماء تلقائياً.
+
+## الاستراتيجيات والإشارات الحية
+
+ست استراتيجيات عامة في [libs/strategies](libs/strategies/README.md): `ma_crossover`, `rsi_reversal`,
+`macd_cross`, `bollinger_reversion`, `supertrend_flip`, `donchian_breakout`. الإشارة حدث على شمعة
+**مغلقة** (بدون look-ahead) وتُنفَّذ عند افتتاح الشمعة التالية.
+
+- `GET /api/v1/strategies` الكتالوج، و `POST /api/v1/strategies/{key}/preview` لتجربة استراتيجية على
+  التاريخ (إشارات + markers لـ Lightweight Charts + خطوط المؤشرات).
+- `POST /api/v1/me/strategies` لتفعيل استراتيجية على سوق وإطار زمني (حتى 20 لكل مستخدم)،
+  و `GET /api/v1/signals` للإشارات (`mine=true` لإشارات استراتيجياتي فقط).
+- المحرك الحي: خدمة `beat` في docker compose تشغّل `signals.tick` كل دقيقة؛ الـ worker يقيّم كل
+  (سوق، إطار) أُغلقت شمعته مرة واحدة لكل إعداد مميز مهما كان عدد المستخدمين، يخزّن الإشارة
+  (idempotent) وينشرها على `signals:{instrument_id}` وعلى `user:{id}` لمن فعّل `notify`.
 
 ## التحديثات الحية (WebSocket)
 
