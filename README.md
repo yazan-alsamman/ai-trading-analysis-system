@@ -75,4 +75,34 @@ docker compose exec backend python -m app.cli create-admin --email admin@example
 في الإنتاج (`ENVIRONMENT=production`) يرفض الخادم الإقلاع إذا كان `JWT_SECRET` هو `change-me`
 أو أقصر من 32 حرفاً.
 
+## بيانات السوق (الشموع)
+
+- مصدر الحقيقة الوحيد هو شموع الدقيقة في الجدول `candles_1m` (TimescaleDB hypertable).
+  الأطر الأعلى `5m, 15m, 1h, 4h, 1d` هي continuous aggregates هرمية
+  (`5m ← 1m`, `15m ← 5m`, `1h ← 15m`, `4h ← 1h`, `1d ← 1h`) مع real-time aggregation،
+  لذلك تظهر الشمعة التي ما زالت تتشكّل فوراً. **لا تكتب أبداً في الأطر الأعلى.**
+- كل الأوقات UTC، و `ts` هو بداية الشمعة ويجب أن يكون على رأس الدقيقة.
+- القراءة (أي مستخدم مسجّل):
+  `GET /api/v1/market/instruments/{id}/candles?timeframe=1h&start=...&end=...&limit=500`
+  يعيد `{instrument_id, timeframe, candles: [{time, open, high, low, close, volume}]}`
+  حيث `time` بالثواني (unix) مناسب مباشرة لـ Lightweight Charts. بدون `start` يعيد آخر `limit` شمعة.
+- الكتابة (admin، للـ backfill): `POST /api/v1/admin/instruments/{id}/candles` بجسم
+  `{"candles": [{"ts": "...Z" أو unix seconds, "open", "high", "low", "close", "volume", "trades"?}]}`
+  (حتى 5000 شمعة 1m في الطلب، upsert). الـ collectors داخل الخادم تستدعي
+  `market_service.upsert_candles()` مباشرة.
+- سياسات التحديث تعيد حساب نافذة حديثة فقط (أقدمها لـ `5m`: آخر ساعتين). عند كتابة بيانات أقدم من ساعة
+  عبر الـ API أو أمر الـ seed يُحدَّث الـ aggregates تلقائياً للأيام المتأثرة؛ إن كتبت بيانات قديمة
+  بطريقة أخرى فاستدعِ `market_service.refresh_aggregates(start, end)` بعد الـ commit.
+
+```bash
+cd backend
+python -m app.cli seed-instruments                       # 5 أزواج Binance + 4 من Twelve Data
+python -m app.cli seed-demo-candles --symbol BTC/USDT --source binance --days 30
+# داخل Docker:
+docker compose exec backend python -m app.cli seed-instruments
+docker compose exec backend python -m app.cli seed-demo-candles --symbol BTC/USDT --source binance --days 30
+```
+
+`seed-demo-candles` يولّد **بيانات وهمية** (random walk) لتطوير الرسوم البيانية فقط، وليست أسعاراً حقيقية.
+
 قواعد الفروع والـ PR في [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
