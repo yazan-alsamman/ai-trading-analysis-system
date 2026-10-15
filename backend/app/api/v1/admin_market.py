@@ -10,7 +10,7 @@ from app.schemas.market import (
     InstrumentRead,
     InstrumentUpdate,
 )
-from app.services import market_service
+from app.services import market_events, market_service
 
 router = APIRouter(prefix="/admin/instruments", tags=["admin"])
 
@@ -40,10 +40,12 @@ async def upsert_candles(
 
     Batches reaching further back than the refresh policies' window also refresh the
     aggregates for the affected days, so higher timeframes show the backfilled data at once.
+    Recent candles are then pushed to WebSocket subscribers (a publish failure is only logged).
     """
     await market_service.get_instrument_or_404(session, instrument_id)
     written = await market_service.upsert_candles(session, instrument_id, data.candles)
     await session.commit()
     if market_service.needs_aggregate_refresh(data.candles):
         await refresh_aggregates(min(c.ts for c in data.candles), max(c.ts for c in data.candles))
+    await market_events.publish_candle_updates_safely(session, instrument_id, data.candles)
     return CandlesWritten(written=written)

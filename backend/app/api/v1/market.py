@@ -76,15 +76,5 @@ async def get_candles(
     return CandleSeries(
         instrument_id=instrument_id,
         timeframe=timeframe,
-        candles=[
-            CandleOut(
-                time=int(r.ts.timestamp()),
-                open=r.open,
-                high=r.high,
-                low=r.low,
-                close=r.close,
-                volume=r.volume,
-            )
-            for r in rows
-        ],
+        candles=[CandleOut.from_candle(r) for r in rows],
     )
