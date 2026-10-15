@@ -6,7 +6,8 @@ from typing import Annotated
 import trading_strategies as ts
 from fastapi import APIRouter, Query, Response, status
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, SignalsReader, StrategiesReader
+from app.api.limits import EXPENSIVE
 from app.models.candle import Timeframe
 from app.schemas.common import Page
 from app.schemas.strategies import (
@@ -22,15 +23,15 @@ router = APIRouter(tags=["strategies"])
 
 
 @router.get("/strategies")
-async def strategy_catalog(_: CurrentUser) -> list[dict]:
+async def strategy_catalog(_: StrategiesReader) -> list[dict]:
     """The global strategies: description, params (type, default, min, max), the indicator
     lines to draw with each one, and the history (bars) it needs before its first signal."""
     return ts.catalog()
 
 
-@router.post("/strategies/{key}/preview")
+@router.post("/strategies/{key}/preview", openapi_extra=EXPENSIVE)
 async def preview_strategy(
-    key: str, data: StrategyPreviewRequest, _: CurrentUser, session: SessionDep
+    key: str, data: StrategyPreviewRequest, _: StrategiesReader, session: SessionDep
 ) -> Response:
     """Run a strategy over the same candle window ``GET .../candles`` returns. Response:
     ``signals`` (time, side, strength, price, reason, details), Lightweight Charts ``markers``
@@ -66,7 +67,7 @@ async def delete_strategy(user_strategy_id: uuid.UUID, user: CurrentUser, sessio
 
 @router.get("/signals", response_model=Page[SignalRead])
 async def list_signals(
-    user: CurrentUser,
+    principal: SignalsReader,
     session: SessionDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -81,7 +82,7 @@ async def list_signals(
         since = since.replace(tzinfo=UTC)  # naive = UTC, like everywhere else
     rows, total = await strategy_service.list_signals(
         session,
-        user,
+        principal.user,
         limit=limit,
         offset=offset,
         instrument_id=instrument_id,

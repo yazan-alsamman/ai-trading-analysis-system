@@ -138,6 +138,15 @@ pip install "git+https://github.com/yazan-alsamman/ai-trading-analysis-system@ma
   (سوق، إطار) أُغلقت شمعته مرة واحدة لكل إعداد مميز مهما كان عدد المستخدمين، يخزّن الإشارة
   (idempotent) وينشرها على `signals:{instrument_id}` وعلى `user:{id}` لمن فعّل `notify`.
 
+## مفاتيح API وتحديد المعدل
+
+للبرامج الخارجية (بوتات، Colab): أنشئ مفتاحاً عبر `POST /api/v1/me/api-keys` (بـ JWT) وأرسله في
+الترويسة `X-API-Key: tk_...`. للمفتاح صلاحيات محددة (`market:read`, `indicators:read`,
+`strategies:read`, `signals:read`, `stream`) ولا يصل أبداً إلى `/auth/*` أو `/users/me` أو `/me/*`
+أو `/admin/*`. كل طلبات `/api/v1` (عدا `/health`) محدودة في الدقيقة: trader 60، analyst/expert 300،
+admin 1000، مع ترويسات `RateLimit-*` و 429 + `Retry-After` عند التجاوز. الدليل الكامل بالإنجليزية
+مع أمثلة curl و Python في [docs/api-keys.md](docs/api-keys.md).
+
 ## التحديثات الحية (WebSocket)
 
 `ws://<host>/ws/market?token=<access JWT>`: اشترك في `candles` لأي instrument وأي إطار زمني

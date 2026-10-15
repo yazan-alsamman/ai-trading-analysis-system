@@ -3,7 +3,7 @@
 import logging
 import re
 
-_TOKEN_IN_URL = re.compile(r"(token=)[^&\s\"']+")
+_TOKEN_IN_URL = re.compile(r"((?:token|api_key)=)[^&\s\"']+")
 
 
 def redact_tokens(value: str) -> str:
@@ -11,7 +11,8 @@ def redact_tokens(value: str) -> str:
 
 
 class RedactTokenFilter(logging.Filter):
-    """Hide ``token=...`` query values (the WebSocket access token) in log records."""
+    """Hide ``token=...`` and ``api_key=...`` query values (WebSocket credentials) in log
+    records."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.msg, str):

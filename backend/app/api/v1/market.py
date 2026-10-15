@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import MarketReader, SessionDep
 from app.models.candle import Timeframe
 from app.models.instrument import MarketType
 from app.schemas.common import Page
@@ -23,7 +23,7 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 @router.get("/instruments", response_model=Page[InstrumentRead])
 async def list_instruments(
-    _: CurrentUser,
+    _: MarketReader,
     session: SessionDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -50,14 +50,14 @@ async def list_instruments(
 
 
 @router.get("/instruments/{instrument_id}", response_model=InstrumentRead)
-async def get_instrument(instrument_id: uuid.UUID, _: CurrentUser, session: SessionDep):
+async def get_instrument(instrument_id: uuid.UUID, _: MarketReader, session: SessionDep):
     return await market_service.get_instrument_or_404(session, instrument_id)
 
 
 @router.get("/instruments/{instrument_id}/candles", response_model=CandleSeries)
 async def get_candles(
     instrument_id: uuid.UUID,
-    _: CurrentUser,
+    _: MarketReader,
     session: SessionDep,
     timeframe: Timeframe,
     start: Annotated[datetime | None, Query(description="ISO 8601, inclusive")] = None,

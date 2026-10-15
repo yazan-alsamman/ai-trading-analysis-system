@@ -18,4 +18,5 @@ COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# X-Forwarded-For is trusted only from FORWARDED_ALLOW_IPS (the Nginx container, see compose)
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]

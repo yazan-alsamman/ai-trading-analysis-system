@@ -7,6 +7,13 @@ def test_redact_tokens() -> None:
     assert redact_tokens("/ws/market?token=abc.def.ghi") == "/ws/market?token=[redacted]"
     assert redact_tokens("/x?a=1&token=abc&b=2") == "/x?a=1&token=[redacted]&b=2"
     assert redact_tokens("/api/v1/health") == "/api/v1/health"
+    assert (
+        redact_tokens("/ws/market?api_key=tk_abcdefgh_s3cr3t-_x") == "/ws/market?api_key=[redacted]"
+    )
+    assert (
+        redact_tokens("/ws/market?a=1&api_key=tk_x&token=y")
+        == "/ws/market?a=1&api_key=[redacted]&token=[redacted]"
+    )
 
 
 def test_filter_redacts_uvicorn_style_records() -> None:
