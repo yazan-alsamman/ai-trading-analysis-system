@@ -7,13 +7,17 @@ Push updates for charts, so clients never poll. Server code: `backend/app/api/ws
 
 ```
 ws://<host>/ws/market?token=<access JWT>        (wss:// in production)
+ws://<host>/ws/market?api_key=<tk_... key>      (external programs, key needs the `stream` scope)
 ```
 
 - Through Nginx (`http://localhost` in docker compose) or directly to the API (`:8000`).
 - Browsers cannot set headers on a WebSocket, so the **access** token (from `/api/v1/auth/login`)
   goes in the `token` query parameter. Refresh tokens are rejected.
-- If the token is missing, invalid, expired, or the user is inactive, the server accepts and then
-  closes with code **4401**.
+- External programs can use an API key with the `stream` scope instead (`?api_key=`, see
+  [api-keys.md](api-keys.md)). The connection belongs to the key's owner: the topic rules are the
+  same, including the owner's own `user:` topic. A `token` wins if both are given.
+- If the token or key is missing, invalid, expired or revoked, the key lacks `stream`, or the
+  user is inactive, the server accepts and then closes with code **4401**.
 - When the access token expires during the connection, the server sends
   `{"type":"error","code":"token_expired",...}` and closes with **4401**. Refresh the token and
   reconnect.
@@ -93,7 +97,9 @@ strategy setup that users run on it. It has no `timeframe` field and sends no sn
 | Server heartbeat | every 25 s |
 | Idle timeout | 75 s without any client frame → close **1001** |
 | Slow consumer | more than 256 undelivered messages → close **1013** |
-| Bad or expired token | close **4401** |
+| Bad or expired token / API key | close **4401** |
+| Concurrent connections | 5 per identity (user for a JWT, key for an API key) → close **4429** |
+| New connections | 20 per minute per IP → close **4429** |
 
 Send `{"op":"ping"}` every ~30 s to stay under the idle timeout. Browsers do not expose
 protocol-level pings.
@@ -104,6 +110,9 @@ protocol-level pings.
   the delay after a successful connection.
 - On **4401**, refresh the access token (`POST /api/v1/auth/refresh`) before reconnecting. If the
   refresh fails, send the user to log in.
+- On **4429**, you have too many open connections or open them too fast: close unused ones (one
+  connection can carry 50 subscriptions) and wait at least 3 s before retrying, backing off as
+  above.
 - Subscriptions are not remembered across connections. Send your `subscribe` ops again after every
   reconnect; the `snapshot` reply brings the chart up to date.
 
