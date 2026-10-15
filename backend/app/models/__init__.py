@@ -6,6 +6,7 @@ from app.models.instrument import Instrument, MarketType
 from app.models.refresh_token import RefreshToken
 from app.models.strategy import Signal, SignalSide, UserStrategy
 from app.models.user import User, UserRole
+from app.models.workspace import Workspace
 
 __all__ = [
     "ApiKey",
@@ -21,4 +22,5 @@ __all__ = [
     "User",
     "UserRole",
     "UserStrategy",
+    "Workspace",
 ]
