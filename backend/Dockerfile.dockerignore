@@ -1,0 +1,12 @@
+# Used instead of a root .dockerignore when building backend/Dockerfile (BuildKit).
+# Whitelist: send only what the image needs.
+*
+!backend/pyproject.toml
+!backend/app
+!backend/alembic
+!backend/alembic.ini
+!libs/indicators/pyproject.toml
+!libs/indicators/README.md
+!libs/indicators/trading_indicators
+**/__pycache__
+**/*.pyc
