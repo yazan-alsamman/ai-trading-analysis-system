@@ -87,6 +87,11 @@ strategy setup that users run on it. It has no `timeframe` field and sends no sn
   subscription needed. When one of the user's active strategies (with `notify = true`)
   produces a signal, the user gets `{"type": "signal", "user_strategy_ids": ["<uuid>"],
   "signal": {...}}` with the same `signal` object. Other notifications come in Y15.
+- When one of the user's workspaces changes (on any device), every connection of that user gets
+  `{"type": "workspace_updated", "workspace_id": "<uuid>" | null, "version": 8 | null,
+  "action": "created" | "state_updated" | "renamed" | "default_changed" | "deleted" |
+  "reordered" | "shared" | "unshared"}`. Reload the workspace if `version` is newer than yours,
+  or the list on `reordered` / `deleted` / `created` (see [workspaces.md](workspaces.md)).
 
 ## Limits and close codes
 

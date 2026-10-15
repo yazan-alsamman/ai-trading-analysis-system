@@ -147,6 +147,15 @@ pip install "git+https://github.com/yazan-alsamman/ai-trading-analysis-system@ma
 admin 1000، مع ترويسات `RateLimit-*` و 429 + `Retry-After` عند التجاوز. الدليل الكامل بالإنجليزية
 مع أمثلة curl و Python في [docs/api-keys.md](docs/api-keys.md).
 
+## مساحات العمل (Workspaces)
+
+كل مستخدم يحفظ شاشات تداول متعددة (تبويبات): التخطيط، الرسوم، الأدوات والإطارات الزمنية،
+المؤشرات، الاستراتيجيات، الرسومات وقائمة المراقبة، في مستند JSON واحد مُتحقَّق منه عبر
+`/api/v1/me/workspaces`. التعديل من جهازين محمي بـ `version` (409 عند التعارض) وكل تغيير يصل إلى
+الأجهزة الأخرى عبر رسالة `workspace_updated` على قناة المستخدم. الدليل الكامل للواجهات (Web و Flutter)
+في [docs/workspaces.md](docs/workspaces.md) و JSON Schema في
+[docs/workspace-state.schema.json](docs/workspace-state.schema.json).
+
 ## التحديثات الحية (WebSocket)
 
 `ws://<host>/ws/market?token=<access JWT>`: اشترك في `candles` لأي instrument وأي إطار زمني

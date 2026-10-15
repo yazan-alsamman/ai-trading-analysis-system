@@ -1,0 +1,417 @@
+{
+  "$defs": {
+    "Drawing": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 40,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "trendline",
+            "horizontal",
+            "vertical",
+            "rectangle",
+            "fibonacci",
+            "text"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Points",
+          "type": "array"
+        },
+        "style": {
+          "$ref": "#/$defs/DrawingStyle"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "points"
+      ],
+      "title": "Drawing",
+      "type": "object"
+    },
+    "DrawingStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "default": "#2196F3",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "width": {
+          "default": 1,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "title": "DrawingStyle",
+      "type": "object"
+    },
+    "IndicatorOverlay": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 40,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "IndicatorOverlay",
+      "type": "object"
+    },
+    "InstrumentInfo": {
+      "description": "Read-only, added to each panel on read.",
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "symbol",
+        "source",
+        "is_active"
+      ],
+      "title": "InstrumentInfo",
+      "type": "object"
+    },
+    "Layout": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "default": "1x1",
+          "enum": [
+            "1x1",
+            "1x2",
+            "2x1",
+            "2x2",
+            "1+2"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "sizes": {
+          "anyOf": [
+            {
+              "items": {
+                "exclusiveMinimum": 0,
+                "maximum": 1,
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sizes"
+        }
+      },
+      "title": "Layout",
+      "type": "object"
+    },
+    "Panel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 40,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "instrument_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instrument Id"
+        },
+        "timeframe": {
+          "$ref": "#/$defs/Timeframe",
+          "default": "1h"
+        },
+        "chart_type": {
+          "default": "candles",
+          "enum": [
+            "candles",
+            "heikin_ashi",
+            "line",
+            "area",
+            "bars"
+          ],
+          "title": "Chart Type",
+          "type": "string"
+        },
+        "indicators": {
+          "items": {
+            "$ref": "#/$defs/IndicatorOverlay"
+          },
+          "maxItems": 10,
+          "title": "Indicators",
+          "type": "array"
+        },
+        "strategies": {
+          "items": {
+            "$ref": "#/$defs/StrategyOverlay"
+          },
+          "maxItems": 5,
+          "title": "Strategies",
+          "type": "array"
+        },
+        "drawings": {
+          "items": {
+            "$ref": "#/$defs/Drawing"
+          },
+          "maxItems": 200,
+          "title": "Drawings",
+          "type": "array"
+        },
+        "instrument": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstrumentInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unavailable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unavailable"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Panel",
+      "type": "object"
+    },
+    "Point": {
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "description": "unix seconds",
+          "minimum": 0,
+          "title": "Time",
+          "type": "integer"
+        },
+        "price": {
+          "title": "Price",
+          "type": "number"
+        }
+      },
+      "required": [
+        "time",
+        "price"
+      ],
+      "title": "Point",
+      "type": "object"
+    },
+    "StrategyOverlay": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 40,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "strategy_key": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Strategy Key",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "strategy_key"
+      ],
+      "title": "StrategyOverlay",
+      "type": "object"
+    },
+    "Sync": {
+      "additionalProperties": false,
+      "properties": {
+        "crosshair": {
+          "default": true,
+          "title": "Crosshair",
+          "type": "boolean"
+        },
+        "timeframe": {
+          "default": false,
+          "title": "Timeframe",
+          "type": "boolean"
+        },
+        "instrument": {
+          "default": false,
+          "title": "Instrument",
+          "type": "boolean"
+        }
+      },
+      "title": "Sync",
+      "type": "object"
+    },
+    "Timeframe": {
+      "enum": [
+        "1m",
+        "5m",
+        "15m",
+        "1h",
+        "4h",
+        "1d"
+      ],
+      "title": "Timeframe",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Workspace state, schema_version 1. Panel.instrument and Panel.unavailable are read-only (ignored on write). Cross-field rules (panels per layout, unique ids, active_panel, drawing points, registry params, instrument existence, 262144 bytes max) are checked by the API: docs/workspaces.md.",
+  "properties": {
+    "layout": {
+      "$ref": "#/$defs/Layout"
+    },
+    "sync": {
+      "$ref": "#/$defs/Sync"
+    },
+    "panels": {
+      "items": {
+        "$ref": "#/$defs/Panel"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Panels",
+      "type": "array"
+    },
+    "watchlist": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Watchlist",
+      "type": "array"
+    },
+    "active_panel": {
+      "maxLength": 40,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "title": "Active Panel",
+      "type": "string"
+    }
+  },
+  "required": [
+    "panels",
+    "active_panel"
+  ],
+  "title": "WorkspaceState",
+  "type": "object",
+  "$id": "workspace-state.schema.json"
+}

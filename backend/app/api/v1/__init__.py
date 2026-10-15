@@ -13,6 +13,7 @@ from app.api.v1 import (
     market,
     strategies,
     users,
+    workspaces,
 )
 
 # Every /api/v1 route except /health* is rate limited per identity (user or API key).
@@ -28,6 +29,8 @@ limited_router.include_router(admin_api_keys.router)
 limited_router.include_router(indicators.router)
 limited_router.include_router(strategies.router)
 limited_router.include_router(api_keys.router)
+limited_router.include_router(workspaces.router)
+limited_router.include_router(workspaces.shared_router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)

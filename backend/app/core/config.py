@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     login_lockout_seconds: int = 900  # ... lock that email for this long
     ws_max_connections_per_identity: int = 5
     ws_new_connections_ip_per_minute: int = 20
+    # Workspaces: at most this many per user, by role
+    workspace_limit_trader: int = 5
+    workspace_limit_analyst: int = 20
+    workspace_limit_expert: int = 20
+    workspace_limit_admin: int = 20
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 
@@ -66,6 +71,9 @@ class Settings(BaseSettings):
     def tier_limit(self, role: str) -> int:
         """Requests per minute of a role (``trader``, ``analyst``, ``expert``, ``admin``)."""
         return getattr(self, f"rate_limit_{role}")
+
+    def workspace_limit(self, role: str) -> int:
+        return getattr(self, f"workspace_limit_{role}")
 
 
 @lru_cache
