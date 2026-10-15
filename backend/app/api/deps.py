@@ -1,4 +1,5 @@
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import credentials_exception, decode_token
 from app.db.session import get_session
 from app.models.user import User, UserRole
+from app.services import market_service
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
@@ -46,3 +48,14 @@ def require_roles(*roles: UserRole) -> Callable[..., Coroutine[Any, Any, User]]:
 
 
 AdminUser = Annotated[User, Depends(require_roles(UserRole.admin))]
+
+
+AggregateRefresher = Callable[[datetime, datetime], Awaitable[None]]
+
+
+def get_aggregate_refresher() -> AggregateRefresher:
+    """Overridable in tests: refreshing aggregates needs committed data and its own connection."""
+    return market_service.refresh_aggregates
+
+
+AggregateRefresherDep = Annotated[AggregateRefresher, Depends(get_aggregate_refresher)]
