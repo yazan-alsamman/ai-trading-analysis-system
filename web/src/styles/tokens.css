@@ -1,0 +1,143 @@
+/*
+ * Semantic design tokens. Components reference ONLY these names (via the
+ * Tailwind theme mapping in index.css), never raw hex values, so both themes
+ * stay consistent. See docs/DESIGN_SYSTEM.md for usage rules.
+ *
+ * Colour rules:
+ *  - --up / --down are reserved for market direction (always paired with a
+ *    sign and an arrow, never colour alone).
+ *  - --forecast is reserved for AI model output so a prediction can never be
+ *    mistaken for an observed price or an interactive control.
+ *  - System feedback uses --danger (orange), --warning (amber) and --info,
+ *    always with an icon and a text label.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-canvas: #070b12;
+  --bg-surface: #0d131d;
+  --bg-raised: #131b28;
+  --bg-inset: #0a1019;
+  --bg-hover: #141c2a;
+  --bg-selected: #142036;
+
+  --line-subtle: #1a2333;
+  --line-strong: #29344a;
+
+  --fg-primary: #e6eaf0;
+  --fg-secondary: #a3adbb;
+  --fg-muted: #8792a3;
+  --fg-disabled: #4f5866;
+
+  --accent: #63a0ff;
+  --accent-hover: #80b3ff;
+  --accent-fg: #06101f;
+  --accent-soft: rgb(99 160 255 / 0.14);
+
+  --up: #2bc48d;
+  --up-soft: rgb(43 196 141 / 0.14);
+  --down: #ff6b73;
+  --down-soft: rgb(255 107 115 / 0.14);
+
+  --forecast: #bb9cff;
+  --forecast-soft: rgb(187 156 255 / 0.16);
+
+  --danger: #ff8a4c;
+  --danger-soft: rgb(255 138 76 / 0.14);
+  --warning: #e8b33f;
+  --warning-soft: rgb(232 179 63 / 0.14);
+  --info: #5fb0ea;
+  --info-soft: rgb(95 176 234 / 0.14);
+
+  --demo: #e8b33f;
+  --demo-soft: rgb(232 179 63 / 0.12);
+
+  --focus: #8ab4ff;
+  --overlay: rgb(2 5 10 / 0.7);
+  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.35);
+
+  /* Chart-specific (consumed by src/features/chart/chartTheme.ts). */
+  --chart-grid: #111926;
+  --chart-crosshair: #5a6678;
+  --chart-zone-entry: rgb(76 141 255 / 0.13);
+  --chart-zone-tp: rgb(38 184 132 / 0.11);
+  --chart-zone-sl: rgb(242 85 94 / 0.11);
+  --chart-ind-1: #5fb0ea;
+  --chart-ind-2: #d9a35b;
+  --chart-ind-3: #8792a3;
+  --chart-vol-up: rgb(43 196 141 / 0.24);
+  --chart-vol-down: rgb(255 107 115 / 0.24);
+  --chart-forecast-region: rgb(179 146 255 / 0.05);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-canvas: #f2f4f8;
+  --bg-surface: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-inset: #f7f8fa;
+  --bg-hover: #eef1f5;
+  --bg-selected: #edf2fc;
+
+  --line-subtle: #e1e6ee;
+  --line-strong: #c4ccd6;
+
+  --fg-primary: #0f1720;
+  --fg-secondary: #46505e;
+  --fg-muted: #5a6574;
+  --fg-disabled: #a5adb8;
+
+  --accent: #1a55c4;
+  --accent-hover: #1649aa;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(26 85 196 / 0.1);
+
+  --up: #066b47;
+  --up-soft: rgb(6 107 71 / 0.1);
+  --down: #b3262f;
+  --down-soft: rgb(179 38 47 / 0.09);
+
+  --forecast: #6534c8;
+  --forecast-soft: rgb(101 52 200 / 0.1);
+
+  --danger: #a33c0b;
+  --danger-soft: rgb(163 60 11 / 0.09);
+  --warning: #774d00;
+  --warning-soft: rgb(196 140 20 / 0.13);
+  --info: #155c90;
+  --info-soft: rgb(21 92 144 / 0.09);
+
+  --demo: #774d00;
+  --demo-soft: rgb(196 140 20 / 0.12);
+
+  --focus: #1a55c4;
+  --overlay: rgb(15 23 32 / 0.4);
+  --shadow-float: 0 12px 32px rgb(15 23 32 / 0.14), 0 2px 6px rgb(15 23 32 / 0.08);
+
+  --chart-grid: #eef1f5;
+  --chart-crosshair: #8b95a3;
+  --chart-zone-entry: rgb(31 95 214 / 0.1);
+  --chart-zone-tp: rgb(11 127 86 / 0.09);
+  --chart-zone-sl: rgb(200 50 59 / 0.08);
+  --chart-ind-1: #1b6ca8;
+  --chart-ind-2: #a8661c;
+  --chart-ind-3: #6b7686;
+  --chart-vol-up: rgb(6 107 71 / 0.2);
+  --chart-vol-down: rgb(179 38 47 / 0.18);
+  --chart-forecast-region: rgb(109 63 209 / 0.045);
+}
+
+:root {
+  /* Layout constants. */
+  --sidebar-w: 224px;
+  --sidebar-w-collapsed: 64px;
+  --topbar-h: 48px;
+  --row-h: 36px;
+}
+
+:root[data-density='compact'] {
+  --row-h: 30px;
+}
