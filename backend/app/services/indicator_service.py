@@ -57,7 +57,8 @@ def resolve(requests: list[IndicatorSpec]) -> list[ResolvedIndicator]:
     return resolved
 
 
-def _frame(rows: list[CandleRow]) -> pd.DataFrame:
+def frame(rows: list[CandleRow]) -> pd.DataFrame:
+    """OHLCV DataFrame (UTC DatetimeIndex) from candle rows."""
     return pd.DataFrame(
         {
             "open": [r.open for r in rows],
@@ -71,13 +72,12 @@ def _frame(rows: list[CandleRow]) -> pd.DataFrame:
     )
 
 
-def _compute(
-    candles: list[CandleRow], window: int, indicators: list[ResolvedIndicator]
+def lines(
+    df: pd.DataFrame, times: list[int], indicators: list[ResolvedIndicator]
 ) -> list[dict[str, Any]]:
-    """CPU-bound part (runs in a worker thread so the event loop stays responsive)."""
-    df = _frame(candles)
-    first = len(df) - window
-    times = [int(r.ts.timestamp()) for r in candles[first:]]
+    """Indicator results over the last ``len(times)`` rows of ``df`` as Lightweight Charts
+    points (``{time, value}``, null during warm-up)."""
+    first = len(df) - len(times)
     results = []
     for ind in indicators:
         out = ind.spec.compute(df, **ind.params).iloc[first:]
@@ -100,6 +100,60 @@ def _compute(
     return results
 
 
+def _compute(
+    candles: list[CandleRow], window: int, indicators: list[ResolvedIndicator]
+) -> list[dict[str, Any]]:
+    """CPU-bound part (runs in a worker thread so the event loop stays responsive)."""
+    times = [int(r.ts.timestamp()) for r in candles[len(candles) - window :]]
+    return lines(frame(candles), times, indicators)
+
+
+async def load_candles(
+    session: AsyncSession,
+    instrument_id: uuid.UUID,
+    timeframe: Timeframe,
+    *,
+    history: int,
+    day_anchor: bool = False,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    limit: int = 500,
+) -> tuple[list[CandleRow], list[CandleRow]]:
+    """``(history, window)``: the window the candles endpoint returns for these parameters, and
+    up to ``history`` bars before it (capped at MAX_HISTORY). With ``day_anchor`` the history
+    also reaches back to 00:00 UTC of the first window candle (for VWAP)."""
+    window = await market_service.get_candles(
+        session, instrument_id, timeframe, start=start, end=end, limit=limit
+    )
+    before_rows: list[CandleRow] = []
+    if window:
+        before = window[0].ts - timedelta(microseconds=1)
+        needed = min(history, MAX_HISTORY)
+        if needed:
+            before_rows = await market_service.get_candles(
+                session, instrument_id, timeframe, end=before, limit=needed
+            )
+        day_start = window[0].ts.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        if (
+            day_anchor
+            and day_start < window[0].ts
+            and (not before_rows or before_rows[0].ts > day_start)
+        ):
+            # [day_start, window) is a superset of the count-based history here
+            before_rows = await market_service.get_candles(
+                session, instrument_id, timeframe, start=day_start, end=before, limit=MAX_HISTORY
+            )
+    return before_rows, window
+
+
+def needs(indicators: list[ResolvedIndicator]) -> tuple[int, bool]:
+    """(history bars, day anchor) the given indicators need."""
+    return (
+        max((i.history for i in indicators), default=0),
+        any(i.spec.anchor == "day" for i in indicators),
+    )
+
+
 async def compute_indicators(
     session: AsyncSession,
     instrument_id: uuid.UUID,
@@ -118,22 +172,15 @@ async def compute_indicators(
     00:00 UTC of the first candle. That history is trimmed off afterwards, so the first points
     are valid and stable whenever enough data exists.
     """
-    window = await market_service.get_candles(
-        session, instrument_id, timeframe, start=start, end=end, limit=limit
+    history, anchored = needs(indicators)
+    before, window = await load_candles(
+        session,
+        instrument_id,
+        timeframe,
+        history=history,
+        day_anchor=anchored,
+        start=start,
+        end=end,
+        limit=limit,
     )
-    history: list[CandleRow] = []
-    if window:
-        before = window[0].ts - timedelta(microseconds=1)
-        needed = min(max((i.history for i in indicators), default=0), MAX_HISTORY)
-        if needed:
-            history = await market_service.get_candles(
-                session, instrument_id, timeframe, end=before, limit=needed
-            )
-        day_start = window[0].ts.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        anchored = any(i.spec.anchor == "day" for i in indicators)
-        if anchored and day_start < window[0].ts and (not history or history[0].ts > day_start):
-            # [day_start, window) is a superset of the count-based history here
-            history = await market_service.get_candles(
-                session, instrument_id, timeframe, start=day_start, end=before, limit=MAX_HISTORY
-            )
-    return await asyncio.to_thread(_compute, history + window, len(window), indicators)
+    return await asyncio.to_thread(_compute, before + window, len(window), indicators)

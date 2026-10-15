@@ -8,6 +8,7 @@ from app.api.v1 import (
     health,
     indicators,
     market,
+    strategies,
     users,
 )
 
@@ -20,3 +21,4 @@ api_router.include_router(market.router)
 api_router.include_router(admin_market.router)
 api_router.include_router(admin_realtime.router)
 api_router.include_router(indicators.router)
+api_router.include_router(strategies.router)

@@ -25,7 +25,7 @@ from app.realtime.hub import (
     WebSocketHub,
 )
 from app.realtime.protocol import SubscribeMessage, UnsubscribeMessage
-from app.realtime.topics import candles_topic, user_topic
+from app.realtime.topics import candles_topic, signals_topic, user_topic
 from app.schemas.market import CandleOut
 from app.services import market_service
 
@@ -180,7 +180,7 @@ async def _subscribe(
         client.send(protocol.subscribed(topic))
         return
 
-    topic = candles_topic(msg.instrument_id, msg.timeframe)
+    topic = _market_topic(msg)
     if (
         topic not in client.topics
         and _counted_subscriptions(client) >= hub.config.max_subscriptions
@@ -207,9 +207,17 @@ async def _subscribe(
             client.send(protocol.error(protocol.UNAVAILABLE, "live updates are unavailable"))
             return
         client.send(protocol.subscribed(topic))
+        if msg.topic == "signals":
+            return  # no snapshot: GET /api/v1/signals lists past signals
         latest = await market_service.get_latest_candle(session, msg.instrument_id, msg.timeframe)
     candle = CandleOut.from_candle(latest).model_dump() if latest is not None else None
     client.send(protocol.snapshot(topic, candle))
+
+
+def _market_topic(msg: SubscribeMessage | UnsubscribeMessage) -> str:
+    if msg.topic == "signals":
+        return signals_topic(msg.instrument_id)
+    return candles_topic(msg.instrument_id, msg.timeframe)
 
 
 async def _unsubscribe(client: Client, hub: WebSocketHub, msg: UnsubscribeMessage) -> None:
@@ -219,6 +227,6 @@ async def _unsubscribe(client: Client, hub: WebSocketHub, msg: UnsubscribeMessag
             return
         topic = user_topic(client.user_id)
     else:
-        topic = candles_topic(msg.instrument_id, msg.timeframe)
+        topic = _market_topic(msg)
     await hub.unsubscribe(client, topic)
     client.send(protocol.unsubscribed(topic))

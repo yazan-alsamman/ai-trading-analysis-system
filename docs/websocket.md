@@ -25,8 +25,14 @@ JSON text frames, at most 4 KB each.
 ```json
 {"op": "subscribe",   "topic": "candles", "instrument_id": "<uuid>", "timeframe": "1m"}
 {"op": "unsubscribe", "topic": "candles", "instrument_id": "<uuid>", "timeframe": "1m"}
+{"op": "subscribe",   "topic": "signals", "instrument_id": "<uuid>"}
+{"op": "unsubscribe", "topic": "signals", "instrument_id": "<uuid>"}
 {"op": "ping"}
 ```
+
+A `signals` topic carries the live strategy signals of one instrument, for every timeframe and
+strategy setup that users run on it. It has no `timeframe` field and sends no snapshot; use
+`GET /api/v1/signals` for past signals.
 
 `timeframe` is one of `1m, 5m, 15m, 1h, 4h, 1d`. Instrument ids come from
 `GET /api/v1/market/instruments`.
@@ -40,6 +46,13 @@ JSON text frames, at most 4 KB each.
 {"type": "candle",       "topic": "candles:<uuid>:1m", "instrument_id": "<uuid>", "timeframe": "1m",
  "candle": {"time": 1760000040, "open": 1.0, "high": 1.2, "low": 0.9, "close": 1.1, "volume": 3.5},
  "sent_at": 1760000041234}
+{"type": "signal",       "topic": "signals:<uuid>", "sent_at": 1760000071000,
+ "signal": {"id": "<uuid>", "instrument_id": "<uuid>", "timeframe": "1h",
+            "strategy_key": "rsi_reversal", "params": {"length": 14, "oversold": 30.0, "overbought": 70.0},
+            "params_hash": "5cd68c7e…", "time": 1760000000, "bar_time": "2025-10-09T09:00:00+00:00",
+            "side": "buy", "strength": 0.42, "price": 61234.5,
+            "reason": "rsi_cross_up_oversold",
+            "details": {"rsi_prev": 28.4, "rsi": 31.2, "level": 30.0, "extreme": 22.1}}}
 {"type": "unsubscribed", "topic": "candles:<uuid>:1m"}
 {"type": "pong"}
 {"type": "heartbeat"}
@@ -63,14 +76,19 @@ JSON text frames, at most 4 KB each.
   - `unavailable`: the live feed is temporarily down
 
   Only `token_expired` closes the socket.
-- Messages sent to a user's own topic (`user:<id>`, notifications, coming in Y15) arrive
-  automatically. No subscription is needed.
+- `signal` messages are published once per new signal, on the closed bar `time` (unix seconds,
+  bar start). The signal is actionable at the open of the next bar. To draw a marker, use
+  `{time, position: side == "buy" ? "belowBar" : "aboveBar", shape: side == "buy" ? "arrowUp" : "arrowDown"}`.
+- Messages sent to a user's own topic (`user:<id>`) arrive automatically, with no
+  subscription needed. When one of the user's active strategies (with `notify = true`)
+  produces a signal, the user gets `{"type": "signal", "user_strategy_ids": ["<uuid>"],
+  "signal": {...}}` with the same `signal` object. Other notifications come in Y15.
 
 ## Limits and close codes
 
 | | |
 |---|---|
-| Subscriptions per connection | 50 (re-subscribing to the same topic does not count) |
+| Subscriptions per connection | 50 candles/signals topics (re-subscribing does not count) |
 | Max client frame | 4 KB |
 | Server heartbeat | every 25 s |
 | Idle timeout | 75 s without any client frame → close **1001** |

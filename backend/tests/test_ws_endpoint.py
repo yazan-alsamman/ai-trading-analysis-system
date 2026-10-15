@@ -181,7 +181,7 @@ async def test_unknown_and_inactive_instrument(
         f'{{"op": "subscribe", "topic": "candles", "instrument_id": "{uuid.uuid4()}", '
         '"timeframe": "2h"}',
         '{"op": "subscribe", "topic": "candles", "timeframe": "1m"}',
-        f'{{"op": "subscribe", "topic": "signals", "instrument_id": "{uuid.uuid4()}"}}',
+        f'{{"op": "subscribe", "topic": "news", "instrument_id": "{uuid.uuid4()}"}}',
         '{"op": "ping", "extra": 1}',
         f'{{"op": "ping", "pad": "{"x" * 5000}"}}',  # larger than 4 KB
     ],
@@ -222,10 +222,17 @@ async def test_subscription_limit(
         assert hub.stats()["topics_by_kind"]["candles"] == 50
 
 
-async def test_user_topic(client: AsyncClient, hub: WebSocketHub, user, token) -> None:
+async def test_user_topic(
+    client: AsyncClient, hub: WebSocketHub, redis_client: Redis, user, token
+) -> None:
     own = user_topic(user.id)
+
+    async def redis_has_subscriber() -> bool:
+        return dict(await redis_client.pubsub_numsub(channel_for(own)))[channel_for(own)] == 1
+
     async with ws_connect(token) as ws:
-        await wait_for(lambda: hub.subscriber_count(own) == 1)  # automatic on connect
+        # automatic on connect (no ack to wait for): wait until Redis has applied it
+        await wait_for(redis_has_subscriber)
         await publisher.publish(own, {"type": "notification", "text": "hello"})
         msg = await recv_until(ws, lambda m: m["type"] == "notification")
         assert msg["topic"] == own and msg["text"] == "hello"

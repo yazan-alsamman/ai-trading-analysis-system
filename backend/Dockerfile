@@ -5,9 +5,10 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# shared indicators library first (the backend declares it as a dependency by name)
+# shared libraries first (the backend declares them as dependencies by name)
 COPY libs/indicators /tmp/libs/indicators
-RUN pip install --no-cache-dir /tmp/libs/indicators && rm -rf /tmp/libs
+COPY libs/strategies /tmp/libs/strategies
+RUN pip install --no-cache-dir /tmp/libs/indicators /tmp/libs/strategies && rm -rf /tmp/libs
 
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
