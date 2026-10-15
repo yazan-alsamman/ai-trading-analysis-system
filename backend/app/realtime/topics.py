@@ -19,7 +19,9 @@ def user_topic(user_id: uuid.UUID) -> str:
     return f"user:{user_id}"
 
 
-# Y07 will add: def signals_topic(instrument_id) -> str: return f"signals:{instrument_id}"
+def signals_topic(instrument_id: uuid.UUID) -> str:
+    """Strategy signals produced by the live engine for one instrument (all timeframes)."""
+    return f"signals:{instrument_id}"
 
 
 def channel_for(topic: str) -> str:

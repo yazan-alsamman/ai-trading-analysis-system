@@ -16,18 +16,25 @@ class _ClientMessage(BaseModel):
 
 
 class _TopicRef(_ClientMessage):
-    topic: Literal["candles", "user"]
+    topic: Literal["candles", "signals", "user"]
     instrument_id: uuid.UUID | None = None
     timeframe: Timeframe | None = None
     user_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _check_fields(self) -> Self:
-        if self.topic == "candles":
-            if self.instrument_id is None or self.timeframe is None or self.user_id is not None:
-                raise ValueError("candles topic needs instrument_id and timeframe")
-        elif self.user_id is None or self.instrument_id is not None or self.timeframe is not None:
-            raise ValueError("user topic needs user_id")
+        given = {
+            name
+            for name in ("instrument_id", "timeframe", "user_id")
+            if getattr(self, name) is not None
+        }
+        required = {
+            "candles": {"instrument_id", "timeframe"},
+            "signals": {"instrument_id"},
+            "user": {"user_id"},
+        }[self.topic]
+        if given != required:
+            raise ValueError(f"{self.topic} topic needs exactly: {', '.join(sorted(required))}")
         return self
 
 
