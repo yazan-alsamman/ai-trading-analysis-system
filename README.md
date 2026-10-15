@@ -9,6 +9,7 @@
 | `web/` | لوحة الويب React + TS | Elias |
 | `mobile/` | تطبيق Flutter | Batoul |
 | `infra/` | إعدادات Nginx والنشر | Yazan |
+| `libs/indicators/` | مكتبة المؤشرات الفنية المشتركة (`trading-indicators`) للـ backend والاستراتيجيات وفريق الذكاء | Yazan |
 
 ## التشغيل محلياً
 
@@ -29,9 +30,13 @@ docker compose up --build
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
+pip install -e ../libs/indicators   # المكتبة المحلية أولاً (pip لا يدعم مسارات نسبية في pyproject)
 pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
+
+صورة Docker للـ backend والـ worker تُبنى من جذر المستودع (`context: .`) حتى تثبّت `libs/indicators`؛
+الملفات المرسلة للبناء محددة في `backend/Dockerfile.dockerignore`.
 
 ### الاختبارات
 
@@ -104,6 +109,19 @@ docker compose exec backend python -m app.cli seed-demo-candles --symbol BTC/USD
 ```
 
 `seed-demo-candles` يولّد **بيانات وهمية** (random walk) لتطوير الرسوم البيانية فقط، وليست أسعاراً حقيقية.
+
+## المؤشرات الفنية
+
+مكتبة مستقلة في [libs/indicators](libs/indicators/README.md) (numpy + pandas فقط، بدون look-ahead،
+مطابقة لـ TA-Lib حتى `1e-8`). للـ notebooks في Colab/Kaggle:
+
+```bash
+pip install "git+https://github.com/yazan-alsamman/ai-trading-analysis-system@main#subdirectory=libs/indicators"
+```
+
+في الـ API: `GET /api/v1/indicators` (الكتالوج) و `POST /api/v1/market/instruments/{id}/indicators`
+بجسم `{"timeframe": "1h", "limit": 500, "indicators": [{"name": "rsi", "params": {"length": 14}}, {"name": "macd"}]}`
+يعيد لكل output نقاط `{time, value}` جاهزة لـ Lightweight Charts، مع تحميل تاريخ الإحماء تلقائياً.
 
 ## التحديثات الحية (WebSocket)
 
