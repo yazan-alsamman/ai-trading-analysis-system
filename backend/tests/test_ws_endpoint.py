@@ -181,7 +181,7 @@ async def test_unknown_and_inactive_instrument(
         f'{{"op": "subscribe", "topic": "candles", "instrument_id": "{uuid.uuid4()}", '
         '"timeframe": "2h"}',
         '{"op": "subscribe", "topic": "candles", "timeframe": "1m"}',
-        f'{{"op": "subscribe", "topic": "signals", "instrument_id": "{uuid.uuid4()}"}}',
+        f'{{"op": "subscribe", "topic": "news", "instrument_id": "{uuid.uuid4()}"}}',
         '{"op": "ping", "extra": 1}',
         f'{{"op": "ping", "pad": "{"x" * 5000}"}}',  # larger than 4 KB
     ],
