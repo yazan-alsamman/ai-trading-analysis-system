@@ -8,6 +8,7 @@ releases a savepoint.
 import asyncio
 import os
 from collections.abc import AsyncIterator
+from datetime import datetime
 from pathlib import Path
 
 TEST_DATABASE_URL = os.environ.get(
@@ -34,11 +35,12 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
 from alembic import command  # noqa: E402
+from app.api.deps import get_aggregate_refresher  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import get_session  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import User, UserRole  # noqa: E402
-from tests.utils import DEFAULT_PASSWORD  # noqa: E402
+from tests.utils import DEFAULT_PASSWORD, bearer  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -91,12 +93,29 @@ async def session(session_factory: async_sessionmaker[AsyncSession]) -> AsyncIte
 
 
 @pytest.fixture
-async def client(session_factory: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncClient]:
+def refresh_calls() -> list[tuple[datetime, datetime]]:
+    """Calls the API made to refresh the continuous aggregates (recorded, not executed).
+
+    A real refresh runs on its own connection, so it cannot see the uncommitted test data and
+    would only move the aggregates' watermarks; see tests/test_aggregate_refresh.py instead.
+    """
+    return []
+
+
+@pytest.fixture
+async def client(
+    session_factory: async_sessionmaker[AsyncSession],
+    refresh_calls: list[tuple[datetime, datetime]],
+) -> AsyncIterator[AsyncClient]:
     async def _get_test_session() -> AsyncIterator[AsyncSession]:
         async with session_factory() as s:
             yield s
 
+    async def _record_refresh(start: datetime, end: datetime) -> None:
+        refresh_calls.append((start, end))
+
     app.dependency_overrides[get_session] = _get_test_session
+    app.dependency_overrides[get_aggregate_refresher] = lambda: _record_refresh
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
@@ -131,3 +150,15 @@ def login(client: AsyncClient):
         return res.json()
 
     return _login
+
+
+@pytest.fixture
+async def admin_headers(make_user, login) -> dict[str, str]:
+    await make_user("admin@example.com", role=UserRole.admin)
+    return bearer((await login("admin@example.com"))["access_token"])
+
+
+@pytest.fixture
+async def trader_headers(make_user, login) -> dict[str, str]:
+    await make_user("trader@example.com", role=UserRole.trader)
+    return bearer((await login("trader@example.com"))["access_token"])

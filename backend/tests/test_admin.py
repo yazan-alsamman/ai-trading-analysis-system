@@ -9,12 +9,6 @@ from tests.utils import bearer
 USERS = "/api/v1/admin/users"
 
 
-@pytest.fixture
-async def admin_headers(make_user, login) -> dict[str, str]:
-    await make_user("admin@example.com", role=UserRole.admin)
-    return bearer((await login("admin@example.com"))["access_token"])
-
-
 async def _id_of(client: AsyncClient, headers: dict[str, str]) -> str:
     return (await client.get("/api/v1/users/me", headers=headers)).json()["id"]
 
