@@ -10,7 +10,7 @@ dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
   "pydantic-settings>=2.4",
-  "sqlalchemy[asyncio]>=2.0",
+  "sqlalchemy[asyncio]>=2.1",  # postgresql.distinct_on
   "asyncpg>=0.29",
   "alembic>=1.13",
   "redis>=5.0",
@@ -20,9 +20,10 @@ dependencies = [
   "pwdlib[argon2]>=0.2",
   "email-validator>=2.2",
   "python-multipart>=0.0.9",
-  # local package in libs/indicators: pip cannot express a relative path dependency, so it is
+  # local packages in libs/: pip cannot express a relative path dependency, so it is
   # installed first everywhere (Dockerfile, CI, README); uv users get it via tool.uv.sources
   "trading-indicators",
+  "trading-strategies",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +31,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-cov>=5", "ruff>=0.6", "httpx
 
 [tool.uv.sources]
 trading-indicators = { path = "../libs/indicators", editable = true }
+trading-strategies = { path = "../libs/strategies", editable = true }
 
 [tool.ruff]
 line-length = 100

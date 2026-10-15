@@ -8,5 +8,8 @@
 !libs/indicators/pyproject.toml
 !libs/indicators/README.md
 !libs/indicators/trading_indicators
+!libs/strategies/pyproject.toml
+!libs/strategies/README.md
+!libs/strategies/trading_strategies
 **/__pycache__
 **/*.pyc

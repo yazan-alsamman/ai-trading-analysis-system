@@ -46,6 +46,15 @@ services:
       - redis
       - db
 
+  beat:  # Celery beat: schedules signals.tick every minute (live signal engine)
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    command: celery -A app.tasks beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    depends_on:
+      - redis
+
   ai-service:
     build: ./ai-service
     ports:
