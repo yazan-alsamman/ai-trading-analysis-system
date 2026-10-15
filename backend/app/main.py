@@ -3,8 +3,9 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.api import ws
@@ -18,6 +19,7 @@ from app.db.session import SessionLocal, engine
 from app.models.candle import Timeframe
 from app.realtime.hub import HubConfig, WebSocketHub
 from app.services import indicator_service, user_service
+from app.services.workspace_service import VersionConflict
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +81,13 @@ app.add_middleware(
     expose_headers=list(RATE_LIMIT_HEADERS),
 )
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+
+@app.exception_handler(VersionConflict)
+async def version_conflict_handler(request: Request, exc: VersionConflict) -> JSONResponse:
+    """Workspace edited on another device: 409 with the current version to reload."""
+    return JSONResponse(exc.body(), status_code=409, headers={"ETag": f'"{exc.current_version}"'})
+
 
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws.router)  # /ws/market, at the root: Nginx proxies /ws/ with Upgrade headers
