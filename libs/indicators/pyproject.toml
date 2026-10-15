@@ -15,7 +15,13 @@ dependencies = [
 
 [project.optional-dependencies]
 # TA-Lib is only a reference to verify our numbers in tests, never a runtime dependency.
-dev = ["pytest>=8", "ruff>=0.6", "TA-Lib>=0.6"]
+# TA-Lib 0.8.2 ships no cp310 wheels (it would need the C library to build), so 3.10 stays below.
+dev = [
+  "pytest>=8",
+  "ruff>=0.6",
+  "TA-Lib>=0.6; python_version >= '3.11'",
+  "TA-Lib>=0.6,<0.8.2; python_version < '3.11'",
+]
 
 [tool.setuptools.packages.find]
 include = ["trading_indicators*"]
