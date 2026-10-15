@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     first_admin_email: str | None = None
     first_admin_password: str | None = None
     ai_service_url: str = "http://localhost:8001"
+    # WebSocket hub (/ws/market)
+    ws_heartbeat_seconds: float = 25
+    ws_idle_timeout_seconds: float = 75
+    ws_queue_size: int = 256
+    ws_max_subscriptions: int = 50
+    ws_max_message_bytes: int = 4096
     cors_origins: str = "http://localhost:5173"
 
     @model_validator(mode="after")
