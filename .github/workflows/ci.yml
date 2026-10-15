@@ -42,7 +42,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e ../libs/indicators -e ../libs/strategies
+      - run: pip install -e ../libs/indicators -e ../libs/strategies -e ../libs/backtest
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
@@ -81,6 +81,27 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ../indicators
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+
+  backtest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    defaults:
+      run:
+        working-directory: libs/backtest
+    env:
+      BACKTEST_PERF_FACTOR: "3"  # shared CI runners are slower than a dev machine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ../indicators -e ../strategies
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .

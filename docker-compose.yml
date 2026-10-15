@@ -50,6 +50,18 @@ services:
       - redis
       - db
 
+  worker-backtest:  # backtests on their own queue, so they never delay the live signal engine
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    command: >-
+      celery -A app.tasks worker -Q backtests --concurrency 2 --hostname backtests@%h
+      --loglevel=info
+    depends_on:
+      - redis
+      - db
+
   beat:  # Celery beat: schedules signals.tick every minute (live signal engine)
     build:
       context: .
