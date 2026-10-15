@@ -105,4 +105,18 @@ docker compose exec backend python -m app.cli seed-demo-candles --symbol BTC/USD
 
 `seed-demo-candles` يولّد **بيانات وهمية** (random walk) لتطوير الرسوم البيانية فقط، وليست أسعاراً حقيقية.
 
+## التحديثات الحية (WebSocket)
+
+`ws://<host>/ws/market?token=<access JWT>`: اشترك في `candles` لأي instrument وأي إطار زمني
+فتصلك الشمعة الحالية فور تغيّرها (Redis Pub/Sub، يعمل مع عدة workers). البروتوكول الكامل ومثال
+JavaScript مع Lightweight Charts في [docs/websocket.md](docs/websocket.md).
+
+لتطوير الرسوم الحية قبل وجود الـ collectors:
+
+```bash
+docker compose exec backend python -m app.cli simulate-live --symbol BTC/USDT --source binance --interval 2
+```
+
+الاختبارات تحتاج Redis أيضاً: `TEST_REDIS_URL` (الافتراضي `REDIS_URL` ثم `redis://localhost:6379/0`).
+
 قواعد الفروع والـ PR في [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
