@@ -32,6 +32,8 @@ CLOSE_GOING_AWAY = 1001  # idle timeout / server shutdown
 CLOSE_TRY_AGAIN_LATER = 1013  # client too slow (queue full)
 CLOSE_UNAUTHORIZED = 4401  # invalid or expired access token
 
+SUBSCRIBE_CONFIRM_TIMEOUT = 1.0  # seconds to wait for Redis to confirm a SUBSCRIBE
+
 
 @dataclass(frozen=True)
 class HubConfig:
@@ -93,7 +95,8 @@ class WebSocketHub:
     def __init__(self, redis: Redis, config: HubConfig | None = None) -> None:
         self.config = config or HubConfig()
         self._redis = redis
-        self._pubsub = redis.pubsub(ignore_subscribe_messages=True)
+        self._pubsub = redis.pubsub()  # subscribe confirmations are used, see subscribe()
+        self._confirmations: dict[str, asyncio.Event] = {}
         self._topics: dict[str, set[Client]] = {}
         self._clients: set[Client] = set()
         self._lock = asyncio.Lock()
@@ -127,16 +130,21 @@ class WebSocketHub:
         while True:
             try:
                 await self._pubsub_ready.wait()
-                message = await self._pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=1.0
-                )
+                message = await self._pubsub.get_message(timeout=1.0)
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001 - keep the reader alive; redis-py reconnects
                 logger.exception("Redis Pub/Sub read failed; retrying in 1s")
                 await asyncio.sleep(1)
                 continue
-            if message is None or message.get("type") != "message":
+            if message is None:
+                continue
+            if message.get("type") == "subscribe":
+                confirmed = self._confirmations.pop(message["channel"], None)
+                if confirmed is not None:
+                    confirmed.set()
+                continue
+            if message.get("type") != "message":
                 continue
             topic = topic_for(message["channel"])
             if topic is not None:
@@ -197,12 +205,23 @@ class WebSocketHub:
             if clients is None:
                 # register locally first so a message arriving right after SUBSCRIBE is kept
                 self._topics[topic] = {client}
+                channel = channel_for(topic)
+                confirmed = self._confirmations[channel] = asyncio.Event()
                 try:
-                    await self._pubsub.subscribe(channel_for(topic))
+                    await self._pubsub.subscribe(channel)
                 except Exception:
                     del self._topics[topic]
+                    self._confirmations.pop(channel, None)
                     raise
                 self._pubsub_ready.set()
+                # redis-py's subscribe() only sends the command; wait for Redis' confirmation
+                # (read by the reader task) so a message published right after the client's
+                # "subscribed" ack cannot miss this process.
+                try:
+                    await asyncio.wait_for(confirmed.wait(), SUBSCRIBE_CONFIRM_TIMEOUT)
+                except TimeoutError:
+                    self._confirmations.pop(channel, None)
+                    logger.warning("Redis did not confirm SUBSCRIBE %s in time", channel)
             else:
                 clients.add(client)
         client.topics.add(topic)
