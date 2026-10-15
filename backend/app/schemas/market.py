@@ -138,6 +138,18 @@ class CandleOut(BaseModel):
     close: float
     volume: float
 
+    @classmethod
+    def from_candle(cls, candle) -> "CandleOut":
+        """From anything with ts/open/high/low/close/volume (CandleRow, CandleIn)."""
+        return cls(
+            time=int(candle.ts.timestamp()),
+            open=candle.open,
+            high=candle.high,
+            low=candle.low,
+            close=candle.close,
+            volume=candle.volume,
+        )
+
 
 class CandleSeries(BaseModel):
     instrument_id: uuid.UUID

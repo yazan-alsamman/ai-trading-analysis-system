@@ -39,7 +39,7 @@ DEFAULT_INSTRUMENTS: tuple[SeedInstrument, ...] = (
 )
 
 # Per-minute log-return volatility of the demo walk, by market.
-_DEMO_VOLATILITY = {
+DEMO_VOLATILITY = {
     MarketType.crypto: 0.0008,
     MarketType.forex: 0.0001,
     MarketType.commodity: 0.0003,
@@ -91,7 +91,7 @@ def generate_demo_candles(
     )
     price_digits = instrument.price_precision if instrument.price_precision is not None else 4
     price = round(start_price or (seed_item.demo_price if seed_item else 100.0), price_digits)
-    vol = _DEMO_VOLATILITY[instrument.market]
+    vol = DEMO_VOLATILITY[instrument.market]
     qty_digits = instrument.quantity_precision if instrument.quantity_precision is not None else 2
     is_crypto = instrument.market == MarketType.crypto
     # ~100k quote units per minute for crypto, tick-volume-like numbers otherwise.

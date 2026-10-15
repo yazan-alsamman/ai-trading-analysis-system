@@ -14,8 +14,12 @@ from pathlib import Path
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://trading:trading@localhost:5432/trading_test"
 )
+TEST_REDIS_URL = os.environ.get(
+    "TEST_REDIS_URL", os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+)
 # Must be set before anything imports app.* (settings and the engine are created at import time).
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["REDIS_URL"] = TEST_REDIS_URL
 os.environ["ENVIRONMENT"] = "test"
 os.environ["JWT_SECRET"] = "test-secret-that-is-at-least-32-characters-long"
 os.environ["FIRST_ADMIN_EMAIL"] = ""
@@ -25,6 +29,7 @@ import asyncpg  # noqa: E402
 import pytest  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
+from redis.asyncio import Redis  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncConnection,
@@ -35,11 +40,13 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
 from alembic import command  # noqa: E402
-from app.api.deps import get_aggregate_refresher  # noqa: E402
+from app.api.deps import get_aggregate_refresher, get_session_factory  # noqa: E402
+from app.core.redis import set_redis  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import get_session  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import User, UserRole  # noqa: E402
+from app.realtime.hub import HubConfig, WebSocketHub  # noqa: E402
 from tests.utils import DEFAULT_PASSWORD, bearer  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -92,6 +99,33 @@ async def session(session_factory: async_sessionmaker[AsyncSession]) -> AsyncIte
         yield s
 
 
+@pytest.fixture(autouse=True)
+async def redis_client() -> AsyncIterator[Redis]:
+    """A Redis client per test (async clients are bound to the event loop that uses them),
+    installed as the app's shared client. Connections are only opened when used."""
+    client = Redis.from_url(TEST_REDIS_URL, decode_responses=True)
+    set_redis(client)
+    yield client
+    set_redis(None)
+    await client.aclose()
+
+
+@pytest.fixture
+def hub_config() -> HubConfig:
+    return HubConfig()
+
+
+@pytest.fixture
+async def hub(redis_client: Redis, hub_config: HubConfig) -> AsyncIterator[WebSocketHub]:
+    """The app's WebSocket hub (normally started by the lifespan, which tests do not run)."""
+    hub = WebSocketHub(redis_client, hub_config)
+    await hub.start()
+    app.state.hub = hub
+    yield hub
+    await hub.stop()
+    del app.state.hub
+
+
 @pytest.fixture
 def refresh_calls() -> list[tuple[datetime, datetime]]:
     """Calls the API made to refresh the continuous aggregates (recorded, not executed).
@@ -115,6 +149,7 @@ async def client(
         refresh_calls.append((start, end))
 
     app.dependency_overrides[get_session] = _get_test_session
+    app.dependency_overrides[get_session_factory] = lambda: session_factory
     app.dependency_overrides[get_aggregate_refresher] = lambda: _record_refresh
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
