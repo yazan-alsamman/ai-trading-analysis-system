@@ -24,6 +24,10 @@ os.environ["ENVIRONMENT"] = "test"
 os.environ["JWT_SECRET"] = "test-secret-that-is-at-least-32-characters-long"
 os.environ["FIRST_ADMIN_EMAIL"] = ""
 os.environ["FIRST_ADMIN_PASSWORD"] = ""
+# Rate limiting is off in tests unless a test uses the ``rate_limits`` fixture; its Redis keys
+# get their own prefix so tests never touch a running stack's buckets.
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+os.environ["RATE_LIMIT_KEY_PREFIX"] = "test-rl"
 
 import asyncpg  # noqa: E402
 import pytest  # noqa: E402
@@ -41,6 +45,8 @@ from sqlalchemy.pool import NullPool  # noqa: E402
 
 from alembic import command  # noqa: E402
 from app.api.deps import get_aggregate_refresher, get_session_factory  # noqa: E402
+from app.core import rate_limit  # noqa: E402
+from app.core.config import Settings, get_settings  # noqa: E402
 from app.core.redis import set_redis  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import get_session  # noqa: E402
@@ -108,6 +114,45 @@ async def redis_client() -> AsyncIterator[Redis]:
     yield client
     set_redis(None)
     await client.aclose()
+
+
+class FrozenClock:
+    """The rate limiter's clock in tests (ms since the epoch); ``advance`` moves it."""
+
+    def __init__(self) -> None:
+        self.now_ms = 1_800_000_000_000.0
+
+    def __call__(self) -> float:
+        return self.now_ms
+
+    def advance(self, seconds: float) -> None:
+        self.now_ms += seconds * 1000
+
+
+async def _delete_keys(redis: Redis, pattern: str) -> None:
+    keys = [k async for k in redis.scan_iter(match=pattern, count=1000)]
+    if keys:
+        await redis.delete(*keys)
+
+
+@pytest.fixture
+def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> FrozenClock:
+    clock = FrozenClock()
+    monkeypatch.setattr(rate_limit, "clock_ms", clock)
+    return clock
+
+
+@pytest.fixture
+async def rate_limits(
+    redis_client: Redis, monkeypatch: pytest.MonkeyPatch, frozen_clock: FrozenClock
+) -> AsyncIterator[Settings]:
+    """Rate limiting on, with a frozen clock and no leftover buckets."""
+    settings = get_settings()
+    monkeypatch.setattr(settings, "rate_limit_enabled", True)
+    pattern = f"{settings.rate_limit_key_prefix}:*"
+    await _delete_keys(redis_client, pattern)
+    yield settings
+    await _delete_keys(redis_client, pattern)
 
 
 @pytest.fixture
