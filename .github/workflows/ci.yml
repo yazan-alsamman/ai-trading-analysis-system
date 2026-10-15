@@ -42,6 +42,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - run: pip install -e ../libs/indicators
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+
+  indicators:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 3.10 for Colab/Kaggle-style environments, 3.12 like the backend
+        python-version: ["3.10", "3.12"]
+    defaults:
+      run:
+        working-directory: libs/indicators
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
