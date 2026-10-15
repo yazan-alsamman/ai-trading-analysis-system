@@ -28,6 +28,7 @@ class Scope(StrEnum):
     strategies_read = "strategies:read"  # strategy catalog + preview
     signals_read = "signals:read"  # GET /signals
     stream = "stream"  # WebSocket /ws/market
+    backtests_read = "backtests:read"  # GET /backtests*
 
 
 ALL_SCOPES: frozenset[str] = frozenset(s.value for s in Scope)
