@@ -7,6 +7,8 @@ import asyncio
 import logging
 import math
 import time
+import uuid
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
@@ -14,12 +16,16 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import get_session_factory
+from app.api.limits import WsConnectionSlot, client_ip, ws_ip_allowed
+from app.core.redis import get_redis
 from app.core.security import decode_token
+from app.models.api_key import Scope
 from app.models.instrument import Instrument
 from app.models.user import User
 from app.realtime import protocol
 from app.realtime.hub import (
     CLOSE_GOING_AWAY,
+    CLOSE_RATE_LIMITED,
     CLOSE_UNAUTHORIZED,
     Client,
     WebSocketHub,
@@ -27,7 +33,7 @@ from app.realtime.hub import (
 from app.realtime.protocol import SubscribeMessage, UnsubscribeMessage
 from app.realtime.topics import candles_topic, signals_topic, user_topic
 from app.schemas.market import CandleOut
-from app.services import market_service
+from app.services import api_key_service, market_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,37 +42,85 @@ router = APIRouter(tags=["realtime"])
 SessionFactory = Annotated[async_sessionmaker[AsyncSession], Depends(get_session_factory)]
 
 
+@dataclass(frozen=True)
+class _Auth:
+    user: User
+    expires_at: float  # unix seconds of the token's / key's expiry (inf: never)
+    identity: str  # rate-limit identity: user:<id> (JWT) or key:<id> (API key)
+    credential: str  # "access token" / "API key", for the expiry message
+
+
 async def _authenticate(
-    token: str | None, session_factory: async_sessionmaker[AsyncSession]
-) -> tuple[User, float] | None:
-    """(active user, token exp as unix seconds) or None."""
-    if not token:
-        return None
-    try:
-        payload = decode_token(token, "access")
-    except HTTPException:
-        return None
-    async with session_factory() as session:
-        user = await session.get(User, payload["sub"])
-    if user is None or not user.is_active:
-        return None
-    return user, float(payload["exp"])
+    token: str | None, api_key: str | None, session_factory: async_sessionmaker[AsyncSession]
+) -> _Auth | str:
+    """The connection's identity, or why it is refused (closed with 4401). A token wins over
+    an API key; a key needs the ``stream`` scope."""
+    if token:
+        try:
+            payload = decode_token(token, "access")
+        except HTTPException:
+            return "invalid or expired token"
+        async with session_factory() as session:
+            user = await session.get(User, payload["sub"])
+        if user is None or not user.is_active:
+            return "invalid or expired token"
+        return _Auth(user, float(payload["exp"]), f"user:{user.id}", "access token")
+    if api_key:
+        async with session_factory() as session:
+            try:
+                user, row = await api_key_service.authenticate(session, get_redis(), api_key)
+            except HTTPException:
+                return "invalid API key"
+        if Scope.stream.value not in row.scopes:
+            return "API key lacks the 'stream' scope"
+        expires_at = row.expires_at.timestamp() if row.expires_at is not None else math.inf
+        return _Auth(user, expires_at, f"key:{row.id}", "API key")
+    return "invalid or expired token"
+
+
+async def _refuse(websocket: WebSocket, code: int, reason: str) -> None:
+    # A close sent before accept() becomes an HTTP 403 and browsers only see code 1006,
+    # so accept and close with the application code.
+    await websocket.accept()
+    await websocket.close(code=code, reason=reason)
 
 
 @router.websocket("/ws/market")
 async def market_ws(
-    websocket: WebSocket, session_factory: SessionFactory, token: str | None = None
+    websocket: WebSocket,
+    session_factory: SessionFactory,
+    token: str | None = None,
+    api_key: str | None = None,
 ) -> None:
-    # Authenticate before doing any work for the connection. A close sent before accept()
-    # becomes an HTTP 403 and browsers only see code 1006, so accept and close with 4401.
-    auth = await _authenticate(token, session_factory)
-    if auth is None:
-        await websocket.accept()
-        await websocket.close(code=CLOSE_UNAUTHORIZED, reason="invalid or expired token")
+    # Limit and authenticate before doing any work for the connection.
+    if not await ws_ip_allowed(client_ip(websocket)):
+        await _refuse(websocket, CLOSE_RATE_LIMITED, "too many new connections")
         return
-    user, token_exp = auth
+    auth = await _authenticate(token, api_key, session_factory)
+    if isinstance(auth, str):
+        await _refuse(websocket, CLOSE_UNAUTHORIZED, auth)
+        return
     hub: WebSocketHub = websocket.app.state.hub
+    slot = WsConnectionSlot(
+        auth.identity, uuid.uuid4().hex, stale_seconds=3 * hub.config.heartbeat_seconds
+    )
+    if not await slot.acquire():
+        await _refuse(websocket, CLOSE_RATE_LIMITED, "too many connections")
+        return
+    try:
+        await _serve(websocket, hub, session_factory, auth, slot)
+    finally:
+        await slot.release()
 
+
+async def _serve(
+    websocket: WebSocket,
+    hub: WebSocketHub,
+    session_factory: async_sessionmaker[AsyncSession],
+    auth: _Auth,
+    slot: WsConnectionSlot,
+) -> None:
+    user = auth.user
     await websocket.accept()
     client = hub.new_client(websocket, user.id)
     await hub.register(client)
@@ -74,7 +128,7 @@ async def market_ws(
     try:
         await hub.subscribe(client, user_topic(user.id))
         receiver = asyncio.create_task(_receive_loop(client, hub, session_factory))
-        watchdog = asyncio.create_task(_watchdog(client, hub, token_exp))
+        watchdog = asyncio.create_task(_watchdog(client, hub, auth, slot))
         stop_wait = asyncio.create_task(client.stopped.wait())
         await asyncio.wait({receiver, stop_wait}, return_when=asyncio.FIRST_COMPLETED)
     except Exception:  # noqa: BLE001
@@ -95,16 +149,17 @@ async def market_ws(
                 pass
 
 
-async def _watchdog(client: Client, hub: WebSocketHub, token_exp: float) -> None:
-    """Heartbeats, idle timeout and access-token expiry."""
+async def _watchdog(client: Client, hub: WebSocketHub, auth: _Auth, slot: WsConnectionSlot) -> None:
+    """Heartbeats (which also refresh the connection slot), idle timeout and expiry of the
+    access token or API key."""
     loop = asyncio.get_running_loop()
     heartbeat, idle = hub.config.heartbeat_seconds, hub.config.idle_timeout_seconds
     next_heartbeat = loop.time() + heartbeat
     while True:
         now = loop.time()
-        seconds_to_exp = token_exp - time.time()
+        seconds_to_exp = auth.expires_at - time.time()
         if seconds_to_exp <= 0:
-            client.send(protocol.error(protocol.TOKEN_EXPIRED, "access token expired"))
+            client.send(protocol.error(protocol.TOKEN_EXPIRED, f"{auth.credential} expired"))
             client.close(CLOSE_UNAUTHORIZED, "token expired", flush=True)
             return
         if now - client.last_seen >= idle:
@@ -115,6 +170,7 @@ async def _watchdog(client: Client, hub: WebSocketHub, token_exp: float) -> None
                 hub.drop(client)
                 return
             next_heartbeat = now + heartbeat
+            await slot.touch()
         wait = min(next_heartbeat - now, client.last_seen + idle - now, seconds_to_exp)
         await asyncio.sleep(max(wait, 0.01) if math.isfinite(wait) else heartbeat)
 

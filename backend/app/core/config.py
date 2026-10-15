@@ -27,6 +27,25 @@ class Settings(BaseSettings):
     ws_max_subscriptions: int = 50
     ws_max_message_bytes: int = 4096
     cors_origins: str = "http://localhost:5173"
+    # Rate limiting (app/core/rate_limit.py). All limits are per minute.
+    rate_limit_enabled: bool = True
+    rate_limit_key_prefix: str = "rl"  # Redis key prefix of buckets, lockouts and usage
+    rate_limit_trader: int = 60
+    rate_limit_analyst: int = 300
+    rate_limit_expert: int = 300
+    rate_limit_admin: int = 1000
+    rate_limit_expensive_cost: int = 5  # indicators compute + strategy preview
+    auth_login_ip_per_minute: int = 10  # /auth/login and /auth/token
+    auth_login_email_per_minute: int = 5
+    auth_register_ip_per_minute: int = 5
+    auth_refresh_ip_per_minute: int = 30
+    login_lockout_failures: int = 10  # failed logins of one email within the window ...
+    login_lockout_window_seconds: int = 900
+    login_lockout_seconds: int = 900  # ... lock that email for this long
+    ws_max_connections_per_identity: int = 5
+    ws_new_connections_ip_per_minute: int = 20
+    # API keys
+    api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 
     @model_validator(mode="after")
     def _check_production_secret(self) -> "Settings":
@@ -43,6 +62,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    def tier_limit(self, role: str) -> int:
+        """Requests per minute of a role (``trader``, ``analyst``, ``expert``, ``admin``)."""
+        return getattr(self, f"rate_limit_{role}")
 
 
 @lru_cache

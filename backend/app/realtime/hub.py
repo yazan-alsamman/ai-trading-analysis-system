@@ -31,6 +31,7 @@ CLOSE_NORMAL = 1000
 CLOSE_GOING_AWAY = 1001  # idle timeout / server shutdown
 CLOSE_TRY_AGAIN_LATER = 1013  # client too slow (queue full)
 CLOSE_UNAUTHORIZED = 4401  # invalid or expired access token
+CLOSE_RATE_LIMITED = 4429  # too many connections (per identity) or new connections (per IP)
 
 SUBSCRIBE_CONFIRM_TIMEOUT = 1.0  # seconds to wait for Redis to confirm a SUBSCRIBE
 

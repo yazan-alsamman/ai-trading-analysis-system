@@ -4,7 +4,8 @@ import uuid
 import trading_indicators as ti
 from fastapi import APIRouter, Response
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import IndicatorsReader, SessionDep
+from app.api.limits import EXPENSIVE
 from app.schemas.indicators import IndicatorsRequest, IndicatorsResponse
 from app.services import indicator_service, market_service
 
@@ -12,15 +13,19 @@ router = APIRouter(tags=["indicators"])
 
 
 @router.get("/indicators")
-async def indicator_catalog(_: CurrentUser) -> list[dict]:
+async def indicator_catalog(_: IndicatorsReader) -> list[dict]:
     """Every available indicator: params (type, default, min, max), outputs, placement, levels
     and the warm-up (``lookback``) with the default params."""
     return ti.catalog()
 
 
-@router.post("/market/instruments/{instrument_id}/indicators", response_model=IndicatorsResponse)
+@router.post(
+    "/market/instruments/{instrument_id}/indicators",
+    response_model=IndicatorsResponse,
+    openapi_extra=EXPENSIVE,
+)
 async def compute_indicators(
-    instrument_id: uuid.UUID, data: IndicatorsRequest, _: CurrentUser, session: SessionDep
+    instrument_id: uuid.UUID, data: IndicatorsRequest, _: IndicatorsReader, session: SessionDep
 ):
     """Indicator lines over the same window ``GET .../candles`` returns for these parameters
     (without ``start``: the latest ``limit`` candles). Warm-up history is loaded automatically,
