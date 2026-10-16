@@ -49,6 +49,9 @@ def _enum(cls, name: str) -> SAEnum:
 
 
 class NewsSource(Base):
+    """Where articles come from: an RSS feed the platform fetches, or an API source that pushes
+    through the ingestion API."""
+
     __tablename__ = "news_sources"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -119,6 +122,8 @@ class NewsArticle(Base):
 
 
 class NewsArticleInstrument(Base):
+    """An instrument tag of an article with its relevance (0..1)."""
+
     __tablename__ = "news_article_instruments"
     __table_args__ = (
         CheckConstraint("relevance BETWEEN 0 AND 1", name="ck_news_article_instruments_relevance"),

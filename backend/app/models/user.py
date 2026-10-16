@@ -17,6 +17,9 @@ class UserRole(StrEnum):
 
 
 class User(Base):
+    """An account: login e-mail, Argon2 password hash and one of four roles (trader, analyst,
+    expert, admin)."""
+
     __tablename__ = "users"
     __table_args__ = (CheckConstraint("email = lower(email)", name="ck_users_email_lowercase"),)
 

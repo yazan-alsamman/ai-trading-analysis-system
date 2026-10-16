@@ -46,6 +46,8 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
+      - name: ERD docs are up to date (T05)
+        run: python scripts/erd.py --check
       - run: pytest -q
 
   indicators:

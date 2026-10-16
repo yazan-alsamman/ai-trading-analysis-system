@@ -1,0 +1,59 @@
+erDiagram
+    notifications {
+        uuid id PK
+        uuid user_id FK
+        enum_notification_type type
+        varchar title
+        text body
+        jsonb data
+        enum_notification_severity severity
+        varchar dedup_key
+        timestamptz read_at
+        timestamptz created_at
+    }
+    notification_deliveries {
+        uuid id PK
+        uuid notification_id FK
+        enum_notification_channel channel
+        varchar target
+        enum_delivery_status status
+        int attempts
+        varchar last_error
+        varchar provider_message_id
+        varchar hold
+        timestamptz release_at
+        timestamptz created_at
+        timestamptz sent_at
+    }
+    notification_preferences {
+        uuid user_id PK, FK
+        jsonb matrix
+        double min_signal_strength
+        bool only_valid_plans
+        jsonb quiet_hours
+        varchar language
+        jsonb max_per_hour
+        timestamptz updated_at
+    }
+    telegram_links {
+        uuid user_id PK, FK
+        bigint chat_id UK
+        varchar username
+        timestamptz linked_at
+    }
+    user_devices {
+        uuid id PK
+        uuid user_id FK
+        enum_device_platform platform
+        varchar token UK
+        varchar app_version
+        varchar locale
+        timestamptz last_seen_at
+        timestamptz created_at
+    }
+    users
+    notification_deliveries }o--|| notifications : "notification_id"
+    notification_preferences |o--|| users : "user_id"
+    notifications }o--|| users : "user_id"
+    telegram_links |o--|| users : "user_id"
+    user_devices }o--|| users : "user_id"

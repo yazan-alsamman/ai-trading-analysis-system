@@ -185,6 +185,9 @@ class NotificationPreference(Base):
 
 
 class TelegramLink(Base):
+    """The Telegram chat a user linked for notifications (one chat per user and one user per
+    chat)."""
+
     __tablename__ = "telegram_links"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
