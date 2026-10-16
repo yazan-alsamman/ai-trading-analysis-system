@@ -3,9 +3,6 @@ name: Server inspect (read-only)
 # Runs the read-only inspection script on the VPS over SSH. Nothing on the server is changed.
 on:
   workflow_dispatch:
-  push:
-    branches: [claude/project-thread-1zx7f1]
-    paths: [infra/deploy/inspect.sh, .github/workflows/server-inspect.yml]
 
 jobs:
   inspect:

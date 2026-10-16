@@ -92,7 +92,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    mem_limit: 128m
+    mem_limit: 192m  # beat sits at ~106MiB after start
     cpus: 0.25
 
   ai-service:
