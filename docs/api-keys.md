@@ -89,6 +89,11 @@ curl -s "http://localhost/api/v1/market/instruments/$ID/candles?timeframe=1h&lim
 | `signals:read` | `GET /signals` (with `mine=true`: signals of the key owner's active strategies) |
 | `stream` | WebSocket `/ws/market` (section 6) |
 | `backtests:read` | `GET /backtests`, `GET /backtests/{id}`, `GET /backtests/{id}/trades`, `GET /backtests/{id}/trades.csv` (your own backtests; creating, cancelling and comparing need a login) |
+| `news:read` | `GET /news`, `GET /news/{id}`, `GET /news/sentiment`, and the WebSocket `news` topics ([news-posts.md](news-posts.md)) |
+| `news:write` | `POST /ingest/news`, `POST /ingest/news/sentiment` ([news-ingestion.md](news-ingestion.md)). **Admins only**: only an admin can put it on a key (403 otherwise), and the key stops working if its owner is no longer an admin |
+
+`GET /me/api-keys/scopes` lists every scope with its description, `admin_only` and `grantable`
+(whether you may put it on a key), for the key forms of the apps.
 
 Give a key only the scopes it needs. A key can **never** use `/auth/*`, `/users/me*`, `/me/*`
 (including key management and strategy activation) or `/admin/*`, whatever its scopes; those

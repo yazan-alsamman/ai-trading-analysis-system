@@ -23,6 +23,11 @@ the Celery queue `notifications`. Nothing calls a channel directly.
 | `backtest_failed` | backtest task | `warning` | the same plus `error` |
 | `security` | sign-in from a new IP/device, password changed, API key created / revoked, account locked by the login lockout | `warning` / `info` / **`critical`** (locked) | `event` (`new_login`, `password_changed`, `api_key_created`, `api_key_revoked`, `account_locked`) plus `ip`, `user_agent`, `key_name`, `key_prefix` or `minutes` |
 | `system` | admin broadcast, test messages | any | `title`, `body` (`broadcast_id`), or `test`, `channel` |
+| `new_post` (Y18) | an author you follow published a post (fan-out task, batches of 500) | `info` | `post_id`, `title`, `excerpt`, `author_id`, `author_name`, `instrument_symbol`, `direction` |
+| `comment_reply` (Y18) | a comment on your post, or a reply to your comment (never your own) | `info` | `post_id`, `comment_id`, `post_title`, `excerpt`, `author_name`, `kind` (`post` \| `comment`) |
+| `post_liked` (Y18) | likes on your post: **in-app only, one row per post and UTC day**, updated (and marked unread) by every like | `info` | `post_id`, `post_title`, `count` |
+| `content_hidden` (Y18) | moderation hid your post or comment | `warning` | `target_type`, `target_id`, `post_id`, `comment_id`, `excerpt`, `reason` |
+| `price_alert` (Y18) | one of your price alerts fired ([price-alerts.md](price-alerts.md)) | `warning` | `alert_id`, `instrument`, `condition`, `value`, `price`, `bar_time`, `note`, ... |
 
 - There is **one notification per (event, user)**: `dedup_key` (unique per user) makes
   producing idempotent. Examples: `signal:<signal_id>` (several activations of the same user on
@@ -103,7 +108,11 @@ GET /me/notification-preferences   (created with the defaults on first read)
     "backtest_completed": {"telegram": false, "email": false, "push": true},
     "backtest_failed":    {"telegram": false, "email": false, "push": true},
     "security":           {"telegram": false, "email": true,  "push": false},
-    "system":             {"telegram": true,  "email": false, "push": true}
+    "system":             {"telegram": true,  "email": false, "push": true},
+    "new_post":           {"telegram": false, "email": false, "push": true},
+    "comment_reply":      {"telegram": false, "email": false, "push": true},
+    "content_hidden":     {"telegram": false, "email": true,  "push": true},
+    "price_alert":        {"telegram": true,  "email": false, "push": true}
   },
   "min_signal_strength": 0.0,
   "only_valid_plans": false,
@@ -113,6 +122,8 @@ GET /me/notification-preferences   (created with the defaults on first read)
   "updated_at": "…"
 }
 ```
+
+`post_liked` has no matrix entry: it never leaves the app (a `PUT` that sets it is a 422).
 
 `PUT` takes the same fields. A missing field gets its default, and a missing matrix entry
 keeps the default for that event and channel. Example:
@@ -218,6 +229,8 @@ Authorization: Bearer <access token>
   | `backtest` | `backtest_id` |
   | `security` | — |
   | `notifications` | — (system messages, and digests with `type: "digest"` and `count`) |
+  | `post` | `post_id`, and `comment_id` for comments (`new_post`, `comment_reply`, `post_liked`, `content_hidden`) |
+  | `price_alert` | `alert_id`, `instrument_id` |
 
   With `notification_id` the app can mark it read (`POST /me/notifications/{id}/read`).
 - The body is the first whole lines of the inbox text, at most 240 characters.
