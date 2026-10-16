@@ -75,6 +75,8 @@ jobs:
     defaults:
       run:
         working-directory: libs/strategies
+    env:
+      STRATEGIES_PERF_FACTOR: "3"  # shared CI runners are slower than a dev machine
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

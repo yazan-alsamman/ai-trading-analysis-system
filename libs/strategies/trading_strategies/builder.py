@@ -483,14 +483,20 @@ class _Evaluator:
         self.n = len(df)
         self._indicators: dict[tuple[str, str], pd.DataFrame] = {}
         self._operands: dict[str, np.ndarray] = {}
+        # id() of operand dicts of the definition, which lives longer than this evaluator
+        self._by_id: dict[int, np.ndarray] = {}
 
     def _column(self, name: str) -> np.ndarray:
         return self.df[name].to_numpy(dtype=np.float64)
 
     def operand(self, op: Mapping[str, Any]) -> np.ndarray:
-        key = json.dumps(op, sort_keys=True)
+        seen = self._by_id.get(id(op))  # the same dict again (details of every signal bar)
+        if seen is not None:
+            return seen
+        key = json.dumps(op, sort_keys=True)  # an equal operand elsewhere in the definition
         cached = self._operands.get(key)
         if cached is not None:
+            self._by_id[id(op)] = cached
             return cached
         kind = op["type"]
         if kind == "constant":
@@ -517,7 +523,7 @@ class _Evaluator:
         multiplier = op.get("multiplier", 1.0)
         if multiplier != 1.0:
             value = value * multiplier
-        self._operands[key] = value
+        self._operands[key] = self._by_id[id(op)] = value
         return value
 
     def condition(self, cond: Mapping[str, Any]) -> np.ndarray:

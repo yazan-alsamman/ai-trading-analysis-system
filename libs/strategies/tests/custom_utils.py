@@ -141,3 +141,33 @@ def random_builder(rng: np.random.Generator) -> dict:
         sell=random_group(rng),
         strength=str(rng.choice(["fixed", "rule_ratio"])),
     )
+
+
+def twenty_conditions() -> dict:
+    """20 conditions, depth 2: buy = any of 9 upward crosses AND RSI between 20 and 70; sell
+    mirrored (the performance check of docs/custom-strategies.md)."""
+
+    def crosses(op: str) -> list[dict]:
+        out = [cond(price("close"), op, ind("ema", length=n)) for n in (10, 20, 30, 50)]
+        out += [cond(price("close"), op, ind("sma", length=n)) for n in (20, 50)]
+        out += [cond(ind("rsi", length=n), op, const(50)) for n in (7, 14)]
+        out.append(cond(ind("macd", output="macd"), op, ind("macd", output="signal")))
+        return out
+
+    rsi = ind("rsi", length=14)
+    return builder(
+        buy={
+            "all": [
+                {"any": crosses("crosses_above")},
+                {"op": "between", "value": rsi, "lower": const(20), "upper": const(70)},
+            ]
+        },
+        sell={
+            "all": [
+                {"any": crosses("crosses_below")},
+                {"op": "between", "value": rsi, "lower": const(30), "upper": const(80)},
+            ]
+        },
+        strength="rule_ratio",
+        category="momentum",
+    )

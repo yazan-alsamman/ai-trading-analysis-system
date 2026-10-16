@@ -2,6 +2,8 @@
 strength, details, history, and exact replicas of global strategies."""
 
 import json
+import os
+import time
 
 import numpy as np
 import pytest
@@ -19,6 +21,7 @@ from tests.custom_utils import (
     ind,
     price,
     signal_bars,
+    twenty_conditions,
 )
 
 CLOSE = price("close")
@@ -351,3 +354,16 @@ def test_rsi_reversal_replica_is_exact(seed: int) -> None:
     original = ts.run("rsi_reversal", df)
     assert (original["signal"] != 0).sum() > 50
     np.testing.assert_array_equal(replica["signal"].to_numpy(), original["signal"].to_numpy())
+
+
+def test_twenty_conditions_on_17500_bars_is_fast() -> None:
+    """Measured ~0.1 s on a dev machine; CI runners get STRATEGIES_PERF_FACTOR."""
+    factor = float(os.environ.get("STRATEGIES_PERF_FACTOR", "1"))
+    strategy = ts.BuilderStrategy(twenty_conditions())
+    df = synthetic_ohlcv(17_500, seed=1)
+    strategy.generate(df.iloc[:500])  # warm up imports and caches
+    started = time.perf_counter()
+    out = strategy.generate(df)
+    elapsed = time.perf_counter() - started
+    assert (out["signal"] != 0).sum() > 1000
+    assert elapsed < 1.5 * factor, f"{elapsed:.2f} s"
