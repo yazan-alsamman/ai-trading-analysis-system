@@ -89,6 +89,33 @@ async def due_jobs(session: AsyncSession, now: datetime) -> list[Job]:
     return sorted(jobs, key=lambda j: (j.timeframe.interval, str(j.instrument_id)))
 
 
+async def custom_snapshots(
+    session: AsyncSession, jobs: list[Job]
+) -> dict[tuple[uuid.UUID, Timeframe], dict[str, dict[str, Any]]]:
+    """For the beat tick: the custom setups of all due jobs resolved in one batch (one query for
+    the active custom keys, then :func:`strategy_resolver.engine_snapshots`), per job."""
+    if not jobs:
+        return {}
+    pairs = {(j.instrument_id, j.timeframe) for j in jobs}
+    rows = await session.execute(
+        select(UserStrategy.instrument_id, UserStrategy.timeframe, UserStrategy.strategy_key)
+        .where(
+            UserStrategy.is_active.is_(True),
+            UserStrategy.strategy_key.startswith(strategy_resolver.KEY_PREFIX),
+            UserStrategy.instrument_id.in_({p[0] for p in pairs}),
+        )
+        .distinct()
+    )
+    wanted = [(iid, tf, key) for iid, tf, key in rows.all() if (iid, tf) in pairs]
+    if not wanted:
+        return {}
+    resolved = await strategy_resolver.engine_snapshots(session, {k for _, _, k in wanted})
+    out: dict[tuple[uuid.UUID, Timeframe], dict[str, dict[str, Any]]] = defaultdict(dict)
+    for iid, tf, key in wanted:
+        out[(iid, tf)][key] = resolved[key]
+    return dict(out)
+
+
 @dataclass(frozen=True)
 class Setup:
     strategy_key: str
@@ -196,10 +223,14 @@ def _evaluate_setups(
 
 
 async def evaluate(
-    session_factory: async_sessionmaker[AsyncSession], redis: Redis, job: Job
+    session_factory: async_sessionmaker[AsyncSession],
+    redis: Redis,
+    job: Job,
+    custom: dict[str, dict[str, Any]] | None = None,
 ) -> EvaluationResult:
     """Evaluate one (instrument, timeframe) on its last closed bar. Safe to call twice: a Redis
-    lock stops concurrent runs and the unique constraint makes the insert idempotent."""
+    lock stops concurrent runs and the unique constraint makes the insert idempotent.
+    ``custom``: custom setups already resolved by the beat tick (key -> snapshot)."""
     started = time.perf_counter()
     result = EvaluationResult(job)
     token = uuid.uuid4().hex
@@ -212,7 +243,7 @@ async def evaluate(
         async with session_factory() as session:
             active = await active_setups(session, job.instrument_id, job.timeframe)
             setups, errors = await strategy_resolver.for_engine(
-                session, ((s.strategy_key, s.params_hash, s.params) for s in active)
+                session, ((s.strategy_key, s.params_hash, s.params) for s in active), custom
             )
             result.errors.extend(errors)
             result.setups = len(setups)

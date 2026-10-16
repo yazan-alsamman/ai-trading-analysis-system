@@ -328,6 +328,18 @@
           "default": true,
           "title": "Visible",
           "type": "boolean"
+        },
+        "unavailable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unavailable"
         }
       },
       "required": [

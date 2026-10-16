@@ -9,6 +9,7 @@ report FastAPI-style errors (``loc`` = the JSON path), so clients get one format
 import json
 import math
 import uuid
+from collections.abc import Collection
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -17,6 +18,7 @@ import trading_strategies as ts
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app.models.candle import Timeframe
+from app.models.custom_strategy import KEY_PREFIX as CUSTOM_PREFIX
 
 SCHEMA_VERSION = 1
 MAX_STATE_BYTES = 256 * 1024
@@ -76,9 +78,13 @@ class IndicatorOverlay(_Strict):
 
 class StrategyOverlay(_Strict):
     id: ItemId
+    # a global key, or custom:<uuid> (one of your custom strategies or a public one)
     strategy_key: str = Field(min_length=1, max_length=64)
     params: dict[str, Any] = Field(default_factory=dict)  # resolved with defaults on save
     visible: bool = True
+    # read-only on a workspace read: the strategy cannot be used (custom strategy deleted or
+    # made private by its author); accepted on write and ignored
+    unavailable: bool | None = Field(default=None, exclude=True)
 
 
 class Point(_Strict):
@@ -154,7 +160,11 @@ def error(loc: Loc, msg: str, kind: str = "value_error") -> dict[str, Any]:
     return {"loc": list(loc), "msg": msg, "type": kind}
 
 
-def state_errors(state: WorkspaceState, prefix: Loc = ("body", "state")) -> list[dict[str, Any]]:
+def state_errors(
+    state: WorkspaceState,
+    prefix: Loc = ("body", "state"),
+    custom_ok: Collection[str] = (),
+) -> list[dict[str, Any]]:
     """Cross-field rules and registry validation. Resolves indicator and strategy params in
     place (defaults filled in), so the stored state is explicit."""
     errors: list[dict[str, Any]] = []
@@ -212,6 +222,20 @@ def state_errors(state: WorkspaceState, prefix: Loc = ("body", "state")) -> list
         for s, strat in enumerate(panel.strategies):
             sloc = (*ploc, "strategies", s)
             unique(strat.id, (*sloc, "id"))
+            if strat.strategy_key.startswith(CUSTOM_PREFIX):
+                # custom strategies: checked by the service (access needs the database)
+                if strat.strategy_key.lower() not in custom_ok:
+                    errors.append(
+                        error(
+                            (*sloc, "strategy_key"),
+                            f"unknown or inaccessible custom strategy {strat.strategy_key}",
+                        )
+                    )
+                elif strat.params:
+                    errors.append(error((*sloc, "params"), "custom strategies take no params"))
+                else:
+                    strat.strategy_key = strat.strategy_key.lower()
+                continue
             try:
                 strategy = ts.get_strategy(strat.strategy_key)
             except ValueError as exc:

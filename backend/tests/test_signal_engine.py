@@ -336,14 +336,22 @@ async def test_user_strategy_unique_setup(session: AsyncSession, make_user) -> N
 
 def test_tick_schedules_evaluations_after_the_boundary(monkeypatch) -> None:
     job = Job(uuid.uuid4(), Timeframe.m1, utc("2026-03-02 11:59"))
-    monkeypatch.setattr(signal_tasks, "run_async", lambda fn: [job])
+    snapshots = {"custom:x": {"error": "test"}}
+    monkeypatch.setattr(
+        signal_tasks,
+        "run_async",
+        lambda fn: ([job], {(job.instrument_id, job.timeframe): snapshots}),
+    )
     calls = []
     monkeypatch.setattr(
-        signal_tasks.evaluate, "apply_async", lambda args, eta: calls.append((args, eta))
+        signal_tasks.evaluate,
+        "apply_async",
+        lambda args, kwargs, eta: calls.append((args, kwargs, eta)),
     )
     assert signal_tasks.tick.run() == 1
-    [(args, eta)] = calls
+    [(args, kwargs, eta)] = calls
     assert args == (str(job.instrument_id), "1m", "2026-03-02T11:59:00+00:00")
+    assert kwargs == {"custom": snapshots}  # custom setups resolved once per beat run
     assert eta.second == 10 and eta.microsecond == 0
 
 

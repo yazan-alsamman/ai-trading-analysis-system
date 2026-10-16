@@ -16,12 +16,15 @@ import uuid
 from collections.abc import Iterable
 from typing import Any
 
+import trading_strategies as ts
 from fastapi import HTTPException, status
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.models.custom_strategy import KEY_PREFIX as CUSTOM_PREFIX
+from app.models.custom_strategy import CustomStrategy, Visibility
 from app.models.instrument import Instrument
 from app.models.user import User, UserRole
 from app.models.workspace import Workspace
@@ -39,7 +42,7 @@ from app.schemas.workspaces import (
     error,
     state_errors,
 )
-from app.services import market_service
+from app.services import market_service, strategy_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -200,19 +203,47 @@ async def _instruments(session: AsyncSession, ids: Iterable[uuid.UUID]) -> dict:
     return {row.id: row for row in rows}
 
 
+def _custom_keys(state: dict[str, Any] | WorkspaceState) -> set[str]:
+    """``custom:<uuid>`` strategy overlays of a state (lower case)."""
+    if isinstance(state, WorkspaceState):
+        keys = [s.strategy_key for p in state.panels for s in p.strategies]
+    else:
+        keys = [s.get("strategy_key", "") for p in state["panels"] for s in p.get("strategies", [])]
+    return {k.lower() for k in keys if k.lower().startswith(CUSTOM_PREFIX)}
+
+
+async def _usable_custom(
+    session: AsyncSession, keys: Iterable[str], user_id: uuid.UUID | None
+) -> set[str]:
+    """The custom keys ``user_id`` may use: their own strategies and public ones (only public
+    ones without a user, e.g. a shared link)."""
+    ids = {cid for key in keys if (cid := strategy_resolver.custom_id(key)) is not None}
+    if not ids:
+        return set()
+    rows = await session.scalars(select(CustomStrategy).where(CustomStrategy.id.in_(ids)))
+    return {
+        r.key
+        for r in rows
+        if r.visibility == Visibility.public or (user_id is not None and r.user_id == user_id)
+    }
+
+
 async def validate_state(
     session: AsyncSession,
     state: WorkspaceState,
     *,
     keep: Iterable[uuid.UUID] = (),
     prefix: Loc = ("body", "state"),
+    user: User | None = None,
+    keep_custom: Iterable[str] = (),
 ) -> dict[str, Any]:
     """The document to store, or 422 with every error (``loc`` = JSON path).
 
     Instruments must exist; inactive ones are fine, and ids already in the stored state
     (``keep``) may stay even if the instrument was deleted, so a workspace never breaks.
     """
-    errors = state_errors(state, prefix)
+    usable = await _usable_custom(session, _custom_keys(state), user.id if user else None)
+    errors = state_errors(state, prefix, custom_ok=usable | set(keep_custom))
     refs = _instrument_refs(state)
     known = await _instruments(session, (i for _, i in refs))
     allowed = set(known) | set(keep)
@@ -347,8 +378,12 @@ async def get_own_or_404(session: AsyncSession, user: User, workspace_id: uuid.U
     return row
 
 
-async def _annotated_state(session: AsyncSession, state: dict[str, Any]):
-    """(state with read-only ``instrument``/``unavailable`` on each panel, unavailable ids)."""
+async def _annotated_state(
+    session: AsyncSession, state: dict[str, Any], viewer_id: uuid.UUID | None = None
+):
+    """(state with read-only ``instrument``/``unavailable`` on each panel and ``unavailable``
+    on each strategy overlay, unavailable instrument ids)."""
+    usable = await _usable_custom(session, _custom_keys(state), viewer_id)
     refs = _instrument_refs(state)
     found = await _instruments(session, (i for _, i in refs))
     unavailable = []
@@ -370,12 +405,24 @@ async def _annotated_state(session: AsyncSession, state: dict[str, Any]):
             }
         # deleted (no row) or deactivated; an empty panel (no instrument) is not unavailable
         missing = raw is not None and (row is None or not row.is_active)
-        panels.append({**panel, "instrument": info, "unavailable": missing})
+        strategies = [
+            {**s, "unavailable": _strategy_unavailable(s.get("strategy_key", ""), usable)}
+            for s in panel.get("strategies", [])
+        ]
+        panels.append(
+            {**panel, "instrument": info, "unavailable": missing, "strategies": strategies}
+        )
     return {**state, "panels": panels}, unavailable
 
 
+def _strategy_unavailable(key: str, usable: set[str]) -> bool:
+    if key.lower().startswith(CUSTOM_PREFIX):
+        return key.lower() not in usable
+    return key not in ts.STRATEGIES  # a global strategy removed from the code
+
+
 async def read(session: AsyncSession, row: Workspace) -> dict[str, Any]:
-    state, unavailable = await _annotated_state(session, row.state)
+    state, unavailable = await _annotated_state(session, row.state, row.user_id)
     return {
         "id": row.id,
         "name": row.name,
@@ -430,7 +477,7 @@ async def create(session: AsyncSession, user: User, data: WorkspaceCreate) -> Wo
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Give either state or template, not both"
         )
     if data.state is not None:
-        stored = await validate_state(session, data.state)
+        stored = await validate_state(session, data.state, user=user)
     else:
         stored = (await template_state(session, data.template or "blank")).stored()
     return await _insert(session, user, data.name, stored, explicit_name=True)
@@ -450,7 +497,9 @@ async def replace_state(
         )
     current = await get_own_or_404(session, user, workspace_id)
     keep = {i for _, i in _instrument_refs(current.state)}
-    stored = await validate_state(session, state, keep=keep)
+    stored = await validate_state(
+        session, state, keep=keep, user=user, keep_custom=_custom_keys(current.state)
+    )
     # atomic compare-and-set: no read-modify-write race between devices
     row = await session.scalar(
         update(Workspace)

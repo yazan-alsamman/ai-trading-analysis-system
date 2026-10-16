@@ -50,14 +50,16 @@ def tick() -> int:
 
     async def jobs(session_factory, _redis):
         async with session_factory() as session:
-            return await signal_engine.due_jobs(session, now)
+            due = await signal_engine.due_jobs(session, now)
+            # custom setups of every due job, resolved in one batch for this beat run
+            return due, await signal_engine.custom_snapshots(session, due)
 
-    due = run_async(jobs)
+    due, custom = run_async(jobs)
     eta = boundary + EVALUATE_DELAY
     for job in due:
-        evaluate.apply_async(
-            (str(job.instrument_id), job.timeframe.value, job.bar_time.isoformat()), eta=eta
-        )
+        args = (str(job.instrument_id), job.timeframe.value, job.bar_time.isoformat())
+        snapshots = custom.get((job.instrument_id, job.timeframe))
+        evaluate.apply_async(args, {"custom": snapshots} if snapshots else None, eta=eta)
     closed = [tf.value for tf, _ in signal_engine.closed_bars(now)]
     logger.info(
         "signals.tick boundary=%s closed=%s jobs=%d", boundary.isoformat(), closed, len(due)
@@ -72,13 +74,17 @@ def tick() -> int:
     reject_on_worker_lost=True,
     max_retries=6,
 )
-def evaluate(self, instrument_id: str, timeframe: str, bar_time: str) -> dict:
+def evaluate(
+    self, instrument_id: str, timeframe: str, bar_time: str, custom: dict | None = None
+) -> dict:
+    """``custom``: custom setups resolved by the tick (key -> snapshot); others are resolved
+    here."""
     job = signal_engine.Job(
         uuid.UUID(instrument_id), Timeframe(timeframe), datetime.fromisoformat(bar_time)
     )
 
     async def go(session_factory, redis):
-        return await signal_engine.evaluate(session_factory, redis, job)
+        return await signal_engine.evaluate(session_factory, redis, job, custom)
 
     result = run_async(go)
     if result.status == "locked":  # another worker is on it; check again once it is done
