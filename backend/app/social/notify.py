@@ -77,6 +77,12 @@ async def fanout_new_post(
     if row is None or row[0].status != "published":
         return 0
     post, author, symbol = row
+    subscribers_only = post.visibility == "subscribers"
+    if subscribers_only:  # Y19: only the expert's entitled subscribers hear about it
+        from app.payments.entitlements import subscriber_ids  # noqa: PLC0415
+
+        async with factory() as session:
+            recipients = sorted(await subscriber_ids(session, author.id, "premium_posts"))
     data = {
         "post_id": str(post.id),
         "title": post.title,
@@ -89,6 +95,16 @@ async def fanout_new_post(
     sent, last = 0, None
     while True:
         async with factory() as session:
+            if subscribers_only:
+                ids = [u for u in recipients if last is None or u > last][:FANOUT_BATCH]
+                if not ids:
+                    return sent
+                prepared = await notifications.prepare(session, redis, _items(ids, post, data))
+                await session.commit()
+                await notifications.after_commit(redis, prepared)
+                sent += len(prepared.notifications)
+                last = ids[-1]
+                continue
             query = (
                 select(Follow.follower_id)
                 .join(User, User.id == Follow.follower_id)
@@ -101,20 +117,23 @@ async def fanout_new_post(
             ids = list(await session.scalars(query))
             if not ids:
                 return sent
-            items = [
-                notifications.NotifyItem(
-                    user_id=uid,
-                    type=NotificationType.new_post,
-                    data=data,
-                    dedup_key=f"new_post:{post.id}",
-                )
-                for uid in ids
-            ]
-            prepared = await notifications.prepare(session, redis, items)
+            prepared = await notifications.prepare(session, redis, _items(ids, post, data))
             await session.commit()
         await notifications.after_commit(redis, prepared)
         sent += len(prepared.notifications)
         last = ids[-1]
+
+
+def _items(ids, post: Post, data: dict) -> list[notifications.NotifyItem]:
+    return [
+        notifications.NotifyItem(
+            user_id=uid,
+            type=NotificationType.new_post,
+            data=data,
+            dedup_key=f"new_post:{post.id}",
+        )
+        for uid in ids
+    ]
 
 
 # --- comments ------------------------------------------------------------------------------------
@@ -232,9 +251,10 @@ def hidden_item(
     author_id: uuid.UUID,
     target_type: str,
     target_id: uuid.UUID,
-    post_id: uuid.UUID,
+    post_id: uuid.UUID | None,
     excerpt: str,
     reason: str | None,
+    conversation_id: uuid.UUID | None = None,
 ) -> notifications.NotifyItem:
     return notifications.NotifyItem(
         user_id=author_id,
@@ -242,8 +262,9 @@ def hidden_item(
         data={
             "target_type": target_type,
             "target_id": str(target_id),
-            "post_id": str(post_id),
+            "post_id": str(post_id) if post_id else None,
             "comment_id": str(target_id) if target_type == "comment" else None,
+            "conversation_id": str(conversation_id) if conversation_id else None,
             "excerpt": excerpt,
             "reason": reason,
         },

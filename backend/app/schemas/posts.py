@@ -96,7 +96,10 @@ class PostRead(BaseModel):
     id: uuid.UUID
     author: AuthorRead
     title: str
-    body: str
+    body: str = Field(description="the first 200 characters when locked")
+    locked: bool = Field(
+        default=False, description="a subscribers post you are not entitled to (a teaser)"
+    )
     instrument: InstrumentRef | None
     timeframe: Timeframe | None
     direction: PostDirection | None
