@@ -39,6 +39,7 @@ KEEP_HEADERS = {
     "ratelimit-remaining",
     "ratelimit-reset",
     "retry-after",
+    "x-request-id",
 }
 # Lists longer than this are cut to TRIM_TO items in saved examples (candles, curves, ...),
 # except in the responses below, whose whole content is the point.
