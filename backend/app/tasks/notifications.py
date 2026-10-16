@@ -1,6 +1,7 @@
 """Notification tasks on the ``notifications`` queue (consumed by the ``worker`` service).
 
 - ``notifications.send``: a chunk of deliveries (retries are scheduled by the service).
+- ``notifications.fanout``: splits a big batch (one signal, many users) into send chunks.
 - ``notifications.digests`` (beat, every minute): digests of held deliveries whose quiet hours
   or hourly cap ended, and deliveries held by an open circuit going back to the queue.
 - ``notifications.cleanup`` (beat, daily): inbox retention.
@@ -25,6 +26,12 @@ def send(delivery_ids: list[str]) -> dict:
     lock and the ``pending`` check make that safe."""
     ids = [uuid.UUID(i) for i in delivery_ids]
     return run_async(lambda factory, redis: service.send_deliveries(factory, redis, ids))
+
+
+@celery_app.task(name="notifications.fanout")
+def fanout(delivery_ids: list[str]) -> int:
+    """Split a big batch into ``notifications.send`` chunks."""
+    return service.send_chunks(delivery_ids)
 
 
 @celery_app.task(name="notifications.digests")

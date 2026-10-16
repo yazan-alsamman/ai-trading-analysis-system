@@ -60,7 +60,7 @@ from app.notifications.channels.push import FcmClient
 from app.notifications.channels.telegram import TelegramClient
 from app.notifications.preferences import EXTERNAL, Prefs
 from app.realtime import publisher
-from app.realtime.topics import user_topic
+from app.realtime.topics import channel_for, user_topic
 
 logger = logging.getLogger(__name__)
 
@@ -102,12 +102,27 @@ class Prepared:
 # --- enqueueing (replaced in tests) --------------------------------------------------------------
 
 
-def _enqueue_celery(ids: Sequence[uuid.UUID], countdown: float | None = None) -> None:
+def send_chunks(ids: Sequence[uuid.UUID | str], countdown: float | None = None) -> int:
+    """One ``notifications.send`` task per chunk of deliveries."""
     from app.tasks import celery_app  # the API process only needs Celery to send
 
     for i in range(0, len(ids), SEND_CHUNK):
         chunk = [str(x) for x in ids[i : i + SEND_CHUNK]]
         celery_app.send_task("notifications.send", args=[chunk], queue=QUEUE, countdown=countdown)
+    return -(-len(ids) // SEND_CHUNK)
+
+
+def _enqueue_celery(ids: Sequence[uuid.UUID], countdown: float | None = None) -> None:
+    """A big batch (a signal for hundreds of users) is one ``notifications.fanout`` task that a
+    worker splits into chunks, so the producer (the signal engine) pays for one enqueue."""
+    if len(ids) <= SEND_CHUNK:
+        send_chunks(ids, countdown)
+        return
+    from app.tasks import celery_app
+
+    celery_app.send_task(
+        "notifications.fanout", args=[[str(x) for x in ids]], queue=QUEUE, countdown=countdown
+    )
 
 
 enqueue: Callable[..., None] = _enqueue_celery
@@ -205,6 +220,7 @@ async def prepare(
         title, body = templates.inbox(item.type, item.data, prefs[item.user_id].language)
         rows.append(
             {
+                "id": uuid.uuid4(),
                 "user_id": item.user_id,
                 "type": item.type,
                 "title": title[:200],
@@ -215,13 +231,18 @@ async def prepare(
             }
         )
         by_key[(item.user_id, item.dedup_key[:200])] = item
+    # Core executemany (batched "insertmanyvalues"), not one huge multi-row VALUES: 500 rows in
+    # ~0.1 s instead of ~1 s; only the keys come back, the rest is known here
+    table = Notification.__table__
     stmt = (
-        insert(Notification)
-        .values(rows)
+        insert(table)
         .on_conflict_do_nothing(constraint="uq_notifications_user_dedup")
-        .returning(*Notification.__table__.columns)
+        .returning(table.c.id, table.c.created_at)
     )
-    stored = [dict(r._mapping) for r in (await session.execute(stmt)).all()]
+    created = dict((await session.execute(stmt, rows)).all())
+    stored = [
+        {**r, "created_at": created[r["id"]], "read_at": None} for r in rows if r["id"] in created
+    ]
     if not stored:
         return out
     out.notifications = stored
@@ -276,6 +297,7 @@ async def prepare(
             disabled = not server.get(channel)
             delivery_rows.append(
                 {
+                    "id": uuid.uuid4(),
                     "notification_id": row["id"],
                     "channel": channel,
                     "target": target,
@@ -286,38 +308,38 @@ async def prepare(
                 }
             )
     if delivery_rows:
+        table = NotificationDelivery.__table__
         stmt = (
-            insert(NotificationDelivery)
-            .values(delivery_rows)
+            insert(table)
             .on_conflict_do_nothing(constraint="uq_notification_deliveries_target")
-            .returning(
-                NotificationDelivery.id,
-                NotificationDelivery.channel,
-                NotificationDelivery.target,
-                NotificationDelivery.status,
-                NotificationDelivery.hold,
-                NotificationDelivery.notification_id,
-            )
+            .returning(table.c.id)
         )
-        for d in (await session.execute(stmt)).all():
-            out.deliveries.append(dict(d._mapping))
-            if d.status == DeliveryStatus.pending and d.hold is None:
-                out.send_ids.append(d.id)
+        inserted = set((await session.execute(stmt, delivery_rows)).scalars())
+        for d in delivery_rows:
+            if d["id"] not in inserted:
+                continue
+            out.deliveries.append(d)
+            if d["status"] == DeliveryStatus.pending and d["hold"] is None:
+                out.send_ids.append(d["id"])
     return out
 
 
 async def after_commit(redis: Redis | None, prepared: Prepared) -> None:
     """Publish the WebSocket messages and enqueue the sends (never raises)."""
     redis = redis or get_redis()
-    for row in prepared.notifications:
+    if prepared.notifications:
+        # one round trip for all users (500 users: one pipeline, not 500 PUBLISH calls)
         try:
-            await publisher.publish(
-                user_topic(row["user_id"]),
-                {"type": "notification", "notification": wire(row)},
-                redis,
-            )
+            pipe = redis.pipeline(transaction=False)
+            for row in prepared.notifications:
+                topic = user_topic(row["user_id"])
+                message = {"type": "notification", "notification": wire(row)}
+                pipe.publish(channel_for(topic), publisher.encode(topic, message))
+            await pipe.execute()
         except Exception:  # noqa: BLE001 - stored in the inbox anyway
-            logger.exception("notifications: publishing to user %s failed", row["user_id"])
+            logger.exception(
+                "notifications: publishing %d messages failed", len(prepared.notifications)
+            )
     _schedule(prepared.send_ids)
 
 

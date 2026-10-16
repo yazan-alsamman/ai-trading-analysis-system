@@ -642,3 +642,21 @@ async def test_test_message_and_channels(
     notes = (await client.get(INBOX, headers=headers)).json()
     assert notes["items"][0]["title"] == "إشعار تجريبي"
     assert user.email
+
+
+def test_big_batches_are_one_fanout_task(monkeypatch) -> None:
+    from app.tasks import celery_app
+    from app.tasks.notifications import fanout
+
+    calls = []
+    monkeypatch.setattr(celery_app, "send_task", lambda name, **kw: calls.append((name, kw)))
+    ids = [uuid.uuid4() for _ in range(120)]
+    service._enqueue_celery(ids[:10])
+    assert [(n, len(kw["args"][0])) for n, kw in calls] == [("notifications.send", 10)]
+    calls.clear()
+    service._enqueue_celery(ids)  # the signal engine pays for one enqueue
+    assert [(n, len(kw["args"][0])) for n, kw in calls] == [("notifications.fanout", 120)]
+    assert all(kw["queue"] == "notifications" for _, kw in calls)
+    calls.clear()
+    assert fanout.run([str(i) for i in ids]) == 3  # the worker splits it: 50 + 50 + 20
+    assert [len(kw["args"][0]) for _, kw in calls] == [50, 50, 20]
