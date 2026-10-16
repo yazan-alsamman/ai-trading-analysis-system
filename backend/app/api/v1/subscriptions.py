@@ -43,7 +43,8 @@ from app.social.notify import display_name
 
 router = APIRouter(tags=["subscriptions"])
 admin_router = APIRouter(prefix="/admin", tags=["subscriptions"])
-public_router = APIRouter(tags=["subscriptions"])  # no identity rate limit (no login)
+# no identity rate limit (no login); "payments-demo" in the OpenAPI document
+public_router = APIRouter(tags=["payments-demo"])
 
 limit_pay_ip = limit_ip("demo-pay", "auth_login_ip_per_minute")
 

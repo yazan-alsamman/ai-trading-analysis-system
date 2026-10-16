@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from app.api import ws
 from app.api.limits import RateLimitHeadersMiddleware, rate_limit_exceeded_handler
+from app.api.openapi import install as install_openapi
 from app.api.v1 import api_router
 from app.core.config import get_settings
 from app.core.logging import install_token_redaction, quiet_http_clients
@@ -92,3 +93,4 @@ async def version_conflict_handler(request: Request, exc: VersionConflict) -> JS
 
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws.router)  # /ws/market, at the root: Nginx proxies /ws/ with Upgrade headers
+install_openapi(app)

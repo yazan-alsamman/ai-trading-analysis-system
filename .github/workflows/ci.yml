@@ -48,6 +48,10 @@ jobs:
       - run: ruff format --check .
       - name: ERD docs are up to date (T05)
         run: python scripts/erd.py --check
+      - name: API contract is up to date (T07)
+        run: |
+          python scripts/openapi.py --check
+          python scripts/asyncapi.py --check
       - run: pytest -q
 
   indicators:
@@ -125,6 +129,30 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: pytest -q
+
+  api-contract:
+    # the committed contract (docs/api) is valid and both client generators accept it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Validate the AsyncAPI document
+        run: npx -y @asyncapi/cli@2.16.0 validate docs/api/asyncapi.yaml
+      - name: TypeScript client (openapi-typescript)
+        run: |
+          npx -y openapi-typescript@7.4.4 docs/api/openapi.json -o /tmp/ts/schema.d.ts
+          wc -l /tmp/ts/schema.d.ts
+      - name: Dart client (openapi-generator dart-dio)
+        run: |
+          npx -y @openapitools/openapi-generator-cli@2.15.3 version-manager set 7.10.0
+          npx -y @openapitools/openapi-generator-cli@2.15.3 generate -i docs/api/openapi.json             -g dart-dio -o /tmp/dart --additional-properties=pubName=trading_api
+          echo "dart files: $(find /tmp/dart/lib -name '*.dart' | wc -l)"
 
   compose:
     runs-on: ubuntu-latest
