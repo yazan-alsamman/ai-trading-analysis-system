@@ -383,6 +383,9 @@ async def test_push_payload_token_cache_and_invalid_token(
         "signal_id": SIGNAL_DATA["signal"]["id"],
     }
     assert message["android"]["priority"] == "high"
+    body = message["notification"]["body"]  # whole lines only, up to 240 characters
+    lines = templates.inbox("signal", SIGNAL_DATA, "ar")[1].splitlines()
+    assert len(body) <= 240 and body.endswith(lines[-2])  # the size line fits, the risk not
     # FCM says the token is gone: the device row is deleted
     fcm.responses = [
         (404, {"error": {"status": "NOT_FOUND", "details": [{"errorCode": "UNREGISTERED"}]}})

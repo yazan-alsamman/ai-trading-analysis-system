@@ -212,8 +212,13 @@ def deep_link(event: str, data: dict[str, Any], notification_id: str) -> dict[st
 
 
 def push(title: str, body: str) -> tuple[str, str]:
-    """Short title/body: the first lines of the body, cut to fit a notification."""
-    short = " · ".join(line for line in body.split("\n") if line)[:PUSH_BODY_MAX]
+    """Short title/body: as many whole lines of the body as fit (never a cut number)."""
+    parts: list[str] = []
+    for line in (x for x in body.split("\n") if x):
+        if len(" · ".join([*parts, line])) > PUSH_BODY_MAX:
+            break
+        parts.append(line)
+    short = " · ".join(parts) or body[:PUSH_BODY_MAX]
     return title[:120], short
 
 
