@@ -66,6 +66,25 @@ class Settings(BaseSettings):
     custom_strategy_limit_expert: int = 50
     custom_strategy_limit_admin: int = 50
     rate_limit_validate_cost: int = 2  # POST /custom-strategies/validate
+    # Notifications (Y15). Empty secrets = that channel is disabled (reported, never an error).
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = ""  # optional: otherwise read once with getMe
+    telegram_mode: str = "polling"  # polling (no HTTPS needed) | webhook
+    telegram_webhook_secret: str = ""
+    telegram_api_base: str = "https://api.telegram.org"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_starttls: bool = True
+    fcm_project_id: str = ""
+    fcm_credentials_json: str = ""  # service-account JSON, or a path to the file
+    notification_timeout_seconds: float = 10.0  # every outbound call
+    notification_max_attempts: int = 5
+    notification_breaker_failures: int = 5  # consecutive failures that open a channel's circuit
+    notification_breaker_seconds: int = 300  # how long it stays open
+    notification_test_cost: int = 5  # rate-limit cost of POST /me/notifications/test
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 
