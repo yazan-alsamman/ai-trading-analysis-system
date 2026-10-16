@@ -35,6 +35,12 @@ class NotificationType(StrEnum):
     backtest_failed = "backtest_failed"
     security = "security"
     system = "system"
+    # Y18 (migration 0011 adds them to the existing enum type)
+    new_post = "new_post"
+    comment_reply = "comment_reply"
+    post_liked = "post_liked"  # in-app only, batched per post and day
+    content_hidden = "content_hidden"
+    price_alert = "price_alert"
 
 
 class Severity(StrEnum):
