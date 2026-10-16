@@ -74,8 +74,9 @@ Effect, measured on the BTC/USDT 1h demo data with `ma_crossover`:
 With wide levels no entry bar reaches them, so nothing changes. With levels inside a typical
 bar's range, the old rule hid exits that really happened (here mostly stops), which made the
 results look better than they were. Y11 configs with `check_entry_bar: false` give
-**bit-identical** results to the Y11 engine; a test fingerprints 3 strategies × 5 configs
-against it.
+**bit-identical** results to the Y11 engine: a test runs 3 strategies × 5 configs through the
+new engine and through the Y11 engine (kept verbatim in `libs/backtest/tests/y11_reference.py`)
+and compares every trade and equity value exactly.
 
 ## Stops (`stop`)
 
