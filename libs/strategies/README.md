@@ -75,19 +75,33 @@ is ever evaluated as an expression). They behave exactly like the global ones (`
 import trading_strategies as ts
 
 rules = {
-    "schema_version": 1, "category": "trend",
-    "buy":  {"all": [{"left": {"type": "indicator", "name": "ema", "params": {"length": 9}},
-                      "op": "crosses_above",
-                      "right": {"type": "indicator", "name": "ema", "params": {"length": 21}}}]},
+    "schema_version": 1,
+    "category": "trend",
+    "buy": {
+        "all": [
+            {
+                "left": {"type": "indicator", "name": "ema", "params": {"length": 9}},
+                "op": "crosses_above",
+                "right": {"type": "indicator", "name": "ema", "params": {"length": 21}},
+            }
+        ]
+    },
 }
-ts.BuilderStrategy(rules).generate(df)            # BuilderStrategy: rules (AND/OR groups)
-combo = {"schema_version": 1, "mode": "weighted", "window": 3, "threshold": 0.6,
-         "members": [{"ref": "rsi_reversal"}, {"ref": "custom:<uuid>", "weight": 2}]}
+ts.BuilderStrategy(rules).generate(df)  # BuilderStrategy: rules (AND/OR groups)
+combo = {
+    "schema_version": 1,
+    "mode": "weighted",
+    "window": 3,
+    "threshold": 0.6,
+    "members": [{"ref": "rsi_reversal"}, {"ref": "custom:<uuid>", "weight": 2}],
+}
 ts.CompositeStrategy(combo, resolver=lambda ref: ("builder", rules)).generate(df)
-ts.validate("builder", rules)                     # errors with JSON paths, normalised definition
+ts.validate("builder", rules)  # errors with JSON paths, normalised definition
 snap = ts.snapshot("composite", combo, resolver)  # rebuild later without a resolver
-ts.from_snapshot(snap); ts.snapshot_hash(snap)    # the setup's identity (like params_hash)
-ts.json_schemas(); ts.operand_catalog()           # what editors are generated from
+ts.from_snapshot(snap)
+ts.snapshot_hash(snap)  # the setup's identity (like params_hash)
+ts.json_schemas()
+ts.operand_catalog()  # what editors are generated from
 ```
 
 Builder and Composite signals are **edge-triggered** (they fire when the rules become true),
