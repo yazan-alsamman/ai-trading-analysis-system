@@ -71,6 +71,8 @@ class UserStrategy(Base):
     name: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     notify: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    # risk rules of this activation's trade plans (null: the user's risk profile)
+    risk_override: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
