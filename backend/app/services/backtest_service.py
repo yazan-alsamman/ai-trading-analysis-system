@@ -34,13 +34,14 @@ from app.models.user import User
 from app.realtime import publisher
 from app.realtime.topics import user_topic
 from app.schemas.backtests import HEADLINE_METRICS, BacktestCreate
-from app.services import market_service, strategy_service
+from app.services import market_service, strategy_resolver
 
 logger = logging.getLogger(__name__)
 
 MAX_CURVE_POINTS = 2000
 PROGRESS_RUNNING, PROGRESS_LOADED, PROGRESS_COMPUTED = 5, 30, 80
 QUEUED_TOO_LONG = timedelta(hours=6)
+SNAPSHOT_KEY = "strategy"  # config.strategy: the custom strategy's snapshot
 SECONDS_PER_YEAR = 365 * 24 * 3600
 
 ENTRY_COLOR, EXIT_WIN_COLOR, EXIT_LOSS_COLOR = "#2196F3", "#26a69a", "#ef5350"
@@ -149,10 +150,35 @@ def _unprocessable(message: str) -> HTTPException:
     return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, message)
 
 
+def strategy_snapshot(resolved: strategy_resolver.Resolved) -> dict[str, Any]:
+    """What a custom strategy was when the backtest was created (stored in ``config.strategy``),
+    so results stay reproducible after the strategy is edited or deleted."""
+    assert resolved.custom is not None and resolved.snapshot is not None
+    return {
+        "key": resolved.key,
+        "name": resolved.custom.name,
+        "version": resolved.custom.version,
+        "definition_hash": resolved.params_hash,
+        **resolved.snapshot,
+    }
+
+
+def strategy_of(row: Backtest) -> tuple[ts.Strategy, tb.BacktestConfig]:
+    """The strategy a backtest runs (custom ones from their snapshot) and its engine config."""
+    config = dict(row.config)
+    snapshot = config.pop(SNAPSHOT_KEY, None)
+    if snapshot is not None:
+        strategy = ts.from_snapshot(snapshot, key=row.strategy_key, title=snapshot.get("name"))
+    else:
+        strategy = ts.get_strategy(row.strategy_key)
+    return strategy, tb.BacktestConfig.from_dict(config)
+
+
 async def create(session: AsyncSession, user: User, data: BacktestCreate) -> Backtest:
     """Validate everything that can be checked now and store the backtest as ``queued``."""
-    strategy = strategy_service.get_strategy(data.strategy_key)
-    params = strategy_service.resolve_params(strategy, data.params)
+    resolved = await strategy_resolver.get(session, data.strategy_key, user, data.params)
+    if data.config and SNAPSHOT_KEY in data.config:
+        raise _unprocessable(f"config: {SNAPSHOT_KEY} is set by the server")
     try:
         config = tb.BacktestConfig.from_dict(data.config)
     except ValueError as exc:
@@ -174,14 +200,17 @@ async def create(session: AsyncSession, user: User, data: BacktestCreate) -> Bac
             f"The range has {bars} {data.timeframe.value} bars; at most {maximum} per backtest "
             "(shorten the range or use a higher timeframe)"
         )
+    stored = config.to_dict()
+    if resolved.custom is not None:
+        stored[SNAPSHOT_KEY] = strategy_snapshot(resolved)
     row = Backtest(
         user_id=user.id,
         instrument_id=data.instrument_id,
         timeframe=data.timeframe,
-        strategy_key=strategy.key,
-        params=params,
-        params_hash=ts.params_hash(strategy.key, params),
-        config=config.to_dict(),
+        strategy_key=resolved.key,
+        params=resolved.params,
+        params_hash=resolved.params_hash,
+        config=stored,
         range_start=data.start,
         range_end=data.end,
         status=BacktestStatus.queued,
@@ -347,7 +376,7 @@ async def execute(
         return BacktestStatus.cancelled
 
     try:
-        strategy = ts.get_strategy(row.strategy_key)
+        strategy, config = strategy_of(row)
         async with factory() as session:
             history = await market_service.get_candles(
                 session,
@@ -375,7 +404,7 @@ async def execute(
             _frame(history, rows),
             strategy,
             row.params,
-            tb.BacktestConfig.from_dict(row.config),
+            config,
             start=rows[0][0],
             bars_per_year=bars_per_year(row.timeframe),
         )

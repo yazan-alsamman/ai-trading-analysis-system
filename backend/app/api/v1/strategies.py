@@ -25,18 +25,20 @@ router = APIRouter(tags=["strategies"])
 @router.get("/strategies")
 async def strategy_catalog(_: StrategiesReader) -> list[dict]:
     """The global strategies: description, params (type, default, min, max), the indicator
-    lines to draw with each one, and the history (bars) it needs before its first signal."""
+    lines to draw with each one, and the history (bars) it needs before its first signal.
+    Custom strategies are listed by /me/custom-strategies and /custom-strategies/public."""
     return ts.catalog()
 
 
 @router.post("/strategies/{key}/preview", openapi_extra=EXPENSIVE)
 async def preview_strategy(
-    key: str, data: StrategyPreviewRequest, _: StrategiesReader, session: SessionDep
+    key: str, data: StrategyPreviewRequest, principal: StrategiesReader, session: SessionDep
 ) -> Response:
-    """Run a strategy over the same candle window ``GET .../candles`` returns. Response:
+    """Run a strategy (a global key, or ``custom:<uuid>`` for one of your custom strategies or
+    a public one) over the same candle window ``GET .../candles`` returns. Response:
     ``signals`` (time, side, strength, price, reason, details), Lightweight Charts ``markers``
     and the strategy's ``indicators`` lines (same format as the indicators endpoint)."""
-    result = await strategy_service.preview(session, key, data)
+    result = await strategy_service.preview(session, principal.user, key, data)
     body = json.dumps(result, separators=(",", ":"), allow_nan=False)
     return Response(content=body, media_type="application/json")
 
@@ -56,7 +58,7 @@ async def update_strategy(
     user_strategy_id: uuid.UUID, data: UserStrategyUpdate, user: CurrentUser, session: SessionDep
 ):
     row = await strategy_service.get_user_strategy_or_404(session, user, user_strategy_id)
-    return await strategy_service.update_user_strategy(session, row, data)
+    return await strategy_service.update_user_strategy(session, user, row, data)
 
 
 @router.delete("/me/strategies/{user_strategy_id}", status_code=status.HTTP_204_NO_CONTENT)

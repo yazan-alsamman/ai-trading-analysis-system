@@ -6,6 +6,10 @@ setup on the **last closed bar only**. New signals are stored idempotently and p
 ``signals:{instrument_id}`` and to the ``user:{id}`` topic of each user whose active setup
 produced them with ``notify = true``.
 
+Global and custom strategies (``custom:<uuid>``, resolved by ``strategy_resolver``) run in the
+same evaluation, on candles loaded once. A custom setup always runs its current definition and
+is tagged with its current hash, so an edit becomes a new setup from the next bar on.
+
 All functions take their session factory / Redis client as arguments, so the Celery tasks, the
 tests and the CLI can drive them with their own connections.
 """
@@ -18,7 +22,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import trading_strategies as ts
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import distinct_on, insert
@@ -29,8 +32,9 @@ from app.models.instrument import Instrument
 from app.models.strategy import Signal, SignalSide, UserStrategy
 from app.realtime import publisher
 from app.realtime.topics import signals_topic, user_topic
-from app.services import indicator_service, market_service
+from app.services import indicator_service, market_service, strategy_resolver
 from app.services.market_service import floor_to_bucket
+from app.services.strategy_resolver import Resolved
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +161,7 @@ async def _release(redis: Redis, key: str, token: str) -> None:
 
 
 def _evaluate_setups(
-    candles: list[market_service.CandleRow], setups: list[Setup], result: EvaluationResult
+    candles: list[market_service.CandleRow], setups: list[Resolved], result: EvaluationResult
 ) -> list[dict[str, Any]]:
     """Run every setup on the candles; signals of the last (closed) bar only."""
     df = indicator_service.frame(candles)
@@ -165,11 +169,11 @@ def _evaluate_setups(
     rows = []
     for setup in setups:
         try:
-            out = ts.get_strategy(setup.strategy_key).generate(df, setup.params)
+            out = setup.strategy.generate(df, setup.params)
             sig = int(out["signal"].iloc[-1])
         except Exception as exc:  # noqa: BLE001 - one bad setup must not stop the others
-            logger.exception("Strategy %s failed on %s", setup.strategy_key, result.job)
-            result.errors.append(f"{setup.strategy_key}: {type(exc).__name__}: {exc}")
+            logger.exception("Strategy %s failed on %s", setup.key, result.job)
+            result.errors.append(f"{setup.key}: {type(exc).__name__}: {exc}")
             continue
         if sig == 0:
             continue
@@ -177,7 +181,7 @@ def _evaluate_setups(
             {
                 "instrument_id": result.job.instrument_id,
                 "timeframe": result.job.timeframe,
-                "strategy_key": setup.strategy_key,
+                "strategy_key": setup.key,
                 "params": setup.params,
                 "params_hash": setup.params_hash,
                 "bar_time": last.ts,
@@ -206,15 +210,15 @@ async def evaluate(
         return result
     try:
         async with session_factory() as session:
-            setups = await active_setups(session, job.instrument_id, job.timeframe)
-            setups = [s for s in setups if s.strategy_key in ts.STRATEGIES]
+            active = await active_setups(session, job.instrument_id, job.timeframe)
+            setups, errors = await strategy_resolver.for_engine(
+                session, ((s.strategy_key, s.params_hash, s.params) for s in active)
+            )
+            result.errors.extend(errors)
             result.setups = len(setups)
             needed = 1
             for s in setups:
-                try:
-                    needed = max(needed, ts.get_strategy(s.strategy_key).history(s.params) + 1)
-                except ValueError as exc:  # stored params no longer valid for the strategy
-                    result.errors.append(f"{s.strategy_key}: {exc}")
+                needed = max(needed, s.strategy.history(s.params) + 1)
             # end = bar_time: the forming bucket (and anything newer) is never loaded
             candles = await market_service.get_candles(
                 session,

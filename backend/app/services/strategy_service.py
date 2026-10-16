@@ -1,4 +1,5 @@
-"""Global strategies (from ``trading_strategies``), user activations, previews and signals."""
+"""Strategies (global ones from ``trading_strategies`` and custom ones, both resolved through
+``strategy_resolver``): previews, user activations and signals."""
 
 import asyncio
 import uuid
@@ -18,7 +19,7 @@ from app.models.instrument import Instrument
 from app.models.strategy import Signal, UserStrategy
 from app.models.user import User
 from app.schemas.strategies import StrategyPreviewRequest, UserStrategyCreate, UserStrategyUpdate
-from app.services import indicator_service, market_service
+from app.services import indicator_service, market_service, strategy_resolver
 from app.services.indicator_service import ResolvedIndicator
 
 MAX_USER_STRATEGIES = 20
@@ -27,20 +28,6 @@ BUY_COLOR, SELL_COLOR = "#26a69a", "#ef5350"
 
 
 # --- catalog / params ------------------------------------------------------------------------
-
-
-def get_strategy(key: str) -> ts.Strategy:
-    try:
-        return ts.get_strategy(key)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
-
-
-def resolve_params(strategy: ts.Strategy, params: dict[str, Any] | None) -> dict[str, Any]:
-    try:
-        return strategy.resolve(params)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
 
 
 def chart_indicators(strategy: ts.Strategy, params: dict[str, Any]) -> list[ResolvedIndicator]:
@@ -104,11 +91,14 @@ def _preview(
     }
 
 
-async def preview(session: AsyncSession, key: str, data: StrategyPreviewRequest) -> dict[str, Any]:
-    """Run a strategy over the candle window (same window semantics and warm-up handling as
-    the indicators endpoint) and return its signals, chart markers and indicator lines."""
-    strategy = get_strategy(key)
-    params = resolve_params(strategy, data.params)
+async def preview(
+    session: AsyncSession, user: User, key: str, data: StrategyPreviewRequest
+) -> dict[str, Any]:
+    """Run a strategy (global, or a custom one ``user`` may use) over the candle window (same
+    window semantics and warm-up handling as the indicators endpoint) and return its signals,
+    chart markers and indicator lines."""
+    resolved = await strategy_resolver.get(session, key, user, data.params)
+    strategy, params = resolved.strategy, resolved.params
     await market_service.get_instrument_or_404(session, data.instrument_id)
     indicators = chart_indicators(strategy, params)
     lines_history, anchored = indicator_service.needs(indicators)
@@ -126,8 +116,9 @@ async def preview(session: AsyncSession, key: str, data: StrategyPreviewRequest)
         _preview, before + window, len(window), strategy, params, indicators
     )
     return {
-        "strategy_key": key,
+        "strategy_key": resolved.key,
         "params": params,
+        "params_hash": resolved.params_hash,
         "instrument_id": str(data.instrument_id),
         "timeframe": data.timeframe.value,
         **result,
@@ -182,8 +173,9 @@ async def _commit_or_409(session: AsyncSession) -> None:
 async def create_user_strategy(
     session: AsyncSession, user: User, data: UserStrategyCreate
 ) -> UserStrategy:
-    strategy = get_strategy(data.strategy_key)
-    params = resolve_params(strategy, data.params)
+    """Activate a global strategy, or a custom one the user may use (``custom:<uuid>``, no
+    params; its ``params_hash`` is the definition hash and follows later edits)."""
+    resolved = await strategy_resolver.get(session, data.strategy_key, user, data.params)
     await _active_instrument(session, data.instrument_id)
     count = await session.scalar(
         select(func.count()).select_from(UserStrategy).where(UserStrategy.user_id == user.id)
@@ -195,9 +187,9 @@ async def create_user_strategy(
         )
     row = UserStrategy(
         user_id=user.id,
-        strategy_key=strategy.key,
-        params=params,
-        params_hash=ts.params_hash(strategy.key, params),
+        strategy_key=resolved.key,
+        params=resolved.params,
+        params_hash=resolved.params_hash,
         instrument_id=data.instrument_id,
         timeframe=data.timeframe,
         name=data.name,
@@ -211,13 +203,15 @@ async def create_user_strategy(
 
 
 async def update_user_strategy(
-    session: AsyncSession, row: UserStrategy, data: UserStrategyUpdate
+    session: AsyncSession, user: User, row: UserStrategy, data: UserStrategyUpdate
 ) -> UserStrategy:
     changes = data.model_dump(exclude_unset=True)
-    if "params" in changes:
-        strategy = get_strategy(row.strategy_key)
-        params = resolve_params(strategy, changes.pop("params"))
-        row.params, row.params_hash = params, ts.params_hash(strategy.key, params)
+    if "params" in changes or changes.get("is_active"):
+        # re-resolve: params changed, or a custom strategy is re-activated (it must still be
+        # usable: not deleted, not made private by its author) with its current hash
+        params = changes.pop("params", row.params)
+        resolved = await strategy_resolver.get(session, row.strategy_key, user, params)
+        row.params, row.params_hash = resolved.params, resolved.params_hash
     if changes.get("is_active"):
         await _active_instrument(session, row.instrument_id)
     for name, value in changes.items():
