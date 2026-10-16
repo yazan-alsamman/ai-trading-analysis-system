@@ -17,12 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import get_session_factory
 from app.api.limits import WsConnectionSlot, client_ip, ws_ip_allowed
+from app.chat import presence
 from app.core.redis import get_redis
 from app.core.security import decode_token
 from app.models.api_key import Scope
+from app.models.chat import Conversation
 from app.models.instrument import Instrument
-from app.models.user import User
-from app.realtime import protocol
+from app.models.user import User, UserRole
+from app.realtime import protocol, publisher
 from app.realtime.hub import (
     CLOSE_GOING_AWAY,
     CLOSE_RATE_LIMITED,
@@ -30,8 +32,8 @@ from app.realtime.hub import (
     Client,
     WebSocketHub,
 )
-from app.realtime.protocol import SubscribeMessage, UnsubscribeMessage
-from app.realtime.topics import candles_topic, news_topic, signals_topic, user_topic
+from app.realtime.protocol import SubscribeMessage, TypingMessage, UnsubscribeMessage
+from app.realtime.topics import candles_topic, chat_topic, news_topic, signals_topic, user_topic
 from app.schemas.market import CandleOut
 from app.services import api_key_service, market_service
 
@@ -142,6 +144,8 @@ async def _serve(
         await asyncio.gather(
             *(t for t in (receiver, watchdog, stop_wait) if t is not None), return_exceptions=True
         )
+        for conversation_id in list(client.presence):
+            await presence.clear(get_redis(), conversation_id, client.user_id)
         await hub.unregister(client)
         if not client.peer_closed:
             try:
@@ -172,6 +176,8 @@ async def _watchdog(client: Client, hub: WebSocketHub, auth: _Auth, slot: WsConn
                 return
             next_heartbeat = now + heartbeat
             await slot.touch()
+            for conversation_id in list(client.presence):
+                await presence.mark(get_redis(), conversation_id, client.user_id)
         wait = min(next_heartbeat - now, client.last_seen + idle - now, seconds_to_exp)
         await asyncio.sleep(max(wait, 0.01) if math.isfinite(wait) else heartbeat)
 
@@ -210,6 +216,8 @@ async def _receive_loop(
             await _subscribe(client, hub, session_factory, msg, auth)
         elif isinstance(msg, UnsubscribeMessage):
             await _unsubscribe(client, hub, msg)
+        elif isinstance(msg, TypingMessage):
+            await _typing(client, msg)
         else:
             client.send(protocol.pong())
 
@@ -248,6 +256,9 @@ async def _subscribe(
         and Scope.news_read.value not in auth.scopes
     ):
         client.send(protocol.error(protocol.FORBIDDEN, "API key lacks the 'news:read' scope"))
+        return
+    if msg.topic == "chat":
+        await _subscribe_chat(client, hub, session_factory, msg)
         return
     topic = _market_topic(msg)
     if (
@@ -296,7 +307,74 @@ async def _subscribe_plain(client: Client, hub: WebSocketHub, topic: str) -> Non
     client.send(protocol.subscribed(topic))
 
 
+TYPING_INTERVAL_MS = 3000
+
+
+async def _subscribe_chat(
+    client: Client,
+    hub: WebSocketHub,
+    session_factory: async_sessionmaker[AsyncSession],
+    msg: SubscribeMessage,
+) -> None:
+    """Only the two participants (and admins) may subscribe. A participant's subscription
+    counts as presence: no chat notifications while it lasts."""
+    topic = chat_topic(msg.conversation_id)
+    if (
+        topic not in client.topics
+        and _counted_subscriptions(client) >= hub.config.max_subscriptions
+    ):
+        client.send(
+            protocol.error(
+                protocol.TOO_MANY_SUBSCRIPTIONS,
+                f"at most {hub.config.max_subscriptions} subscriptions per connection",
+            )
+        )
+        return
+    async with session_factory() as session:
+        conv = await session.get(Conversation, msg.conversation_id)
+        user = await session.get(User, client.user_id)
+    participant = conv is not None and client.user_id in (conv.expert_id, conv.user_id)
+    if not participant and not (conv is not None and user.role == UserRole.admin):
+        client.send(protocol.error(protocol.FORBIDDEN, "not a participant of this conversation"))
+        return
+    try:
+        await hub.subscribe(client, topic)
+    except Exception:  # noqa: BLE001
+        logger.exception("Subscribing %s to %s failed", client.id, topic)
+        client.send(protocol.error(protocol.UNAVAILABLE, "live updates are unavailable"))
+        return
+    if participant:
+        client.presence.add(conv.id)
+        await presence.mark(get_redis(), conv.id, client.user_id)
+    client.send(protocol.subscribed(topic))
+
+
+async def _typing(client: Client, msg: TypingMessage) -> None:
+    """``chat_typing`` to the conversation, at most once per 3 s per user (others dropped)."""
+    if msg.conversation_id not in client.presence:
+        client.send(protocol.error(protocol.FORBIDDEN, "subscribe to the chat topic first"))
+        return
+    redis = get_redis()
+    try:
+        key = f"chat:typing:{msg.conversation_id}:{client.user_id}"
+        if not await redis.set(key, "1", nx=True, px=TYPING_INTERVAL_MS):
+            return
+        await publisher.publish(
+            chat_topic(msg.conversation_id),
+            {
+                "type": "chat_typing",
+                "conversation_id": str(msg.conversation_id),
+                "user_id": str(client.user_id),
+            },
+            redis,
+        )
+    except Exception:  # noqa: BLE001 - typing is best effort
+        logger.warning("typing event for %s failed", msg.conversation_id)
+
+
 def _market_topic(msg: SubscribeMessage | UnsubscribeMessage) -> str:
+    if msg.topic == "chat":
+        return chat_topic(msg.conversation_id)
     if msg.topic == "news":
         return news_topic(msg.instrument_id)
     if msg.topic == "signals":
@@ -312,5 +390,8 @@ async def _unsubscribe(client: Client, hub: WebSocketHub, msg: UnsubscribeMessag
         topic = user_topic(client.user_id)
     else:
         topic = _market_topic(msg)
+    if msg.topic == "chat" and msg.conversation_id in client.presence:
+        client.presence.discard(msg.conversation_id)
+        await presence.clear(get_redis(), msg.conversation_id, client.user_id)
     await hub.unsubscribe(client, topic)
     client.send(protocol.unsubscribed(topic))

@@ -64,6 +64,7 @@ class Client:
         self.user_id = user_id
         self.queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=queue_size)
         self.topics: set[str] = set()
+        self.presence: set[uuid.UUID] = set()  # chats this connection is looking at (Y19)
         self.stopped = asyncio.Event()
         self.close_code: int | None = None
         self.close_reason = ""

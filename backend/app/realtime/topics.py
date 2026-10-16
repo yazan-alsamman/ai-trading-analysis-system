@@ -30,6 +30,11 @@ def news_topic(instrument_id: uuid.UUID | str | None = None) -> str:
     return "news" if instrument_id is None else f"news:{instrument_id}"
 
 
+def chat_topic(conversation_id: uuid.UUID | str) -> str:
+    """A chat conversation (Y19): only its two participants (and admins) may subscribe."""
+    return f"chat:{conversation_id}"
+
+
 def channel_for(topic: str) -> str:
     return CHANNEL_PREFIX + topic
 
