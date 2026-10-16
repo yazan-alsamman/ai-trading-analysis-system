@@ -33,6 +33,8 @@ JSON text frames, at most 4 KB each.
 {"op": "unsubscribe", "topic": "signals", "instrument_id": "<uuid>"}
 {"op": "subscribe",   "topic": "news"}
 {"op": "subscribe",   "topic": "news", "instrument_id": "<uuid>"}
+{"op": "subscribe",   "topic": "chat", "conversation_id": "<uuid>"}
+{"op": "typing",      "conversation_id": "<uuid>"}
 {"op": "ping"}
 ```
 
@@ -49,6 +51,13 @@ snapshot; `GET /api/v1/news` lists past ones. API keys need the `news:read` scop
 "instruments": [{"instrument_id", "symbol", "relevance"}]}}`. Only articles published in the
 last 24 hours are pushed (a backfill or a first RSS fetch does not flood the sockets), at most
 50 per batch. See [news-posts.md](news-posts.md).
+
+A `chat` topic (Y19, `chat:<conversation id>`) carries one expert conversation:
+`chat_message`, `chat_message_updated` (edits, tombstones), `chat_read` (read markers) and
+`chat_typing`. Only the two participants (and admins) may subscribe (error `forbidden`
+otherwise); a participant's subscription counts as presence, which stops chat notifications for
+that conversation. `{"op": "typing", "conversation_id"}` needs that subscription and is
+forwarded at most once per 3 s per user. See [chat.md](chat.md).
 
 `timeframe` is one of `1m, 5m, 15m, 1h, 4h, 1d`. Instrument ids come from
 `GET /api/v1/market/instruments`.
@@ -133,7 +142,7 @@ last 24 hours are pushed (a backfill or a first RSS fetch does not flood the soc
 
 | | |
 |---|---|
-| Subscriptions per connection | 50 candles/signals/news topics (re-subscribing does not count) |
+| Subscriptions per connection | 50 candles/signals/news/chat topics (re-subscribing does not count) |
 | Max client frame | 4 KB |
 | Server heartbeat | every 25 s |
 | Idle timeout | 75 s without any client frame → close **1001** |

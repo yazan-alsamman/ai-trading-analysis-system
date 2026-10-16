@@ -99,6 +99,28 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/me/price-alerts"
   ```
 
+## الخبراء والاشتراكات والمحادثة (Y19)
+- لا خدمات جديدة. التجديدات الشهرية/السنوية ينفّذها الـ `worker` عبر مهمة `subscriptions.renew` كل ساعة (الدقيقة 7).
+- الدفع **تجريبي فقط** (`PAYMENT_PROVIDER=demo`): لا أموال حقيقية ولا مفاتيح مزوّد. صفحة الدفع التجريبية
+  على `/api/v1/pay/demo/{checkout_id}`، وتقبل البطاقات التجريبية فقط.
+- Migration `0012` إضافية فقط، وقيم enum الجديدة (`notification_type`، `post_visibility=subscribers`،
+  `report_target=message`) تُضاف خارج المعاملة كما في 0011.
+- متغيرات جديدة (قيم افتراضية آمنة، تُضاف تلقائياً إلى `.env`): `PAYMENT_PROVIDER=demo`،
+  `PAYMENT_DEMO_WEBHOOK_SECRET=` (فارغ = سرّ يُولَّد ويُحفظ في Redis)، `PAYMENT_DEMO_TOOLS=false`،
+  `PAYMENT_RETURN_URL=`، `PUBLIC_BASE_URL=`، `PLATFORM_FEE_PCT=20`، `SUBSCRIPTION_GRACE_DAYS=3`،
+  `CHECKOUT_TTL_MINUTES=30`، `CHAT_MESSAGES_PER_MINUTE=30`، `CHAT_MESSAGES_PER_DAY=2000`،
+  `CHAT_EDIT_WINDOW_MINUTES=15`، `CHAT_NOTIFY_COLLAPSE_MINUTES=5`.
+- اختياري على السيرفر: `PUBLIC_BASE_URL=http://187.127.76.76:8080` لتصبح روابط الدفع مطلقة، و
+  `PAYMENT_DEMO_TOOLS=true` لعرض أداة تقديم الوقت (fast-forward) في العروض التقديمية.
+- فحص بعد النشر:
+  ```bash
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/experts"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/conversations"
+  # checkout تجريبي (بحساب متداول وخطة موجودة) ثم فتح صفحة الدفع التجريبية:
+  curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'        -d '{"plan_id":"<plan id>"}' http://187.127.76.76:8080/api/v1/subscriptions/checkout
+  curl -s "http://187.127.76.76:8080/api/v1/pay/demo/<checkout_id>" | grep -o '<title>[^<]*'
+  ```
+
 ## للبرومبتات القادمة
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.
 - أي خدمة جديدة تُضاف إلى `docker-compose.yml` (للتطوير) **وإلى** `infra/deploy/docker-compose.prod.yml` (للإنتاج) مع `mem_limit` و`cpus` و`restart: unless-stopped`، ومن دون أي منفذ عام.
