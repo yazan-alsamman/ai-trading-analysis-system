@@ -1,21 +1,23 @@
 """Y11 configs give bit-identical results with ``check_entry_bar: false``.
 
-The fingerprints were produced by the Y11 engine (main @ 230b5ab, before risk management):
-sha256 of every trade's core fields and of the equity curve, for 3 strategies x 5 configs.
+The reference is the Y11 engine itself (tests/y11_reference.py, kept verbatim from main @
+230b5ab), run on the same machine, so float results are compared exactly whatever the platform.
 With the default ``check_entry_bar: true`` stops/targets are also checked on the entry bar, so
-runs with stops or targets may differ (the entry-bar fix, docs/risk-management.md).
+only runs with stops or targets may differ (docs/risk-management.md).
 """
 
-import hashlib
-
+import numpy as np
 import pytest
+import trading_strategies as ts
 
 import trading_backtest as tb
 from tests.conftest import synthetic_ohlcv
+from tests.y11_reference import y11_simulate
 
 CORE = (
-    "number", "side", "entry_price", "exit_price", "quantity", "gross_pnl", "fees", "net_pnl",
-    "return_pct", "bars_held", "exit_reason", "entry_index", "exit_index",
+    "number", "side", "entry_time", "entry_price", "exit_time", "exit_price", "quantity",
+    "gross_pnl", "fees", "net_pnl", "return_pct", "bars_held", "entry_reason", "exit_reason",
+    "entry_index", "exit_index",
 )  # fmt: skip
 CONFIGS = [
     {},
@@ -33,44 +35,41 @@ CONFIGS = [
         "slippage_bps": 3,
     },
 ]
-Y11 = {
-    "ma_crossover/0": "df97a6a192da4be8",
-    "ma_crossover/1": "56ab506cf21b5aeb",
-    "ma_crossover/2": "32e3cc57d37f948e",
-    "ma_crossover/3": "6bf7343a2d639b0e",
-    "ma_crossover/4": "9434fcb38f8188c5",
-    "rsi_reversal/0": "cac135e8fae238a5",
-    "rsi_reversal/1": "6842457b02487a15",
-    "rsi_reversal/2": "f954f43eb6caaef8",
-    "rsi_reversal/3": "b9118bcc47508397",
-    "rsi_reversal/4": "99c3e75730c40121",
-    "donchian_breakout/0": "3bdd95067648adbf",
-    "donchian_breakout/1": "470084dc3abb15b4",
-    "donchian_breakout/2": "4d63196679da4dbc",
-    "donchian_breakout/3": "473aa37b0557eabd",
-    "donchian_breakout/4": "ea8a15490f22934d",
-}
+KEYS = ("ma_crossover", "rsi_reversal", "donchian_breakout")
+CASES = [(key, k) for key in KEYS for k in range(len(CONFIGS))]
 
 
-def fingerprint(result: tb.BacktestResult) -> str:
-    trades = [[repr(getattr(t, c)) for c in CORE] for t in result.trades]
-    payload = repr(trades) + repr(result.equity.tolist())
-    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+def _core(trades) -> list[tuple]:
+    return [tuple(getattr(t, c) for c in CORE) for t in trades]
 
 
-@pytest.mark.parametrize("case", sorted(Y11))
-def test_y11_results_are_unchanged_without_the_entry_bar_check(case: str) -> None:
-    key, k = case.split("/")
-    df = synthetic_ohlcv(3000)
-    result = tb.backtest(df, key, None, {**CONFIGS[int(k)], "check_entry_bar": False})
-    assert fingerprint(result) == Y11[case]
+def _y11(df, key: str, config: dict):
+    out = ts.get_strategy(key).generate(df)
+    cfg = tb.BacktestConfig.from_dict(config)
+    return y11_simulate(df, out["signal"].to_numpy(), out["reason"].to_numpy(dtype=object), cfg)
 
 
-def test_the_entry_bar_check_changes_only_runs_with_stops_or_targets() -> None:
-    df = synthetic_ohlcv(3000)
+@pytest.fixture(scope="module")
+def df():
+    return synthetic_ohlcv(3000)
+
+
+@pytest.mark.parametrize(("key", "k"), CASES)
+def test_y11_results_are_unchanged_without_the_entry_bar_check(df, key: str, k: int) -> None:
+    trades, equity = _y11(df, key, CONFIGS[k])
+    result = tb.backtest(df, key, None, {**CONFIGS[k], "check_entry_bar": False})
+    assert _core(result.trades) == _core(trades)  # exact float equality
+    np.testing.assert_array_equal(result.equity.to_numpy(), equity)
+    assert trades  # the comparison covers real trades
+
+
+def test_the_entry_bar_check_changes_only_runs_with_stops_or_targets(df) -> None:
     changed = set()
-    for case in Y11:
-        key, k = case.split("/")
-        if fingerprint(tb.backtest(df, key, None, CONFIGS[int(k)])) != Y11[case]:
-            changed.add(case)
-    assert changed and all(case.split("/")[1] in ("2", "3", "4") for case in changed)
+    for key, k in CASES:
+        trades, equity = _y11(df, key, CONFIGS[k])
+        result = tb.backtest(df, key, None, CONFIGS[k])
+        if _core(result.trades) != _core(trades) or not np.array_equal(
+            result.equity.to_numpy(), equity
+        ):
+            changed.add((key, k))
+    assert changed and all(k in (2, 3, 4) for _, k in changed)
