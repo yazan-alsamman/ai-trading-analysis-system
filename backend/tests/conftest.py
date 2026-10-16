@@ -28,6 +28,8 @@ os.environ["FIRST_ADMIN_PASSWORD"] = ""
 # get their own prefix so tests never touch a running stack's buckets.
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["RATE_LIMIT_KEY_PREFIX"] = "test-rl"
+# The seeded public RSS feeds are never fetched in tests (fixture feeds are used instead).
+os.environ["NEWS_RSS_ENABLED"] = "false"
 
 import asyncpg  # noqa: E402
 import pytest  # noqa: E402
@@ -254,6 +256,9 @@ def notification_queue(monkeypatch: pytest.MonkeyPatch) -> list[tuple[list, floa
         notification_service, "enqueue", lambda ids, countdown=None: sent.append((ids, countdown))
     )
     monkeypatch.setattr(notification_service, "enqueue_broadcast", lambda *a: None)
+    from app.social import notify as social_notify
+
+    monkeypatch.setattr(social_notify, "enqueue_new_post", lambda post_id: None)
     # every test session shares one connection (savepoints): send one delivery at a time
     monkeypatch.setattr(notification_service, "SEND_CONCURRENCY", 1)
     return sent
