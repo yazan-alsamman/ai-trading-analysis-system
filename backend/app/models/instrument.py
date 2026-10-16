@@ -27,6 +27,8 @@ class MarketType(StrEnum):
 
 
 class Instrument(Base):
+    """A market (symbol on a data source) with its price and quantity precision."""
+
     __tablename__ = "instruments"
     __table_args__ = (
         UniqueConstraint("source", "symbol", name="uq_instruments_source_symbol"),

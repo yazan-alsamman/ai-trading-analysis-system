@@ -38,6 +38,25 @@ echo "Deploying ${TAG} (previous: ${prev:-none})"
 dc pull --quiet
 dc up -d --remove-orphans --wait --wait-timeout 180 || deploy_failed=1
 
+# Our nginx keeps its config until reloaded, and `up` does not recreate it when only the
+# bind-mounted nginx/default.conf changed. Reload OUR nginx container (never the host's) when the
+# file differs from the last one applied; recreate it if the container sees a stale copy.
+if [ -z "${deploy_failed:-}" ]; then
+  conf_sum="$(sha256sum nginx/default.conf | cut -d' ' -f1)"
+  if [ "$(cat .nginx.sha256 2>/dev/null || true)" != "$conf_sum" ]; then
+    seen="$(dc exec -T nginx sha256sum /etc/nginx/conf.d/default.conf 2>/dev/null | cut -d' ' -f1 || true)"
+    if [ "$seen" != "$conf_sum" ]; then
+      echo "Nginx sees an old copy of its config: recreating our nginx service"
+      dc up -d --no-deps --force-recreate nginx && echo "$conf_sum" > .nginx.sha256
+    elif dc exec -T nginx nginx -t && dc exec -T nginx nginx -s reload; then
+      echo "Nginx config changed: reloaded our nginx"
+      echo "$conf_sum" > .nginx.sha256
+    else
+      echo "!!! New nginx config is invalid: kept the running one"
+    fi
+  fi
+fi
+
 health() {
   for _ in $(seq 1 30); do
     # through our own nginx container (busybox wget), so the host needs no curl

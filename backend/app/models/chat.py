@@ -31,6 +31,8 @@ class ConversationStatus(StrEnum):
 
 
 class Conversation(Base):
+    """The chat between one expert and one subscriber (unique pair), with both read markers."""
+
     __tablename__ = "conversations"
     __table_args__ = (
         UniqueConstraint("expert_id", "user_id", name="uq_conversations_pair"),

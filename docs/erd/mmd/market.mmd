@@ -1,0 +1,61 @@
+erDiagram
+    instruments {
+        uuid id PK
+        varchar symbol
+        varchar source
+        enum_market_type market
+        varchar base_asset
+        varchar quote_asset
+        int price_precision
+        int quantity_precision
+        bool is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    candles_1m {
+        uuid instrument_id PK, FK
+        timestamptz ts PK
+        double open
+        double high
+        double low
+        double close
+        double volume
+        int trades
+    }
+    signals {
+        uuid id PK
+        uuid instrument_id FK
+        string timeframe
+        varchar strategy_key
+        jsonb params
+        varchar params_hash
+        timestamptz bar_time
+        enum_signal_side side
+        double strength
+        double price
+        varchar reason
+        jsonb details
+        timestamptz created_at
+    }
+    price_alerts {
+        uuid id PK
+        uuid user_id FK
+        uuid instrument_id FK
+        enum_price_alert_condition condition
+        double value
+        int window_minutes
+        enum_price_alert_repeat repeat
+        int cooldown_minutes
+        varchar note
+        bool is_active
+        timestamptz last_triggered_at
+        int trigger_count
+        timestamptz expires_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    users
+    candles_1m }o--|| instruments : "instrument_id"
+    price_alerts }o--|| instruments : "instrument_id"
+    price_alerts }o--|| users : "user_id"
+    signals }o--|| instruments : "instrument_id"

@@ -41,6 +41,8 @@ def _enum(cls, name: str) -> SAEnum:
 
 
 class PriceAlert(Base):
+    """A user's alert on an instrument's price, checked on every closed 1m bar."""
+
     __tablename__ = "price_alerts"
     __table_args__ = (
         CheckConstraint("value > 0", name="ck_price_alerts_value_positive"),

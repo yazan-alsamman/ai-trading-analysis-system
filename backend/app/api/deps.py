@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.logging import user_id_var
 from app.core.redis import get_redis
 from app.core.security import credentials_exception, decode_token
 from app.db.session import SessionLocal, get_session
@@ -76,13 +77,16 @@ async def resolve_credentials(
     """A bearer token wins over an API key when both are sent."""
     try:
         if token is not None:
-            return Principal(await user_from_access_token(session, token))
-        if api_key is not None:
+            principal = Principal(await user_from_access_token(session, token))
+        elif api_key is not None:
             user, row = await api_key_service.authenticate(session, get_redis(), api_key)
-            return Principal(user, row)
+            principal = Principal(user, row)
+        else:
+            return None
     except HTTPException as exc:
         return exc
-    return None
+    user_id_var.set(str(principal.user.id))  # for the request log line
+    return principal
 
 
 CredentialsDep = Annotated[Credentials, Depends(resolve_credentials)]

@@ -1,0 +1,17 @@
+erDiagram
+    workspaces {
+        uuid id PK
+        uuid user_id FK
+        varchar name
+        int position
+        bool is_default
+        jsonb state
+        int schema_version
+        int version
+        bool is_shared
+        varchar share_slug UK
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    users
+    workspaces }o--|| users : "user_id"

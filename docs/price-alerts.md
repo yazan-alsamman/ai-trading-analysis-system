@@ -21,7 +21,9 @@ Alerts are checked on every **closed 1m candle** (never on the minute still form
   `crosses_above` for "tell me when a minute closes above 70k after being below".
 - Data gaps: the previous close is the last 1m candle within the hour before the bar; the
   reference of `change_pct` is the last candle at or before `bar − window`, but not older than
-  `bar − 2 × window`. A minute without a candle fires nothing.
+  `bar − 2 × window`. A minute without a candle fires nothing in its own run, but each run
+  also catches up on the 4 bars before it that were not evaluated yet, so a candle that arrives
+  up to ~5 minutes late is still checked (once: evaluated bars are marked in Redis).
 - An alert is first checked on the minute in which it was created.
 
 ## Repeat, cooldown, expiry

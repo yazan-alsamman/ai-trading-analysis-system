@@ -78,6 +78,8 @@ def _ts(**kw):
 
 
 class ExpertProfile(Base):
+    """An expert's public profile, shown in the experts directory when listed."""
+
     __tablename__ = "expert_profiles"
     __table_args__ = (Index("ix_expert_profiles_listed", "is_listed"),)
 
@@ -177,6 +179,9 @@ class Subscription(Base):
 
 
 class Invoice(Base):
+    """A charge for one subscription period (trial 0.00, initial, renewal); fee and expert
+    share are set when paid."""
+
     __tablename__ = "invoices"
     __table_args__ = (
         Index("ix_invoices_subscription", "subscription_id", text("created_at DESC")),
@@ -210,6 +215,8 @@ class Invoice(Base):
 
 
 class CheckoutSession(Base):
+    """One payment attempt for a plan on the provider's hosted page (valid 30 minutes)."""
+
     __tablename__ = "checkout_sessions"
     __table_args__ = (Index("ix_checkout_sessions_user", "user_id", text("created_at DESC")),)
 

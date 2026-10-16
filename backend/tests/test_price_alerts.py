@@ -78,7 +78,9 @@ async def _alert(session, user, instrument, condition, value, **over) -> PriceAl
         instrument_id=instrument.id,
         condition=condition,
         value=value,
-        created_at=over.pop("created_at", T0 - timedelta(hours=1)),
+        # created during the bar B evaluated by most tests: earlier bars (which a run also
+        # catches up on) cannot fire for it
+        created_at=over.pop("created_at", B),
         **over,
     )
     session.add(row)
@@ -137,8 +139,9 @@ async def test_crosses_below_and_moves_down(session, session_factory, redis_clie
     user, _ = trader
     down = [(100, 100, 100, 100), (100, 100, 99, 99.5), (99.5, 99.6, 97, 97.4)]
     await _bars(session, btc, down)
-    cross = await _alert(session, user, btc, "crosses_below", 98.0)
-    move = await _alert(session, user, btc, "change_pct", 2.5, window_minutes=2)
+    at = T0 + timedelta(minutes=2)
+    cross = await _alert(session, user, btc, "crosses_below", 98.0, created_at=at)
+    move = await _alert(session, user, btc, "change_pct", 2.5, window_minutes=2, created_at=at)
     run = await _run(session_factory, redis_client, bar=T0 + timedelta(minutes=2))
     assert run.fired == 2
     fired = await _fired(session)
@@ -165,8 +168,11 @@ async def test_once_and_every_with_cooldown(session, session_factory, redis_clie
     user, _ = trader
     flat = [(103.0, 103.5, 102.8, 103.2)] * 12
     await _bars(session, btc, flat)
-    once = await _alert(session, user, btc, "above", 103.0)
-    every = await _alert(session, user, btc, "above", 103.0, repeat="every", cooldown_minutes=5)
+    early = T0 - timedelta(hours=1)
+    once = await _alert(session, user, btc, "above", 103.0, created_at=early)
+    every = await _alert(
+        session, user, btc, "above", 103.0, repeat="every", cooldown_minutes=5, created_at=early
+    )
     fired_at = []
     for minute in range(11):
         run = await _run(session_factory, redis_client, bar=T0 + timedelta(minutes=minute))
@@ -189,6 +195,10 @@ async def test_dedup_per_bar(session, session_factory, redis_client, trader, btc
     again = await _run(session_factory, redis_client)
     assert (first.notifications, again.status) == (1, "already_done")
     await redis_client.delete(f"lock:alerts:{B.isoformat()}")  # e.g. a redelivered task
+    again = await _run(session_factory, redis_client)
+    assert (again.status, again.fired) == ("done", 0)  # the bar is marked as evaluated
+    await redis_client.delete(f"lock:alerts:{B.isoformat()}")
+    await redis_client.delete(f"alerts:bar:{btc.id}:{B.isoformat()}")  # even without it:
     alert.last_triggered_at = None  # even if the alert were eligible again
     await session.commit()
     third = await _run(session_factory, redis_client)
@@ -384,7 +394,7 @@ async def test_evaluation_time_with_1000_alerts(
                 "condition": condition,
                 "value": value,
                 "window_minutes": [1, 3, 15, 60][i % 4] if condition == "change_pct" else None,
-                "created_at": T0 - timedelta(hours=1),
+                "created_at": B,
             }
         )
     await session.execute(insert(PriceAlert), rows)
@@ -398,3 +408,20 @@ async def test_evaluation_time_with_1000_alerts(
     quiet = await _run(session_factory, redis_client, bar=B - timedelta(minutes=1))
     print(f"[alerts] 1000 alerts / 3 instruments / none fired: {quiet.duration_ms} ms")
     assert elapsed < 5000 and quiet.duration_ms < 5000
+
+
+async def test_late_candle_is_caught_up(session, session_factory, redis_client, trader, btc):
+    """The candle of bar B arrives after B's run: the next run evaluates B as well."""
+    user, _ = trader
+    await _bars(session, btc, BARS[:3])  # T0..T0+2; B's candle is late
+    alert = await _alert(session, user, btc, "above", 102.9)
+    first = await _run(session_factory, redis_client)
+    assert (first.no_bar, first.fired) == (1, 0)
+    await _bars(session, btc, [BARS[3], (102.5, 102.6, 102.4, 102.5)], start=B)  # B, B+1
+    second = await _run(session_factory, redis_client, bar=B + timedelta(minutes=1))
+    assert (second.caught_up, second.fired, second.notifications) == (1, 1, 1)
+    [note] = (await _fired(session)).values()
+    assert note.data["bar_time"] == B.isoformat() and note.data["price"] == 103.0
+    third = await _run(session_factory, redis_client, bar=B + timedelta(minutes=2))
+    assert (third.caught_up, third.fired) == (0, 0)  # every bar is marked as done
+    assert str(alert.id) in await _fired(session)

@@ -1,0 +1,104 @@
+flowchart LR
+    subgraph domain_auth["Auth, sessions and API keys"]
+        direction TB
+        users[users]
+        refresh_tokens[refresh_tokens]
+        api_keys[api_keys]
+        login_fingerprints[login_fingerprints]
+    end
+    subgraph domain_market["Market data, signals and price alerts"]
+        direction TB
+        instruments[instruments]
+        candles_1m[candles_1m]
+        signals[signals]
+        price_alerts[price_alerts]
+    end
+    subgraph domain_strategies["Strategies, backtests and risk"]
+        direction TB
+        user_strategies[user_strategies]
+        custom_strategies[custom_strategies]
+        backtests[backtests]
+        backtest_trades[backtest_trades]
+        risk_profiles[risk_profiles]
+        signal_plans[signal_plans]
+    end
+    subgraph domain_workspaces["Workspaces"]
+        direction TB
+        workspaces[workspaces]
+    end
+    subgraph domain_notifications["Notifications"]
+        direction TB
+        notifications[notifications]
+        notification_deliveries[notification_deliveries]
+        notification_preferences[notification_preferences]
+        telegram_links[telegram_links]
+        user_devices[user_devices]
+    end
+    subgraph domain_social["News and social"]
+        direction TB
+        news_sources[news_sources]
+        news_articles[news_articles]
+        news_article_instruments[news_article_instruments]
+        posts[posts]
+        comments[comments]
+        post_likes[post_likes]
+        follows[follows]
+        content_reports[content_reports]
+    end
+    subgraph domain_subscriptions["Subscriptions and chat"]
+        direction TB
+        expert_profiles[expert_profiles]
+        subscription_plans[subscription_plans]
+        subscriptions[subscriptions]
+        invoices[invoices]
+        checkout_sessions[checkout_sessions]
+        payment_events[payment_events]
+        conversations[conversations]
+        messages[messages]
+    end
+    api_keys -.-> users
+    backtest_trades --> backtests
+    backtests --> instruments
+    backtests -.-> users
+    candles_1m --> instruments
+    checkout_sessions --> subscription_plans
+    checkout_sessions --> subscriptions
+    checkout_sessions -.-> users
+    comments --> posts
+    comments -.-> users
+    content_reports -.-> users
+    conversations -.-> users
+    custom_strategies -.-> users
+    expert_profiles -.-> users
+    follows -.-> users
+    invoices --> subscriptions
+    invoices -.-> users
+    login_fingerprints -.-> users
+    messages --> conversations
+    messages -.-> users
+    news_article_instruments --> instruments
+    news_article_instruments --> news_articles
+    news_articles --> news_sources
+    notification_deliveries --> notifications
+    notification_preferences -.-> users
+    notifications -.-> users
+    post_likes --> posts
+    post_likes -.-> users
+    posts --> instruments
+    posts -.-> users
+    price_alerts --> instruments
+    price_alerts -.-> users
+    refresh_tokens -.-> users
+    risk_profiles -.-> users
+    signal_plans --> signals
+    signal_plans --> user_strategies
+    signal_plans -.-> users
+    signals --> instruments
+    subscription_plans -.-> users
+    subscriptions --> subscription_plans
+    subscriptions -.-> users
+    telegram_links -.-> users
+    user_devices -.-> users
+    user_strategies --> instruments
+    user_strategies -.-> users
+    workspaces -.-> users

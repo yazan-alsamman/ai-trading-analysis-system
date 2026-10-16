@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_JWT_SECRETS = {"change-me", ""}
@@ -107,7 +107,7 @@ class Settings(BaseSettings):
     payment_demo_webhook_secret: str = ""  # empty: generated once and shared through Redis
     payment_demo_tools: bool = False  # admin fast-forward in production (always on elsewhere)
     payment_return_url: str = ""  # where the demo page sends the browser after paying
-    public_base_url: str = ""  # e.g. http://187.127.76.76:8080; empty: relative checkout URLs
+    public_base_url: str = ""  # e.g. http://187.127.76.76:8080; empty: from the request (Host)
     platform_fee_pct: float = 20.0  # kept from every paid invoice (expert earnings view)
     subscription_grace_days: int = 3  # past_due keeps access this long, then expired
     checkout_ttl_minutes: int = 30
@@ -116,8 +116,25 @@ class Settings(BaseSettings):
     chat_messages_per_day: int = 2000
     chat_edit_window_minutes: int = 15
     chat_notify_collapse_minutes: int = 5  # one external notification per conversation
+    # Operations (T05/T07 + hardening)
+    log_format: str = "auto"  # auto: JSON when ENVIRONMENT=production, text otherwise | json | text
+    app_version: str = "dev"  # the image tag / git sha, baked in at build time (APP_VERSION)
+    # Swagger UI, ReDoc and /openapi.json. Empty: on outside production, off in production;
+    # true / false force them on / off (e.g. true for a live demo, then back to empty).
+    api_docs_enabled: bool | None = None
+    # Database connections per process (API and each Celery process). Under overload a request
+    # waits db_pool_timeout seconds for a connection, then gets 503 + Retry-After (not a 500).
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout: float = 10
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
+
+    @field_validator("api_docs_enabled", mode="before")
+    @classmethod
+    def _empty_is_auto(cls, value: object) -> object:
+        # the deploy appends new keys to the server .env as `KEY=` (empty): that means automatic
+        return None if isinstance(value, str) and not value.strip() else value
 
     @model_validator(mode="after")
     def _check_production_secret(self) -> "Settings":
@@ -129,6 +146,9 @@ class Settings(BaseSettings):
                 f"at least {MIN_JWT_SECRET_LENGTH} characters long. "
                 'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
+        if "*" in self.cors_origin_list:
+            # the API allows credentials: a wildcard would let any site call it as the user
+            raise ValueError("CORS_ORIGINS must list the web app origins, not '*'")
         return self
 
     @property
@@ -149,6 +169,14 @@ class Settings(BaseSettings):
     def demo_tools_enabled(self) -> bool:
         """The admin fast-forward of subscriptions: on outside production, or when asked."""
         return self.environment != "production" or self.payment_demo_tools
+
+    @property
+    def docs_enabled(self) -> bool:
+        """Serve Swagger UI, ReDoc and /openapi.json: API_DOCS_ENABLED when set, otherwise only
+        outside production (the public contract is the committed docs/api/openapi.json)."""
+        if self.api_docs_enabled is not None:
+            return self.api_docs_enabled
+        return self.environment != "production"
 
     def price_alert_limit(self, role: str) -> int:
         return getattr(self, f"price_alert_limit_{role}")

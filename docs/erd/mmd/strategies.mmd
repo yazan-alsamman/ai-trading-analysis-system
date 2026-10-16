@@ -1,0 +1,107 @@
+erDiagram
+    user_strategies {
+        uuid id PK
+        uuid user_id FK
+        varchar strategy_key
+        jsonb params
+        varchar params_hash
+        uuid instrument_id FK
+        string timeframe
+        varchar name
+        bool is_active
+        bool notify
+        jsonb risk_override
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    custom_strategies {
+        uuid id PK
+        uuid user_id FK
+        varchar name
+        varchar description
+        enum_custom_strategy_kind kind
+        jsonb definition
+        varchar definition_hash
+        int version
+        enum_custom_strategy_visibility visibility
+        uuid cloned_from FK
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    backtests {
+        uuid id PK
+        uuid user_id FK
+        uuid instrument_id FK
+        string timeframe
+        varchar strategy_key
+        jsonb params
+        varchar params_hash
+        jsonb config
+        timestamptz range_start
+        timestamptz range_end
+        timestamptz first_bar_at
+        timestamptz last_bar_at
+        enum_backtest_status status
+        int progress
+        text error
+        jsonb metrics
+        jsonb equity_curve
+        int bars
+        timestamptz created_at
+        timestamptz started_at
+        timestamptz finished_at
+        int duration_ms
+        int engine_ms
+    }
+    backtest_trades {
+        bigint id PK
+        uuid backtest_id FK
+        int number
+        varchar side
+        timestamptz entry_time
+        double entry_price
+        timestamptz exit_time
+        double exit_price
+        double quantity
+        double gross_pnl
+        double fees
+        double net_pnl
+        double return_pct
+        int bars_held
+        varchar entry_reason
+        varchar exit_reason
+        double initial_stop
+        double risk_amount
+        double r_multiple
+        jsonb fills
+    }
+    risk_profiles {
+        uuid user_id PK, FK
+        double account_size
+        varchar quote_currency
+        jsonb config
+        varchar template
+        timestamptz updated_at
+    }
+    signal_plans {
+        uuid id PK
+        uuid signal_id FK
+        uuid user_id FK
+        uuid user_strategy_id FK
+        jsonb plan
+        timestamptz created_at
+    }
+    instruments
+    users
+    signals
+    backtest_trades }o--|| backtests : "backtest_id"
+    backtests }o--|| instruments : "instrument_id"
+    backtests }o--|| users : "user_id"
+    custom_strategies }o--o| custom_strategies : "cloned_from"
+    custom_strategies }o--|| users : "user_id"
+    risk_profiles |o--|| users : "user_id"
+    signal_plans }o--o| user_strategies : "user_strategy_id"
+    signal_plans }o--|| signals : "signal_id"
+    signal_plans }o--|| users : "user_id"
+    user_strategies }o--|| instruments : "instrument_id"
+    user_strategies }o--|| users : "user_id"

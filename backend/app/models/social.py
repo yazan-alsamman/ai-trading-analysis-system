@@ -143,6 +143,8 @@ class Comment(Base):
 
 
 class PostLike(Base):
+    """A user's like of a post (``posts.likes_count`` moves in the same transaction)."""
+
     __tablename__ = "post_likes"
     __table_args__ = (Index("ix_post_likes_post_created", "post_id", "created_at"),)
 
@@ -158,6 +160,8 @@ class PostLike(Base):
 
 
 class Follow(Base):
+    """A user following an analyst or expert (the following feed and new_post notifications)."""
+
     __tablename__ = "follows"
     __table_args__ = (
         CheckConstraint("follower_id <> followee_id", name="ck_follows_not_self"),
@@ -176,6 +180,9 @@ class Follow(Base):
 
 
 class ContentReport(Base):
+    """A user's report of a post, comment or chat message; an admin hides the content or
+    dismisses it."""
+
     __tablename__ = "content_reports"
     __table_args__ = (
         UniqueConstraint(

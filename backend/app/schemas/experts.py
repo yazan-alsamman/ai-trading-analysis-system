@@ -161,7 +161,9 @@ class CheckoutRequest(_Strict):
 
 class CheckoutRead(BaseModel):
     checkout_id: uuid.UUID
-    checkout_url: str = Field(description="absolute with PUBLIC_BASE_URL, else a path")
+    checkout_url: str = Field(
+        description="absolute: PUBLIC_BASE_URL, else the scheme and host the request came to"
+    )
     checkout_path: str
     status: str
     expires_at: datetime

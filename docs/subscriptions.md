@@ -45,8 +45,8 @@ sequenceDiagram
    {"checkout_id": "…", "checkout_url": "/api/v1/pay/demo/…", "checkout_path": "/api/v1/pay/demo/…",
     "status": "open", "expires_at": "…"}
    ```
-   - `checkout_url` is absolute when the server sets `PUBLIC_BASE_URL`; otherwise prefix the
-     path with your API origin (e.g. `http://187.127.76.76:8080`).
+   - `checkout_url` is absolute: `PUBLIC_BASE_URL` when set, otherwise the scheme and host the
+     request came to through Nginx (port included, e.g. `http://187.127.76.76:8080/...`).
    - `return_url` must be on an allowed origin (`CORS_ORIGINS` or `PAYMENT_RETURN_URL`), else
      422. Without it, the browser lands on the API's own result page.
    - Errors: 404 plan unknown or inactive, 400 your own plan, 409 you already have a live
@@ -119,7 +119,7 @@ stateDiagram-v2
 | `canceled` | no | ended at period end after a cancel, or by a refund |
 | `expired` | no | payment failed and the grace period ended |
 
-**Renewals** run every hour (beat `subscriptions.renew`, minute 7): for each live subscription
+**Renewals** run every 10 minutes (beat `subscriptions.renew`, `maintenance` queue): for each live subscription
 whose period ended, an invoice (`renewal`) is charged through the provider. Success → new period
 (one calendar month or year), `subscription_renewed`. Failure → `past_due`,
 `subscription_payment_failed` (with the grace end). A trial end is the same as a renewal. A
@@ -225,7 +225,7 @@ Push `data`: `{"screen": "subscription", "subscription_id"}` (`"earnings"` for
 | `PAYMENT_DEMO_WEBHOOK_SECRET` | empty | empty: generated once, kept in Redis |
 | `PAYMENT_DEMO_TOOLS` | `false` | the fast-forward tool in production |
 | `PAYMENT_RETURN_URL` | empty | default return page of the demo checkout |
-| `PUBLIC_BASE_URL` | empty | makes `checkout_url` absolute |
+| `PUBLIC_BASE_URL` | empty | overrides the base of absolute URLs (else taken from the request) |
 | `PLATFORM_FEE_PCT` | 20 | |
 | `SUBSCRIPTION_GRACE_DAYS` | 3 | |
 | `CHECKOUT_TTL_MINUTES` | 30 | |

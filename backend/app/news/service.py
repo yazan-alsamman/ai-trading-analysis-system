@@ -505,7 +505,9 @@ async def fetch_due(
     if not sources:
         return {}
     semaphore = asyncio.Semaphore(FETCH_CONCURRENCY)
-    async with httpx.AsyncClient(
+    # no per-operation timeout: rss.download() wraps each feed in one asyncio.timeout (10 s for
+    # the whole request), which also stops a server that drips bytes
+    async with httpx.AsyncClient(  # nosec B113
         transport=transport, follow_redirects=True, max_redirects=3, timeout=None
     ) as client:
 
