@@ -1457,6 +1457,241 @@ FOLDERS: list[Folder] = [
         ],
     ),
     Folder(
+        "Notifications",
+        "The notification inbox, per-event / per-channel preferences, the Telegram link and push "
+        "devices (`docs/notifications.md`). JWT only: API keys get 403.\n\n"
+        "| `type` | Produced by |\n|---|---|\n"
+        "| `signal` | live signal engine, for your activations with `notify: true` (carries your trade plan) |\n"
+        "| `backtest_completed` / `backtest_failed` | backtest worker |\n"
+        "| `security` | sign-in from a new IP / device, password changed, API key created or revoked, account locked |\n"
+        "| `system` | admin broadcast, test messages |\n\n"
+        "Every event is stored in the inbox and pushed on the WebSocket as `notification`. "
+        "Telegram, email and push follow your preferences: event on for the channel → signal "
+        "filters → quiet hours → hourly cap (held deliveries go out later as one digest). A "
+        "channel the server has no settings for reports `enabled_on_server: false` and its "
+        "deliveries are `skipped`.\n\n"
+        "By the time the Collection Runner gets here, the inbox already holds real events from "
+        "the folders before (password changed, API key created / revoked, backtest completed).\n\n"
+        "The Telegram webhook (`POST /telegram/webhook/{secret}`) is called by Telegram itself, "
+        "only in `TELEGRAM_MODE=webhook` behind HTTPS, and is not a client endpoint: the server "
+        "uses long polling for now.",
+        [
+            Req(
+                "notif_prefs_get",
+                "Get notification preferences",
+                "GET",
+                "/me/notification-preferences",
+                "Created with the defaults on first read: Telegram for signals and system "
+                "messages, push for signals, backtests and system messages, email for security "
+                "events; no quiet hours, 30 per hour per channel, Arabic.",
+            ),
+            Req(
+                "notif_prefs_put",
+                "Update notification preferences",
+                "PUT",
+                "/me/notification-preferences",
+                "The whole document: a missing field takes its default, and a missing matrix "
+                "entry keeps the default for that event and channel. `quiet_hours` is local "
+                "time in `tz` (`23:00`–`07:00` spans midnight); deliveries held by quiet hours "
+                "or by `max_per_hour` are sent later as one digest. `critical` events ignore "
+                "both.\n\n"
+                "A 422 lists every error with its path in `loc`. **Reset preferences** at the end "
+                "of the folder puts the defaults back.",
+                body={
+                    "matrix": {
+                        "signal": {"telegram": True, "email": True, "push": True},
+                        "backtest_completed": {"telegram": True},
+                    },
+                    "min_signal_strength": 0.6,
+                    "only_valid_plans": True,
+                    "quiet_hours": {"start": "23:00", "end": "07:00", "tz": "Asia/Damascus"},
+                    "language": "en",
+                    "max_per_hour": {"telegram": 20},
+                },
+                variants=[
+                    Variant(
+                        "422 Invalid quiet hours",
+                        422,
+                        body={
+                            "quiet_hours": {"start": "25:00", "end": "07:00", "tz": "Mars/Olympus"},
+                            "max_per_hour": {"push": 0},
+                        },
+                    )
+                ],
+            ),
+            Req(
+                "notif_channels",
+                "Notification channels",
+                "GET",
+                "/me/notifications/channels",
+                "What each channel can do for you: configured on this server "
+                "(`enabled_on_server`), the linked Telegram account, the email address, the "
+                "number of push devices. Show a channel with `enabled_on_server: false` as "
+                '"not available".',
+            ),
+            Req(
+                "notif_test",
+                "Send test notification",
+                "POST",
+                "/me/notifications/test",
+                "A `system` test message on one channel (`in_app`, `telegram`, `email`, "
+                "`push`), ignoring preferences, quiet hours and caps. A channel the server has "
+                "no settings for gives a `skipped` delivery; Telegram without a linked chat or "
+                "push without a device answers 409. The new notification is stored as "
+                "`notification_id`.",
+                body={"channel": "in_app"},
+                expect=[201],
+                captures={"notification_id": "notification_id"},
+                cost=5,
+                variants=[
+                    Variant("409 Telegram not linked", 409, body={"channel": "telegram"}),
+                    Variant("422 Unknown channel", 422, body={"channel": "sms"}),
+                ],
+            ),
+            Req(
+                "notif_list",
+                "List notifications",
+                "GET",
+                "/me/notifications",
+                "Your inbox, newest first. `title` and `body` are rendered in your language when "
+                "the event is stored; `data` carries the event's details (the signal and your "
+                "trade plan, the backtest metrics, the security event).\n\n"
+                "Read notifications are deleted after 90 days, unread ones after 180.",
+                query=PAGE_QUERY,
+                optional_query=[
+                    (
+                        "type",
+                        "security",
+                        "signal | backtest_completed | backtest_failed | security | system",
+                    ),
+                    ("unread", "true", "true = unread only, false = read only"),
+                ],
+            ),
+            Req(
+                "notif_unread_count",
+                "Unread count",
+                "GET",
+                "/me/notifications/unread-count",
+                "For the bell badge. Live updates arrive on the WebSocket as `notification` "
+                "messages.",
+            ),
+            Req(
+                "notif_read",
+                "Mark notification as read",
+                "POST",
+                "/me/notifications/:notification_id/read",
+                "Idempotent. Another user's notification answers 404. Push messages carry "
+                "`notification_id` in their `data`, so the app can mark them read.",
+                path_vars={"notification_id": ("{{notification_id}}", "Notification UUID")},
+                expect=[204],
+                variants=[
+                    Variant(
+                        "404 Notification not found",
+                        404,
+                        path_vars={"notification_id": "00000000-0000-0000-0000-000000000000"},
+                    )
+                ],
+            ),
+            Req(
+                "notif_read_all",
+                "Mark all as read",
+                "POST",
+                "/me/notifications/read-all",
+                "Every unread notification of yours.",
+                expect=[204],
+            ),
+            Req(
+                "notif_telegram_link",
+                "Get Telegram link code",
+                "POST",
+                "/me/notifications/telegram/link",
+                "A one-time code, valid for 10 minutes. Open `deep_link` in Telegram (or send "
+                "`/start <code>` to the bot): the bot links that chat to your account, and "
+                "**Notification channels** then shows `telegram.linked: true`. `/stop` in the "
+                "bot or **Unlink Telegram** removes the link.\n\n"
+                "409 when the server has no bot configured.",
+                expect=[200, 409],
+            ),
+            Req(
+                "notif_telegram_unlink",
+                "Unlink Telegram",
+                "DELETE",
+                "/me/notifications/telegram",
+                "Idempotent (204 also when nothing was linked). Blocking the bot unlinks "
+                "automatically.",
+                expect=[204],
+            ),
+            Req(
+                "notif_device_register",
+                "Register push device",
+                "POST",
+                "/me/devices",
+                "Registers an FCM registration token for push (Flutter app). Call it on every "
+                "app start and whenever FCM rotates the token: **201** the first time, **200** "
+                "for a known token (refreshed, and moved to this account if another one had "
+                "it). The response never contains the token, only `token_suffix`. "
+                "`platform`: `android`, `ios` or `web`.\n\n"
+                "Tokens FCM reports as invalid are deleted by the server.",
+                body={
+                    "token": "postman-demo-fcm-token-{{$timestamp}}",
+                    "platform": "android",
+                    "app_version": "1.0.0",
+                    "locale": "ar",
+                },
+                expect=[201, 200],
+                captures={"device_id": "id"},
+                variants=[
+                    Variant(
+                        "422 Unknown platform",
+                        422,
+                        body={"token": "postman-demo-fcm-token", "platform": "windows"},
+                    )
+                ],
+            ),
+            Req(
+                "notif_devices",
+                "List push devices",
+                "GET",
+                "/me/devices",
+                "Your registered devices, oldest first.",
+            ),
+            Req(
+                "notif_device_delete",
+                "Delete push device",
+                "DELETE",
+                "/me/devices/:device_id",
+                "Call it on sign-out so the device stops receiving your notifications.",
+                path_vars={"device_id": ("{{device_id}}", "Device UUID")},
+                expect=[204],
+                variants=[
+                    Variant(
+                        "404 Device not found",
+                        404,
+                        path_vars={"device_id": "00000000-0000-0000-0000-000000000000"},
+                    )
+                ],
+            ),
+            Req(
+                "notif_delete",
+                "Delete notification",
+                "DELETE",
+                "/me/notifications/:notification_id",
+                "Removes it from your inbox (here: the test notification sent above).",
+                path_vars={"notification_id": ("{{notification_id}}", "Notification UUID")},
+                expect=[204],
+            ),
+            Req(
+                "notif_prefs_reset",
+                "Reset preferences",
+                "PUT",
+                "/me/notification-preferences",
+                "An empty document puts every field back to its default (it undoes **Update "
+                "notification preferences**).",
+                body={},
+            ),
+        ],
+    ),
+    Folder(
         "Admin",
         "Admin-only endpoints (role `admin`; everyone else gets 403). Authenticated with "
         "`{{admin_access_token}}`, obtained automatically from `admin_email` / "
@@ -1681,6 +1916,49 @@ FOLDERS: list[Folder] = [
                     ),
                 ],
             ),
+            Folder(
+                "Notifications",
+                "Broadcasts and delivery monitoring.",
+                [
+                    Req(
+                        "admin_notif_broadcast",
+                        "Broadcast notification",
+                        "POST",
+                        "/admin/notifications/broadcast",
+                        "A `system` notification to every active user, or only to `roles`, sent "
+                        "in batches by a background task (202 with the number of recipients). "
+                        "Sending the same `id` again creates nothing new.\n\n"
+                        '> ⚠️ Here limited to `roles: ["admin"]`: remove `roles` to reach every '
+                        "user.",
+                        auth="admin",
+                        body={
+                            "title": "Scheduled maintenance",
+                            "body": "The platform will be unavailable on Saturday from 02:00 to 02:30 (Damascus time).",
+                            "severity": "warning",
+                            "roles": ["admin"],
+                        },
+                        expect=[202],
+                        variants=[
+                            Variant(
+                                "422 Empty title",
+                                422,
+                                body={"title": "", "body": "…", "severity": "urgent"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_notif_stats",
+                        "Notification stats",
+                        "GET",
+                        "/admin/notifications/stats",
+                        "Last 24 h: deliveries per channel and status, the circuit breaker of "
+                        "each channel (open for 5 minutes after 5 consecutive failures), "
+                        "deliveries held by quiet hours / caps / an open circuit, and the "
+                        "length of the `notifications` queue.",
+                        auth="admin",
+                    ),
+                ],
+            ),
         ],
         auth="admin",
     ),
@@ -1723,9 +2001,14 @@ and reconnect.
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
 ```
 
-Pushed to the user's own topic without subscribing: `signal` (with `user_strategy_ids`, the \
-user's trade `plan` and `plans` per activation) for activations with `notify: true`, `workspace_updated`, `backtest_progress`, \
-`backtest_completed`, `backtest_failed`.
+Pushed to the user's own topic without subscribing: `notification` (every inbox item, see \
+the **Notifications** folder), `signal` (with `user_strategy_ids`, the user's trade `plan` and \
+`plans` per activation) for activations with `notify: true`, `workspace_updated`, \
+`backtest_progress`, `backtest_completed`, `backtest_failed`.
+
+```json
+{"type": "notification", "topic": "user:<uuid>", "sent_at": 1792156510640, "notification": {"id": "<uuid>", "type": "signal", "title": "SELL signal: BTC/USDT 1m", "body": "…", "data": {"...": "..."}, "severity": "info", "created_at": "…", "read_at": null}}
+```
 
 ### Limits and close codes
 
