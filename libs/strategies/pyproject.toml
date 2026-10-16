@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trading-strategies"
+version = "0.1.0"
+description = "Trading strategies (Strategy pattern) on pandas OHLCV data, no look-ahead"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "pydantic>=2.7",  # custom strategy definitions (Y12)
+  # local package in libs/indicators, installed first (pip cannot express relative paths)
+  "trading-indicators",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.uv.sources]
+trading-indicators = { path = "../indicators", editable = true }
+
+[tool.setuptools.packages.find]
+include = ["trading_strategies*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

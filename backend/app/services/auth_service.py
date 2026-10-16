@@ -42,10 +42,21 @@ async def _issue_pair(session: AsyncSession, user: User) -> tuple[TokenPair, Ref
     return pair, row
 
 
-async def login(session: AsyncSession, email: str, password: str) -> TokenPair:
+async def login(
+    session: AsyncSession, email: str, password: str, client: tuple[str, str] | None = None
+) -> TokenPair:
+    """``client`` = (IP, user agent): a sign-in from a new one notifies the user (Y15)."""
     user = await authenticate(session, email, password)
     pair, _ = await _issue_pair(session, user)
     await session.commit()
+    if client is not None:
+        from app.notifications import security  # noqa: PLC0415 - keeps auth imports light
+
+        try:
+            await security.on_login(session, user, *client)
+        except Exception:  # noqa: BLE001 - never block a sign-in
+            logger.exception("Recording the sign-in fingerprint failed")
+            await session.rollback()
     return pair
 
 

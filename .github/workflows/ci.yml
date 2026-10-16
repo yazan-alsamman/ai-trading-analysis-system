@@ -42,6 +42,68 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - run: pip install -e ../libs/indicators -e ../libs/strategies -e ../libs/backtest
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+
+  indicators:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 3.10 for Colab/Kaggle-style environments, 3.12 like the backend
+        python-version: ["3.10", "3.12"]
+    defaults:
+      run:
+        working-directory: libs/indicators
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+
+  strategies:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    defaults:
+      run:
+        working-directory: libs/strategies
+    env:
+      STRATEGIES_PERF_FACTOR: "3"  # shared CI runners are slower than a dev machine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ../indicators
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+
+  backtest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    defaults:
+      run:
+        working-directory: libs/backtest
+    env:
+      BACKTEST_PERF_FACTOR: "3"  # shared CI runners are slower than a dev machine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ../indicators -e ../strategies
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
@@ -89,4 +151,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
       - run: docker compose config -q
+      - name: Validate the production stack
+        run: |
+          echo IMAGE_TAG=ci > image.env
+          docker compose -f infra/deploy/docker-compose.prod.yml --project-directory . --env-file .env --env-file image.env config -q
+      - run: for f in infra/deploy/*.sh; do bash -n "$f"; done
       - run: docker compose build backend ai-service

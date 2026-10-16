@@ -1,0 +1,139 @@
+# Production stack on the shared VPS (docs/deployment.md).
+# Copied to /opt/trading/docker-compose.yml by the Deploy workflow; images come from GHCR.
+# The VPS runs other live projects: everything here is scoped to the compose project "trading",
+# its own network, its own volumes, and capped memory/CPU. Only nginx is published (port 8080).
+name: trading
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-backend: &backend
+  image: ${BACKEND_IMAGE:-ghcr.io/yazan-alsamman/ai-trading-backend}:${IMAGE_TAG:?IMAGE_TAG is set by image.env}
+  env_file: .env
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  db:
+    image: timescale/timescaledb:2.17.2-pg16
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5435:5432"  # loopback only, reachable through an SSH tunnel
+    mem_limit: 768m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 192m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  backend:  # runs `alembic upgrade head` on start (backend/Dockerfile)
+    <<: *backend
+    environment:
+      FORWARDED_ALLOW_IPS: ${NGINX_IP:-172.30.57.10}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 384m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # Workers start after the backend is healthy, i.e. after migrations ran.
+  worker:  # the signal engine (default queue) and notification sends (notifications queue)
+    <<: *backend
+    command: celery -A app.tasks worker -Q celery,notifications --loglevel=info --concurrency 2
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 384m
+    cpus: 0.75
+
+  worker-backtest:
+    <<: *backend
+    command: >-
+      celery -A app.tasks worker -Q backtests --concurrency 2 --hostname backtests@%h
+      --loglevel=info
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+
+  beat:
+    <<: *backend
+    command: celery -A app.tasks beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 192m  # beat sits at ~106MiB after start
+    cpus: 0.25
+
+  # Telegram long polling (/start linking, /stop, /status). Idles when TELEGRAM_BOT_TOKEN is
+  # empty or TELEGRAM_MODE=webhook. No port: it only makes outbound calls.
+  telegram-bot:
+    <<: *backend
+    command: python -m app.notifications.telegram_bot
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 128m
+    cpus: 0.25
+
+  ai-service:
+    image: ${AI_IMAGE:-ghcr.io/yazan-alsamman/ai-trading-ai-service}:${IMAGE_TAG:?}
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 256m
+    cpus: 0.5
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"  # the public entry point: http://187.127.76.76:8080
+    networks:
+      default:
+        ipv4_address: ${NGINX_IP:-172.30.57.10}
+    depends_on:
+      - backend
+    mem_limit: 64m
+    cpus: 0.25
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-172.30.57.0/24}
+
+volumes:
+  db_data:
