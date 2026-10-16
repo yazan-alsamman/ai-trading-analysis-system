@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     # Operations (T05/T07 + hardening)
     log_format: str = "auto"  # auto: JSON when ENVIRONMENT=production, text otherwise | json | text
     app_version: str = "dev"  # the image tag / git sha, baked in at build time (APP_VERSION)
+    # Database connections per process (API and each Celery process). Under overload a request
+    # waits db_pool_timeout seconds for a connection, then gets 503 + Retry-After (not a 500).
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout: float = 10
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 

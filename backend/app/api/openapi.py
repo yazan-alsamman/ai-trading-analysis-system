@@ -44,7 +44,7 @@ ERROR_SCHEMA = {
         },
         "retry_after": {
             "type": "integer",
-            "description": "429 only: seconds until the request would be accepted",
+            "description": "429 and 503: seconds until a retry makes sense",
         },
     },
     "example": {"detail": "Not found"},

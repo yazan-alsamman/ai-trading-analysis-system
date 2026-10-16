@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import TimeoutError as PoolTimeout
 
 from app.api import ws
 from app.api.limits import RateLimitHeadersMiddleware, rate_limit_exceeded_handler
@@ -24,6 +25,7 @@ from app.services import indicator_service, user_service
 from app.services.workspace_service import VersionConflict
 
 logger = logging.getLogger(__name__)
+POOL_RETRY_AFTER = 2  # seconds, on 503 when the database pool is exhausted
 
 settings = get_settings()
 # one root handler (JSON in production): uvicorn's loggers propagate to it
@@ -98,6 +100,17 @@ app.add_middleware(
     expose_headers=[*RATE_LIMIT_HEADERS, "X-Request-ID"],
 )
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+
+@app.exception_handler(PoolTimeout)
+async def pool_timeout_handler(request: Request, exc: PoolTimeout) -> JSONResponse:
+    """Every database connection busy for db_pool_timeout seconds (overload): 503 and a hint
+    when to retry, instead of an unhandled 500."""
+    return JSONResponse(
+        {"detail": "Server busy, try again shortly", "retry_after": POOL_RETRY_AFTER},
+        status_code=503,
+        headers={"Retry-After": str(POOL_RETRY_AFTER)},
+    )
 
 
 @app.exception_handler(VersionConflict)
