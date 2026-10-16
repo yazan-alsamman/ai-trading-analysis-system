@@ -34,18 +34,19 @@ role; for a trader they answer 403 and the runner skips what depends on them.
 ## Structure
 
 ```
-01 · Health                 07 · Risk Management        12 · Admin
+01 · Health                 07 · Risk Management        13 · Admin
 02 · Auth                   08 · Custom Strategies           Users
 03 · Users (me)             09 · Backtests                   Market Data
 04 · Market Data            10 · Workspaces                  API Keys & Rate Limits
-05 · Indicators             11 · API Keys               13 · Realtime (WebSocket)
-06 · Strategies & Signals        Using an API key
+05 · Indicators             11 · API Keys                    Notifications
+06 · Strategies & Signals        Using an API key       14 · Realtime (WebSocket)
+                            12 · Notifications
 ```
 
 Folders are ordered for the **Collection Runner** / Newman: each folder creates what it needs,
 uses it and deletes it again, and ids flow between requests through environment variables
 (`instrument_id`, `workspace_id`, `backtest_id`, …). A 429 is waited out (`Retry-After`) and the
-request is sent again. Postman v2.1 files cannot hold WebSocket requests, so folder 12 documents
+request is sent again. Postman v2.1 files cannot hold WebSocket requests, so folder 14 documents
 `/ws/market` (URL, messages, close codes) for a **New → WebSocket** tab.
 
 ```bash
