@@ -159,8 +159,9 @@ async def protected_login(request: Request, session: AsyncSession, email: str, p
     limit nor the lockout reveals whether an email is registered.
     """
     settings = get_settings()
+    client = (client_ip(request), request.headers.get("user-agent", "")[:300])
     if not settings.rate_limit_enabled:
-        return await auth_service.login(session, email, password)
+        return await auth_service.login(session, email, password, client)
     redis, email_id = get_redis(), _email_id(email)
     try:
         locked = await _locked_for(redis, email_id)
@@ -180,10 +181,16 @@ async def protected_login(request: Request, session: AsyncSession, email: str, p
     enforce(request, decision)
 
     try:
-        pair = await auth_service.login(session, email, password)
+        pair = await auth_service.login(session, email, password, client)
     except HTTPException as exc:
-        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
-            await _record_failure(redis, email_id)
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED and await _record_failure(
+            redis, email_id
+        ):
+            from app.notifications import security  # noqa: PLC0415
+
+            await security.account_locked(
+                session, email, settings.login_lockout_seconds, settings.login_lockout_failures
+            )
         raise
     try:
         await redis.delete(rate_limit.key("login-fail", email_id))
@@ -192,7 +199,8 @@ async def protected_login(request: Request, session: AsyncSession, email: str, p
     return pair
 
 
-async def _record_failure(redis: Redis, email_id: str) -> None:
+async def _record_failure(redis: Redis, email_id: str) -> bool:
+    """True if this failure locked the email."""
     settings = get_settings()
     try:
         script = redis.register_script(rate_limit.LOGIN_FAILURE_LUA)
@@ -206,7 +214,7 @@ async def _record_failure(redis: Redis, email_id: str) -> None:
         )
     except (RedisError, OSError):
         logger.warning("Could not record a failed login")
-        return
+        return False
     if locked:
         logger.warning(
             "Login locked for %ss after %s failures (email id %s)",
@@ -214,6 +222,7 @@ async def _record_failure(redis: Redis, email_id: str) -> None:
             settings.login_lockout_failures,
             email_id[:8],
         )
+    return bool(locked)
 
 
 class RateLimitHeadersMiddleware:

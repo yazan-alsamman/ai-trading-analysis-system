@@ -340,9 +340,9 @@ async def fail(
                         func.extract("epoch", func.now() - Backtest.started_at) * 1000
                     ),
                 )
-                .returning(Backtest.user_id)
+                .returning(Backtest)
             )
-        ).first()
+        ).scalar_one_or_none()
         await session.commit()
     if row is None:
         return False
@@ -356,7 +356,48 @@ async def fail(
             "error": message[:1000],
         },
     )
+    await _notify(factory, redis, row, "backtest_failed", error=message[:300])
     return True
+
+
+async def _notify(
+    factory: async_sessionmaker[AsyncSession],
+    redis: Redis | None,
+    row: Backtest,
+    kind: str,
+    **data: Any,
+) -> None:
+    """A ``backtest_completed`` / ``backtest_failed`` notification (Y15); never raises."""
+    from app.models.notification import NotificationType, Severity  # noqa: PLC0415
+    from app.notifications import service as notifications  # noqa: PLC0415
+
+    try:
+        async with factory() as session:
+            instrument = await session.get(Instrument, row.instrument_id)
+        snapshot = (row.config or {}).get(SNAPSHOT_KEY) or {}
+        strategy = snapshot.get("name")
+        if strategy is None:
+            try:
+                strategy = ts.get_strategy(row.strategy_key).title
+            except ValueError:
+                strategy = row.strategy_key
+        item = notifications.NotifyItem(
+            user_id=row.user_id,
+            type=NotificationType(kind),
+            data={
+                "backtest_id": str(row.id),
+                "strategy_key": row.strategy_key,
+                "strategy_name": strategy,
+                "symbol": instrument.symbol if instrument else "?",
+                "timeframe": Timeframe(row.timeframe).value,
+                **data,
+            },
+            dedup_key=f"backtest:{row.id}:{kind}",
+            severity=Severity.success if kind == "backtest_completed" else Severity.warning,
+        )
+        await notifications.notify_with(factory, item, redis)
+    except Exception:  # noqa: BLE001
+        logger.exception("notifying %s of backtest %s failed", kind, row.id)
 
 
 def _frame(history: Sequence[market_service.CandleRow], rows: Sequence[tuple]) -> pd.DataFrame:
@@ -519,6 +560,7 @@ async def execute(
             "metrics": headline,
         },
     )
+    await _notify(factory, redis, row, "backtest_completed", metrics=headline)
     logger.info(
         "backtest %s completed bars=%d trades=%d engine_ms=%d total_ms=%d",
         backtest_id,

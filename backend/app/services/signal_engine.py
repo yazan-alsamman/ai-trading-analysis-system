@@ -29,8 +29,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.candle import Timeframe
 from app.models.instrument import Instrument
+from app.models.notification import NotificationType
 from app.models.risk import SignalPlan
 from app.models.strategy import Signal, SignalSide, UserStrategy
+from app.notifications import service as notifications
 from app.realtime import publisher
 from app.realtime.topics import signals_topic, user_topic
 from app.services import indicator_service, market_service, risk_service, strategy_resolver
@@ -154,6 +156,7 @@ class EvaluationResult:
     published: int = 0
     user_messages: int = 0
     plans: int = 0
+    notifications: int = 0
     errors: list[str] = field(default_factory=list)
     duration_ms: float = 0.0
 
@@ -380,15 +383,76 @@ async def evaluate(
                     .returning(SignalPlan.id)
                 )
                 result.plans = len((await session.execute(stmt)).all())
+            prepared = await _notifications(session, redis, job, inserted, by_user, setups, result)
             await session.commit()
         result.inserted = len(inserted)
         await _publish(redis, inserted, by_user, result)
+        await notifications.after_commit(redis, prepared)
         await redis.set(job.lock_key, "done", px=int(DONE_TTL.total_seconds() * 1000))
     except BaseException:
         await _release(redis, job.lock_key, token)
         raise
     _log(result, started)
     return result
+
+
+async def _notifications(
+    session: AsyncSession,
+    redis: Redis,
+    job: Job,
+    inserted: list[dict[str, Any]],
+    by_user: dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]],
+    setups: list[Resolved],
+    result: EvaluationResult,
+) -> notifications.Prepared:
+    """One ``signal`` notification per (signal, user with notify = true), with the user's plans;
+    stored in a savepoint so a failure never loses the signal (Y15)."""
+    if not inserted:
+        return notifications.Prepared()
+    instrument = await session.get(Instrument, job.instrument_id)
+    names = {s.key: s.name for s in setups}
+    items = []
+    for row in inserted:
+        payload = signal_payload(row)
+        for (signal_id, user_id), entries in by_user.items():
+            notified = [(a, plan) for a, plan in entries if a.notify]
+            if signal_id != row["id"] or not notified:
+                continue
+            items.append(
+                notifications.NotifyItem(
+                    user_id=user_id,
+                    type=NotificationType.signal,
+                    data={
+                        "signal": payload,
+                        "strategy_name": names.get(row["strategy_key"], row["strategy_key"]),
+                        "instrument": {
+                            "id": str(job.instrument_id),
+                            "symbol": instrument.symbol if instrument else "?",
+                            "price_precision": instrument.price_precision if instrument else None,
+                            "quantity_precision": (
+                                instrument.quantity_precision if instrument else None
+                            ),
+                        },
+                        "user_strategy_ids": [str(a.id) for a, _ in notified],
+                        "plan": notified[0][1],
+                        "plans": [
+                            {"user_strategy_id": str(a.id), "plan": plan} for a, plan in notified
+                        ],
+                    },
+                    dedup_key=f"signal:{row['id']}",
+                )
+            )
+    if not items:
+        return notifications.Prepared()
+    try:
+        async with session.begin_nested():
+            prepared = await notifications.prepare(session, redis, items)
+    except Exception as exc:  # noqa: BLE001 - never block the signal
+        logger.exception("Notifications for %s failed", job)
+        result.errors.append(f"notifications: {type(exc).__name__}: {exc}")
+        return notifications.Prepared()
+    result.notifications = len(prepared.notifications)
+    return prepared
 
 
 async def _publish(
@@ -435,7 +499,8 @@ def _log(result: EvaluationResult, started: float) -> None:
     job = result.job
     logger.info(
         "signals.evaluate instrument=%s timeframe=%s bar=%s status=%s setups=%d signals=%d "
-        "inserted=%d plans=%d published=%d user_messages=%d errors=%d duration_ms=%.1f",
+        "inserted=%d plans=%d notifications=%d published=%d user_messages=%d errors=%d "
+        "duration_ms=%.1f",
         job.instrument_id,
         job.timeframe.value,
         job.bar_time.isoformat(),
@@ -444,6 +509,7 @@ def _log(result: EvaluationResult, started: float) -> None:
         result.signals,
         result.inserted,
         result.plans,
+        result.notifications,
         result.published,
         result.user_messages,
         len(result.errors),
