@@ -1,0 +1,25 @@
+name: Server inspect (read-only)
+
+# Runs the read-only inspection script on the VPS over SSH. Nothing on the server is changed.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/project-thread-1zx7f1]
+    paths: [infra/deploy/inspect.sh, .github/workflows/server-inspect.yml]
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Inspect
+        run: >-
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+          -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          'bash -s' < infra/deploy/inspect.sh
