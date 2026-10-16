@@ -242,3 +242,26 @@ async def admin_headers(make_user, login) -> dict[str, str]:
 async def trader_headers(make_user, login) -> dict[str, str]:
     await make_user("trader@example.com", role=UserRole.trader)
     return bearer((await login("trader@example.com"))["access_token"])
+
+
+@pytest.fixture(autouse=True)
+def notification_queue(monkeypatch: pytest.MonkeyPatch) -> list[tuple[list, float | None]]:
+    """Notification sends handed to Celery are recorded instead (``(ids, countdown)``)."""
+    from app.notifications import service as notification_service
+
+    sent: list[tuple[list, float | None]] = []
+    monkeypatch.setattr(
+        notification_service, "enqueue", lambda ids, countdown=None: sent.append((ids, countdown))
+    )
+    monkeypatch.setattr(notification_service, "enqueue_broadcast", lambda *a: None)
+    # every test session shares one connection (savepoints): send one delivery at a time
+    monkeypatch.setattr(notification_service, "SEND_CONCURRENCY", 1)
+    return sent
+
+
+@pytest.fixture(autouse=True)
+async def _clean_notification_keys(redis_client: Redis) -> AsyncIterator[None]:
+    """Hourly caps, circuit breakers, cached FCM token and link codes start empty."""
+    await _delete_keys(redis_client, "notif:*")
+    yield
+    await _delete_keys(redis_client, "notif:*")
