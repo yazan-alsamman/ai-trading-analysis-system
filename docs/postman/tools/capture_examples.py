@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,10 @@ CAPTURE_PASSWORD = "Trader12345"
 # A second analyst who publishes a post, so the feed has someone to follow and something to report.
 AUTHOR_EMAIL = "lina@example.com"
 AUTHOR_PASSWORD = "Analyst12345"
+# An expert with a plan (all perks) and a subscribers-only post: the directory, checkout, chat
+# and the teaser in the feed need someone to subscribe to.
+EXPERT_EMAIL = "sami@example.com"
+EXPERT_PASSWORD = "Expert12345"
 BACKEND = Path(__file__).resolve().parents[3] / "backend"
 
 
@@ -98,6 +103,8 @@ class Runner:
                 name = m.group(1)
                 if name == "$timestamp":
                     return str(int(time.time()))
+                if name == "$guid":
+                    return str(uuid.uuid4())
                 return str(self.vars.get(name, ""))
 
             return re.sub(r"\{\{([^}]+)\}\}", sub, value)
@@ -111,7 +118,11 @@ class Runner:
         """``"{{custom_strategy_version}}"`` must reach the API as a number, as in Postman
         where the raw body text is substituted."""
         text = json.dumps(value)
-        text = re.sub(r'"\{\{(custom_strategy_version)\}\}"', lambda m: self.vars[m.group(1)], text)
+        text = re.sub(
+            r'"\{\{(custom_strategy_version)\}\}"',
+            lambda m: self.vars[m.group(1)],
+            text,
+        )
         return json.loads(self.resolve(text)) if isinstance(value, (dict, list)) else value
 
     # --- auth --------------------------------------------------------------------------------
@@ -202,6 +213,10 @@ class Runner:
                 self.vars[f"candle_ts_{i}"] = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
         if req.id == "alerts_history":
             self.fire_price_alert()
+        if req.id == "chat_send":
+            self.vars["chat_client_id"] = str(uuid.uuid4())
+        if req.id == "experts_earnings" and self.vars.get("my_plan_id"):
+            self.subscribe(AUTHOR_EMAIL, AUTHOR_PASSWORD, self.vars["my_plan_id"])
         if req.id == "ws_reorder":
             ids = json.loads(self.vars.get("workspace_ids", "[]"))
             self.vars["workspace_ids_reversed"] = json.dumps(list(reversed(ids)))
@@ -225,12 +240,22 @@ class Runner:
             )
         if req.id == "posts_feed" and data:
             me = self.vars.get("user_id")
-            other = [p for p in data["items"] if p["author"]["id"] != me]
+            other = [p for p in data["items"] if p["author"]["id"] != me and not p.get("locked")]
             authors = [p for p in other if p["author"]["role"] in ("analyst", "expert")]
             if other:
                 self.vars["other_post_id"] = other[0]["id"]
             if authors:
                 self.vars["author_user_id"] = authors[0]["author"]["id"]
+        if req.id == "experts_list" and data:
+            others = [e for e in data["items"] if e["id"] != self.vars.get("user_id")]
+            if others:
+                self.vars["expert_id"] = others[0]["id"]
+        if req.id == "subs_mine" and data:
+            mine = [s for s in data if s["expert"]["id"] == self.vars.get("expert_id")]
+            if mine:
+                self.vars["subscription_id"] = mine[0]["id"]
+                if mine[0]["invoices"]:
+                    self.vars["invoice_id"] = mine[0]["invoices"][0]["id"]
         if req.id == "alerts_history" and self.vars.get("demo_alert_id"):
             self.http.delete(
                 f"/api/v1/me/price-alerts/{self.vars.pop('demo_alert_id')}",
@@ -239,10 +264,17 @@ class Runner:
         if req.id in ("ws_list", "ws_list_2"):
             self.vars["workspace_ids"] = json.dumps([w["id"] for w in data])
         cleanup = {
-            "ws_delete": ("/me/workspaces/", ["workspace_copy_id", "workspace_import_id"]),
+            "ws_delete": (
+                "/me/workspaces/",
+                ["workspace_copy_id", "workspace_import_id"],
+            ),
             "custom_delete": (
                 "/me/custom-strategies/",
-                ["custom_strategy_clone_id", "public_clone_id", "composite_strategy_id"],
+                [
+                    "custom_strategy_clone_id",
+                    "public_clone_id",
+                    "composite_strategy_id",
+                ],
             ),
             "backtests_delete": ("/backtests/", ["backtest_id_2"]),
         }
@@ -251,8 +283,34 @@ class Runner:
             for name in names:
                 if self.vars.get(name):
                     self.http.delete(
-                        f"/api/v1{prefix}{self.vars.pop(name)}", headers=self.auth_headers("user")
+                        f"/api/v1{prefix}{self.vars.pop(name)}",
+                        headers=self.auth_headers("user"),
                     )
+
+    def token(self, email: str, password: str) -> dict[str, str]:
+        res = self.http.post("/api/v1/auth/login", json={"email": email, "password": password})
+        res.raise_for_status()
+        return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+    def subscribe(self, email: str, password: str, plan_id: str) -> None:
+        """Another user buys ``plan_id`` with the test card (for the expert's earnings)."""
+        res = self.http.post(
+            "/api/v1/subscriptions/checkout",
+            headers=self.token(email, password),
+            json={"plan_id": plan_id},
+        )
+        if res.status_code != 201:
+            print(f"   subscribe {email}: {res.status_code} {res.text[:120]}")
+            return
+        self.http.post(
+            f"/api/v1/pay/demo/{res.json()['checkout_id']}/confirm",
+            data={
+                "card_number": "4242424242424242",
+                "expiry": "12/30",
+                "cvc": "123",
+                "name": "x",
+            },
+        )
 
     def fire_price_alert(self) -> None:
         """A real trigger for the history example: an alert any price meets, a 1m candle for the
@@ -310,7 +368,11 @@ class Runner:
         another user, so 'Browse public strategies' has something to show."""
         res = self.http.post(
             "/api/v1/auth/register",
-            json={"email": CAPTURE_EMAIL, "password": CAPTURE_PASSWORD, "full_name": "Sara Trader"},
+            json={
+                "email": CAPTURE_EMAIL,
+                "password": CAPTURE_PASSWORD,
+                "full_name": "Sara Trader",
+            },
         )
         if res.status_code not in (201, 409):
             res.raise_for_status()
@@ -319,17 +381,22 @@ class Runner:
             "/api/v1/admin/users", params={"q": CAPTURE_EMAIL}, headers=admin
         ).json()
         uid = users["items"][0]["id"]
-        self.http.patch(f"/api/v1/admin/users/{uid}/role", json={"role": "analyst"}, headers=admin)
+        self.http.patch(f"/api/v1/admin/users/{uid}/role", json={"role": "expert"}, headers=admin)
         self.http.post(
             "/api/v1/auth/register",
-            json={"email": AUTHOR_EMAIL, "password": AUTHOR_PASSWORD, "full_name": "Lina Analyst"},
+            json={
+                "email": AUTHOR_EMAIL,
+                "password": AUTHOR_PASSWORD,
+                "full_name": "Lina Analyst",
+            },
         )
         lina = self.http.get(
             "/api/v1/admin/users", params={"q": AUTHOR_EMAIL}, headers=admin
         ).json()["items"][0]["id"]
         self.http.patch(f"/api/v1/admin/users/{lina}/role", json={"role": "analyst"}, headers=admin)
         token = self.http.post(
-            "/api/v1/auth/login", json={"email": AUTHOR_EMAIL, "password": AUTHOR_PASSWORD}
+            "/api/v1/auth/login",
+            json={"email": AUTHOR_EMAIL, "password": AUTHOR_PASSWORD},
         ).json()["access_token"]
         lina_auth = {"Authorization": f"Bearer {token}"}
         if not self.http.get("/api/v1/posts", headers=lina_auth).json()["items"]:
@@ -344,8 +411,63 @@ class Runner:
                     "timeframe": "1d",
                 },
             ).raise_for_status()
+        self.http.post(
+            "/api/v1/auth/register",
+            json={
+                "email": EXPERT_EMAIL,
+                "password": EXPERT_PASSWORD,
+                "full_name": "Sami Expert",
+            },
+        )
+        sami = self.http.get(
+            "/api/v1/admin/users", params={"q": EXPERT_EMAIL}, headers=admin
+        ).json()["items"][0]["id"]
+        self.http.patch(f"/api/v1/admin/users/{sami}/role", json={"role": "expert"}, headers=admin)
+        sami_auth = self.token(EXPERT_EMAIL, EXPERT_PASSWORD)
+        self.http.put(
+            "/api/v1/me/expert-profile",
+            headers=sami_auth,
+            json={
+                "headline": "Gold & forex macro · 12 years",
+                "bio": "Daily XAU/USD and EUR/USD plans with clear invalidation levels.",
+                "markets": ["gold", "forex"],
+                "languages": ["ar", "en"],
+                "response_time_hint": "within a day",
+            },
+        ).raise_for_status()
+        if not self.http.get("/api/v1/me/plans", headers=sami_auth).json():
+            self.http.post(
+                "/api/v1/me/plans",
+                headers=sami_auth,
+                json={
+                    "name": "Gold desk monthly",
+                    "description": "Premium plans, chat and live signals.",
+                    "price": "19.00",
+                    "interval": "month",
+                    "perks": {
+                        "premium_posts": True,
+                        "chat": True,
+                        "signals_feed": True,
+                    },
+                },
+            ).raise_for_status()
+            self.http.post(
+                "/api/v1/posts",
+                headers=sami_auth,
+                json={
+                    "title": "XAU/USD weekly plan (subscribers)",
+                    "body": "Gold holds the 2,380 demand zone. **Plan:** buy dips into 2,385 with "
+                    "a stop under 2,362; targets 2,420 and 2,455. Full levels and the scenario "
+                    "tree below, plus the invalidation for the bearish case.",
+                    "direction": "bullish",
+                    "timeframe": "4h",
+                    "visibility": "subscribers",
+                },
+            ).raise_for_status()
         public = self.http.get(
-            "/api/v1/custom-strategies/public", headers=admin, params={"search": "Trend rider"}
+            "/api/v1/custom-strategies/public",
+            headers=admin,
+            params={"search": "Trend rider"},
         ).json()
         if not public["items"]:
             from spec import EMA_CROSS
@@ -394,7 +516,11 @@ class Runner:
         res = self.http.post(
             "/api/v1/me/api-keys",
             headers=self.auth_headers("user"),
-            json={"name": "rate limit demo", "scopes": ["market:read"], "rate_limit_per_minute": 1},
+            json={
+                "name": "rate limit demo",
+                "scopes": ["market:read"],
+                "rate_limit_per_minute": 1,
+            },
         )
         key = res.json()
         saved = self.vars["api_key"]

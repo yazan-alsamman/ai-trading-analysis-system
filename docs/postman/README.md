@@ -34,21 +34,23 @@ role; for a trader they answer 403 and the runner skips what depends on them.
 ## Structure
 
 ```
-01 · Health                 07 · Risk Management        13 · Community
-02 · Auth                   08 · Custom Strategies      14 · Price Alerts
-03 · Users (me)             09 · Backtests              15 · Notifications
-04 · Market Data            10 · Workspaces             16 · Admin
-05 · Indicators             11 · API Keys                    Users · Market Data
-06 · Strategies & Signals        Using an API key            API Keys & Rate Limits
-                            12 · News                        News & Moderation · Notifications
-                                                        17 · Realtime (WebSocket)
+01 · Health                 08 · Custom Strategies      15 · Experts & Subscriptions
+02 · Auth                   09 · Backtests              16 · Chat
+03 · Users (me)             10 · Workspaces             17 · Expert Studio
+04 · Market Data            11 · API Keys               18 · Notifications
+05 · Indicators                  Using an API key       19 · Admin
+06 · Strategies & Signals   12 · News                        Users · Market Data
+07 · Risk Management        13 · Community                   API Keys & Rate Limits
+                            14 · Price Alerts                News & Moderation
+                                                             Subscriptions & Chat · Notifications
+                                                        20 · Realtime (WebSocket)
 ```
 
 Folders are ordered for the **Collection Runner** / Newman: each folder creates what it needs,
 uses it and deletes it again, and ids flow between requests through environment variables
 (`instrument_id`, `workspace_id`, `backtest_id`, …). A 429 is waited out (`Retry-After`) and the
-request is sent again. Postman v2.1 files cannot hold WebSocket requests, so folder 17 documents
-`/ws/market` (URL, messages, close codes) for a **New → WebSocket** tab.
+request is sent again. Postman v2.1 files cannot hold WebSocket requests, so folder 20 documents
+`/ws/market` (URL, messages, chat events, close codes) for a **New → WebSocket** tab.
 
 ```bash
 npx newman run docs/postman/AI-Trading-Platform.postman_collection.json \
