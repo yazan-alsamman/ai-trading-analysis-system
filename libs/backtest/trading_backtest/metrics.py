@@ -13,6 +13,15 @@ Formulas (``E_0`` = initial capital, ``E_1..E_n`` = equity at each bar close of 
 * ``calmar = CAGR / |max drawdown|``;
 * ``P`` = 365 days of 24 h divided by the bar length (crypto trades around the clock).
 
+Risk metrics (trades with an initial stop; R = net P&L / money at risk at the initial stop):
+
+* ``avg_r`` = mean R; ``expectancy_r`` = sum of net P&L / sum of money at risk (the R earned
+  per unit of risk taken, weighted by risk); ``r_distribution`` = trades per R bucket;
+* ``avg_risk_pct`` = mean money at risk as % of equity at entry;
+* ``max_consecutive_losses`` = longest run of trades with net P&L <= 0;
+* ``exits_by_reason`` = exit fills per reason (a partial target fill is ``partial_tp``);
+* ``skipped_entries`` = entries not taken, per reason (guards, invalid plans, size below min).
+
 Ratios that are undefined (no variance, no losses, no trades) are ``None``.
 """
 
@@ -28,6 +37,15 @@ import pandas as pd
 from trading_backtest.engine import Trade
 
 SECONDS_PER_YEAR = 365 * 24 * 3600
+R_BUCKETS = (
+    ("<-2", -math.inf, -2),
+    ("-2..-1", -2, -1),
+    ("-1..0", -1, 0),
+    ("0..1", 0, 1),
+    ("1..2", 1, 2),
+    ("2..3", 2, 3),
+    (">=3", 3, math.inf),
+)
 
 
 def periods_per_year(index: pd.DatetimeIndex) -> float | None:
@@ -59,6 +77,7 @@ def compute(
     *,
     benchmark: tuple[float, float],
     bars_per_year: float | None,
+    skipped: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """All metrics of a run. ``benchmark`` = (first window open, last close) for buy & hold."""
     n = len(equity)
@@ -128,6 +147,33 @@ def compute(
         "buy_and_hold_return_pct": _f((last_close / first_open - 1) * 100),
         "bars": n,
         "bars_per_year": _f(p) if p else None,
+        **risk_metrics(trades),
+        "skipped_entries": dict(sorted((skipped or {}).items())),
+    }
+
+
+def risk_metrics(trades: Sequence[Trade]) -> dict[str, Any]:
+    rs = [t.r_multiple for t in trades if t.r_multiple is not None]
+    risked = [t for t in trades if t.risk_amount]
+    total_risk = sum(t.risk_amount for t in risked)
+    risk_pcts = [t.risk_pct for t in trades if t.risk_pct is not None]
+    longest = run = 0
+    for t in trades:
+        run = run + 1 if t.net_pnl <= 0 else 0
+        longest = max(longest, run)
+    exits: dict[str, int] = {}
+    for t in trades:
+        for f in t.fills or ({"reason": t.exit_reason},):
+            exits[f["reason"]] = exits.get(f["reason"], 0) + 1
+    return {
+        "avg_r": _f(float(np.mean(rs))) if rs else None,
+        "expectancy_r": _f(sum(t.net_pnl for t in risked) / total_risk) if total_risk else None,
+        "r_distribution": {name: sum(1 for r in rs if lo <= r < hi) for name, lo, hi in R_BUCKETS}
+        if rs
+        else None,
+        "avg_risk_pct": _f(float(np.mean(risk_pcts))) if risk_pcts else None,
+        "max_consecutive_losses": longest,
+        "exits_by_reason": dict(sorted(exits.items())),
     }
 
 

@@ -370,7 +370,10 @@ async def test_queue_unavailable_fails_with_503(
     [
         ({"strategy_key": "nope"}, "unknown strategy"),
         ({"params": {"fast": 30, "slow": 10}}, "fast"),
-        ({"config": {"fee_bps": -1}}, "config: fee_bps"),
+        ({"config": {"fee_bps": -1}}, '"loc": ["body", "config", "fee_bps"]'),
+        ({"config": {"stop": {"type": "atr", "multiplier": 0}}}, '"path": "stop.multiplier"'),
+        ({"config": {"sizing": {"mode": "risk"}}}, "risk sizing needs a stop"),
+        ({"config": {"risk_profile": "yes"}}, "risk_profile must be true or false"),
         ({"config": {"exits": {"stop_loss_pct": 0}}}, "stop_loss_pct"),
         ({"config": {"leverage": 3}}, "unknown field"),
         ({"start": END.isoformat()}, "start must be before end"),

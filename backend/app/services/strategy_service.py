@@ -19,7 +19,7 @@ from app.models.instrument import Instrument
 from app.models.strategy import Signal, UserStrategy
 from app.models.user import User
 from app.schemas.strategies import StrategyPreviewRequest, UserStrategyCreate, UserStrategyUpdate
-from app.services import indicator_service, market_service, strategy_resolver
+from app.services import indicator_service, market_service, risk_service, strategy_resolver
 from app.services.indicator_service import ResolvedIndicator
 
 MAX_USER_STRATEGIES = 20
@@ -176,6 +176,9 @@ async def create_user_strategy(
     """Activate a global strategy, or a custom one the user may use (``custom:<uuid>``, no
     params; its ``params_hash`` is the definition hash and follows later edits)."""
     resolved = await strategy_resolver.get(session, data.strategy_key, user, data.params)
+    override = None
+    if data.risk_override is not None:
+        override = risk_service.validate_config(data.risk_override, ("body", "risk_override"))
     await _active_instrument(session, data.instrument_id)
     count = await session.scalar(
         select(func.count()).select_from(UserStrategy).where(UserStrategy.user_id == user.id)
@@ -195,6 +198,7 @@ async def create_user_strategy(
         name=data.name,
         is_active=data.is_active,
         notify=data.notify,
+        risk_override=override,
     )
     session.add(row)
     await _commit_or_409(session)
@@ -206,6 +210,10 @@ async def update_user_strategy(
     session: AsyncSession, user: User, row: UserStrategy, data: UserStrategyUpdate
 ) -> UserStrategy:
     changes = data.model_dump(exclude_unset=True)
+    if changes.get("risk_override") is not None:
+        changes["risk_override"] = risk_service.validate_config(
+            changes["risk_override"], ("body", "risk_override")
+        )
     if "params" in changes or changes.get("is_active"):
         # re-resolve: params changed, or a custom strategy is re-activated (it must still be
         # usable: not deleted, not made private by its author) with its current hash

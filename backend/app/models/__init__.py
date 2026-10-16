@@ -6,6 +6,7 @@ from app.models.candle import Candle, Timeframe
 from app.models.custom_strategy import CustomStrategy, CustomStrategyKind, Visibility
 from app.models.instrument import Instrument, MarketType
 from app.models.refresh_token import RefreshToken
+from app.models.risk import RiskProfile, SignalPlan
 from app.models.strategy import Signal, SignalSide, UserStrategy
 from app.models.user import User, UserRole
 from app.models.workspace import Workspace
@@ -22,8 +23,10 @@ __all__ = [
     "Instrument",
     "MarketType",
     "RefreshToken",
+    "RiskProfile",
     "Scope",
     "Signal",
+    "SignalPlan",
     "SignalSide",
     "Timeframe",
     "User",

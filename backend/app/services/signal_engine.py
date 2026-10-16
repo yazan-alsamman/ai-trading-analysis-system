@@ -29,10 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.candle import Timeframe
 from app.models.instrument import Instrument
+from app.models.risk import SignalPlan
 from app.models.strategy import Signal, SignalSide, UserStrategy
 from app.realtime import publisher
 from app.realtime.topics import signals_topic, user_topic
-from app.services import indicator_service, market_service, strategy_resolver
+from app.services import indicator_service, market_service, risk_service, strategy_resolver
 from app.services.market_service import floor_to_bucket
 from app.services.strategy_resolver import Resolved
 
@@ -89,6 +90,33 @@ async def due_jobs(session: AsyncSession, now: datetime) -> list[Job]:
     return sorted(jobs, key=lambda j: (j.timeframe.interval, str(j.instrument_id)))
 
 
+async def custom_snapshots(
+    session: AsyncSession, jobs: list[Job]
+) -> dict[tuple[uuid.UUID, Timeframe], dict[str, dict[str, Any]]]:
+    """For the beat tick: the custom setups of all due jobs resolved in one batch (one query for
+    the active custom keys, then :func:`strategy_resolver.engine_snapshots`), per job."""
+    if not jobs:
+        return {}
+    pairs = {(j.instrument_id, j.timeframe) for j in jobs}
+    rows = await session.execute(
+        select(UserStrategy.instrument_id, UserStrategy.timeframe, UserStrategy.strategy_key)
+        .where(
+            UserStrategy.is_active.is_(True),
+            UserStrategy.strategy_key.startswith(strategy_resolver.KEY_PREFIX),
+            UserStrategy.instrument_id.in_({p[0] for p in pairs}),
+        )
+        .distinct()
+    )
+    wanted = [(iid, tf, key) for iid, tf, key in rows.all() if (iid, tf) in pairs]
+    if not wanted:
+        return {}
+    resolved = await strategy_resolver.engine_snapshots(session, {k for _, _, k in wanted})
+    out: dict[tuple[uuid.UUID, Timeframe], dict[str, dict[str, Any]]] = defaultdict(dict)
+    for iid, tf, key in wanted:
+        out[(iid, tf)][key] = resolved[key]
+    return dict(out)
+
+
 @dataclass(frozen=True)
 class Setup:
     strategy_key: str
@@ -125,6 +153,7 @@ class EvaluationResult:
     inserted: int = 0
     published: int = 0
     user_messages: int = 0
+    plans: int = 0
     errors: list[str] = field(default_factory=list)
     duration_ms: float = 0.0
 
@@ -161,10 +190,9 @@ async def _release(redis: Redis, key: str, token: str) -> None:
 
 
 def _evaluate_setups(
-    candles: list[market_service.CandleRow], setups: list[Resolved], result: EvaluationResult
+    df, candles: list[market_service.CandleRow], setups: list[Resolved], result: EvaluationResult
 ) -> list[dict[str, Any]]:
     """Run every setup on the candles; signals of the last (closed) bar only."""
-    df = indicator_service.frame(candles)
     last = candles[-1]
     rows = []
     for setup in setups:
@@ -195,11 +223,104 @@ def _evaluate_setups(
     return rows
 
 
+@dataclass(frozen=True)
+class Activation:
+    id: uuid.UUID
+    user_id: uuid.UUID
+    strategy_key: str
+    params_hash: str
+    notify: bool
+    risk_override: dict[str, Any] | None
+
+
+async def active_activations(session: AsyncSession, job: Job) -> list[Activation]:
+    rows = await session.execute(
+        select(
+            UserStrategy.id,
+            UserStrategy.user_id,
+            UserStrategy.strategy_key,
+            UserStrategy.params_hash,
+            UserStrategy.notify,
+            UserStrategy.risk_override,
+        ).where(
+            UserStrategy.instrument_id == job.instrument_id,
+            UserStrategy.timeframe == job.timeframe,
+            UserStrategy.is_active.is_(True),
+        )
+    )
+    return [Activation(*r) for r in rows.all()]
+
+
+def _risk_history(activations, profiles, result: EvaluationResult) -> int:
+    needed, seen = 1, set()
+    for a in activations:
+        config = risk_service.effective(a.risk_override, profiles.get(a.user_id))[0]
+        key = risk_service.config_key(config)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            needed = max(needed, risk_service.history_for(config))
+        except ValueError as exc:  # a stored config the library no longer accepts
+            result.errors.append(f"risk config of user {a.user_id}: {exc}")
+    return needed
+
+
+def _plans(
+    df,
+    inserted: list[dict[str, Any]],
+    activations: list[Activation],
+    profiles: dict,
+    result: EvaluationResult,
+) -> tuple[list[dict[str, Any]], dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]]]:
+    """(signal_plans rows, (signal id, user id) -> [(activation, plan or None)])."""
+    rows: list[dict[str, Any]] = []
+    by_user: dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]] = defaultdict(list)
+    cache: dict[tuple[str, float, int], dict[str, Any]] = {}
+    for signal in inserted:
+        side = 1 if SignalSide(signal["side"]) == SignalSide.buy else -1
+        for a in activations:
+            if (a.strategy_key, a.params_hash) != (signal["strategy_key"], signal["params_hash"]):
+                continue
+            plan = None
+            try:
+                config, size, currency, source = risk_service.effective(
+                    a.risk_override, profiles.get(a.user_id)
+                )
+                key = (risk_service.config_key(config), size, side)
+                if key not in cache:
+                    cache[key] = risk_service.plan_dict(df, side, config, size)
+                plan = {
+                    **cache[key],
+                    "account_size": size,
+                    "quote_currency": currency,
+                    "risk_source": source,
+                    "risk_config": config,
+                }
+                rows.append(
+                    {
+                        "signal_id": signal["id"],
+                        "user_id": a.user_id,
+                        "user_strategy_id": a.id,
+                        "plan": plan,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 - never block the signal or other users
+                logger.exception("Trade plan failed for user %s on %s", a.user_id, result.job)
+                result.errors.append(f"plan for user {a.user_id}: {type(exc).__name__}: {exc}")
+            by_user[(signal["id"], a.user_id)].append((a, plan))
+    return rows, by_user
+
+
 async def evaluate(
-    session_factory: async_sessionmaker[AsyncSession], redis: Redis, job: Job
+    session_factory: async_sessionmaker[AsyncSession],
+    redis: Redis,
+    job: Job,
+    custom: dict[str, dict[str, Any]] | None = None,
 ) -> EvaluationResult:
     """Evaluate one (instrument, timeframe) on its last closed bar. Safe to call twice: a Redis
-    lock stops concurrent runs and the unique constraint makes the insert idempotent."""
+    lock stops concurrent runs and the unique constraints make the inserts idempotent.
+    ``custom``: custom setups already resolved by the beat tick (key -> snapshot)."""
     started = time.perf_counter()
     result = EvaluationResult(job)
     token = uuid.uuid4().hex
@@ -212,11 +333,15 @@ async def evaluate(
         async with session_factory() as session:
             active = await active_setups(session, job.instrument_id, job.timeframe)
             setups, errors = await strategy_resolver.for_engine(
-                session, ((s.strategy_key, s.params_hash, s.params) for s in active)
+                session, ((s.strategy_key, s.params_hash, s.params) for s in active), custom
             )
             result.errors.extend(errors)
             result.setups = len(setups)
-            needed = 1
+            activations = await active_activations(session, job)
+            profiles = await risk_service.profiles_for(
+                session, sorted({a.user_id for a in activations})
+            )
+            needed = _risk_history(activations, profiles, result)
             for s in setups:
                 needed = max(needed, s.strategy.history(s.params) + 1)
             # end = bar_time: the forming bucket (and anything newer) is never loaded
@@ -234,7 +359,8 @@ async def evaluate(
                 await _release(redis, job.lock_key, token)
                 _log(result, started)
                 return result
-            rows = _evaluate_setups(candles, setups, result)
+            df = indicator_service.frame(candles)
+            rows = _evaluate_setups(df, candles, setups, result)
             result.signals = len(rows)
             inserted: list[dict[str, Any]] = []
             if rows:
@@ -245,10 +371,18 @@ async def evaluate(
                     .returning(*Signal.__table__.columns)
                 )
                 inserted = [dict(r._mapping) for r in (await session.execute(stmt)).all()]
-            recipients = await _recipients(session, job, inserted)
+            plan_rows, by_user = _plans(df, inserted, activations, profiles, result)
+            if plan_rows:
+                stmt = (
+                    insert(SignalPlan)
+                    .values(plan_rows)
+                    .on_conflict_do_nothing(constraint="uq_signal_plans_signal_user_setup")
+                    .returning(SignalPlan.id)
+                )
+                result.plans = len((await session.execute(stmt)).all())
             await session.commit()
         result.inserted = len(inserted)
-        await _publish(redis, inserted, recipients, result)
+        await _publish(redis, inserted, by_user, result)
         await redis.set(job.lock_key, "done", px=int(DONE_TTL.total_seconds() * 1000))
     except BaseException:
         await _release(redis, job.lock_key, token)
@@ -257,41 +391,14 @@ async def evaluate(
     return result
 
 
-async def _recipients(
-    session: AsyncSession, job: Job, inserted: list[dict[str, Any]]
-) -> dict[tuple[str, str], dict[uuid.UUID, list[uuid.UUID]]]:
-    """(strategy_key, params_hash) -> {user_id: [user_strategy ids]} for active setups with
-    notify = true."""
-    if not inserted:
-        return {}
-    keys = {(r["strategy_key"], r["params_hash"]) for r in inserted}
-    rows = await session.execute(
-        select(
-            UserStrategy.id,
-            UserStrategy.user_id,
-            UserStrategy.strategy_key,
-            UserStrategy.params_hash,
-        ).where(
-            UserStrategy.instrument_id == job.instrument_id,
-            UserStrategy.timeframe == job.timeframe,
-            UserStrategy.is_active.is_(True),
-            UserStrategy.notify.is_(True),
-        )
-    )
-    out: dict[tuple[str, str], dict[uuid.UUID, list[uuid.UUID]]] = defaultdict(dict)
-    for us_id, user_id, key, params_hash in rows.all():
-        if (key, params_hash) in keys:
-            out[(key, params_hash)].setdefault(user_id, []).append(us_id)
-    return out
-
-
 async def _publish(
     redis: Redis,
     inserted: list[dict[str, Any]],
-    recipients: dict[tuple[str, str], dict[uuid.UUID, list[uuid.UUID]]],
+    by_user: dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]],
     result: EvaluationResult,
 ) -> None:
-    """Publishing failures are logged: the signals are stored and listed by the API anyway."""
+    """Publishing failures are logged: the signals and plans are stored and listed by the API.
+    Users get one message per signal with the plans of their activations (``notify`` only)."""
     for row in inserted:
         payload = signal_payload(row)
         try:
@@ -299,14 +406,21 @@ async def _publish(
                 signals_topic(row["instrument_id"]), {"type": "signal", "signal": payload}, redis
             )
             result.published += 1
-            users = recipients.get((row["strategy_key"], row["params_hash"]), {})
-            for user_id, user_strategy_ids in users.items():
+            for (signal_id, user_id), items in by_user.items():
+                if signal_id != row["id"]:
+                    continue
+                notified = [(a, plan) for a, plan in items if a.notify]
+                if not notified:
+                    continue
+                plans = [{"user_strategy_id": str(a.id), "plan": plan} for a, plan in notified]
                 await publisher.publish(
                     user_topic(user_id),
                     {
                         "type": "signal",
-                        "user_strategy_ids": [str(i) for i in user_strategy_ids],
+                        "user_strategy_ids": [str(a.id) for a, _ in notified],
                         "signal": payload,
+                        "plan": plans[0]["plan"],
+                        "plans": plans,
                     },
                     redis,
                 )
@@ -321,7 +435,7 @@ def _log(result: EvaluationResult, started: float) -> None:
     job = result.job
     logger.info(
         "signals.evaluate instrument=%s timeframe=%s bar=%s status=%s setups=%d signals=%d "
-        "inserted=%d published=%d user_messages=%d errors=%d duration_ms=%.1f",
+        "inserted=%d plans=%d published=%d user_messages=%d errors=%d duration_ms=%.1f",
         job.instrument_id,
         job.timeframe.value,
         job.bar_time.isoformat(),
@@ -329,6 +443,7 @@ def _log(result: EvaluationResult, started: float) -> None:
         result.setups,
         result.signals,
         result.inserted,
+        result.plans,
         result.published,
         result.user_messages,
         len(result.errors),

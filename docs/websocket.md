@@ -86,7 +86,12 @@ strategy setup that users run on it. It has no `timeframe` field and sends no sn
 - Messages sent to a user's own topic (`user:<id>`) arrive automatically, with no
   subscription needed. When one of the user's active strategies (with `notify = true`)
   produces a signal, the user gets `{"type": "signal", "user_strategy_ids": ["<uuid>"],
-  "signal": {...}}` with the same `signal` object. Other notifications come in Y15.
+  "signal": {...}, "plan": {...}, "plans": [{"user_strategy_id": "<uuid>", "plan": {...}}]}`
+  with the same `signal` object. `plan` is the user's **trade plan** for it (entry, stop,
+  targets, quantity, money at risk, R:R, from the user's risk profile or the activation's
+  override; [risk-management.md](risk-management.md)); `plans` has one per activation of the
+  user on that setup. A plan with `invalid_reason` set (e.g. `stop_unavailable`) is sent too,
+  flagged; `plan` is `null` if computing it failed. Other notifications come in Y15.
 - Signals of custom strategies have `strategy_key: "custom:<uuid>"`, empty `params`, the
   definition hash as `params_hash`, `reason` `builder_buy`/`builder_sell` or
   `composite_buy`/`composite_sell`, and `details` explaining the rules or the members' votes

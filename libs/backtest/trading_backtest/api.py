@@ -103,6 +103,7 @@ def run_backtest(
         config.initial_capital,
         benchmark=(float(df["open"].iloc[first]), float(df["close"].iloc[-1])),
         bars_per_year=ppy,
+        skipped=sim.skipped,
     )
     return BacktestResult(
         config=config,

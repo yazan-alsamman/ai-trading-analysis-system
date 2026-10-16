@@ -34,7 +34,7 @@ from app.models.user import User
 from app.realtime import publisher
 from app.realtime.topics import user_topic
 from app.schemas.backtests import HEADLINE_METRICS, BacktestCreate
-from app.services import market_service, strategy_resolver
+from app.services import market_service, risk_service, strategy_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +42,18 @@ MAX_CURVE_POINTS = 2000
 PROGRESS_RUNNING, PROGRESS_LOADED, PROGRESS_COMPUTED = 5, 30, 80
 QUEUED_TOO_LONG = timedelta(hours=6)
 SNAPSHOT_KEY = "strategy"  # config.strategy: the custom strategy's snapshot
+PROFILE_KEY = "risk_profile"  # config.risk_profile: true in a request, the profile's snapshot after
+RISK_KEYS = ("stop", "trailing", "take_profit", "sizing", "guards")
 SECONDS_PER_YEAR = 365 * 24 * 3600
 
 ENTRY_COLOR, EXIT_WIN_COLOR, EXIT_LOSS_COLOR = "#2196F3", "#26a69a", "#ef5350"
 EXIT_LABELS = {
     "opposite_signal": "Exit",
     "stop_loss": "SL",
+    "trailing_stop": "Trail",
+    "breakeven_stop": "BE",
     "take_profit": "TP",
+    "partial_tp": "Partial TP",
     "max_bars": "Time",
     "end_of_data": "End",
 }
@@ -67,6 +72,9 @@ CSV_COLUMNS = (
     "bars_held",
     "entry_reason",
     "exit_reason",
+    "initial_stop",
+    "risk_amount",
+    "r_multiple",
 )
 
 
@@ -167,6 +175,7 @@ def strategy_of(row: Backtest) -> tuple[ts.Strategy, tb.BacktestConfig]:
     """The strategy a backtest runs (custom ones from their snapshot) and its engine config."""
     config = dict(row.config)
     snapshot = config.pop(SNAPSHOT_KEY, None)
+    config.pop(PROFILE_KEY, None)
     if snapshot is not None:
         strategy = ts.from_snapshot(snapshot, key=row.strategy_key, title=snapshot.get("name"))
     else:
@@ -174,15 +183,55 @@ def strategy_of(row: Backtest) -> tuple[ts.Strategy, tb.BacktestConfig]:
     return strategy, tb.BacktestConfig.from_dict(config)
 
 
+async def _with_profile(
+    session: AsyncSession, user: User, requested: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The caller's risk profile under the request: its rules, fee and account size, unless the
+    request sets them (a Y11 ``exits.stop_loss_pct`` / ``take_profit_pct`` replaces the
+    profile's stop / take profit). Returns the config and the profile's snapshot."""
+    profile = await risk_service.get_or_create(session, user)
+    rules = {k: v for k, v in profile.config.items() if k in RISK_KEYS}
+    exits = requested.get("exits") or {}
+    if isinstance(exits, dict):
+        if exits.get("stop_loss_pct") is not None:
+            rules.pop("stop", None)
+        if exits.get("take_profit_pct") is not None:
+            rules.pop("take_profit", None)
+    merged = {
+        **rules,
+        "fee_bps": profile.config.get("fee_bps", 10.0),
+        "initial_capital": profile.account_size,
+        **requested,
+    }
+    meta = {
+        "template": profile.template,
+        "account_size": profile.account_size,
+        "quote_currency": profile.quote_currency,
+        "config": profile.config,
+        "updated_at": profile.updated_at.isoformat(),
+    }
+    return merged, meta
+
+
 async def create(session: AsyncSession, user: User, data: BacktestCreate) -> Backtest:
     """Validate everything that can be checked now and store the backtest as ``queued``."""
     resolved = await strategy_resolver.get(session, data.strategy_key, user, data.params)
-    if data.config and SNAPSHOT_KEY in data.config:
+    requested = dict(data.config or {})
+    if SNAPSHOT_KEY in requested:
         raise _unprocessable(f"config: {SNAPSHOT_KEY} is set by the server")
+    use_profile = requested.pop(PROFILE_KEY, False)
+    if not isinstance(use_profile, bool):
+        raise _unprocessable(f"config: {PROFILE_KEY} must be true or false")
+    profile_meta = None
+    if use_profile:
+        requested, profile_meta = await _with_profile(session, user, requested)
     try:
-        config = tb.BacktestConfig.from_dict(data.config)
-    except ValueError as exc:
-        raise _unprocessable(f"config: {exc}") from None
+        config = tb.BacktestConfig.from_dict(requested)
+    except tb.ConfigError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            risk_service.config_errors(exc, ("body", "config")),
+        ) from None
     if data.end > datetime.now(UTC):
         raise _unprocessable("end must not be in the future")
     await market_service.get_instrument_or_404(session, data.instrument_id)
@@ -201,6 +250,8 @@ async def create(session: AsyncSession, user: User, data: BacktestCreate) -> Bac
             "(shorten the range or use a higher timeframe)"
         )
     stored = config.to_dict()
+    if profile_meta is not None:
+        stored[PROFILE_KEY] = profile_meta
     if resolved.custom is not None:
         stored[SNAPSHOT_KEY] = strategy_snapshot(resolved)
     row = Backtest(
@@ -347,6 +398,10 @@ def _trade_rows(backtest_id: uuid.UUID, trades: Sequence[tb.Trade]) -> list[dict
             "bars_held": t.bars_held,
             "entry_reason": t.entry_reason,
             "exit_reason": t.exit_reason,
+            "initial_stop": t.initial_stop,
+            "risk_amount": t.risk_amount,
+            "r_multiple": t.r_multiple,
+            "fills": [dict(f) for f in t.fills] or None,
         }
         for t in trades
     ]
@@ -588,6 +643,19 @@ def markers(trades: Sequence[BacktestTrade]) -> list[dict[str, Any]]:
                 "text": f"#{t.number} {'Long' if long else 'Short'}",
             }
         )
+        # partial exits (targets that closed part of the position) get their own marker
+        for fill in (t.fills or [])[:-1]:
+            move = (fill["price"] / t.entry_price - 1) * 100 * (1 if long else -1)
+            out.append(
+                {
+                    "time": int(datetime.fromisoformat(fill["time"]).timestamp()),
+                    "position": "aboveBar" if long else "belowBar",
+                    "shape": "arrowDown" if long else "arrowUp",
+                    "color": EXIT_WIN_COLOR if move > 0 else EXIT_LOSS_COLOR,
+                    "text": f"#{t.number} {EXIT_LABELS.get(fill['reason'], fill['reason'])} "
+                    f"{move:+.2f}%",
+                }
+            )
         out.append(
             {
                 "time": int(t.exit_time.timestamp()),

@@ -139,9 +139,18 @@ def test_gap_through_the_target_fills_at_the_open() -> None:
     assert (res.trades[0].exit_reason, res.trades[0].exit_price) == ("take_profit", 115)
 
 
-def test_stops_are_not_checked_on_the_entry_bar() -> None:
-    res, _ = _long_at_100([(100, 101, 50, 100), (100, 101, 99, 100)], stop_loss_pct=5)
-    assert res.trades[0].exit_reason == "end_of_data"
+def test_entry_bar_check_on_and_off() -> None:
+    rows = [(100, 101, 50, 100), (100, 101, 99, 100)]
+    df = bars([(100, 100, 100, 100), *rows])
+    exits = {"stop_loss_pct": 5}
+    on = run_backtest(df, signals(df, {0: 1}), {**NO_COSTS, "exits": exits})
+    # the fill is at bar 1's open: the rest of bar 1 (low 50) happens after it
+    (t,) = on.trades
+    assert (t.exit_reason, t.exit_price, t.exit_index, t.bars_held) == ("stop_loss", 95, 1, 1)
+    off = run_backtest(
+        df, signals(df, {0: 1}), {**NO_COSTS, "exits": exits, "check_entry_bar": False}
+    )
+    assert off.trades[0].exit_reason == "end_of_data"  # the Y11 behaviour
 
 
 def test_stop_and_target_of_a_short() -> None:
@@ -268,4 +277,15 @@ def test_config_round_trip() -> None:
         {"direction": "long_short", "exits": {"stop_loss_pct": 2, "take_profit_pct": 4}}
     )
     assert BacktestConfig.from_dict(config.to_dict()) == config
-    assert config.to_dict()["sizing"] == {"mode": "fraction", "value": 1.0}
+    d = config.to_dict()
+    assert d["sizing"] == {
+        "mode": "fraction",
+        "value": 1.0,
+        "max_position_pct": 100.0,
+        "min_notional": 10.0,
+    }
+    # the Y11 aliases become the new rules
+    assert d["stop"] == {"type": "percent", "value": 2.0}
+    assert d["take_profit"] == {"type": "percent", "value": 4.0}
+    assert d["exits"] == {"max_bars_held": None, "exit_on_opposite_signal": True}
+    assert config.exits.stop_loss_pct == 2 and config.exits.take_profit_pct == 4

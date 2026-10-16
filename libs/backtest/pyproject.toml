@@ -11,7 +11,9 @@ requires-python = ">=3.10"
 dependencies = [
   "numpy>=1.24",
   "pandas>=2.0",
+  "pydantic>=2.7",  # risk config validation and JSON Schema (Y13)
   # local packages in libs/, installed first (pip cannot express relative paths)
+  "trading-indicators",  # ATR for stops, trailing and volatility sizing (Y13)
   "trading-strategies",
 ]
 

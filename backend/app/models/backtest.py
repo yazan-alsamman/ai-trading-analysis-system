@@ -119,3 +119,8 @@ class BacktestTrade(Base):
     bars_held: Mapped[int] = mapped_column(Integer)
     entry_reason: Mapped[str | None] = mapped_column(String(64))
     exit_reason: Mapped[str] = mapped_column(String(16))
+    # risk (Y13): initial stop, money at risk there, R = net_pnl / risk_amount, exit fills
+    initial_stop: Mapped[float | None] = mapped_column(Double)
+    risk_amount: Mapped[float | None] = mapped_column(Double)
+    r_multiple: Mapped[float | None] = mapped_column(Double)
+    fills: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)

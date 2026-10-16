@@ -175,23 +175,92 @@ async def get(
     return Resolved(key, strategy, resolved, ts.params_hash(key, resolved))
 
 
+async def load_reachable(
+    session: AsyncSession, rows: Iterable[CustomStrategy]
+) -> dict[str, CustomStrategy]:
+    """``rows`` and every custom strategy reachable from them through composites, one query per
+    nesting level for all of them together (no access filter: the resolver applies it)."""
+    found = {row.key: row for row in rows}
+    pending = {ref for row in found.values() for ref in member_refs(row.kind, row.definition)}
+    for _ in range(MAX_NESTING + 2):
+        ids = {i for ref in pending if ref not in found and (i := custom_id(ref)) is not None}
+        if not ids:
+            break
+        loaded = await session.scalars(select(CustomStrategy).where(CustomStrategy.id.in_(ids)))
+        pending = set()
+        for row in loaded:
+            found[row.key] = row
+            pending |= member_refs(row.kind, row.definition)
+    return found
+
+
+def _owner_resolver(rows: dict[str, CustomStrategy], owner_id: uuid.UUID):
+    def resolve(ref: str) -> tuple[str, dict[str, Any]]:
+        row = rows.get(ref.lower())
+        if row is None or not can_use(row, owner_id):
+            raise LookupError(ref)
+        return row.kind.value, row.definition
+
+    return resolve
+
+
+async def engine_snapshots(session: AsyncSession, keys: Iterable[str]) -> dict[str, dict[str, Any]]:
+    """Custom keys -> ``{"snapshot", "params_hash", "name"}`` or ``{"error"}``, for the live
+    engine: one query for the strategies and one per nesting level for their members, however
+    many keys (the beat tick resolves all due jobs at once)."""
+    keys = sorted(set(keys))
+    ids = {cid: key for key in keys if (cid := custom_id(key)) is not None}
+    out: dict[str, dict[str, Any]] = {
+        key: {"error": "malformed custom key"} for key in keys if custom_id(key) is None
+    }
+    rows = []
+    if ids:
+        rows = list(
+            await session.scalars(select(CustomStrategy).where(CustomStrategy.id.in_(list(ids))))
+        )
+    reachable = await load_reachable(session, rows)
+    by_id = {row.id: row for row in rows}
+    for cid, key in ids.items():
+        row = by_id.get(cid)
+        if row is None:
+            out[key] = {"error": "custom strategy not found"}
+            continue
+        checked = ts.validate(
+            row.kind.value, row.definition, _owner_resolver(reachable, row.user_id), key=row.key
+        )
+        if not checked.valid:
+            first = checked.errors[0]
+            where = f"{first['path']}: " if first["path"] else ""
+            out[key] = {
+                "error": f"Custom strategy {row.name!r} cannot run: {where}{first['message']}"
+            }
+            continue
+        out[key] = {
+            "snapshot": checked.snapshot,
+            "params_hash": ts.snapshot_hash(checked.snapshot),
+            "name": row.name,
+        }
+    return out
+
+
 async def for_engine(
-    session: AsyncSession, setups: Iterable[tuple[str, str, dict[str, Any]]]
+    session: AsyncSession,
+    setups: Iterable[tuple[str, str, dict[str, Any]]],
+    snapshots: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[Resolved], list[str]]:
     """The live engine's setups ``(strategy_key, params_hash, params)`` as runnable strategies,
     plus error messages for setups that cannot run (unknown key, invalid params, a custom
-    strategy deleted or broken). No caller access check: activations are checked when they are
-    created and deactivated when a strategy is deleted or made private."""
+    strategy deleted or broken). Custom setups come from ``snapshots`` (resolved by the beat
+    tick); keys missing there are resolved here in one batch. No caller access check:
+    activations are checked when they are created and deactivated when a strategy is deleted
+    or made private."""
     out: list[Resolved] = []
     errors: list[str] = []
-    custom: dict[uuid.UUID, str] = {}
+    custom: list[str] = []
     for key, params_hash, params in setups:
         if is_custom(key):
-            cid = custom_id(key)
-            if cid is None:
-                errors.append(f"{key}: malformed custom key")
-            else:
-                custom[cid] = key  # one setup per custom key: the current definition
+            if key not in custom:
+                custom.append(key)  # one setup per custom key: the current definition
             continue
         if key not in ts.STRATEGIES:
             continue  # a strategy removed from the code: nothing to run
@@ -202,18 +271,15 @@ async def for_engine(
             errors.append(f"{key}: {exc}")
             continue
         out.append(Resolved(key, strategy, params, params_hash))
-    if custom:
-        rows = await session.scalars(
-            select(CustomStrategy).where(CustomStrategy.id.in_(list(custom)))
-        )
-        by_id = {row.id: row for row in rows}
-        for cid, key in custom.items():
-            row = by_id.get(cid)
-            if row is None:
-                errors.append(f"{key}: custom strategy not found")
-                continue
-            try:
-                out.append(await resolve_custom_row(session, row))
-            except HTTPException as exc:
-                errors.append(f"{key}: {exc.detail}")
+    known = dict(snapshots or {})
+    missing = [k for k in custom if k not in known]
+    if missing:
+        known.update(await engine_snapshots(session, missing))
+    for key in custom:
+        entry = known[key]
+        if "error" in entry:
+            errors.append(f"{key}: {entry['error']}")
+            continue
+        strategy = ts.from_snapshot(entry["snapshot"], key=key, title=entry.get("name"))
+        out.append(Resolved(key, strategy, {}, entry["params_hash"], snapshot=entry["snapshot"]))
     return out, errors
