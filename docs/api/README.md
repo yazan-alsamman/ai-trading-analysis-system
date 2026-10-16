@@ -8,7 +8,8 @@
 Both are generated from the code; CI fails when they are out of date (`--check`), validates the
 AsyncAPI file and generates both clients below on every pull request. Human guides: the other
 files in [docs/](..). The live API also serves the document at `/openapi.json` and Swagger UI at
-`/docs` in development; **both are off in production** (this folder is the public contract).
+`/docs` in development; **both are off in production** unless `API_DOCS_ENABLED=true` (this
+folder is the public contract; see docs/security.md for the demo-day switch).
 
 ## What the document guarantees
 

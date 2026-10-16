@@ -83,9 +83,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await close_redis()
 
 
-# Swagger UI, ReDoc and /openapi.json only outside production: the public contract is the
-# committed docs/api/openapi.json (T07), so production does not advertise its own surface.
-_docs = settings.environment != "production"
+# Swagger UI, ReDoc and /openapi.json: off in production unless API_DOCS_ENABLED=true (the
+# public contract is the committed docs/api/openapi.json, T07); see Settings.docs_enabled.
+_docs = settings.docs_enabled
 app = FastAPI(
     title="AI Trading Platform API",
     version="0.1.0",

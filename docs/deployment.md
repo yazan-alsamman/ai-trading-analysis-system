@@ -6,7 +6,7 @@
 | | |
 |---|---|
 | API | `http://187.127.76.76:8080/api/v1/...` |
-| التوثيق (Swagger) | http://187.127.76.76:8080/docs |
+| التوثيق (Swagger) | http://187.127.76.76:8080/docs (مطفأ افتراضياً، انظر «تشغيل /docs يوم العرض») |
 | الجاهزية | http://187.127.76.76:8080/api/v1/health/ready |
 | WebSocket | `ws://187.127.76.76:8080/ws/market` |
 
@@ -180,6 +180,25 @@ python -m app.cli purge-demo --prefix e2e- --instrument-prefix E2E --yes
 - **ملاحظة**: عنوان Nginx ثابت (`NGINX_IP=172.30.57.10`) والعناوين الأخرى ديناميكية من نفس الشبكة، فقد يأخذ
   حاوية أُعيد إنشاؤها مع Nginx في نفس `up` عنوانَه (حدث محلياً). النشر الحالي لا يعيد إنشاء Nginx مع غيره، لكن
   الحل الدائم `ip_range` للشبكة يحتاج إعادة إنشائها، أي نافذة صيانة مخطَّطة.
+
+## تشغيل /docs يوم العرض
+في الإنتاج Swagger UI و`/redoc` و`/openapi.json` مطفأة افتراضياً (`API_DOCS_ENABLED=` فارغ). لتشغيلها:
+```bash
+cd /opt/trading
+sed -i 's/^API_DOCS_ENABLED=.*/API_DOCS_ENABLED=true/' .env
+docker compose -p trading -f docker-compose.yml --env-file .env --env-file image.env up -d --no-deps --force-recreate backend
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 200
+```
+لإطفائها بعد العرض (نفس الأمر بقيمة فارغة):
+```bash
+cd /opt/trading
+sed -i 's/^API_DOCS_ENABLED=.*/API_DOCS_ENABLED=/' .env
+docker compose -p trading -f docker-compose.yml --env-file .env --env-file image.env up -d --no-deps --force-recreate backend
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
+```
+- الأمر يعيد إنشاء حاوية `backend` الخاصة بمشروعنا فقط (`--no-deps`)، ولا يمس nginx ولا أي مشروع آخر.
+- **تحذير**: أطفئها بعد العرض مباشرة. النشر لا يغيّر قيمة موجودة في `.env` (يضيف المفاتيح الجديدة فقط)، فتبقى
+  `/docs` مفتوحة للعموم إلى أن تُعاد القيمة فارغة.
 
 ## للبرومبتات القادمة
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.

@@ -103,7 +103,19 @@ connections per IP (`app/core/rate_limit.py`).
 - **CORS**: an explicit allow-list from `CORS_ORIGINS`; the app refuses to start with `*` (it
   allows credentials).
 - **API docs**: Swagger UI, ReDoc and `/openapi.json` are **disabled in production**; the public
-  contract is the committed `docs/api/openapi.json`.
+  contract is the committed `docs/api/openapi.json`. `API_DOCS_ENABLED` overrides it: empty
+  (the default, also what the deploy appends to the server `.env`) = automatic, `true` = on even
+  in production, `false` = off everywhere.
+
+### Turning the docs on for demo day
+
+On the server, in `/opt/trading`: set `API_DOCS_ENABLED=true` in `.env` and recreate only our
+backend with the command in docs/deployment.md ("تشغيل /docs يوم العرض"):
+`docker compose -p trading -f docker-compose.yml --env-file .env --env-file image.env up -d --no-deps --force-recreate backend`.
+To turn them off, set `API_DOCS_ENABLED=` (empty) and run the same command; `/docs` then returns
+404 again. **Switch them off right after the demo**: deploys never change an existing `.env`
+value, so the docs stay public until someone does. While on, they expose the full route list
+and schemas (no data, no secrets; every route keeps its normal authentication).
 - **Isolation on the shared VPS**: one compose project (`trading`) with its own network, volumes,
   memory and CPU limits; the database and Redis are not published (the database only on
   127.0.0.1 for SSH tunnels). Deploys only touch this stack (`infra/deploy/remote-deploy.sh`).
