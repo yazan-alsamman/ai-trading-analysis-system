@@ -48,3 +48,9 @@ command -v ufw >/dev/null && (ufw status 2>&1 | head -20) || echo "ufw not prese
 
 section "Our target dir"
 ls -la /opt/trading
+
+section "trading stack"
+docker compose ls --filter name=trading 2>&1
+docker ps --filter label=com.docker.compose.project=trading --format '{{.Names}} | {{.Status}}'
+ls -1 /opt/trading/backups 2>/dev/null
+crontab -l 2>/dev/null | grep trading-backup || echo "no backup cron"

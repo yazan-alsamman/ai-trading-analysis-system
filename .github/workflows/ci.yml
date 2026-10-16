@@ -134,5 +134,5 @@ jobs:
         run: |
           echo IMAGE_TAG=ci > image.env
           docker compose -f infra/deploy/docker-compose.prod.yml --project-directory . --env-file .env --env-file image.env config -q
-      - run: bash -n infra/deploy/remote-deploy.sh infra/deploy/backup.sh
+      - run: for f in infra/deploy/*.sh; do bash -n "$f"; done
       - run: docker compose build backend ai-service

@@ -8,8 +8,6 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
-  push:  # TEMPORARY: first deploy from the setup branch, removed before merge
-    branches: [claude/project-thread-1zx7f1]
 
 permissions:
   contents: read
@@ -69,9 +67,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: http://187.127.76.76:8080/docs
+    environment: production
     steps:
       - uses: actions/checkout@v4
         with:
