@@ -83,6 +83,7 @@ async def test_create_read_list(client: AsyncClient, trader) -> None:
         "params": {"length": 9},
         "output": "ema",
         "shift": 0,
+        "multiplier": 1.0,
     }
     assert created["definition"]["strength"] == "fixed"
 

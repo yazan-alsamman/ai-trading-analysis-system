@@ -105,6 +105,16 @@ def with_buy(*nodes, kind: str = "all") -> dict:
         ),
         (with_buy(cond(price(shift=1.5), ">", const(1))), "buy.all[0].left.shift", "integer"),
         (
+            with_buy(cond({**price(), "multiplier": 0}, ">", const(1))),
+            "buy.all[0].left.multiplier",
+            "greater than 0",
+        ),
+        (
+            with_buy(cond(CLOSE, ">", {**const(1), "multiplier": 2})),
+            "buy.all[0].right.multiplier",
+            "Extra inputs are not permitted",
+        ),
+        (
             with_buy({"op": "rising", "value": CLOSE, "bars": 0}),
             "buy.all[0].bars",
             "greater than or equal to 1",
@@ -221,6 +231,7 @@ def test_normalisation() -> None:
                         "params": {"length": 14},
                         "output": "rsi",
                         "shift": 0,
+                        "multiplier": 1.0,
                     },
                     "op": "<",
                     "right": {"type": "constant", "value": 30.0, "shift": 0},

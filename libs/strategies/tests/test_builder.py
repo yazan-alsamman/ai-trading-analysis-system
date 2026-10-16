@@ -93,6 +93,16 @@ def test_rising_and_falling_are_strict() -> None:
     assert buy_when({"op": "rising", "value": CLOSE, "bars": 1}, df) == {1: 1, 4: 1}
 
 
+def test_multiplier() -> None:
+    df = frame([10, 10, 10], volume=[10, 16, 14])
+    vol_avg = ind("volume_sma", length=1, multiplier=1.5)  # 1.5 x the volume itself
+    assert buy_when(cond(price("volume", shift=1), "<", vol_avg), df) == {1: 1}
+    # volume[t-1] < 1.5 * volume[t]: 10 < 24 on bar 1, 16 < 21 on bar 2 (still true)
+    out = run(builder(buy={"all": [cond({**CLOSE, "multiplier": 2}, ">", const(15))]}), df)
+    assert signal_bars(out) == {0: 1}
+    assert out["details"].iloc[0]["conditions"][0]["left"] == 20.0
+
+
 def test_price_fields() -> None:
     df = frame([10, 10], open_=[1, 1], high=[20, 20], low=[0, 0], volume=[5, 50])
     expect = {"hl2": 10.0, "hlc3": 10.0, "ohlc4": 31 / 4, "open": 1.0, "volume": 5.0}

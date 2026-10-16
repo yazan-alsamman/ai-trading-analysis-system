@@ -17,7 +17,8 @@ Definition (``schema_version`` 1)::
 
 Operands: ``{"type": "indicator", "name", "params", "output"}``, ``{"type": "price", "field"}``
 or ``{"type": "constant", "value"}``, each with an optional ``"shift": n`` (value ``n`` bars
-ago, 0-100).
+ago, 0-100); indicator and price operands also take an optional ``"multiplier"`` (a number,
+default 1), e.g. ``1.5`` x the volume SMA.
 
 Conditions: ``{"left", "op", "right"}`` with ``>``, ``<``, ``>=``, ``<=``, ``crosses_above``,
 ``crosses_below``; ``{"op": "between", "value", "lower", "upper"}`` (inclusive);
@@ -61,6 +62,7 @@ MAX_DEPTH = 3  # the top-level group is depth 1
 MAX_CONDITIONS = 50  # in the whole definition (buy + sell)
 MAX_SHIFT = 100
 MAX_BARS = 50
+MAX_MULTIPLIER = 1000.0
 PRICE_FIELDS = ("open", "high", "low", "close", "volume", "hl2", "hlc3", "ohlc4")
 COMPARE_OPS = (">", "<", ">=", "<=", "crosses_above", "crosses_below")
 TREND_OPS = ("rising", "falling")
@@ -139,6 +141,16 @@ class _Strict(BaseModel):
 Shift = Annotated[
     int, Field(default=0, ge=0, le=MAX_SHIFT, strict=True, description="value n bars ago")
 ]
+Multiplier = Annotated[
+    float,
+    Field(
+        default=1.0,
+        gt=0,
+        le=MAX_MULTIPLIER,
+        allow_inf_nan=False,
+        description="the operand's value times this number (e.g. 1.5 x volume SMA)",
+    ),
+]
 
 
 class IndicatorOperand(_Strict):
@@ -149,12 +161,14 @@ class IndicatorOperand(_Strict):
         default=None, description="required when the indicator has several outputs"
     )
     shift: Shift = 0
+    multiplier: Multiplier = 1.0
 
 
 class PriceOperand(_Strict):
     type: Literal["price"]
     field: Literal["open", "high", "low", "close", "volume", "hl2", "hlc3", "ohlc4"]
     shift: Shift = 0
+    multiplier: Multiplier = 1.0
 
 
 class ConstantOperand(_Strict):
@@ -288,7 +302,12 @@ class _Checker:
 
     def operand(self, op: Any, loc: Loc) -> dict[str, Any]:
         if isinstance(op, PriceOperand):
-            return {"type": "price", "field": op.field, "shift": op.shift}
+            return {
+                "type": "price",
+                "field": op.field,
+                "shift": op.shift,
+                "multiplier": float(op.multiplier),
+            }
         if isinstance(op, ConstantOperand):
             return {"type": "constant", "value": float(op.value), "shift": op.shift}
         return self.indicator(op, loc)
@@ -300,6 +319,7 @@ class _Checker:
             "params": dict(op.params),
             "output": op.output,
             "shift": op.shift,
+            "multiplier": float(op.multiplier),
         }
         spec = ti.INDICATORS.get(op.name)
         if spec is None:
@@ -494,6 +514,9 @@ class _Evaluator:
                 self._indicators[ikey] = frame
             base = frame[op["output"]].to_numpy(dtype=np.float64)
         value = _shift(base, op["shift"])
+        multiplier = op.get("multiplier", 1.0)
+        if multiplier != 1.0:
+            value = value * multiplier
         self._operands[key] = value
         return value
 

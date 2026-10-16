@@ -10,8 +10,12 @@ UUID_C = "custom:cccccccc-0000-4000-8000-000000000003"
 UUID_D = "custom:dddddddd-0000-4000-8000-000000000004"
 
 
-def ind(name: str, shift: int = 0, output: str | None = None, **params) -> dict:
+def ind(
+    name: str, shift: int = 0, output: str | None = None, multiplier: float = 1.0, **params
+) -> dict:
     op = {"type": "indicator", "name": name, "params": params, "shift": shift}
+    if multiplier != 1.0:
+        op["multiplier"] = multiplier
     if output is not None:
         op["output"] = output
     return op
