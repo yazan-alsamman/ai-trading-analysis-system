@@ -11,5 +11,8 @@
 !libs/strategies/pyproject.toml
 !libs/strategies/README.md
 !libs/strategies/trading_strategies
+!libs/backtest/pyproject.toml
+!libs/backtest/README.md
+!libs/backtest/trading_backtest
 **/__pycache__
 **/*.pyc

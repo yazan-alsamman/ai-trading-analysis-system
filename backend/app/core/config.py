@@ -49,6 +49,17 @@ class Settings(BaseSettings):
     workspace_limit_analyst: int = 20
     workspace_limit_expert: int = 20
     workspace_limit_admin: int = 20
+    # Backtests: queued + running at once, and created per UTC day (0 = unlimited), by role
+    backtest_concurrent_trader: int = 2
+    backtest_concurrent_analyst: int = 5
+    backtest_concurrent_expert: int = 5
+    backtest_concurrent_admin: int = 10
+    backtest_daily_trader: int = 30
+    backtest_daily_analyst: int = 200
+    backtest_daily_expert: int = 200
+    backtest_daily_admin: int = 0
+    backtest_max_bars: int = 200_000
+    backtest_time_limit_seconds: int = 300  # Celery soft time limit of one backtest
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 
@@ -74,6 +85,10 @@ class Settings(BaseSettings):
 
     def workspace_limit(self, role: str) -> int:
         return getattr(self, f"workspace_limit_{role}")
+
+    def backtest_quota(self, role: str) -> tuple[int, int]:
+        """(concurrent queued + running, per UTC day; 0 = unlimited)."""
+        return getattr(self, f"backtest_concurrent_{role}"), getattr(self, f"backtest_daily_{role}")
 
 
 @lru_cache

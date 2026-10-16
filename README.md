@@ -11,6 +11,7 @@
 | `infra/` | إعدادات Nginx والنشر | Yazan |
 | `libs/indicators/` | مكتبة المؤشرات الفنية المشتركة (`trading-indicators`) للـ backend والاستراتيجيات وفريق الذكاء | Yazan |
 | `libs/strategies/` | الاستراتيجيات العامة (`trading-strategies`، نمط Strategy) | Yazan |
+| `libs/backtest/` | محرك الاختبار التاريخي (`trading-backtest`) | Yazan |
 
 ## التشغيل محلياً
 
@@ -31,7 +32,7 @@ docker compose up --build
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -e ../libs/indicators -e ../libs/strategies   # المكتبات المحلية أولاً (pip لا يدعم مسارات نسبية في pyproject)
+pip install -e ../libs/indicators -e ../libs/strategies -e ../libs/backtest   # المكتبات المحلية أولاً (pip لا يدعم مسارات نسبية في pyproject)
 pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
@@ -146,6 +147,15 @@ pip install "git+https://github.com/yazan-alsamman/ai-trading-analysis-system@ma
 أو `/admin/*`. كل طلبات `/api/v1` (عدا `/health`) محدودة في الدقيقة: trader 60، analyst/expert 300،
 admin 1000، مع ترويسات `RateLimit-*` و 429 + `Retry-After` عند التجاوز. الدليل الكامل بالإنجليزية
 مع أمثلة curl و Python في [docs/api-keys.md](docs/api-keys.md).
+
+## اختبار الاستراتيجيات تاريخياً (Backtesting)
+
+حزمة [libs/backtest](libs/backtest/README.md) تشغّل أي استراتيجية (أو إطار إشارات جاهز) على
+بيانات تاريخية: التنفيذ عند افتتاح الشمعة التالية (بدون look-ahead)، رسوم وانزلاق على كل صفقة،
+long_only / long_short، وقف خسارة وجني أرباح وحد أقصى لمدة الصفقة، ومقاييس كاملة (العائد، CAGR،
+أقصى تراجع، Sharpe، Sortino، Calmar، نسبة الربح، profit factor، مقارنة بالشراء والاحتفاظ).
+في الـ API: `POST /api/v1/backtests` يضع الاختبار في طابور Celery مستقل (`worker-backtest`)
+ويصل التقدم عبر WebSocket؛ النتائج والصفقات وCSV والمقارنة في [docs/backtesting.md](docs/backtesting.md).
 
 ## مساحات العمل (Workspaces)
 

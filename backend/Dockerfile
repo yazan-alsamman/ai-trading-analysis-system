@@ -8,7 +8,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 # shared libraries first (the backend declares them as dependencies by name)
 COPY libs/indicators /tmp/libs/indicators
 COPY libs/strategies /tmp/libs/strategies
-RUN pip install --no-cache-dir /tmp/libs/indicators /tmp/libs/strategies && rm -rf /tmp/libs
+COPY libs/backtest /tmp/libs/backtest
+RUN pip install --no-cache-dir /tmp/libs/indicators /tmp/libs/strategies /tmp/libs/backtest \
+    && rm -rf /tmp/libs
 
 COPY backend/pyproject.toml ./
 COPY backend/app ./app

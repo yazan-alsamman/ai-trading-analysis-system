@@ -24,6 +24,7 @@ dependencies = [
   # installed first everywhere (Dockerfile, CI, README); uv users get it via tool.uv.sources
   "trading-indicators",
   "trading-strategies",
+  "trading-backtest",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +33,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-cov>=5", "ruff>=0.6", "httpx
 [tool.uv.sources]
 trading-indicators = { path = "../libs/indicators", editable = true }
 trading-strategies = { path = "../libs/strategies", editable = true }
+trading-backtest = { path = "../libs/backtest", editable = true }
 
 [tool.ruff]
 line-length = 100

@@ -92,6 +92,11 @@ strategy setup that users run on it. It has no `timeframe` field and sends no sn
   "action": "created" | "state_updated" | "renamed" | "default_changed" | "deleted" |
   "reordered" | "shared" | "unshared"}`. Reload the workspace if `version` is newer than yours,
   or the list on `reordered` / `deleted` / `created` (see [workspaces.md](workspaces.md)).
+- Backtests of the user report on the same topic: `{"type": "backtest_progress",
+  "backtest_id", "status": "running" | "cancelled", "progress": 0..100}`, then
+  `{"type": "backtest_completed", "backtest_id", "status": "completed", "progress": 100,
+  "metrics": {…headline…}}` or `{"type": "backtest_failed", "backtest_id", "status": "failed",
+  "error"}` (see [backtesting.md](backtesting.md)).
 
 ## Limits and close codes
 
