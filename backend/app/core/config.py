@@ -132,6 +132,9 @@ class Settings(BaseSettings):
                 f"at least {MIN_JWT_SECRET_LENGTH} characters long. "
                 'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
+        if "*" in self.cors_origin_list:
+            # the API allows credentials: a wildcard would let any site call it as the user
+            raise ValueError("CORS_ORIGINS must list the web app origins, not '*'")
         return self
 
     @property

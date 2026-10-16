@@ -63,3 +63,37 @@ async def test_daily_summary(session_factory, make_user) -> None:
     result = await ops_tasks.summary(session_factory)
     assert result["new_users"] == 1 and result["signals"] == 0
     assert set(result) >= {"deliveries_sent", "deliveries_failed", "active_subscriptions"}
+
+
+def test_cors_wildcard_is_refused() -> None:
+    import pytest
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValueError, match="CORS_ORIGINS"):
+        Settings(cors_origins="http://localhost:5173,*")
+
+
+async def test_demo_page_headers(client, make_user, session) -> None:
+    from tests.expert_utils import make_expert, make_person, make_plan, start_checkout
+
+    _, eh = await make_expert(client, make_user, session)
+    _, th = await make_person(make_user, session, "payer")
+    plan = await make_plan(client, eh)
+    checkout = await start_checkout(client, th, plan["id"])
+    res = await client.get(checkout["checkout_path"])
+    csp = res.headers["Content-Security-Policy"]
+    assert "default-src 'none'" in csp and "form-action 'self'" in csp
+    assert "script-src" not in csp and res.headers["Cache-Control"] == "no-store"
+
+
+def test_docs_are_off_in_production() -> None:
+    import subprocess
+    import sys
+
+    code = (
+        "import os; os.environ.update(ENVIRONMENT='production', JWT_SECRET='x'*40); "
+        "from app.main import app; print(app.docs_url, app.openapi_url)"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.split() == ["None", "None"]

@@ -50,7 +50,8 @@ async def warm_up() -> None:
     catalog/plan caches for the market relations, and run every indicator once."""
     async with engine.connect() as conn:
         for relation in ("users", "instruments", *(tf.relation for tf in Timeframe)):
-            await conn.execute(text(f"SELECT * FROM {relation} LIMIT 1"))  # names from code
+            # relation names come from the Timeframe enum, never from input
+            await conn.execute(text(f"SELECT * FROM {relation} LIMIT 1"))  # nosec B608
     await asyncio.to_thread(indicator_service.warm_up)
 
 
@@ -74,7 +75,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await close_redis()
 
 
-app = FastAPI(title="AI Trading Platform API", version="0.1.0", lifespan=lifespan)
+# Swagger UI, ReDoc and /openapi.json only outside production: the public contract is the
+# committed docs/api/openapi.json (T07), so production does not advertise its own surface.
+_docs = settings.environment != "production"
+app = FastAPI(
+    title="AI Trading Platform API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
+)
 
 app.add_middleware(RateLimitHeadersMiddleware)
 app.add_middleware(RequestContextMiddleware)

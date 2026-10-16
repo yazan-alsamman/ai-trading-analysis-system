@@ -78,6 +78,7 @@ def migrated_db() -> str:
     asyncio.run(_create_database_if_missing(TEST_DATABASE_URL))
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    cfg.attributes["keep_logging"] = True  # alembic.ini's logging would drop pytest's handlers
     command.upgrade(cfg, "head")
     return TEST_DATABASE_URL
 

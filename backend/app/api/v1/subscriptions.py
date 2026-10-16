@@ -50,19 +50,43 @@ public_router = APIRouter(tags=["payments-demo"])
 limit_pay_ip = limit_ip("demo-pay", "auth_login_ip_per_minute")
 
 
+def _allowed_origins() -> list[str]:
+    settings = get_settings()
+    allowed = list(settings.cors_origin_list)
+    for extra in (settings.payment_return_url, settings.public_base_url):
+        if extra:
+            p = urlsplit(extra)
+            allowed.append(f"{p.scheme}://{p.netloc}")
+    return sorted(set(allowed))
+
+
+def _page(html: str, status_code: int = 200) -> HTMLResponse:
+    """The demo provider's pages: a strict CSP (inline styles only, no scripts), the form posts to
+    us and may be redirected to the app's origins, framing only by the web app."""
+    origins = " ".join(_allowed_origins())
+    csp = (
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; "
+        f"form-action 'self' {origins}; frame-ancestors 'self' {origins}"
+    )
+    return HTMLResponse(
+        html,
+        status_code=status_code,
+        headers={
+            "Content-Security-Policy": csp,
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
+
 def _check_return_url(url: str | None) -> str | None:
     """Only to the web app's origins (CORS_ORIGINS) or the configured return URL: the payment
     page must not become an open redirect."""
     if not url:
         return None
-    settings = get_settings()
     parts = urlsplit(url)
     origin = f"{parts.scheme}://{parts.netloc}"
-    allowed = set(settings.cors_origin_list)
-    for extra in (settings.payment_return_url, settings.public_base_url):
-        if extra:
-            p = urlsplit(extra)
-            allowed.add(f"{p.scheme}://{p.netloc}")
+    allowed = set(_allowed_origins())
     if parts.scheme not in ("http", "https") or origin not in allowed:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -174,8 +198,8 @@ async def _page_for(session, checkout, error: str | None = None, code: int = 200
                 False,
             ),
         }[checkout.status]
-        return HTMLResponse(demo_page.message_page(*text), status_code=409 if code == 200 else code)
-    return HTMLResponse(
+        return _page(demo_page.message_page(*text), status_code=409 if code == 200 else code)
+    return _page(
         demo_page.checkout_page(
             checkout_id=str(checkout.id),
             expert_name=display_name(expert),
@@ -280,7 +304,7 @@ async def demo_checkout_done(checkout_id: uuid.UUID, session: SessionDep):
         text = ("Payment failed", checkout.failure_reason or "The card was declined.", False)
     else:
         text = ("Payment pending", f"The checkout is {checkout.status.value}.", False)
-    return HTMLResponse(demo_page.message_page(*text))
+    return _page(demo_page.message_page(*text))
 
 
 @public_router.post("/payments/webhook/{provider}")

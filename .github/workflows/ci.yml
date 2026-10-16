@@ -52,7 +52,18 @@ jobs:
         run: |
           python scripts/openapi.py --check
           python scripts/asyncapi.py --check
-      - run: pytest -q
+      - name: Tests (every log record kept, to look for secrets)
+        run: pytest -q --log-file=/tmp/pytest.log --log-file-level=DEBUG
+      - name: No secrets in the logs of the test run
+        run: python scripts/check_log_secrets.py /tmp/pytest.log
+      - name: Dependency audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit --skip-editable --progress-spinner off
+      - name: Static security analysis (bandit; fails on high severity)
+        run: |
+          pip install bandit
+          bandit -r app -q --severity-level high
 
   indicators:
     runs-on: ubuntu-latest
