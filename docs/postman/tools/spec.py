@@ -163,6 +163,18 @@ WORKSPACE_STATE = {
     "active_panel": "p1",
 }
 
+RISK_CONFIG = {
+    "stop": {"type": "atr", "length": 14, "multiplier": 2.0},
+    "trailing": {"type": "atr", "length": 14, "multiplier": 3.0, "breakeven_r": 1},
+    "take_profit": {
+        "type": "r_multiple",
+        "levels": [{"r": 1, "close_pct": 50}, {"r": 2, "close_pct": 50}],
+    },
+    "sizing": {"mode": "risk", "risk_pct": 1.0, "max_position_pct": 100, "min_notional": 10},
+    "guards": {"max_daily_loss_pct": 3, "max_drawdown_pct": 10, "cooldown_bars": 5},
+    "fee_bps": 10,
+}
+
 PAGE_QUERY = [
     ("limit", "20", "Page size"),
     ("offset", "0", "Items to skip"),
@@ -613,7 +625,9 @@ FOLDERS: list[Folder] = [
                 "POST",
                 "/me/strategies",
                 "Runs a strategy live on one instrument + timeframe for the current user. With "
-                "`notify: true` each new signal is pushed to the user's WebSocket topic.",
+                "`notify: true` each new signal is pushed to the user's WebSocket topic, with a "
+                "**trade plan** from `risk_override` (per-activation risk rules) or, when it is "
+                "`null`, from the user's risk profile.",
                 body={
                     "strategy_key": "{{strategy_key}}",
                     "instrument_id": "{{instrument_id}}",
@@ -622,6 +636,7 @@ FOLDERS: list[Folder] = [
                     "name": "BTC 1h EMA cross",
                     "is_active": True,
                     "notify": True,
+                    "risk_override": None,
                 },
                 expect=[201],
                 captures={"user_strategy_id": "id"},
@@ -638,9 +653,19 @@ FOLDERS: list[Folder] = [
                 "Update activation",
                 "PATCH",
                 "/me/strategies/:user_strategy_id",
-                "Change `name`, `params`, `is_active` or `notify`. Only the fields sent change.",
+                "Change `name`, `params`, `is_active`, `notify` or `risk_override` (risk rules "
+                "for this activation's plans; `null` = back to the risk profile). Only the "
+                "fields sent change.",
                 path_vars={"user_strategy_id": ("{{user_strategy_id}}", "Activation UUID")},
-                body={"params": {"fast": 12, "slow": 26}, "notify": False},
+                body={
+                    "params": {"fast": 12, "slow": 26},
+                    "notify": False,
+                    "risk_override": {
+                        "stop": {"type": "percent", "value": 1.5},
+                        "take_profit": {"type": "r_multiple", "value": 2},
+                        "sizing": {"mode": "risk", "risk_pct": 0.5},
+                    },
+                },
             ),
             Req(
                 "signals_list",
@@ -667,6 +692,122 @@ FOLDERS: list[Folder] = [
                 "Stops the live strategy. Signals already produced are kept.",
                 path_vars={"user_strategy_id": ("{{user_strategy_id}}", "Activation UUID")},
                 expect=[204],
+            ),
+        ],
+    ),
+    Folder(
+        "Risk Management",
+        "Stops, trailing stops, targets, position sizing and account guards "
+        "(`docs/risk-management.md`). The same rules run in backtests and in the **trade plan** "
+        "attached to every live signal (entry, stop, targets, quantity, money at risk, R:R).\n\n"
+        "* Risk profile and signal plans: JWT only.\n"
+        "* Schema and position-size calculator: JWT or API key `strategies:read`.\n"
+        "* Templates: `conservative`, `balanced` (default), `aggressive`.",
+        [
+            Req(
+                "risk_schema",
+                "Risk schema & templates",
+                "GET",
+                "/risk/schema",
+                "JSON Schema of a risk config (`stop`, `trailing`, `take_profit`, `sizing`, "
+                "`guards`, `fee_bps`) and the normalised templates. Editors are generated from "
+                "this.",
+            ),
+            Req(
+                "risk_profile_get",
+                "Get my risk profile",
+                "GET",
+                "/me/risk-profile",
+                "Created on first read with the `balanced` template and 10,000 USDT. "
+                "`account_size` is what the user declares; the platform never connects to an "
+                "exchange. `template` is set while the config is unchanged from a template.",
+            ),
+            Req(
+                "risk_profile_put",
+                "Update my risk profile",
+                "PUT",
+                "/me/risk-profile",
+                "`{account_size, quote_currency, config}` or `{template}` (not both; neither "
+                "changes only the account). The config is stored normalised. 422 lists every "
+                "config error with its `path` (e.g. `stop.multiplier`).",
+                body={
+                    "account_size": 25000,
+                    "quote_currency": "USDT",
+                    "config": RISK_CONFIG,
+                },
+                variants=[
+                    Variant(
+                        "200 From a template",
+                        200,
+                        body={"account_size": 10000, "template": "conservative"},
+                    ),
+                    Variant(
+                        "422 Invalid config (paths)",
+                        422,
+                        body={
+                            "config": {
+                                "stop": {"type": "atr", "length": 14, "multiplier": 0},
+                                "take_profit": {"type": "r_multiple", "value": 2},
+                            }
+                        },
+                    ),
+                ],
+            ),
+            Req(
+                "risk_position_size",
+                "Position-size calculator",
+                "POST",
+                "/risk/position-size",
+                "A trade plan on the **last closed bar**: stop, targets, quantity, notional, "
+                "money at risk and R:R. Omitted `entry` / `stop` come from that bar (its close and "
+                "the stop rule); omitted `config` / `account_size` from your risk profile. A "
+                "`stop` price replaces the stop rule.",
+                body={
+                    "instrument_id": "{{instrument_id}}",
+                    "timeframe": "{{timeframe}}",
+                    "side": "buy",
+                },
+                variants=[
+                    Variant(
+                        "200 Explicit entry, stop, rules and account",
+                        200,
+                        body={
+                            "instrument_id": "{{instrument_id}}",
+                            "timeframe": "{{timeframe}}",
+                            "side": "sell",
+                            "entry": 72000,
+                            "stop": 73500,
+                            "account_size": 5000,
+                            "config": {
+                                "take_profit": {
+                                    "type": "r_multiple",
+                                    "levels": [
+                                        {"r": 1.5, "close_pct": 50},
+                                        {"r": 3, "close_pct": 50},
+                                    ],
+                                },
+                                "sizing": {"mode": "risk", "risk_pct": 2},
+                            },
+                        },
+                    ),
+                ],
+            ),
+            Req(
+                "risk_signal_plans",
+                "My signal trade plans",
+                "GET",
+                "/me/signal-plans",
+                "The trade plans of your live signals (one per signal and activation), newest "
+                "bar first, each with its `signal`. A plan with `invalid_reason` set (e.g. "
+                "`stop_unavailable`) should not be traded. Each plan carries `risk_source` "
+                "(`override`, `profile` or `default`) and the exact `risk_config` used.",
+                query=[("limit", "20", "1–100"), ("offset", "0", "")],
+                optional_query=[
+                    ("instrument_id", "{{instrument_id}}", ""),
+                    ("timeframe", "{{timeframe}}", ""),
+                    ("strategy_key", "{{strategy_key}}", ""),
+                    ("since", "2026-10-01T00:00:00Z", "bar_time >= since"),
+                ],
             ),
         ],
     ),
@@ -882,8 +1023,12 @@ FOLDERS: list[Folder] = [
                 "POST",
                 "/backtests",
                 "Answers **202** with the id while the worker runs it. `params` and `config` are "
-                "optional (defaults are stored resolved). 422: unknown strategy, bad params or "
-                "config, `start ≥ end`, `end` in the future, no candles in the range.",
+                "optional (defaults are stored resolved). `config` takes the risk rules of "
+                "`docs/risk-management.md` (`stop`, `trailing`, `take_profit` with partial "
+                '`levels`, `sizing`, `guards`, `check_entry_bar`); `"risk_profile": true` uses '
+                "your risk profile instead. 422: unknown strategy, bad params or config (with "
+                "`path`, e.g. `stop.multiplier`), `start ≥ end`, `end` in the future, no "
+                "candles in the range.",
                 body={
                     "instrument_id": "{{instrument_id}}",
                     "timeframe": "{{timeframe}}",
@@ -896,13 +1041,16 @@ FOLDERS: list[Folder] = [
                         "fee_bps": 10,
                         "slippage_bps": 5,
                         "direction": "long_only",
-                        "sizing": {"mode": "fraction", "value": 1.0},
-                        "exits": {
-                            "stop_loss_pct": 2,
-                            "take_profit_pct": 4,
-                            "max_bars_held": None,
-                            "exit_on_opposite_signal": True,
+                        "sizing": {"mode": "risk", "risk_pct": 1.0},
+                        "stop": {"type": "atr", "length": 14, "multiplier": 2},
+                        "take_profit": {
+                            "type": "r_multiple",
+                            "levels": [{"r": 1, "close_pct": 50}, {"r": 2, "close_pct": 50}],
                         },
+                        "trailing": {"type": "atr", "length": 14, "multiplier": 3},
+                        "guards": {"max_drawdown_pct": 15},
+                        "check_entry_bar": True,
+                        "exits": {"max_bars_held": None, "exit_on_opposite_signal": True},
                     },
                 },
                 expect=[202],
@@ -940,7 +1088,9 @@ FOLDERS: list[Folder] = [
                 "List trades",
                 "GET",
                 "/backtests/:backtest_id/trades",
-                "The simulated trades, paginated (`limit` up to 500).",
+                "The simulated trades, paginated (`limit` up to 500), with `initial_stop`, "
+                "`risk_amount`, `r_multiple` and every exit `fill` (partial take-profits "
+                "included).",
                 path_vars={"backtest_id": ("{{backtest_id}}", "Backtest UUID")},
                 query=[("limit", "100", "1–500"), ("offset", "0", "")],
             ),
@@ -958,14 +1108,16 @@ FOLDERS: list[Folder] = [
                 "Queue second backtest (for compare)",
                 "POST",
                 "/backtests",
-                "Same endpoint as **Queue backtest**, with `rsi_reversal`, so **Compare** has two "
-                "backtests to put side by side.",
+                'Same endpoint as **Queue backtest**, with `rsi_reversal` and `"risk_profile": '
+                "true` (the rules, fee and account size of your risk profile, snapshotted into "
+                "`config.risk_profile`), so **Compare** has two backtests to put side by side.",
                 body={
                     "instrument_id": "{{instrument_id}}",
                     "timeframe": "{{timeframe}}",
                     "strategy_key": "rsi_reversal",
                     "start": "{{backtest_start}}",
                     "end": "{{backtest_end}}",
+                    "config": {"risk_profile": True},
                 },
                 expect=[202],
                 captures={"backtest_id_2": "id"},
@@ -1571,8 +1723,8 @@ and reconnect.
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
 ```
 
-Pushed to the user's own topic without subscribing: `signal` (with `user_strategy_ids`) for \
-activations with `notify: true`, `workspace_updated`, `backtest_progress`, \
+Pushed to the user's own topic without subscribing: `signal` (with `user_strategy_ids`, the \
+user's trade `plan` and `plans` per activation) for activations with `notify: true`, `workspace_updated`, `backtest_progress`, \
 `backtest_completed`, `backtest_failed`.
 
 ### Limits and close codes

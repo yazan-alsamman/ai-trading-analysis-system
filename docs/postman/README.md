@@ -34,12 +34,12 @@ role; for a trader they answer 403 and the runner skips what depends on them.
 ## Structure
 
 ```
-01 · Health                 06 · Strategies & Signals   11 · Admin
-02 · Auth                   07 · Custom Strategies           Users
-03 · Users (me)             08 · Backtests                   Market Data
-04 · Market Data            09 · Workspaces                  API Keys & Rate Limits
-05 · Indicators             10 · API Keys               12 · Realtime (WebSocket)
-                                 Using an API key
+01 · Health                 07 · Risk Management        12 · Admin
+02 · Auth                   08 · Custom Strategies           Users
+03 · Users (me)             09 · Backtests                   Market Data
+04 · Market Data            10 · Workspaces                  API Keys & Rate Limits
+05 · Indicators             11 · API Keys               13 · Realtime (WebSocket)
+06 · Strategies & Signals        Using an API key
 ```
 
 Folders are ordered for the **Collection Runner** / Newman: each folder creates what it needs,
