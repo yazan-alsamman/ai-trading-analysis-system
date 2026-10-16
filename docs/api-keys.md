@@ -85,7 +85,7 @@ curl -s "http://localhost/api/v1/market/instruments/$ID/candles?timeframe=1h&lim
 |---|---|
 | `market:read` | `GET /market/instruments`, `GET /market/instruments/{id}`, `GET /market/instruments/{id}/candles` |
 | `indicators:read` | `GET /indicators`, `POST /market/instruments/{id}/indicators` |
-| `strategies:read` | `GET /strategies`, `POST /strategies/{key}/preview` |
+| `strategies:read` | `GET /strategies`, `POST /strategies/{key}/preview` (global keys, and `custom:<uuid>` for your own or public custom strategies), `GET /custom-strategies/schema`, `GET /custom-strategies/public` |
 | `signals:read` | `GET /signals` (with `mine=true`: signals of the key owner's active strategies) |
 | `stream` | WebSocket `/ws/market` (section 6) |
 | `backtests:read` | `GET /backtests`, `GET /backtests/{id}`, `GET /backtests/{id}/trades`, `GET /backtests/{id}/trades.csv` (your own backtests; creating, cancelling and comparing need a login) |

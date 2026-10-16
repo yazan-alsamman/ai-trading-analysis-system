@@ -157,6 +157,15 @@ long_only / long_short، وقف خسارة وجني أرباح وحد أقصى �
 في الـ API: `POST /api/v1/backtests` يضع الاختبار في طابور Celery مستقل (`worker-backtest`)
 ويصل التقدم عبر WebSocket؛ النتائج والصفقات وCSV والمقارنة في [docs/backtesting.md](docs/backtesting.md).
 
+## الاستراتيجيات المخصصة (Builder + Composite)
+
+يبني المستخدم استراتيجيته دون كتابة كود: **Builder** (شروط على المؤشرات والأسعار مجمّعة بـ AND/OR
+في مستند JSON) أو **Composite** (2–5 استراتيجيات عامة أو مخصصة تصوّت معاً: all / any / majority /
+weighted). المفتاح `custom:<uuid>` يعمل في كل مكان يعمل فيه مفتاح عام: المعاينة، الـ backtests
+(مع لقطة من التعريف في `config.strategy`)، `/me/strategies` ومحرك الإشارات الحي. واجهات
+`/api/v1/me/custom-strategies` و `/api/v1/custom-strategies/{schema,validate,public}`؛ الدليل الكامل
+بالإنجليزية (للمحررات في الويب والموبايل) في [docs/custom-strategies.md](docs/custom-strategies.md).
+
 ## مساحات العمل (Workspaces)
 
 كل مستخدم يحفظ شاشات تداول متعددة (تبويبات): التخطيط، الرسوم، الأدوات والإطارات الزمنية،

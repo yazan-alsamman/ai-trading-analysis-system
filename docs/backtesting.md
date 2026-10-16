@@ -65,7 +65,10 @@ POST /api/v1/backtests
 }
 ```
 
-`params` and `config` are optional (defaults filled in and stored resolved). Errors:
+`params` and `config` are optional (defaults filled in and stored resolved). `strategy_key`
+can also be a custom strategy, `custom:<uuid>` (yours or a public one, with empty `params`). Its
+definition is then stored as a snapshot in `config.strategy`, so the backtest stays reproducible
+after the strategy is edited or deleted ([custom-strategies.md](custom-strategies.md)). Errors:
 
 | Status | Cause |
 |---|---|

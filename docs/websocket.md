@@ -87,6 +87,10 @@ strategy setup that users run on it. It has no `timeframe` field and sends no sn
   subscription needed. When one of the user's active strategies (with `notify = true`)
   produces a signal, the user gets `{"type": "signal", "user_strategy_ids": ["<uuid>"],
   "signal": {...}}` with the same `signal` object. Other notifications come in Y15.
+- Signals of custom strategies have `strategy_key: "custom:<uuid>"`, empty `params`, the
+  definition hash as `params_hash`, `reason` `builder_buy`/`builder_sell` or
+  `composite_buy`/`composite_sell`, and `details` explaining the rules or the members' votes
+  ([custom-strategies.md](custom-strategies.md)).
 - When one of the user's workspaces changes (on any device), every connection of that user gets
   `{"type": "workspace_updated", "workspace_id": "<uuid>" | null, "version": 8 | null,
   "action": "created" | "state_updated" | "renamed" | "default_changed" | "deleted" |

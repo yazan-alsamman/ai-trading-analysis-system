@@ -2,10 +2,10 @@
 
 The global trading strategies, implemented with the Strategy pattern on top of
 [`trading-indicators`](../indicators/README.md). The package is pure Python: it depends only on
-numpy, pandas and trading-indicators, and does no I/O.
+numpy, pandas, pydantic (custom strategy definitions) and trading-indicators, and does no I/O.
 
-The live signal engine (backend) uses it today. Backtesting (Y11), custom strategies (Y12),
-risk management (Y13) and recommendations (Y17) will build on it.
+The live signal engine (backend), backtesting (Y11) and custom strategies (Y12) use it today. Risk
+management (Y13) and recommendations (Y17) will build on it.
 
 ## Install
 
@@ -64,6 +64,49 @@ order.
 The optional filters are off at 0. ADX filter: ADX ≥ `adx_min`. Volume filter:
 volume > `volume_factor` × the SMA of the previous N bars' volume. Invalid combinations
 (`fast ≥ slow`, `oversold ≥ overbought`, unknown or out-of-range params) raise `ValueError`.
+
+## Custom strategies (Builder + Composite)
+
+Users' own strategies, defined as JSON documents and validated with Pydantic (no code, nothing
+is ever evaluated as an expression). They behave exactly like the global ones (`generate()`,
+`history()`, same signal columns):
+
+```python
+import trading_strategies as ts
+
+rules = {
+    "schema_version": 1,
+    "category": "trend",
+    "buy": {
+        "all": [
+            {
+                "left": {"type": "indicator", "name": "ema", "params": {"length": 9}},
+                "op": "crosses_above",
+                "right": {"type": "indicator", "name": "ema", "params": {"length": 21}},
+            }
+        ]
+    },
+}
+ts.BuilderStrategy(rules).generate(df)  # BuilderStrategy: rules (AND/OR groups)
+combo = {
+    "schema_version": 1,
+    "mode": "weighted",
+    "window": 3,
+    "threshold": 0.6,
+    "members": [{"ref": "rsi_reversal"}, {"ref": "custom:<uuid>", "weight": 2}],
+}
+ts.CompositeStrategy(combo, resolver=lambda ref: ("builder", rules)).generate(df)
+ts.validate("builder", rules)  # errors with JSON paths, normalised definition
+snap = ts.snapshot("composite", combo, resolver)  # rebuild later without a resolver
+ts.from_snapshot(snap)
+ts.snapshot_hash(snap)  # the setup's identity (like params_hash)
+ts.json_schemas()
+ts.operand_catalog()  # what editors are generated from
+```
+
+Builder and Composite signals are **edge-triggered** (they fire when the rules become true),
+and a bar where buy and sell both fire gives no signal. The full format, semantics and the API
+built on it are in [docs/custom-strategies.md](../../docs/custom-strategies.md).
 
 ## Adding a strategy
 

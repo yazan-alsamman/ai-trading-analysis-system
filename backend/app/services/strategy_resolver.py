@@ -1,0 +1,219 @@
+"""Strategy keys -> runnable strategies, for preview, backtests, ``/me/strategies`` and the
+live signal engine (instead of calling the ``trading_strategies`` registry directly).
+
+- A global key (``ma_crossover``) resolves through the registry; ``params`` are validated.
+- ``custom:<uuid>`` resolves to a custom strategy the caller may use: their own, or a public
+  one (anything else is 404, so private strategies are never revealed). Custom strategies take
+  no params; their ``params_hash`` is the definition hash, so an edit is a new setup.
+- Custom members of a composite are resolved with the **composite owner's** access (their own
+  strategies and public ones), recursively, and loaded from the database before the
+  library's synchronous resolver runs.
+"""
+
+import logging
+import uuid
+from collections.abc import Iterable
+from dataclasses import dataclass
+from typing import Any
+
+import trading_strategies as ts
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from trading_strategies.composite import MAX_NESTING
+from trading_strategies.custom import Validation
+
+from app.models.custom_strategy import KEY_PREFIX, CustomStrategy, CustomStrategyKind, Visibility
+from app.models.user import User
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Resolved:
+    key: str
+    strategy: ts.Strategy
+    params: dict[str, Any]
+    params_hash: str
+    custom: CustomStrategy | None = None
+    snapshot: dict[str, Any] | None = None  # custom only: rebuilds the strategy without the DB
+
+    @property
+    def name(self) -> str:
+        return self.custom.name if self.custom is not None else self.strategy.title
+
+
+def not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Strategy not found")
+
+
+def _unprocessable(message: str) -> HTTPException:
+    return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, message)
+
+
+def is_custom(key: str) -> bool:
+    return key.startswith(KEY_PREFIX)
+
+
+def custom_id(key: str) -> uuid.UUID | None:
+    """The id of a ``custom:<uuid>`` key; None for anything else (incl. a malformed id)."""
+    if not is_custom(key):
+        return None
+    try:
+        return uuid.UUID(key.removeprefix(KEY_PREFIX))
+    except ValueError:
+        return None
+
+
+def can_use(row: CustomStrategy, user_id: uuid.UUID) -> bool:
+    return row.user_id == user_id or row.visibility == Visibility.public
+
+
+def member_refs(kind: CustomStrategyKind | str, definition: dict[str, Any]) -> set[str]:
+    if kind != CustomStrategyKind.composite:
+        return set()
+    return {m["ref"] for m in definition.get("members", []) if is_custom(str(m.get("ref", "")))}
+
+
+async def load_members(
+    session: AsyncSession, refs: Iterable[str], owner_id: uuid.UUID
+) -> dict[str, CustomStrategy]:
+    """Every custom strategy reachable from ``refs`` that ``owner_id`` may use (their own and
+    public ones), following composites a few levels deeper than the nesting limit so the
+    library can report a too-deep nesting or a cycle itself."""
+    found: dict[str, CustomStrategy] = {}
+    pending = set(refs)
+    for _ in range(MAX_NESTING + 2):
+        ids = {i for ref in pending if ref not in found and (i := custom_id(ref)) is not None}
+        if not ids:
+            break
+        rows = await session.scalars(select(CustomStrategy).where(CustomStrategy.id.in_(ids)))
+        pending = set()
+        for row in rows:
+            if can_use(row, owner_id):
+                found[row.key] = row
+                pending |= member_refs(row.kind, row.definition)
+    return found
+
+
+def resolver(rows: dict[str, CustomStrategy]):
+    """The library's resolver over preloaded rows (LookupError = unknown or inaccessible)."""
+
+    def resolve(ref: str) -> tuple[str, dict[str, Any]]:
+        row = rows.get(ref.lower())
+        if row is None:
+            raise LookupError(ref)
+        return row.kind.value, row.definition
+
+    return resolve
+
+
+async def check(
+    session: AsyncSession,
+    kind: CustomStrategyKind | str,
+    definition: Any,
+    owner_id: uuid.UUID,
+    *,
+    key: str | None = None,
+) -> Validation:
+    """Validate a definition as ``owner_id``'s (members they may use); never raises."""
+    refs: set[str] = set()
+    if kind == CustomStrategyKind.composite and isinstance(definition, dict):
+        members = definition.get("members")
+        if isinstance(members, list):
+            refs = {
+                str(m["ref"]).lower()
+                for m in members
+                if isinstance(m, dict) and isinstance(m.get("ref"), str) and is_custom(m["ref"])
+            }
+    rows = await load_members(session, refs, owner_id) if refs else {}
+    return ts.validate(str(kind), definition, resolver(rows), key=key)
+
+
+async def resolve_custom_row(session: AsyncSession, row: CustomStrategy) -> Resolved:
+    """A stored custom strategy as a runnable one (422 if it no longer validates, e.g. a
+    member was deleted or made private)."""
+    checked = await check(session, row.kind, row.definition, row.user_id, key=row.key)
+    if not checked.valid:
+        first = checked.errors[0]
+        where = f"{first['path']}: " if first["path"] else ""
+        raise _unprocessable(f"Custom strategy {row.name!r} cannot run: {where}{first['message']}")
+    assert checked.snapshot is not None
+    strategy = ts.from_snapshot(checked.snapshot, key=row.key, title=row.name)
+    return Resolved(
+        key=row.key,
+        strategy=strategy,
+        params={},
+        params_hash=ts.snapshot_hash(checked.snapshot),
+        custom=row,
+        snapshot=checked.snapshot,
+    )
+
+
+async def get_custom_or_404(session: AsyncSession, key: str, user: User) -> CustomStrategy:
+    cid = custom_id(key)
+    row = await session.get(CustomStrategy, cid) if cid is not None else None
+    if row is None or not can_use(row, user.id):
+        raise not_found()
+    return row
+
+
+async def get(
+    session: AsyncSession, key: str, user: User, params: dict[str, Any] | None = None
+) -> Resolved:
+    """Resolve ``key`` for ``user`` (404 for custom strategies they may not use, 422 for an
+    unknown global key or invalid params)."""
+    if is_custom(key):
+        if params:
+            raise _unprocessable("Custom strategies take no params (params must be empty)")
+        return await resolve_custom_row(session, await get_custom_or_404(session, key, user))
+    try:
+        strategy = ts.get_strategy(key)
+        resolved = strategy.resolve(params)
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    return Resolved(key, strategy, resolved, ts.params_hash(key, resolved))
+
+
+async def for_engine(
+    session: AsyncSession, setups: Iterable[tuple[str, str, dict[str, Any]]]
+) -> tuple[list[Resolved], list[str]]:
+    """The live engine's setups ``(strategy_key, params_hash, params)`` as runnable strategies,
+    plus error messages for setups that cannot run (unknown key, invalid params, a custom
+    strategy deleted or broken). No caller access check: activations are checked when they are
+    created and deactivated when a strategy is deleted or made private."""
+    out: list[Resolved] = []
+    errors: list[str] = []
+    custom: dict[uuid.UUID, str] = {}
+    for key, params_hash, params in setups:
+        if is_custom(key):
+            cid = custom_id(key)
+            if cid is None:
+                errors.append(f"{key}: malformed custom key")
+            else:
+                custom[cid] = key  # one setup per custom key: the current definition
+            continue
+        if key not in ts.STRATEGIES:
+            continue  # a strategy removed from the code: nothing to run
+        strategy = ts.get_strategy(key)
+        try:
+            strategy.history(params)  # stored params still valid for the strategy?
+        except ValueError as exc:
+            errors.append(f"{key}: {exc}")
+            continue
+        out.append(Resolved(key, strategy, params, params_hash))
+    if custom:
+        rows = await session.scalars(
+            select(CustomStrategy).where(CustomStrategy.id.in_(list(custom)))
+        )
+        by_id = {row.id: row for row in rows}
+        for cid, key in custom.items():
+            row = by_id.get(cid)
+            if row is None:
+                errors.append(f"{key}: custom strategy not found")
+                continue
+            try:
+                out.append(await resolve_custom_row(session, row))
+            except HTTPException as exc:
+                errors.append(f"{key}: {exc.detail}")
+    return out, errors
