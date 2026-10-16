@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime, timedelta
@@ -41,10 +42,14 @@ KEEP_HEADERS = {
 # Lists longer than this are cut to TRIM_TO items in saved examples (candles, curves, ...),
 # except in the responses below, whose whole content is the point.
 TRIM_OVER, TRIM_TO = 6, 3
-NO_TRIM = {"indicators_catalog", "strategies_catalog"}
+NO_TRIM = {"indicators_catalog", "strategies_catalog", "keys_scopes"}
 
 CAPTURE_EMAIL = "trader@example.com"
 CAPTURE_PASSWORD = "Trader12345"
+# A second analyst who publishes a post, so the feed has someone to follow and something to report.
+AUTHOR_EMAIL = "lina@example.com"
+AUTHOR_PASSWORD = "Analyst12345"
+BACKEND = Path(__file__).resolve().parents[3] / "backend"
 
 
 def get_path(data: Any, path: str) -> Any:
@@ -195,6 +200,8 @@ class Runner:
             for i, back in enumerate((2, 1, 0)):
                 ts = minute - timedelta(minutes=back)
                 self.vars[f"candle_ts_{i}"] = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if req.id == "alerts_history":
+            self.fire_price_alert()
         if req.id == "ws_reorder":
             ids = json.loads(self.vars.get("workspace_ids", "[]"))
             self.vars["workspace_ids_reversed"] = json.dumps(list(reversed(ids)))
@@ -216,6 +223,19 @@ class Runner:
                 self.vars["user_new_password"],
                 self.vars["user_password"],
             )
+        if req.id == "posts_feed" and data:
+            me = self.vars.get("user_id")
+            other = [p for p in data["items"] if p["author"]["id"] != me]
+            authors = [p for p in other if p["author"]["role"] in ("analyst", "expert")]
+            if other:
+                self.vars["other_post_id"] = other[0]["id"]
+            if authors:
+                self.vars["author_user_id"] = authors[0]["author"]["id"]
+        if req.id == "alerts_history" and self.vars.get("demo_alert_id"):
+            self.http.delete(
+                f"/api/v1/me/price-alerts/{self.vars.pop('demo_alert_id')}",
+                headers=self.auth_headers("user"),
+            )
         if req.id in ("ws_list", "ws_list_2"):
             self.vars["workspace_ids"] = json.dumps([w["id"] for w in data])
         cleanup = {
@@ -233,6 +253,46 @@ class Runner:
                     self.http.delete(
                         f"/api/v1{prefix}{self.vars.pop(name)}", headers=self.auth_headers("user")
                     )
+
+    def fire_price_alert(self) -> None:
+        """A real trigger for the history example: an alert any price meets, a 1m candle for the
+        current minute and one evaluation run of the alert engine (in-process, like the worker).
+        Needs the backend's environment (DATABASE_URL, REDIS_URL)."""
+        res = self.http.post(
+            "/api/v1/me/price-alerts",
+            headers=self.auth_headers("user"),
+            json={
+                "instrument_id": self.vars["instrument_id"],
+                "condition": "above",
+                "value": 1,
+                "note": "first target",
+            },
+        )
+        res.raise_for_status()
+        self.vars["demo_alert_id"] = res.json()["id"]
+        minute = datetime.now(UTC).replace(second=0, microsecond=0)
+        price = res.json()["current_price"] or 100.0
+        candle = {
+            "ts": minute.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "open": price,
+            "high": price * 1.002,
+            "low": price * 0.999,
+            "close": price * 1.001,
+            "volume": 3.2,
+        }
+        self.http.post(
+            f"/api/v1/admin/instruments/{self.vars['instrument_id']}/candles",
+            headers=self.auth_headers("admin"),
+            json={"candles": [candle]},
+        ).raise_for_status()
+        code = (
+            "from app.tasks.alerts import evaluate; import sys; "
+            f"print(evaluate.run({minute.isoformat()!r}))"
+        )
+        out = subprocess.run(
+            [sys.executable, "-c", code], cwd=BACKEND, capture_output=True, text=True
+        )
+        print(f"   alert engine: {(out.stdout or out.stderr).strip()[-200:]}")
 
     def wait_backtest(self, var: str) -> None:
         for _ in range(60):
@@ -260,6 +320,30 @@ class Runner:
         ).json()
         uid = users["items"][0]["id"]
         self.http.patch(f"/api/v1/admin/users/{uid}/role", json={"role": "analyst"}, headers=admin)
+        self.http.post(
+            "/api/v1/auth/register",
+            json={"email": AUTHOR_EMAIL, "password": AUTHOR_PASSWORD, "full_name": "Lina Analyst"},
+        )
+        lina = self.http.get(
+            "/api/v1/admin/users", params={"q": AUTHOR_EMAIL}, headers=admin
+        ).json()["items"][0]["id"]
+        self.http.patch(f"/api/v1/admin/users/{lina}/role", json={"role": "analyst"}, headers=admin)
+        token = self.http.post(
+            "/api/v1/auth/login", json={"email": AUTHOR_EMAIL, "password": AUTHOR_PASSWORD}
+        ).json()["access_token"]
+        lina_auth = {"Authorization": f"Bearer {token}"}
+        if not self.http.get("/api/v1/posts", headers=lina_auth).json()["items"]:
+            self.http.post(
+                "/api/v1/posts",
+                headers=lina_auth,
+                json={
+                    "title": "ETH/BTC: momentum is turning",
+                    "body": "Weekly RSI broke its downtrend. I am **long ETH/BTC** while 0.034 "
+                    "holds.\n\n> Not financial advice.",
+                    "direction": "bullish",
+                    "timeframe": "1d",
+                },
+            ).raise_for_status()
         public = self.http.get(
             "/api/v1/custom-strategies/public", headers=admin, params={"search": "Trend rider"}
         ).json()
