@@ -31,7 +31,7 @@ from app.realtime.hub import (
     WebSocketHub,
 )
 from app.realtime.protocol import SubscribeMessage, UnsubscribeMessage
-from app.realtime.topics import candles_topic, signals_topic, user_topic
+from app.realtime.topics import candles_topic, news_topic, signals_topic, user_topic
 from app.schemas.market import CandleOut
 from app.services import api_key_service, market_service
 
@@ -48,6 +48,7 @@ class _Auth:
     expires_at: float  # unix seconds of the token's / key's expiry (inf: never)
     identity: str  # rate-limit identity: user:<id> (JWT) or key:<id> (API key)
     credential: str  # "access token" / "API key", for the expiry message
+    scopes: frozenset[str] | None = None  # an API key's scopes (None: a login, every scope)
 
 
 async def _authenticate(
@@ -74,7 +75,7 @@ async def _authenticate(
         if Scope.stream.value not in row.scopes:
             return "API key lacks the 'stream' scope"
         expires_at = row.expires_at.timestamp() if row.expires_at is not None else math.inf
-        return _Auth(user, expires_at, f"key:{row.id}", "API key")
+        return _Auth(user, expires_at, f"key:{row.id}", "API key", frozenset(row.scopes))
     return "invalid or expired token"
 
 
@@ -127,7 +128,7 @@ async def _serve(
     receiver = watchdog = stop_wait = None
     try:
         await hub.subscribe(client, user_topic(user.id))
-        receiver = asyncio.create_task(_receive_loop(client, hub, session_factory))
+        receiver = asyncio.create_task(_receive_loop(client, hub, session_factory, auth))
         watchdog = asyncio.create_task(_watchdog(client, hub, auth, slot))
         stop_wait = asyncio.create_task(client.stopped.wait())
         await asyncio.wait({receiver, stop_wait}, return_when=asyncio.FIRST_COMPLETED)
@@ -176,7 +177,10 @@ async def _watchdog(client: Client, hub: WebSocketHub, auth: _Auth, slot: WsConn
 
 
 async def _receive_loop(
-    client: Client, hub: WebSocketHub, session_factory: async_sessionmaker[AsyncSession]
+    client: Client,
+    hub: WebSocketHub,
+    session_factory: async_sessionmaker[AsyncSession],
+    auth: _Auth | None = None,
 ) -> None:
     loop = asyncio.get_running_loop()
     while True:
@@ -203,7 +207,7 @@ async def _receive_loop(
             client.send(protocol.error(protocol.BAD_REQUEST, _first_error(exc)))
             continue
         if isinstance(msg, SubscribeMessage):
-            await _subscribe(client, hub, session_factory, msg)
+            await _subscribe(client, hub, session_factory, msg, auth)
         elif isinstance(msg, UnsubscribeMessage):
             await _unsubscribe(client, hub, msg)
         else:
@@ -226,6 +230,7 @@ async def _subscribe(
     hub: WebSocketHub,
     session_factory: async_sessionmaker[AsyncSession],
     msg: SubscribeMessage,
+    auth: _Auth | None = None,
 ) -> None:
     if msg.topic == "user":
         if msg.user_id != client.user_id:
@@ -236,6 +241,14 @@ async def _subscribe(
         client.send(protocol.subscribed(topic))
         return
 
+    if (
+        msg.topic == "news"
+        and auth is not None
+        and auth.scopes is not None
+        and Scope.news_read.value not in auth.scopes
+    ):
+        client.send(protocol.error(protocol.FORBIDDEN, "API key lacks the 'news:read' scope"))
+        return
     topic = _market_topic(msg)
     if (
         topic not in client.topics
@@ -247,6 +260,9 @@ async def _subscribe(
                 f"at most {hub.config.max_subscriptions} subscriptions per connection",
             )
         )
+        return
+    if msg.topic == "news" and msg.instrument_id is None:
+        await _subscribe_plain(client, hub, topic)
         return
     async with session_factory() as session:
         instrument = await session.get(Instrument, msg.instrument_id)
@@ -263,14 +279,26 @@ async def _subscribe(
             client.send(protocol.error(protocol.UNAVAILABLE, "live updates are unavailable"))
             return
         client.send(protocol.subscribed(topic))
-        if msg.topic == "signals":
-            return  # no snapshot: GET /api/v1/signals lists past signals
+        if msg.topic in ("signals", "news"):
+            return  # no snapshot: GET /api/v1/signals and /news list the past ones
         latest = await market_service.get_latest_candle(session, msg.instrument_id, msg.timeframe)
     candle = CandleOut.from_candle(latest).model_dump() if latest is not None else None
     client.send(protocol.snapshot(topic, candle))
 
 
+async def _subscribe_plain(client: Client, hub: WebSocketHub, topic: str) -> None:
+    try:
+        await hub.subscribe(client, topic)
+    except Exception:  # noqa: BLE001
+        logger.exception("Subscribing %s to %s failed", client.id, topic)
+        client.send(protocol.error(protocol.UNAVAILABLE, "live updates are unavailable"))
+        return
+    client.send(protocol.subscribed(topic))
+
+
 def _market_topic(msg: SubscribeMessage | UnsubscribeMessage) -> str:
+    if msg.topic == "news":
+        return news_topic(msg.instrument_id)
     if msg.topic == "signals":
         return signals_topic(msg.instrument_id)
     return candles_topic(msg.instrument_id, msg.timeframe)

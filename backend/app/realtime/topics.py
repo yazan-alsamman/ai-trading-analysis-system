@@ -24,6 +24,12 @@ def signals_topic(instrument_id: uuid.UUID) -> str:
     return f"signals:{instrument_id}"
 
 
+def news_topic(instrument_id: uuid.UUID | str | None = None) -> str:
+    """New articles (Y18): ``news`` gets all of them, ``news:{instrument_id}`` those tagged
+    with that instrument."""
+    return "news" if instrument_id is None else f"news:{instrument_id}"
+
+
 def channel_for(topic: str) -> str:
     return CHANNEL_PREFIX + topic
 

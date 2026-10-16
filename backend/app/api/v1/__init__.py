@@ -13,7 +13,10 @@ from app.api.v1 import (
     health,
     indicators,
     market,
+    news,
     notifications,
+    posts,
+    price_alerts,
     risk,
     strategies,
     users,
@@ -41,6 +44,12 @@ limited_router.include_router(custom_strategies.public_router)
 limited_router.include_router(risk.router)
 limited_router.include_router(notifications.router)
 limited_router.include_router(notifications.admin_router)
+limited_router.include_router(news.router)
+limited_router.include_router(news.admin_router)
+limited_router.include_router(news.ingest_router)
+limited_router.include_router(posts.router)
+limited_router.include_router(posts.admin_router)
+limited_router.include_router(price_alerts.router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)

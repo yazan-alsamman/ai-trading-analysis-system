@@ -85,6 +85,23 @@ class Settings(BaseSettings):
     notification_breaker_failures: int = 5  # consecutive failures that open a channel's circuit
     notification_breaker_seconds: int = 300  # how long it stays open
     notification_test_cost: int = 5  # rate-limit cost of POST /me/notifications/test
+    # News (Y18). The RSS task only fetches the seeded public feeds an admin left active.
+    news_rss_enabled: bool = True
+    news_fetch_timeout_seconds: float = 10.0  # per feed, whole request
+    news_fetch_max_bytes: int = 2 * 1024 * 1024  # larger feeds are refused
+    news_retention_days: int = 180
+    # Posts and comments (Y18)
+    post_roles: str = "analyst,expert,admin"  # who may publish posts (everyone may comment)
+    post_edit_window_hours: int = 24  # authors edit their posts within this time; admins always
+    posts_per_day: int = 10  # per user, rolling 24 h
+    comments_per_hour: int = 60  # per user, rolling hour
+    reports_per_day: int = 20  # per user, rolling 24 h
+    content_create_cost: int = 2  # rate-limit cost of POST /posts, comments and reports
+    # Price alerts (Y18): active alerts per user, by role
+    price_alert_limit_trader: int = 20
+    price_alert_limit_analyst: int = 100
+    price_alert_limit_expert: int = 100
+    price_alert_limit_admin: int = 100
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 
@@ -113,6 +130,13 @@ class Settings(BaseSettings):
 
     def custom_strategy_limit(self, role: str) -> int:
         return getattr(self, f"custom_strategy_limit_{role}")
+
+    def price_alert_limit(self, role: str) -> int:
+        return getattr(self, f"price_alert_limit_{role}")
+
+    @property
+    def post_role_set(self) -> frozenset[str]:
+        return frozenset(r.strip() for r in self.post_roles.split(",") if r.strip())
 
     def backtest_quota(self, role: str) -> tuple[int, int]:
         """(concurrent queued + running, per UTC day; 0 = unlimited)."""

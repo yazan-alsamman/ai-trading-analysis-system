@@ -16,6 +16,8 @@ celery_app = Celery(
         "app.tasks.housekeeping",
         "app.tasks.backtests",
         "app.tasks.notifications",
+        "app.tasks.alerts",
+        "app.tasks.news",
     ],
 )
 celery_app.conf.update(
@@ -51,6 +53,12 @@ celery_app.conf.update(
             "task": "notifications.cleanup",
             "schedule": crontab(hour=3, minute=30),
         },
+        # price alerts on the 1m bar that just closed (evaluated ~10 s after the boundary)
+        "alerts-tick": {"task": "alerts.tick", "schedule": crontab(minute="*")},
+        # RSS feeds whose interval is due (NEWS_RSS_ENABLED)
+        "news-fetch": {"task": "news.fetch", "schedule": crontab(minute="*/5")},
+        # news retention (NEWS_RETENTION_DAYS)
+        "news-cleanup": {"task": "news.cleanup", "schedule": crontab(hour=3, minute=45)},
     },
 )
 

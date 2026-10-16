@@ -16,7 +16,7 @@ class _ClientMessage(BaseModel):
 
 
 class _TopicRef(_ClientMessage):
-    topic: Literal["candles", "signals", "user"]
+    topic: Literal["candles", "signals", "user", "news"]
     instrument_id: uuid.UUID | None = None
     timeframe: Timeframe | None = None
     user_id: uuid.UUID | None = None
@@ -28,6 +28,10 @@ class _TopicRef(_ClientMessage):
             for name in ("instrument_id", "timeframe", "user_id")
             if getattr(self, name) is not None
         }
+        if self.topic == "news":  # all news, or the news of one instrument
+            if not given <= {"instrument_id"}:
+                raise ValueError("news topic takes only an optional instrument_id")
+            return self
         required = {
             "candles": {"instrument_id", "timeframe"},
             "signals": {"instrument_id"},

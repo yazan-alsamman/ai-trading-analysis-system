@@ -76,6 +76,29 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/notifications/unread-count
   ```
 
+## الأخبار والمنشورات وتنبيهات الأسعار (Y18)
+- لا خدمات جديدة. الـ `worker` الحالي ينفّذ جلب RSS (`news.fetch` كل 5 دقائق) وتقييم تنبيهات
+  الأسعار (`alerts.evaluate` كل دقيقة)، والـ `beat` يجدولهما.
+- Migration `0011` إضافية فقط: جداول جديدة، وقيم جديدة لـ `notification_type` عبر
+  `ALTER TYPE ... ADD VALUE IF NOT EXISTS` خارج المعاملة (autocommit). عند الرجوع تبقى القيم.
+- متغيرات جديدة (كلها لها قيم افتراضية آمنة، تُضاف تلقائياً إلى `.env` على السيرفر):
+  `NEWS_RSS_ENABLED=true`، `NEWS_FETCH_TIMEOUT_SECONDS=10`، `NEWS_FETCH_MAX_BYTES=2097152`،
+  `NEWS_RETENTION_DAYS=180`، `POST_ROLES=analyst,expert,admin`، `POST_EDIT_WINDOW_HOURS=24`،
+  `POSTS_PER_DAY=10`، `COMMENTS_PER_HOUR=60`، `REPORTS_PER_DAY=20`، `CONTENT_CREATE_COST=2`،
+  `PRICE_ALERT_LIMIT_TRADER=20`، `PRICE_ALERT_LIMIT_ANALYST=100`،
+  `PRICE_ALERT_LIMIT_EXPERT=100`، `PRICE_ALERT_LIMIT_ADMIN=100`.
+- لإيقاف جلب RSS: `NEWS_RSS_ENABLED=false` ثم إعادة النشر، أو تعطيل مصدر واحد من
+  `PATCH /api/v1/admin/news/sources/{id}`.
+- مفتاح `news:write` لفادي يُنشئه حساب مدير (`POST /api/v1/me/api-keys`).
+- فحص بعد النشر:
+  ```bash
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/news?limit=3"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/news/sources"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/news/sentiment?window=24h"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/posts?limit=5"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/me/price-alerts"
+  ```
+
 ## للبرومبتات القادمة
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.
 - أي خدمة جديدة تُضاف إلى `docker-compose.yml` (للتطوير) **وإلى** `infra/deploy/docker-compose.prod.yml` (للإنتاج) مع `mem_limit` و`cpus` و`restart: unless-stopped`، ومن دون أي منفذ عام.
