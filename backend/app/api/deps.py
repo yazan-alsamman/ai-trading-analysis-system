@@ -129,6 +129,20 @@ IndicatorsReader = Annotated[Principal, Depends(require_scope(Scope.indicators_r
 StrategiesReader = Annotated[Principal, Depends(require_scope(Scope.strategies_read))]
 SignalsReader = Annotated[Principal, Depends(require_scope(Scope.signals_read))]
 BacktestsReader = Annotated[Principal, Depends(require_scope(Scope.backtests_read))]
+NewsReader = Annotated[Principal, Depends(require_scope(Scope.news_read))]
+
+
+async def get_news_writer(
+    principal: Annotated[Principal, Depends(require_scope(Scope.news_write))],
+) -> Principal:
+    """The ingestion API (the AI side): an API key with ``news:write`` (only admins can put it
+    on a key) or an admin's own login. The owner must still be an admin when the key is used."""
+    if principal.user.role != UserRole.admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "news:write needs an admin account")
+    return principal
+
+
+NewsWriter = Annotated[Principal, Depends(get_news_writer)]
 
 
 async def deny_api_keys(request: Request) -> None:

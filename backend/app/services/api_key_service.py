@@ -23,8 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import rate_limit
 from app.core.config import get_settings
 from app.core.security import credentials_exception
-from app.models.api_key import MAX_KEYS_PER_ROLE, ApiKey
-from app.models.user import User
+from app.models.api_key import ADMIN_ONLY_SCOPES, MAX_KEYS_PER_ROLE, ApiKey
+from app.models.user import User, UserRole
 from app.schemas.api_keys import ApiKeyCreate, ApiKeyUpdate
 
 KEY_TYPE = "tk"
@@ -109,6 +109,15 @@ def _check_rate_limit(user: User, value: int | None) -> None:
         )
 
 
+def _check_scopes(user: User, scopes) -> None:
+    """Some scopes (``news:write``) can only be put on a key by an admin."""
+    restricted = sorted(set(map(str, scopes)) & ADMIN_ONLY_SCOPES)
+    if restricted and user.role != UserRole.admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, f"Only admins can grant: {', '.join(restricted)}"
+        )
+
+
 async def count_usable(session: AsyncSession, user: User) -> int:
     now = datetime.now(UTC)
     return await session.scalar(
@@ -125,6 +134,7 @@ async def count_usable(session: AsyncSession, user: User) -> int:
 async def create(session: AsyncSession, user: User, data: ApiKeyCreate) -> tuple[ApiKey, str]:
     """The new row and the full key (returned to the user once, never stored)."""
     _check_rate_limit(user, data.rate_limit_per_minute)
+    _check_scopes(user, data.scopes)
     maximum = MAX_KEYS_PER_ROLE[user.role]
     if await count_usable(session, user) >= maximum:
         raise HTTPException(
@@ -175,6 +185,7 @@ async def update(session: AsyncSession, user: User, row: ApiKey, data: ApiKeyUpd
     if "name" in fields:
         row.name = data.name
     if "scopes" in fields:
+        _check_scopes(user, data.scopes)
         row.scopes = sorted(data.scopes)
     if "rate_limit_per_minute" in fields:
         _check_rate_limit(user, data.rate_limit_per_minute)

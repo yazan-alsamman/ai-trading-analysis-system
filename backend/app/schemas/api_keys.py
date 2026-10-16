@@ -69,3 +69,10 @@ class ApiKeyUsageDay(BaseModel):
     date: date
     requests: int  # allowed requests
     rejected: int  # requests answered with 429
+
+
+class ScopeInfo(BaseModel):
+    scope: str
+    description: str
+    admin_only: bool
+    grantable: bool
