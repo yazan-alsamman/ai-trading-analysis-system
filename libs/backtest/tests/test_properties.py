@@ -16,6 +16,23 @@ CONFIGS = [
     {"direction": "long_short"},
     {"exits": {"stop_loss_pct": 2, "take_profit_pct": 4, "max_bars_held": 30}},
     {"direction": "long_short", "sizing": {"mode": "fixed", "value": 2_500}},
+    {  # risk rules on: ATR stop, partial targets, chandelier trailing + breakeven, risk sizing
+        "direction": "long_short",
+        "stop": {"type": "atr", "length": 14, "multiplier": 2},
+        "take_profit": {
+            "type": "r_multiple",
+            "levels": [{"r": 1, "close_pct": 50}, {"r": 2, "close_pct": 50}],
+        },
+        "trailing": {"type": "atr", "length": 14, "multiplier": 3, "breakeven_r": 1},
+        "sizing": {"mode": "risk", "risk_pct": 1},
+        "guards": {"max_drawdown_pct": 30, "cooldown_bars": 2, "max_consecutive_losses": 4},
+    },
+    {
+        "stop": {"type": "swing", "lookback": 10, "buffer_pct": 0.1},
+        "trailing": {"type": "percent", "value": 3, "activation_r": 1},
+        "sizing": {"mode": "volatility", "target_pct": 1},
+        "guards": {"max_daily_loss_pct": 3},
+    },
 ]
 
 
@@ -116,13 +133,23 @@ def test_result_shapes(ohlcv: pd.DataFrame) -> None:
 FACTOR = float(os.environ.get("BACKTEST_PERF_FACTOR", "1"))
 
 
+RISK_D = {  # the "(d)" configuration of docs/risk-management.md
+    "stop": {"type": "atr", "length": 14, "multiplier": 2},
+    "take_profit": {"type": "r_multiple", "value": 2},
+    "trailing": {"type": "atr", "length": 14, "multiplier": 3},
+    "sizing": {"mode": "risk", "risk_pct": 1},
+}
+
+
 @pytest.mark.perf
+@pytest.mark.parametrize("config", [None, RISK_D], ids=["plain", "risk"])
 @pytest.mark.parametrize(("bars", "freq", "limit"), [(17_500, "h", 1.0), (100_000, "min", 5.0)])
-def test_performance_targets(bars: int, freq: str, limit: float) -> None:
+def test_performance_targets(bars: int, freq: str, limit: float, config) -> None:
     df = synthetic_ohlcv(bars, freq=freq)
-    tb.backtest(df.iloc[:1000], "ma_crossover")  # import / first-use costs
-    best = min(_timed(lambda: tb.backtest(df, "ma_crossover")) for _ in range(3))
-    print(f"\n{bars} bars ({freq}): {best * 1000:.0f} ms")
+    tb.backtest(df.iloc[:1000], "ma_crossover", None, config)  # import / first-use costs
+    best = min(_timed(lambda: tb.backtest(df, "ma_crossover", None, config)) for _ in range(3))
+    label = "risk" if config else "plain"
+    print(f"BENCH {bars} bars ({freq}, {label}): {best * 1000:.0f} ms")
     assert best < limit * FACTOR
 
 
