@@ -16,14 +16,21 @@ execution model and every metric formula; the essentials are repeated here.
   (default 5) against you on every fill.
 - **Direction:** `long_only` (default: sells only close longs) or `long_short` (a sell opens a
   short; an opposite signal reverses).
-- **Sizing:** `fraction` of current equity (default 1.0, compounding) or a `fixed` quote amount.
-- **Exits:**
-  - stop loss / take profit in % of the entry fill, checked from the bar after entry with that
-    bar's high/low;
-  - a gap beyond the level fills at the open;
-  - if both are touched in one bar, the stop is assumed first;
+- **Sizing:** `fraction` of current equity (default 1.0, compounding), a `fixed` quote amount,
+  `risk` (lose `risk_pct` % at the stop) or `volatility` (1 ATR = `target_pct` % of equity),
+  capped at `max_position_pct` (100 = no leverage), skipped below `min_notional`.
+- **Exits** (all rules and formulas: [risk-management.md](risk-management.md)):
+  - stops: percent, ATR (of the signal bar) or swing; trailing (percent or ATR chandelier,
+    `activation_r`, `breakeven_r`), updated at the close and effective from the next bar;
+  - targets in % or R, with partial exits (`levels`); every exit fill is recorded;
+  - checked with each bar's high/low, **including the entry bar** (`check_entry_bar`, default
+    true; the Y11 behaviour is `false`);
+  - a gap beyond the stop or a target fills at the open;
+  - if a stop and a target are touched in one bar, the stop is assumed first;
   - `max_bars_held`;
   - exit on opposite signal (default on).
+- **Guards:** max daily loss, max drawdown, cooldown after a stop-out, pause after consecutive
+  losses. Skipped entries are counted per reason in `metrics.skipped_entries`.
 - One position at a time. An open position is closed at the last close (`end_of_data`).
 - **Sharpe / Sortino:** annualized from per-bar returns with `P = 365 × 24 h / bar length`
   (8,760 for 1h), risk-free rate 0. `sharpe = mean(r) / std(r) × √P`;
@@ -58,12 +65,21 @@ POST /api/v1/backtests
   "config": {
     "initial_capital": 10000, "fee_bps": 10, "slippage_bps": 5,
     "direction": "long_only",
-    "sizing": { "mode": "fraction", "value": 1.0 },
-    "exits": { "stop_loss_pct": 2, "take_profit_pct": 4, "max_bars_held": null,
-               "exit_on_opposite_signal": true }
+    "sizing": { "mode": "risk", "risk_pct": 1.0 },
+    "stop": { "type": "atr", "length": 14, "multiplier": 2 },
+    "take_profit": { "type": "r_multiple", "levels": [ { "r": 1, "close_pct": 50 }, { "r": 2, "close_pct": 50 } ] },
+    "trailing": { "type": "atr", "length": 14, "multiplier": 3 },
+    "guards": { "max_drawdown_pct": 15 },
+    "check_entry_bar": true,
+    "exits": { "max_bars_held": null, "exit_on_opposite_signal": true }
   }
 }
 ```
+
+The Y11 fields `exits.stop_loss_pct` and `exits.take_profit_pct` are still accepted (aliases of
+a percent stop and a percent target). `"risk_profile": true` in `config` uses your risk profile
+(its rules, fee and account size; request fields win) and stores a snapshot of it in
+`config.risk_profile`.
 
 `params` and `config` are optional (defaults filled in and stored resolved). `strategy_key`
 can also be a custom strategy, `custom:<uuid>` (yours or a public one, with empty `params`). Its
@@ -72,7 +88,7 @@ after the strategy is edited or deleted ([custom-strategies.md](custom-strategie
 
 | Status | Cause |
 |---|---|
-| 422 | Unknown strategy, bad params or config; `start ≥ end`; `end` in the future; no candles in the range; more than 200,000 bars (the message gives the count) |
+| 422 | Unknown strategy, bad params or config (config errors are a list with `loc` and `path`, e.g. `stop.multiplier`); `start ≥ end`; `end` in the future; no candles in the range; more than 200,000 bars (the message gives the count) |
 | 404 | Unknown instrument |
 | 429 | Quota (below) |
 
@@ -92,7 +108,11 @@ after the strategy is edited or deleted ([custom-strategies.md](custom-strategie
                "best_trade_pct": 9.8, "worst_trade_pct": -3.1, "avg_bars_held": 31.2,
                "exposure_pct": 26.8, "total_fees": 950.4, "buy_and_hold_return_pct": 18.0,
                "final_equity": 11230.0, "initial_capital": 10000.0, "bars": 5480,
-               "bars_per_year": 8760.0 },
+               "bars_per_year": 8760.0,
+               "avg_r": 0.21, "expectancy_r": 0.19, "avg_risk_pct": 1.0, "max_consecutive_losses": 5,
+               "r_distribution": { "<-2": 0, "-2..-1": 18, "-1..0": 9, "0..1": 6, "1..2": 14, "2..3": 0, ">=3": 0 },
+               "exits_by_reason": { "stop_loss": 18, "partial_tp": 14, "take_profit": 9, "opposite_signal": 20 },
+               "skipped_entries": { "max_drawdown": 2 } },
   "equity":   [ { "time": 1772323200, "value": 10000.0 }, "…" ],
   "drawdown": [ { "time": 1772323200, "value": 0.0 }, "…" ],
   "markers":  [ { "time": 1772420400, "position": "belowBar", "shape": "arrowUp", "color": "#2196F3", "text": "#1 Long" },
@@ -105,7 +125,10 @@ after the strategy is edited or deleted ([custom-strategies.md](custom-strategie
   2,000 points: per bucket the equity min/max and the deepest drawdown are kept, so peaks,
   troughs and the worst drawdown are always visible.
 - `markers` can be passed straight to `series.setMarkers()`. Exit texts are
-  `#n Exit|SL|TP|Time|End ±P&L%`, green for winners and red for losers.
+  `#n Exit|SL|Trail|BE|TP|Time|End ±P&L%`, green for winners and red for losers. A partial
+  exit gets its own marker, `#n Partial TP ±move%`.
+- Trades (`GET /backtests/{id}/trades`) also have `initial_stop`, `risk_amount`, `r_multiple`
+  and `fills` (`[{time, index, price, quantity, reason}]`); the CSV has the first three.
 
 ## Execution and progress
 

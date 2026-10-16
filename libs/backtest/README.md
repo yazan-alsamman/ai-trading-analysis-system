@@ -47,15 +47,26 @@ Give `backtest()` enough bars before `start` for the strategy's warm-up
 | `fee_bps` | 10 | per side, of the fill's notional (0.10 %, Binance spot) |
 | `slippage_bps` | 5 | against you on every fill |
 | `direction` | `long_only` | `long_only`: sells only close longs. `long_short`: a sell opens a short, a buy closes it; an opposite signal reverses |
-| `sizing` | `{"mode": "fraction", "value": 1.0}` | `fraction` of current equity (compounding; notional + entry fee fit in it) or `fixed` quote amount per trade (capped at equity, no leverage) |
-| `exits.stop_loss_pct` | none | % from the entry fill |
-| `exits.take_profit_pct` | none | % from the entry fill |
+| `sizing` | `{"mode": "fraction", "value": 1.0}` | `fraction`, `fixed`, `risk` (`risk_pct` lost at the stop) or `volatility` (`target_pct` per ATR); `max_position_pct` (100), `min_notional` (10) |
+| `stop` | none | `percent`, `atr` (signal bar ATR) or `swing` |
+| `trailing` | none | `percent` or `atr` (chandelier), `activation_r`, `breakeven_r` |
+| `take_profit` | none | `percent` or `r_multiple`, one `value` or partial `levels` |
+| `guards` | none | `max_daily_loss_pct`, `max_drawdown_pct`, `cooldown_bars`, `max_consecutive_losses` |
+| `check_entry_bar` | true | stops/targets also on the entry bar (after the fill at its open); `false` = Y11 |
 | `exits.max_bars_held` | none | closes at the open `n` bars after the entry bar |
 | `exits.exit_on_opposite_signal` | true | |
+| `exits.stop_loss_pct` / `take_profit_pct` | none | Y11 aliases of a percent stop / target |
 
-`BacktestConfig.from_dict()` validates JSON input (unknown fields are errors). Sizing (`Sizer`)
-and exits (`ExitRules`) are small classes so risk management can add ATR stops, trailing stops
-and risk-based sizing later.
+`BacktestConfig.from_dict()` validates JSON input with Pydantic (unknown fields are errors,
+`ConfigError` messages carry the path, e.g. `stop.multiplier: ...`). Rules, formulas, the order
+of operations inside a bar and the trade plan (`plan_trade`, shared with live signals) are in
+[docs/risk-management.md](../../docs/risk-management.md).
+
+```python
+rules = {"stop": {"type": "atr", "multiplier": 2}, "sizing": {"mode": "risk", "risk_pct": 1}}
+plan = tb.plan_trade(df, len(df) - 1, "buy", rules, 10_000)
+plan.stop, plan.quantity, plan.risk_amount, plan.targets, plan.invalid_reason
+```
 
 ## Execution model
 
@@ -69,12 +80,13 @@ and risk-based sizing later.
   1. stop-loss or take-profit already beyond the open (a gap) → filled at the open;
   2. `max_bars_held` reached → closed at the open;
   3. the signal of bar `i − 1` → open, close, or close and reverse, at the open;
-  4. stop-loss / take-profit touched by the bar's low/high → filled at the level. Only for
-     positions opened before bar `i` (never on the entry bar). If both are touched in the same
-     bar, the **stop is assumed first** (conservative);
-  5. equity marked to market at the close.
+  4. stop / targets touched by the bar's low/high → filled at the level, the stop first if
+     both are touched (conservative); also on the entry bar unless `check_entry_bar: false`;
+  5. trailing stop / breakeven updated from this bar's data (effective from the next bar);
+  6. equity marked to market at the close; drawdown / daily-loss guards updated.
 - **End of data.** An open position is closed at the last close (`exit_reason = "end_of_data"`).
-- **Exit reasons:** `opposite_signal`, `stop_loss`, `take_profit`, `max_bars`, `end_of_data`.
+- **Exit reasons:** `opposite_signal`, `stop_loss`, `trailing_stop`, `breakeven_stop`,
+  `take_profit`, `partial_tp` (a partial fill), `max_bars`, `end_of_data`.
 - **Accounting.** Equity = cash + position value. A long holds `+q × price`; a short keeps the
   sale proceeds in cash and owes `q × price`.
 - `bars_held` counts the bars a position was open in (an exit at a bar's open does not count
