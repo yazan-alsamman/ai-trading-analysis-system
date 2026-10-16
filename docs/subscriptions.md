@@ -119,7 +119,7 @@ stateDiagram-v2
 | `canceled` | no | ended at period end after a cancel, or by a refund |
 | `expired` | no | payment failed and the grace period ended |
 
-**Renewals** run every hour (beat `subscriptions.renew`, minute 7): for each live subscription
+**Renewals** run every 10 minutes (beat `subscriptions.renew`, `maintenance` queue): for each live subscription
 whose period ended, an invoice (`renewal`) is charged through the provider. Success → new period
 (one calendar month or year), `subscription_renewed`. Failure → `past_due`,
 `subscription_payment_failed` (with the grace end). A trial end is the same as a renewal. A

@@ -100,7 +100,7 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   ```
 
 ## الخبراء والاشتراكات والمحادثة (Y19)
-- لا خدمات جديدة. التجديدات الشهرية/السنوية ينفّذها الـ `worker` عبر مهمة `subscriptions.renew` كل ساعة (الدقيقة 7).
+- لا خدمات جديدة. التجديدات الشهرية/السنوية تنفّذها مهمة `subscriptions.renew` كل 10 دقائق (طابور `maintenance`).
 - الدفع **تجريبي فقط** (`PAYMENT_PROVIDER=demo`): لا أموال حقيقية ولا مفاتيح مزوّد. صفحة الدفع التجريبية
   على `/api/v1/pay/demo/{checkout_id}`، وتقبل البطاقات التجريبية فقط.
 - Migration `0012` إضافية فقط، وقيم enum الجديدة (`notification_type`، `post_visibility=subscribers`،
@@ -120,6 +120,23 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'        -d '{"plan_id":"<plan id>"}' http://187.127.76.76:8080/api/v1/subscriptions/checkout
   curl -s "http://187.127.76.76:8080/api/v1/pay/demo/<checkout_id>" | grep -o '<title>[^<]*'
   ```
+
+## توزيع المهام على الـ workers (T05/T07 + hardening)
+- `worker` (`-Q celery,notifications`): المسار الحي فقط: محرك الإشارات (`signals.*`)، تنبيهات الأسعار
+  (`alerts.*`)، وإرسال الإشعارات والملخصات.
+- `worker-backtest` (`-Q backtests,maintenance`): الاختبارات التاريخية، والمهام غير العاجلة على طابور
+  `maintenance`: جلب RSS وتنظيف الأخبار (`news.*`)، تنظيف التوكنات والمفاتيح (`housekeeping.*`)،
+  احتفاظ صندوق الإشعارات (`notifications.cleanup`)، التجديدات (`subscriptions.renew`)، والملخص اليومي (`ops.*`).
+
+## حذف حسابات التجربة (purge-demo)
+سكربتات التحقق تنشئ حسابات بأسماء مثل `y19-…@example.com` و`e2e-…`. لحذفها مع كل ما تملكه:
+```bash
+python -m app.cli purge-demo --prefix y19-              # تجربة فقط: يعرض ما سيُحذف
+python -m app.cli purge-demo --prefix y19- --yes        # حذف فعلي
+python -m app.cli purge-demo --prefix e2e- --instrument-prefix E2E --yes
+```
+يرفض البادئات القصيرة (أقل من 3 أحرف) وحذف آخر مدير. **لا يُشغَّل على سيرفر الإنتاج من هنا** (لا SSH)؛ على
+الإنتاج يحتاج تنفيذاً يدوياً مقصوداً عبر workflow مخصص لاحقاً.
 
 ## للبرومبتات القادمة
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.
