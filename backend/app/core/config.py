@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     backtest_daily_admin: int = 0
     backtest_max_bars: int = 200_000
     backtest_time_limit_seconds: int = 300  # Celery soft time limit of one backtest
+    # Custom strategies (Y12): at most this many per user, by role
+    custom_strategy_limit_trader: int = 5
+    custom_strategy_limit_analyst: int = 50
+    custom_strategy_limit_expert: int = 50
+    custom_strategy_limit_admin: int = 50
+    rate_limit_validate_cost: int = 2  # POST /custom-strategies/validate
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 
@@ -85,6 +91,9 @@ class Settings(BaseSettings):
 
     def workspace_limit(self, role: str) -> int:
         return getattr(self, f"workspace_limit_{role}")
+
+    def custom_strategy_limit(self, role: str) -> int:
+        return getattr(self, f"custom_strategy_limit_{role}")
 
     def backtest_quota(self, role: str) -> tuple[int, int]:
         """(concurrent queued + running, per UTC day; 0 = unlimited)."""
