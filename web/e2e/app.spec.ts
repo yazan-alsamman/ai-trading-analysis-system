@@ -7,8 +7,8 @@ test.beforeEach(async ({ page }) => {
 
 test('workspace renders a labelled simulated chart and AI panel', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/');
-  await expect(page).toHaveURL(/\/workspace$/);
+  // Since round 3, "/" opens the Overview; the workspace has its own route.
+  await page.goto('/workspace');
   await settle(page);
 
   await expect(page.getByRole('heading', { level: 1, name: 'EUR/USD' })).toBeVisible();
@@ -91,12 +91,13 @@ test('theme toggle switches and persists', async ({ page }) => {
 
 test('login validates input and creates a labelled demo session', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByText(/enter your email address/i)).toBeVisible();
   await page.getByLabel('Email').fill('elias@example.com');
-  await page.getByLabel('Password').fill('secret123');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/workspace$/);
+  await page.getByLabel('Password', { exact: true }).fill('secret123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  // Overview is the landing page after sign-in (round 3).
+  await expect(page).toHaveURL(/\/overview$/);
   await page.getByRole('button', { name: /account menu/i }).click();
   await expect(page.getByText('Demo session')).toBeVisible();
 });

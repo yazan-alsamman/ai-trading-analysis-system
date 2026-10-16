@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import type { Candle, FeedStatus } from '@/domain/market';
-import type { Session } from '@/domain/user';
+import type { Session, User } from '@/domain/user';
 import type { AppConfig } from '../config';
-import { isAbort } from '../errors';
+import { ApiError, isAbort, isApiError } from '../errors';
 import {
-  AuthResponseSchema,
+  AssistantReplySchema,
   CandleSeriesSchema,
   ChatMessageSchema,
   CommentSchema,
@@ -16,6 +16,8 @@ import {
   PredictionRecordSchema,
   PriceAlertSchema,
   QuoteSchema,
+  TokenPairSchema,
+  UserReadSchema,
 } from '../schemas';
 import type { MarketDataService, Services } from '../types';
 import { endpoints } from './endpoints';
@@ -96,6 +98,58 @@ function apiMarketService(http: HttpClient, cfg: AppConfig): MarketDataService {
   };
 }
 
+/** FastAPI UserRead → domain user. The role is assigned by the server. */
+function toUser(u: z.infer<typeof UserReadSchema>): User {
+  return { id: u.id, email: u.email, name: u.full_name?.trim() || u.email.split('@')[0] || u.email, role: u.role };
+}
+
+/**
+ * Auth against the FastAPI backend (backend/app/api/v1/auth.py):
+ * login → TokenPair, then GET /users/me with the new access token.
+ * Register returns the created user (no token), so it is followed by login.
+ */
+function apiAuthService(http: HttpClient): Services['auth'] {
+  const signIn = async (email: string, password: string): Promise<Session> => {
+    let tokens: z.infer<typeof TokenPairSchema>;
+    try {
+      tokens = await http.request('POST', endpoints.auth.login, { body: { email, password }, schema: TokenPairSchema, token: null, authFailureHandled: true });
+    } catch (e) {
+      if (isApiError(e) && e.kind === 'unauthorized') throw new ApiError('validation', 'The email or password is incorrect.', { status: 401 });
+      throw e;
+    }
+    const me = await http.request('GET', endpoints.auth.me, { schema: UserReadSchema, token: tokens.access_token, authFailureHandled: true });
+    return { user: toUser(me), token: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt: Date.now() + tokens.expires_in * 1000, isDemo: false };
+  };
+
+  return {
+    login: ({ email, password }) => signIn(email, password),
+    register: async ({ name, email, password }) => {
+      try {
+        await http.request('POST', endpoints.auth.register, { body: { email, password, full_name: name }, schema: UserReadSchema, token: null, authFailureHandled: true });
+      } catch (e) {
+        if (isApiError(e) && e.kind === 'conflict')
+          throw new ApiError('validation', 'An account with this email already exists.', {
+            status: 409,
+            fieldErrors: { email: ['An account with this email already exists. Sign in instead.'] },
+          });
+        if (isApiError(e) && e.fieldErrors.full_name)
+          throw new ApiError(e.kind, e.message, { fieldErrors: { ...e.fieldErrors, name: e.fieldErrors.full_name }, ...(e.status ? { status: e.status } : {}) });
+        throw e;
+      }
+      return signIn(email, password);
+    },
+    logout: async (session) => {
+      if (!session.refreshToken) return;
+      await http.request('POST', endpoints.auth.logout, {
+        body: { refresh_token: session.refreshToken },
+        schema: Empty,
+        ...(session.token ? { token: session.token } : {}),
+        authFailureHandled: true,
+      });
+    },
+  };
+}
+
 export function createApiServices(cfg: AppConfig, getSession: () => Session | null, onUnauthorized: () => void): Services {
   const http = createHttpClient({
     baseUrl: cfg.apiBaseUrl,
@@ -132,6 +186,19 @@ export function createApiServices(cfg: AppConfig, getSession: () => Session | nu
       saveOpportunityPreferences: (prefs) =>
         http.request('PUT', endpoints.alerts.opportunityPreferences, { body: prefs, schema: OpportunityPreferencesSchema }),
     },
+    assistant: {
+      describe: () => ({
+        provider: 'remote',
+        label: 'Backend assistant',
+        description: 'Answers come from the AI service configured on the backend. It receives only the context listed here.',
+      }),
+      reply: (messages, context, o) =>
+        http.request('POST', endpoints.assistant.reply, {
+          body: { messages: messages.map(({ role, content }) => ({ role, content })), context },
+          schema: AssistantReplySchema,
+          ...o,
+        }),
+    },
     community: {
       listNews: (o) => http.request('GET', endpoints.community.news, { schema: z.array(NewsItemSchema), ...o }),
       listComments: (id, o) => http.request('GET', endpoints.community.newsComments(id), { schema: z.array(CommentSchema), ...o }),
@@ -142,18 +209,6 @@ export function createApiServices(cfg: AppConfig, getSession: () => Session | nu
       getConversation: (id, o) => http.request('GET', endpoints.community.conversation(id), { schema: z.array(ChatMessageSchema), ...o }),
       sendMessage: (id, body) => http.request('POST', endpoints.community.conversation(id), { body: { body }, schema: ChatMessageSchema }),
     },
-    auth: {
-      login: async (input) => {
-        const res = await http.request('POST', endpoints.auth.login, { body: input, schema: AuthResponseSchema });
-        return { user: res.user, token: res.token, isDemo: false };
-      },
-      register: async (input) => {
-        const res = await http.request('POST', endpoints.auth.register, { body: input, schema: AuthResponseSchema });
-        return { user: res.user, token: res.token, isDemo: false };
-      },
-      logout: async () => {
-        await http.request('POST', endpoints.auth.logout, { schema: Empty });
-      },
-    },
+    auth: apiAuthService(http),
   };
 }

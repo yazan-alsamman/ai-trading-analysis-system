@@ -9,7 +9,8 @@ export type ApiErrorKind =
   | 'unauthorized' // 401 — session missing or expired
   | 'forbidden' // 403 — role not permitted
   | 'not_found'
-  | 'validation' // 422 — input rejected by the server
+  | 'validation' // 400/422 — input rejected by the server
+  | 'conflict' // 409 — e.g. email already registered
   | 'rate_limited' // 429
   | 'server' // 5xx
   | 'contract' // response did not match the expected schema
@@ -59,6 +60,8 @@ export function userMessage(error: unknown): string {
       return 'The requested item could not be found.';
     case 'validation':
       return error.message || 'Some fields need attention.';
+    case 'conflict':
+      return error.message || 'This conflicts with existing data.';
     case 'rate_limited':
       return 'Too many requests. Please wait a moment and try again.';
     case 'server':

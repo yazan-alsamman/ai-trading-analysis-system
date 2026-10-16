@@ -99,3 +99,18 @@ describe('trendOf', () => {
     expect(trendOf(undefined)).toBe('flat');
   });
 });
+
+describe('money and position units (round 3)', () => {
+  it('formats account money with currency rules and true minus sign', async () => {
+    const { formatMoney, formatUnits, formatPct } = await import('./format');
+    expect(formatMoney(1234.5, 'USD')).toBe('$1,234.50');
+    expect(formatMoney(-90, 'EUR')).toBe('−€90.00');
+    expect(formatMoney(15100, 'JPY')).toBe('¥15,100');
+    expect(formatMoney(12.345, 'USD', { signed: true })).toBe('+$12.35');
+    expect(formatMoney(null, 'USD')).toBe('—');
+    expect(formatUnits(10, 'XAU')).toBe('10.00 oz');
+    expect(formatUnits(20000.4, 'EUR')).toBe('20,000 EUR');
+    expect(formatPct(1)).toBe('1%');
+    expect(formatPct(0.9)).toBe('0.9%');
+  });
+});

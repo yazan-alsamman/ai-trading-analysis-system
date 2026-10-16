@@ -1,137 +1,263 @@
-# Design system
+# Design system: "Ink, Aurum and Violet"
 
-The source of truth is `src/styles/tokens.css`, mapped to Tailwind utilities in `src/styles/index.css`. Components use **semantic** names only (`bg-surface`, `text-fg-2`, `text-up`) and never raw hex values. That is why the dark and light themes stay identical in structure.
+_Round 3 (16 October 2026). It replaces the round-2 navy/blue palette. The direction comes from `docs/GOAI_REFERENCE_ANALYSIS.md` §5._
+
+The source of truth is `src/styles/tokens.css`. `src/styles/index.css` maps it to Tailwind utilities.
+
+- Components use **semantic** names only (`bg-surface`, `text-fg-2`, `text-forecast`), never raw hex values.
+- The dark and light themes are structurally identical: only the token values differ.
 
 ## 1. Principles
 
-1. **Data first.** Prices, charts and AI output carry the visual weight. The surrounding interface stays quiet: 1px borders, no gradients, no glow.
-2. **Colour has meaning, never decoration.**
-3. **Observed ≠ predicted.** AI output has its own colour, line style and labels.
-4. **Never colour alone.** Every directional value also has a sign (`+` / `−`) and an arrow, and every status has a text label.
-5. **Density with rhythm.** Dense where traders scan (tables, watchlist), with more room where they read (AI explanations, news).
+1. **A research terminal with an editorial front door.** Narrative surfaces (Overview, sign-in, module openers) use display type and atmosphere. Data surfaces (Workspace, tables, forms) stay dense and quiet.
+2. **Colour has one meaning each.**
+   - Gold is brand and selection.
+   - Violet is the model.
+   - Green and red are market direction.
+   - Sky is simulated data.
+   - Amber and orange are system feedback.
+3. **Observed ≠ projected.** Model output has its own colour, line style, label and region, to the right of a **NOW** boundary.
+4. **Provenance is always visible.** Every value can be traced to one of six sources (§8), shown with `SourceTag`.
+5. **Never colour alone.** Direction has sign and arrow. Every status has an icon and a word.
+6. **Density with rhythm.** Dense where traders scan; roomy where they read.
 
-## 2. Colour roles
+## 2. Colour tokens
 
-| Token | Role | Rule |
+### Dark (primary)
+
+| Token | Value | Role |
 | --- | --- | --- |
-| `canvas`, `surface`, `raised`, `inset`, `hover`, `selected` | Surfaces from back to front | Elevation comes from tone + border; shadow (`shadow-float`) only on floating layers |
-| `line`, `line-strong` | Dividers, control borders | |
-| `fg`, `fg-2`, `fg-3` | Primary, secondary and muted text | `fg-3` is the minimum for any readable text |
-| `accent` | Interaction: selection, primary button, focus, links | Not used for market direction |
-| `up` / `down` | **Market direction and P/L only** (price change, Long/Short, TP/SL levels, realised R) | Always paired with a sign/arrow/label |
-| `forecast` (violet) | **AI model output only**: probabilities, forecast path, "Opportunity detected" | Never used for observed prices |
-| `danger` (orange), `warning` (amber), `info` (blue) | System feedback: errors, stale data, notices | Always with an icon + text. Errors are deliberately **not red**, so they are never confused with a falling price. |
-| `demo` (amber) | Simulated content badges and the demo banner | |
+| `canvas` | `#07070a` | Page background (ink, faint violet cast) |
+| `surface` / `raised` / `inset` | `#0d0d12` / `#13131a` / `#0a0a0e` | Panels; floating layers; wells (inputs, code) |
+| `hover` / `selected` | `#17171f` / `#1c1b26` | Interaction states |
+| `line` / `line-strong` | `#1e1d28` / `#2f2e3d` | Hairlines; control borders |
+| `fg` / `fg-2` / `fg-3` | `#f2f1f6` / `#b0afbf` / `#8f8ea0` | Text, from one lavender-grey family |
+| `primary` / `primary-fg` | `#f2f1f6` / `#0a0a0e` | **Inverted primary action** (one per view) |
+| `accent` | `#e2bd72` (aurum) | Brand, active navigation, focus ring, selection, links, entry level |
+| `forecast` | `#b9a0ff` (violet) | **Model output only** |
+| `up` / `down` | `#2fc68f` / `#ff6f77` | **Market direction only**, always with sign or arrow |
+| `demo` = `info` | `#6cbcff` (sky) | Simulated-data labels (dashed outline) and notices |
+| `warning` / `danger` | `#f2a541` / `#ff8a4c` | Stale/caution; errors and limit breaches (never red, so never mistaken for a falling price) |
 
-**Contrast.** Every text/background pair was measured, including the soft badge backgrounds and the selected-row background, in both themes. All pairs are **≥ 4.5:1** (WCAG AA). The axe scan in `e2e/a11y.spec.ts` checks this on every route.
+### Light ("paper")
+
+| Token | Value |
+| --- | --- |
+| `canvas` / `surface` / `inset` | `#f4f3ef` / `#ffffff` / `#f8f7f4` |
+| `selected` | `#f2ede1` (warm gold tint) |
+| `fg` / `fg-2` / `fg-3` | `#141318` / `#4a4853` / `#5e5c67` |
+| `primary` | `#141318` (ink button, white text) |
+| `accent` | `#7c540d` (deep gold) |
+| `forecast` / `up` / `down` | `#6534c8` / `#066b47` / `#b3262f` |
+| `demo` = `info` | `#0b5a96` |
+| `warning` / `danger` | `#7f4700` / `#a33c0b` |
+
+### Measured contrast
+
+The pairs were computed with the WCAG formula by `scripts/contrast.mjs`. Every text tone was checked on every surface. Minimum values:
+
+| Pair | Dark | Light |
+| --- | --- | --- |
+| `fg-3` (weakest body text) on `selected` | 5.30 | 5.61 |
+| `accent` text on `selected` | 9.53 | 5.13 |
+| Tone text on its own soft badge background | ≥ 5.17 | ≥ 4.76 |
+| Primary button label | 17.9 | 16.7 |
+
+All pairs that the interface actually renders are ≥ 4.5:1 (WCAG AA). The script also tests every text tone on every tone's soft background. One cell is below the threshold: `fg-3` on an `fg-3`-tinted badge over `selected`, 4.40 in dark. No component uses that combination, because there is no `fg-3` badge tone. axe (`e2e/a11y.spec.ts`) re-checks every route in both themes.
+
+**Why sky for demo?** The round-2 amber `demo` collided with amber `warning` and, now, with the gold accent. Sky is unique in the palette, and demo badges also use a **dashed** outline plus a flask icon, so they are recognisable without colour.
 
 ## 3. Typography
 
-| Role | Font / size | Notes |
+| Role | Face / size | Where |
 | --- | --- | --- |
-| Page title | Inter 20/28, 600 | One `h1` per page |
-| Panel title | Inter 13/20, 600 | `h2` inside `Panel` |
+| Display | **Instrument Serif** 400, `text-d1` 64/64 · `text-d2` 44/46 · `text-d3` 32/36, `.display` | Overview hero, section openers, sign-in. **Never** inside dense panels. The muted second clause uses `<em>` (italic, `fg-2`). |
+| Eyebrow | JetBrains Mono 12/16, 500, uppercase, tracking 0.16em, `.eyebrow` | Before sections and page titles: `04 · RISK MANAGEMENT` |
+| Page title | Inter 24/32, 600 | One `h1` per page (`PageHeader`) |
+| Panel title | Inter 13–16, 600 | |
 | Body | Inter 14/22 | |
-| Labels, metadata | Inter 12/16 | **12px is the floor**: no smaller text anywhere, including SVG chart axes |
-| Prices and numbers | JetBrains Mono, `.num` utility | `tabular-nums slashed-zero`, so values keep their width while ticking |
-| Hero price | Mono 24/32, 500 | Neutral colour; the change beside it carries the direction |
+| Labels, metadata | Inter 12/16 | **12px is the floor** everywhere, including SVG axes and eyebrows |
+| Numbers | JetBrains Mono, `.num` (tabular, slashed zero) | Every price, money value, percentage and time |
 
-Fonts are **self-hosted** (Fontsource), not loaded from a CDN. They work offline and behind restrictive networks (SF19).
+All fonts are self-hosted through Fontsource; no CDN is involved. Instrument Serif is OFL-1.1 and is listed in `THIRD_PARTY_NOTICES.md`.
 
-## 4. Spacing, layout and shape
+## 4. Space, layout, shape, elevation
 
-- **4px grid.** Layout spacing uses Tailwind steps 1–6, 8, 10, 12 (4–48px). The 2px half-steps (0.5, 1.5, 2.5, 3.5) appear only inside compact controls, for optical alignment (badges, segmented controls, icon offsets).
-- **App shell:**
-  - Sidebar: 224px (64px collapsed).
-  - Top bar: 48px.
-  - Demo banner: 28px.
-- **Panels:** 16px padding, 44px header, 8px radius, 1px border.
-- **Table rows:** 36px (comfortable) or 30px (compact), set by the Settings density preference through `--row-h`.
-- **Radii:** 4px (inputs, badges), 6px (buttons), 8px (panels, dialogs).
-- **Breakpoints:**
-
-| Width | Workspace layout |
+| Item | Value |
 | --- | --- |
-| ≥ 1440px | Three columns: watchlist, chart, AI panel |
-| 1024–1439px | Chart plus a tabbed side panel (AI / watchlist) |
-| < 1024px | Stacked; the page scrolls |
-| < 1024px (navigation) | The sidebar becomes a drawer |
+| Grid | 4px steps; 2px half-steps only inside compact controls |
+| Shell | Sidebar 232px (64px collapsed) · top bar 52px · `--row-h` 36/30px (density) |
+| Content widths | `--content-wide` 1600px (data pages) · `--content-reading` 1024px (forms, text) · Overview and Assistant 1400px |
+| Radii | 4 (badges, inputs) · 6 (buttons) · 8 (dense panels) · **12–16 (narrative cards)** · **full (pills: primary CTAs, auth switch, view tabs)** |
+| Elevation | Tone + hairline. `shadow-float` only on floating layers (dialogs, sheets, popovers, hero research card) |
+| Atmosphere | `.atmosphere` = 48px grid + two radial glows (aurum, violet). **Overview hero and the auth panel only.** |
 
-## 5. Financial formatting (`src/lib/format.ts`)
+### Breakpoints
 
-| Value | Rule | Example |
+| Width | Behaviour |
+| --- | --- |
+| < 640px | Single column; Signals render as **cards**; full-width side sheets |
+| 640–1023px | Stacked workspace; navigation drawer |
+| 1024–1439px | Chart + tabbed side panel; sidebar visible |
+| ≥ 1440px | Three-column workspace (watchlist · chart · AI panel) |
+
+## 5. Motion
+
+| Token | Value | Use |
 | --- | --- | --- |
-| Price | Instrument precision (5, 3 for JPY, 2 for XAU), thousands separator | `1.08214`, `2,345.67` |
-| Change | Always signed, true minus sign U+2212 | `+0.00087`, `−0.42%` |
-| Probability | Whole percent, plus a band when the model provides one | `68%` · `61–74%` |
-| Expected value | R multiples | `+0.36R` |
-| Reward : risk | | `1 : 2.0` |
-| Distance | Pips, using the instrument pip size | `12.4 pips away` |
-| Missing | Em dash, never `0` or blank | `—` |
-| Time | Stored in UTC; displayed in the chosen zone **with the zone label** | `14:30:05 UTC`, `GMT+3` |
-| Volume | Labelled *tick volume* when the feed is tick volume | `Tick vol 2K` |
+| `--dur-fast` | 150ms | Hover, colour, focus offset |
+| `--dur-base` | 220ms | Side sheet slide-in |
+| `--dur-slow` | 420ms | `.reveal` entrance (opacity + 6px rise), staggered with `.reveal-1…4` |
+| `--ease-out` | `cubic-bezier(.22,1,.36,1)` | All of the above |
 
-## 6. Components (`src/components/ui`)
+Rules:
 
-| Component | Notes |
-| --- | --- |
-| `Button`, `IconButton` | `IconButton` **requires** a `label`, which becomes the accessible name and the visible tooltip |
-| `Badge`, `DemoBadge` | `DemoBadge` marks simulated content everywhere |
-| `Panel`, `PageHeader`, `Stat` | Labelled sections (`section[aria-labelledby]`) |
-| `SegmentedControl` | WAI-ARIA radio group; arrow keys move the selection |
-| `Field`, `Input`, `Select`, `Textarea`, `Checkbox`, `Switch`, `FormError` | Label, hint and error wired with `aria-describedby` and `aria-invalid` |
-| `Dialog`, `ConfirmDialog` | Native `<dialog>`; focus returns to the opener; Cancel is the default focus for destructive confirmations |
-| `Popover` | Disclosure pattern; Esc closes and returns focus |
-| `TableRegion`, `Th`, `SortableTh`, `Td` | Horizontal scroll only inside a labelled, focusable region; `aria-sort` on sortable headers |
-| `EmptyState`, `ErrorState`, `OfflineState`, `Loading`, `Skeleton` | Every async area uses these, so there are no blank areas and no infinite spinners |
-| `ChangeText`, `DirectionBadge`, `FeedStatusPill` | Market semantics with non-colour cues and screen-reader wording |
-| `RouteTabs` | Tabs are links: shareable and Back-button friendly |
+- No motion on prices, tables or charts.
+- No pulsing or glowing values. The only loop is the assistant's three-dot "composing" indicator.
+- `prefers-reduced-motion` disables every animation and transition (`index.css`).
 
-## 7. Chart conventions
+## 6. Chart series
 
 | Element | Treatment |
 | --- | --- |
-| Observed candles / bars | `up` / `down` colours |
-| Line and area | Primary text colour |
-| Indicators | Neutral series colours `--chart-ind-1/2/3`, never up/down; RSI in its own pane with 70/30 guides |
-| Volume | Translucent up/down histogram in the bottom 18% of the price pane |
-| AI zones | Translucent bands for TP (up), entry (accent) and SL (down), starting at the signal candle, drawn **under** price |
-| Price lines | Dashed, with axis labels `TP`, `Entry`, `SL` |
-| Forecast | **Violet dashed line with point markers**, right of a dashed **NOW** boundary, over a faint violet region tint |
-| Legend | Shows *"AI forecast (simulated) — not an observed price"* when hovering the forecast |
-| Time axis | Labels follow the chosen time zone; the crosshair label shows date and time |
-| Controls | Zoom in, zoom out and reset are real buttons, so the chart is keyboard-operable |
+| Observed candles / bars | `up` / `down` |
+| Line / area, Overview research chart | `fg` line with an `fg` → transparent area |
+| Indicators | `--chart-ind-1/2/3` (sky, copper, grey), never up/down |
+| Model zones | Translucent TP (`up`), **entry (`accent` gold)**, SL (`down`), under price |
+| Projection | **Violet dashed line + point markers**, only for points the model supplied, right of a dashed **NOW** line over a faint violet region |
+| Confidence band | Drawn **only** when supplied; never synthesised |
 
-## 8. States checklist (applied to every async area)
+## 7. Components (`src/components/ui`)
 
-| State | Treatment |
+| Component | Notes |
 | --- | --- |
-| Loading | Skeleton plus a polite live-region announcement |
-| Empty | Explanation and a next action |
-| Populated | Normal view |
-| Updating | Previous data stays visible; the refresh icon spins |
-| Stale | Amber notice with the time of the data |
-| Partial failure | Previous data kept, plus an inline error banner |
-| Complete failure | `ErrorState` with a plain-language reason and **Try again** |
-| Permission denied | `forbidden` maps to "Your account does not have access" |
-| Offline | Global banner, plus `Offline` in the feed status |
-| Invalid input | Field-level messages in plain language, validated on blur and on submit |
+| `Button` | Variants: `primary` (inverted), `secondary`, `ghost`, `danger`. Sizes `sm`/`md`/`lg`. `shape="pill"` for narrative CTAs. Supports `trailingIcon`. `buttonClasses()` styles links identically. |
+| `IconButton` | `label` is required (accessible name + tooltip) |
+| `Badge`, `DemoBadge` | Demo tone has a dashed outline |
+| **`SourceTag`** (new) | `live` · `historical` · `model` · `user` · `demo` · `unavailable`, each with an icon, word and tooltip definition |
+| `Panel`, `Page`, `PageHeader` (+ `eyebrow`), **`SectionHeading`** (new) | `SectionHeading` = eyebrow + display title + muted clause |
+| `Field`, `Input`, `Select`, `Checkbox`, `Switch` | `Input` height and width are defaults the caller may override |
+| `Dialog` (sm/md/**lg**), **`SideSheet`** (new) | Native `<dialog>`; focus containment; Esc; focus returns to the opener |
+| **`Markdown`** (new) | Safe renderer for assistant replies: React elements only, never `innerHTML` |
+| `TableRegion`, `SortableTh` | Unchanged |
+| `EmptyState`, `ErrorState`, `Loading`, `Skeleton` | Unchanged; used by every new module |
+| `ChangeText`, `DirectionBadge`, `FeedStatusPill` | Unchanged |
+| Feature-level: `LimitMeter` | Used vs this trade (hatched) vs limit marker; status in words + icon |
+| Feature-level: `ResearchChart`, `PasswordInput`, `PasswordStrength` | |
 
-## 9. Motion
+## 8. Provenance vocabulary
 
-Transitions are 150ms colour and transform changes only. There are no pulsing or glowing prices. `prefers-reduced-motion` disables all transitions and animations globally.
+| Kind | Label | Meaning |
+| --- | --- | --- |
+| `live` | Live | Verified data from the connected backend feed |
+| `historical` | Historical | Recorded past data |
+| `model` | Model output | Produced by the AI model: a probabilistic estimate |
+| `user` | Your input | Entered by the user; not verified |
+| `demo` | Simulated | Generated in the browser |
+| `unavailable` | Not connected | Needs a backend service that does not exist yet |
 
-## 10. Round 2 additions
+## 9. States checklist
 
-| Item | Notes |
+Every async area handles these states:
+
+- loading (skeleton + polite announcement)
+- empty (explanation + next action)
+- updating (previous data kept)
+- stale (amber notice)
+- partial failure (inline banner)
+- failure (`ErrorState` + Try again)
+- offline
+- invalid input (field messages)
+- demo (labelled)
+
+New in round 3:
+
+| Area | State |
 | --- | --- |
-| Brand glyph (`components/brand/BrandMark.tsx`) | Three rising candles in accent + a dashed violet segment ending in a node: *observed vs forecast* is the identity. Use `BrandGlyph` alone at ≤ 32px. |
-| Surfaces | Dark theme is midnight navy: canvas `#070b12`, surface `#0d131d`, raised `#131b28`, selected `#142036`. |
-| `Page` | Every route uses it. `wide` (max 1600px) for data pages, `reading` (max 1024px) for forms and text. |
-| Divided grids | Metric and summary grids use `gap-px` on a `bg-line` container — crisp 1px dividers at any column count, no nested cards. |
-| `Sparkline`, `RangeBar` (`components/ui/MiniCharts.tsx`) | Sparklines are decorative (`aria-hidden`); the same information is present as text. The range bar is neutral grey (position is not direction). |
-| `PriceLadder` | Always SL on the left, TP on the right (longs and shorts alike), entry zone in accent, current-price marker; amber when price is outside the plan. |
-| `TimeframeConfluence` | Three buttons (15m / 1h / 4h) with direction + probability; pressing one switches the chart. |
-| Notification centre | Bell with unread count; items carry provenance ("Simulated"). |
-| Keyboard | `?` help · `Ctrl/⌘ K` search · `g` + `w/s/a/i/c/,` navigation · `t` theme · workspace `1/2/3`, `[` `]`, `z`, `f`. Disabled while typing or when a dialog is open; never bound to Ctrl/Alt combinations. |
-| Demo banner | Dismissible per browser session; the top-bar "Demo data" indicator and every "Simulated" badge always remain. |
+| Risk | **Incomplete**: lists every missing input and calculates nothing. **Invalid**: e.g. a target on the wrong side of the entry. |
+| Signals | "Nothing fits your profile" is treated as a valid answer, not an error |
+| Assistant | Composing (with Stop) · error (with Retry) · context partly unavailable (with Retry) |
+
+## 10. Keyboard
+
+| Shortcut | Action |
+| --- | --- |
+| `?` | Help |
+| `Ctrl/⌘ K` | Search |
+| `g o` | Overview |
+| `g w` | Workspace |
+| `g s` | Signals |
+| `g p` | Assistant |
+| `g r` | Capital & risk |
+| `g a` | Alerts |
+| `g i` | Insights |
+| `g c` | Community |
+| `g ,` | Settings |
+| `t` | Theme |
+| Workspace: `1/2/3`, `[` `]`, `z`, `f` | Timeframe, previous/next instrument, zones, forecast |
+| Assistant: `Enter` / `Shift+Enter` | Send / new line |
+
+## 11. Round 4: motion system and public website
+
+The full specification is in `docs/MOTION_DESIGN_DIRECTION.md`. **This section supersedes §5.**
+
+### Motion tokens
+
+Defined in `src/motion/tokens.ts`, mirrored as CSS custom properties in `src/styles/motion.css`.
+
+| Token | Value |
+| --- | --- |
+| Durations | `instant` 120 · `fast` 180 · `base` 260 · `slow` 600 · `cinematic` 1100 ms |
+| Easing | `out` `(.22,1,.36,1)` · `in` `(.55,0,1,.45)` · `inOut` `(.65,0,.35,1)` · `spring` `(.34,1.4,.64,1)`, plan selection only |
+| Stagger | lines 110 · items 70 · candles 12 ms |
+| Rise | 18 px (10 px under 768 px) |
+| Parallax | ±14 px maximum |
+
+### Runtime
+
+`src/motion/runtime.ts` provides:
+
+- **one** shared scroll/resize frame loop, used only while sections intersect
+- `useInView`
+- `useScrollProgress` / `useStepProgress`, which write `--p` with no per-frame re-render
+- `usePointerParallax` (fine pointers only)
+- `useReducedMotion`
+- `useCinematic` (≥ 1024 px wide and ≥ 600 px tall, motion allowed)
+
+### Primitives
+
+| Primitive | Purpose |
+| --- | --- |
+| `<Reveal variant>` | In-view entrance |
+| `<RevealText lines>` | Line-mask headline (`trigger="mount"` for the hero) |
+| `.m-in`, `.m-in-blur`, `.m-stage`, `.m-draw`, `.m-grow-x/-y`, `.m-pop` | Keyframes with an `--at` delay |
+| `[data-play="false"]` | Holds an animation until its container is in view |
+| `[data-layer][data-on]` | Step-driven layers in pinned sequences |
+| `.accordion-panel[data-open]` | Grid-rows accordion |
+| `.parallax` with `--depth` | Pointer parallax layer |
+
+Page transitions use the View Transitions API through React Router `viewTransition`: root cross-fade plus a shared `brand` and `auth-card`.
+
+### Reduced motion
+
+- Animation **and transition delays are zeroed**.
+- Reveals, layers, masks and parallax are forced to their final state.
+- Pinned sequences render as static layouts.
+- View transitions are disabled.
+
+### New components
+
+| Component | Purpose |
+| --- | --- |
+| `marketing/components/ShowcaseChart` | Intro or step mode; the projection appears only from supplied points |
+| `ModulePreviews` | Renders the app's own components with showcase data |
+| `PlanCard` / `PlanGrid` / `CompareTable` / `PlanFit` / `PlanConfirmSheet` | Membership |
+| `JourneySteps` / `PlanSummary` | Sign-up journey |
+| `features/membership/PlanGate` | Demo upgrade information |
+| `.range` | Slider with a gold fill and a visible focus ring |
+
+### Rules kept
+
+- Prices and figures never animate as if live.
+- Observed data draws as a solid line up to **NOW**. The projection is violet, dashed, after NOW, and only drawn when the model supplied it.
+- Simulated content always carries `SourceTag kind="demo"`.

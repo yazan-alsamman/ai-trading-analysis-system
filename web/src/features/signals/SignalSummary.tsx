@@ -26,12 +26,12 @@ export function SignalSummary({ items }: { items: readonly Opportunity[] }) {
     <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line lg:grid-cols-4">
       <Cell label="Detected" hint={`of ${items.length} analyses`}>
         <span className="num">{detected.length}</span>
-        <span className="ml-3 inline-flex items-center gap-2 text-sm">
-          <span className="num inline-flex items-center text-up">
+        <span className="ml-3 inline-flex flex-wrap items-center gap-x-2 text-sm">
+          <span className="num inline-flex items-center whitespace-nowrap text-up">
             <ArrowUpRight aria-hidden className="size-3.5" />
             {longs} long
           </span>
-          <span className="num inline-flex items-center text-down">
+          <span className="num inline-flex items-center whitespace-nowrap text-down">
             <ArrowDownRight aria-hidden className="size-3.5" />
             {shorts} short
           </span>

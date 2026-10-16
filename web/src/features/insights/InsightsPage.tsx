@@ -34,6 +34,16 @@ function OutcomeBadge({ outcome }: { outcome: PredictionOutcome }) {
 }
 
 /** SF14 (general prediction statistics) and SF15 (per-prediction accuracy). */
+/** Meaning and calculation of every metric on this page (computed in domain/predictions.ts). */
+const METRIC_DEFINITIONS: readonly [string, string][] = [
+  ['Predictions', 'Every model output with a direction, including those still open. Open predictions are excluded from all accuracy figures.'],
+  ['Hit rate', 'Resolved predictions whose take-profit was reached before the stop-loss, divided by all resolved predictions (stop or expiry count as misses).'],
+  ['Mean predicted', 'The average probability the model stated for the same resolved predictions — what the hit rate should be if the model is well calibrated.'],
+  ['Calibration gap', 'Hit rate minus mean predicted. Negative means outcomes were worse than the model said (over-confident).'],
+  ['Brier score', 'Mean of (stated probability − outcome)², with outcome 1 for target hit and 0 otherwise. 0 is perfect; always saying 50 % scores 0.25.'],
+  ['Realised R', 'Result per prediction in units of risk: +reward : risk when the target is hit, −1 when the stop is hit, and the marked-to-market result when the horizon expires.'],
+];
+
 export function InsightsPage() {
   usePageTitle('Insights');
   const services = useServices();
@@ -74,6 +84,7 @@ export function InsightsPage() {
   return (
     <Page>
       <PageHeader
+        eyebrow="06 · Performance insights"
         title="Insights"
         meta={isDemo && <DemoBadge label="Demo statistics" />}
         description="How the AI's predictions have performed: overall statistics, calibration, and the outcome of every prediction."
@@ -119,6 +130,22 @@ export function InsightsPage() {
             />
             <Kpi label="Brier score" value={formatNumber(stats.brierScore, 3)} hint="Lower is better · 0.250 = coin flip" />
           </dl>
+
+          <details className="group rounded-lg border border-line bg-surface">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-3 text-sm font-medium text-fg-2 hover:text-fg">
+              <ChevronRight aria-hidden className="size-4 transition-transform group-open:rotate-90" />
+              How these metrics are defined
+              <span className="ml-auto text-xs font-normal text-fg-3">Source: {isDemo ? 'simulated prediction history' : 'GET /predictions/history'} · window: all records loaded</span>
+            </summary>
+            <dl className="grid gap-x-8 gap-y-3 border-t border-line px-4 py-4 text-sm sm:grid-cols-2">
+              {METRIC_DEFINITIONS.map(([term, def]) => (
+                <div key={term}>
+                  <dt className="font-medium text-fg">{term}</dt>
+                  <dd className="mt-0.5 text-xs text-fg-2">{def}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
 
           <Panel title="Performance" meta={<span>Realised result per prediction: target = +R:R, stop = −1R</span>}>
             <PerformanceChart records={records} timeZone={timeZone} />

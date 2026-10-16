@@ -42,12 +42,26 @@ export function Page({ width = 'wide', children, className }: { width?: 'wide' |
   );
 }
 
-export function PageHeader({ title, description, actions, meta }: { title: string; description?: ReactNode; actions?: ReactNode; meta?: ReactNode }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+  meta,
+  eyebrow,
+}: {
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+  meta?: ReactNode;
+  /** Module name above the title, e.g. "04 · Risk management". Ties the page to the workflow. */
+  eyebrow?: string;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
+        {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-lg leading-tight font-semibold tracking-tight text-fg">{title}</h1>
+          <h1 className="text-xl leading-tight font-semibold tracking-tight text-fg">{title}</h1>
           {meta}
         </div>
         {description && <p className="mt-1 max-w-3xl text-sm text-fg-3">{description}</p>}
@@ -64,6 +78,46 @@ export function Stat({ label, value, hint, className }: { label: ReactNode; valu
       <dt className="text-xs text-fg-3">{label}</dt>
       <dd className="mt-0.5 text-base text-fg">{value}</dd>
       {hint && <dd className="mt-0.5 text-xs text-fg-3">{hint}</dd>}
+    </div>
+  );
+}
+
+/**
+ * Narrative section opener: eyebrow + display (serif) title with an optional
+ * muted second clause. For the Overview and module introductions only — never
+ * inside dense trading panels.
+ */
+export function SectionHeading({
+  eyebrow,
+  title,
+  muted,
+  description,
+  id,
+  level = 2,
+  className,
+}: {
+  eyebrow?: string;
+  title: string;
+  muted?: string;
+  description?: ReactNode;
+  id?: string;
+  level?: 1 | 2;
+  className?: string;
+}) {
+  const H = level === 1 ? 'h1' : 'h2';
+  return (
+    <div className={cn('max-w-3xl', className)}>
+      {eyebrow && <p className="eyebrow mb-2.5">{eyebrow}</p>}
+      <H id={id} className={cn('display text-fg', level === 1 ? 'text-d2 sm:text-d1' : 'text-d3 sm:text-d2')}>
+        {title}
+        {muted && (
+          <>
+            {' '}
+            <em>{muted}</em>
+          </>
+        )}
+      </H>
+      {description && <p className="mt-3 max-w-2xl text-md text-fg-2">{description}</p>}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { AlertCircle } from 'lucide-react';
-import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { useId, type ComponentProps, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
 /**
@@ -53,8 +53,14 @@ export function Field({ label, hint, error, children, className, optional = fals
   );
 }
 
-export function Input({ className, invalid, ...rest }: InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) {
-  return <input aria-invalid={invalid || undefined} className={cn(CONTROL, width(className), 'h-9 px-3', invalid ? 'border-danger' : 'border-line', className)} {...rest} />;
+export function Input({ className, invalid, ...rest }: ComponentProps<'input'> & { invalid?: boolean }) {
+  return (
+    <input
+      aria-invalid={invalid || undefined}
+      className={cn(CONTROL, width(className), unless(className, 'h-', 'h-9'), 'px-3', invalid ? 'border-danger' : 'border-line', className)}
+      {...rest}
+    />
+  );
 }
 
 export function Textarea({ className, invalid, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }) {

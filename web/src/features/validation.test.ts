@@ -66,3 +66,17 @@ describe('post validation', () => {
     expect(postSchema.safeParse({ body: 'A long enough post body', symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD'] }).success).toBe(false);
   });
 });
+
+describe('password strength (round 3)', () => {
+  it('mirrors the backend rules and never blocks on advice-only checks', async () => {
+    const { passwordChecks, passwordStrength, registerSchema } = await import('./auth/schemas');
+    expect(passwordStrength('')).toBe('empty');
+    expect(passwordStrength('abcdefgh')).toBe('too-weak'); // no digit — the backend rejects it too
+    expect(passwordStrength('abcdefg1')).toBe('acceptable');
+    expect(passwordStrength('Abcdefghijk1')).toBe('strong');
+    expect(passwordChecks('abc').filter((c) => c.required).map((c) => c.ok)).toEqual([false, true, false]);
+    const base = { name: 'Sara K', email: 'sara@example.com', confirmPassword: '', acceptTerms: true };
+    expect(registerSchema.safeParse({ ...base, password: 'abcdefg1', confirmPassword: 'abcdefg1' }).success).toBe(true);
+    expect(registerSchema.safeParse({ ...base, password: 'a1'.repeat(65), confirmPassword: 'a1'.repeat(65) }).success).toBe(false);
+  });
+});

@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ChannelSettings, Density, Preferences, ThemePreference, TimeZonePreference, Workspace } from '@/domain/preferences';
+import type { RiskProfile } from '@/domain/risk';
+import type { SignalProfile } from '@/domain/signalProfile';
 import type { LoginInput, RegisterInput, Session } from '@/domain/user';
 import type { Services } from '@/services/types';
 
@@ -29,6 +31,8 @@ export interface PreferencesApi {
   createWorkspace(name: string): Workspace;
   deleteWorkspace(id: string): void;
   setActiveWorkspace(id: string): void;
+  setRiskProfile(profile: RiskProfile): void;
+  setSignalProfile(profile: SignalProfile): void;
 }
 export const PreferencesContext = createContext<PreferencesApi | null>(null);
 export const usePreferences = () => useRequired(PreferencesContext, 'usePreferences');

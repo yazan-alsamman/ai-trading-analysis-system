@@ -11,7 +11,8 @@ import { localId } from '@/lib/cn';
 import { readStored, writeStored } from '@/lib/storage';
 import { ApiError } from '../errors';
 import { OpportunityPreferencesSchema, PriceAlertSchema } from '../schemas';
-import type { AlertService, AuthService, CommunityService, MarketDataService, OpportunityService, PredictionService, Services } from '../types';
+import type { AlertService, AssistantService, AuthService, CommunityService, MarketDataService, OpportunityService, PredictionService, Services } from '../types';
+import { composeReply, DEMO_ASSISTANT } from './assistant';
 import { DemoMarket } from './demoMarket';
 import { demoList, simulateRequest } from './scenario';
 
@@ -241,6 +242,17 @@ function demoAuthService(): AuthService {
   };
 }
 
+function demoAssistantService(): AssistantService {
+  return {
+    describe: () => DEMO_ASSISTANT,
+    async reply(messages, context, options) {
+      await simulateRequest(options?.signal, 350);
+      const question = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+      return composeReply(question, context, Date.now());
+    },
+  };
+}
+
 export function createDemoServices(getSession: () => Session | null): Services {
   const market = new DemoMarket();
   return {
@@ -251,5 +263,6 @@ export function createDemoServices(getSession: () => Session | null): Services {
     alerts: demoAlertService(),
     community: demoCommunityService(getSession),
     auth: demoAuthService(),
+    assistant: demoAssistantService(),
   };
 }

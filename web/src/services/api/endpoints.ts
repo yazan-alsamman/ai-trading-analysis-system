@@ -1,15 +1,18 @@
 /**
- * PROPOSED REST endpoints — NOT confirmed by the backend team.
+ * REST endpoints, relative to VITE_API_BASE_URL (default …/api/v1).
  *
- * Paths are kept in this single file so that aligning with the real Laravel
- * routes (or the team's Postman collection) is a one-file change.
+ * `auth` matches the FastAPI backend in this monorepo (backend/app/api/v1).
+ * Everything else is still a PROPOSAL, not yet implemented by the backend.
+ * Paths are kept in this single file so aligning them is a one-file change.
  * Status of each endpoint is tracked in docs/API_INTEGRATION.md.
  */
 export const endpoints = {
   auth: {
-    login: '/auth/login',
-    register: '/auth/register',
-    logout: '/auth/logout',
+    login: '/auth/login', // implemented (backend Y02)
+    register: '/auth/register', // implemented
+    refresh: '/auth/refresh', // implemented, not yet used by the client
+    logout: '/auth/logout', // implemented — body { refresh_token }
+    me: '/users/me', // implemented
   },
   market: {
     candles: '/market/candles', // ?symbol=EURUSD&timeframe=15m&limit=500
@@ -26,6 +29,9 @@ export const endpoints = {
     list: '/alerts/price',
     item: (id: string) => `/alerts/price/${encodeURIComponent(id)}`,
     opportunityPreferences: '/alerts/opportunity-preferences',
+  },
+  assistant: {
+    reply: '/assistant/replies', // POST { messages, context } — provider called server-side
   },
   community: {
     news: '/news',

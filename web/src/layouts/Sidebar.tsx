@@ -3,8 +3,9 @@ import { NavLink } from 'react-router';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { IconButton } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
+import { DemoPlanChip } from '@/features/membership/PlanGate';
 import { MarketSessions } from './MarketSessions';
-import { NAV_GROUPS, SETTINGS_NAV, type NavItem } from './navigation';
+import { NAV_GROUPS, OVERVIEW_NAV, SETTINGS_NAV, type NavItem } from './navigation';
 
 function Shortcut({ keys }: { keys: string }) {
   return (
@@ -29,14 +30,14 @@ function NavEntry({ item, collapsed, onNavigate }: { item: NavItem; collapsed: b
         className={({ isActive }) =>
           cn(
             'group relative flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors duration-150',
-            isActive ? 'bg-selected font-medium text-fg' : 'text-fg-2 hover:bg-hover hover:text-fg',
+            isActive ? 'bg-selected font-medium text-fg shadow-[inset_0_0_0_1px_var(--line-strong)]' : 'text-fg-2 hover:bg-hover hover:text-fg',
             collapsed && 'justify-center px-0',
           )
         }
       >
         {({ isActive }) => (
           <>
-            {isActive && <span aria-hidden className="absolute top-1.5 bottom-1.5 -left-2 w-0.5 rounded-full bg-accent" />}
+            {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-2 w-[3px] rounded-full bg-accent" />}
             <Icon aria-hidden className={cn('size-4 shrink-0', isActive && 'text-accent')} />
             <span className={cn(collapsed && 'sr-only')}>{item.label}</span>
             {!collapsed && <Shortcut keys={item.shortcut} />}
@@ -61,12 +62,15 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, className }:
         <BrandMark collapsed={collapsed} />
       </div>
       <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-3">
+        <ul className="mb-4 flex flex-col">
+          <NavEntry item={OVERVIEW_NAV} collapsed={collapsed} onNavigate={onNavigate} />
+        </ul>
         {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="mb-3">
+          <div key={group.label} className="mb-4">
             {collapsed ? (
               <span aria-hidden className="mx-auto mb-1.5 block h-px w-5 bg-line" />
             ) : (
-              <h2 className="mb-1 px-2.5 text-xs font-medium text-fg-3">{group.label}</h2>
+              <h2 className="eyebrow mb-1.5 px-2.5 tracking-[0.12em]">{group.label}</h2>
             )}
             <ul className="flex flex-col gap-0.5">
               {group.items.map((item) => (
@@ -76,6 +80,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, className }:
           </div>
         ))}
         <div className="mt-auto flex flex-col gap-3 border-t border-line pt-3">
+          <DemoPlanChip collapsed={collapsed} />
           <MarketSessions collapsed={collapsed} />
           <ul className="flex flex-col gap-0.5">
             <NavEntry item={SETTINGS_NAV} collapsed={collapsed} onNavigate={onNavigate} />

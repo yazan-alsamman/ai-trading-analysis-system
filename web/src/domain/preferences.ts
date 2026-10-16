@@ -2,6 +2,8 @@ import type { NotificationChannel } from './alerts';
 import type { InstrumentSymbol } from './instruments';
 import type { IndicatorId } from './indicators';
 import type { ChartType, Timeframe } from './market';
+import type { RiskProfile } from './risk';
+import type { SignalProfile } from './signalProfile';
 
 export type ThemePreference = 'system' | 'dark' | 'light';
 export type Density = 'comfortable' | 'compact';
@@ -44,6 +46,10 @@ export interface Preferences {
   channels: ChannelSettings;
   workspaces: Workspace[];
   activeWorkspaceId: string;
+  /** Capital and risk limits — shared by the Risk module, Signals and the Assistant. */
+  riskProfile: RiskProfile;
+  /** Saved filter for personalised signals. */
+  signalProfile: SignalProfile;
 }
 
 export function enabledChannels(channels: ChannelSettings): NotificationChannel[] {

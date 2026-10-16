@@ -36,7 +36,7 @@ Normal preferences (theme, density, workspaces) and choosing from the fixed indi
 | 4 | Integration readiness | Service interfaces, HTTP client, zod contracts, proposed endpoints, env config, auth boundary | Switching `VITE_DATA_SOURCE=api` needs no UI changes; contracts documented | ✅ Done (backend not available to test against) |
 | 5 | Responsive & accessibility QA | 5 widths × 2 themes, axe on all routes, keyboard checks | 0 horizontal overflow; 0 serious/critical axe violations | ✅ Done |
 | 6 | Final verification | typecheck, lint, unit, e2e, build | All green | ✅ Done |
-| 7 | Backend integration | Align endpoints, run against Laravel, streaming prices, auth | Real data end-to-end; demo labels disappear automatically (`provenance: live`) | ⏳ Blocked on backend |
+| 7 | Backend integration | Align endpoints, run against the FastAPI backend, streaming prices, auth | Real data end-to-end; demo labels disappear automatically (`provenance: live`) | ⏳ Blocked on backend |
 | 8 | Trader testing & polish | Feedback from professional and intermediate traders (work plan, Oct–Nov 2026) | Feedback items triaged and fixed | ⏳ Next |
 | 9 | Publish | GitHub remote, CI running `pnpm check` + `pnpm e2e`, deployment | Reproducible build from a clean clone | ⏳ When instructed |
 

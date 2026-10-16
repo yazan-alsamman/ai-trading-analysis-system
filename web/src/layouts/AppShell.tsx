@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { usePreferences, useServices } from '@/app/contexts';
 import { IconButton } from '@/components/ui/Button';
 import { AlertMonitor } from '@/features/alerts/AlertMonitor';
+import { useNoIndex } from '@/hooks/useDocumentMeta';
 import { useOnlineStatus } from '@/hooks/useEnvironment';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { readStored, writeStored } from '@/lib/storage';
@@ -98,6 +99,7 @@ export function AppShell() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [bannerHidden, setBannerHidden] = useState(() => readSessionFlag(BANNER_KEY));
   const location = useLocation();
+  useNoIndex();
 
   useEffect(() => writeStored(COLLAPSE_KEY, collapsed), [collapsed]);
 

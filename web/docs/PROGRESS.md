@@ -1,6 +1,6 @@
 # Progress
 
-_Last updated: 15 October 2026 (round 2 — premium transformation)_
+_Last updated: 16 October 2026 (round 4: cinematic public website, motion system, membership)_
 
 ## Current stage
 
@@ -8,8 +8,36 @@ _Last updated: 15 October 2026 (round 2 — premium transformation)_
 | --- | --- |
 | **Round 1** — Phases 1–6: foundation, workspace, core features, integration readiness, QA | ✅ Complete |
 | **Round 2** — premium product transformation | ✅ §1 audit, §2 identity, §3A shell and §3B workspace implemented and verified; the remaining routes improved |
+| **Round 3** — GO AI-inspired product experience | ✅ Reference research, new identity, Overview, Capital & risk, Personalised signals, AI assistant (demo boundary), auth redesign, FastAPI auth alignment. Results: `../reports for website/WEBSITE_REDESIGN_REPORT.md` |
 
 The round-2 brief was received **truncated** (it ends inside §3B). The rest of the brief (further sections and feature expansion) has not yet been received.
+
+## Round 4 — delivered (16 October 2026)
+
+| Area | Delivered |
+| --- | --- |
+| Motion system | `src/motion/` + `styles/motion.css` (no new dependency); `docs/MOTION_DESIGN_DIRECTION.md` |
+| Public website `/` | Cinematic hero, pinned sequences A–C, risk demo, signals + assistant, evidence + methodology, membership preview, FAQ, final CTA, footer |
+| Membership | `/membership`, `/welcome`, plan journey through auth, demo plan preview + `PlanGate`; `docs/MEMBERSHIP_FRONTEND_SPEC.md` |
+| Auth | Animated motif, sliding switch, view transitions, plan summary and progress |
+| SEO | Per-page meta / OG / canonical, app pages `noindex`, `robots.txt`, conditional `sitemap.xml` |
+| Integration | Merged `origin/main`; `docs/FRONTEND_BACKEND_DEPENDENCIES.md` |
+| Tests | 128 unit/component · 64 Playwright (all green) |
+
+## Round 3 — delivered (16 October 2026)
+
+| Area | Delivered |
+| --- | --- |
+| Research | `docs/GOAI_REFERENCE_ANALYSIS.md`: goai.global inspected in real Chrome (desktop, mobile, menus, calculator, module pages, login) |
+| Identity | "Ink, Aurum and Violet" tokens (both themes, contrast measured), Instrument Serif display type, mono eyebrows, inverted pill primary, `SourceTag` provenance vocabulary, `SideSheet`, `Markdown` |
+| Overview (new, landing) | Editorial hero, live gold research card (observed / NOW / model levels / projection only if supplied), seven-module workflow with honest status, "today" cards with sources and definitions |
+| Capital & risk (new) | Position size, money at risk, reward, R : R, notional, limit meters (per trade, daily, aggregate, positions), remaining permitted risk. Missing inputs are named, never guessed. Model plan can be loaded. |
+| Personalised signals | Saved signal profile, "For you" / "All", per-signal checks, provenance sheet, sizing link, phone card layout |
+| AI assistant (new) | Provider-agnostic service; rule-based demo labelled as such; context chips; share-risk toggle; cancel / retry / clear; workspace side sheet |
+| Workspace | AI panel: "What could invalidate it", "What is missing", "Size this trade", "Ask about it" |
+| Auth | Editorial split layout, password visibility, Caps Lock warning, strength meter matching backend rules, honest password-recovery note; API adapter aligned with the FastAPI `/api/v1` auth contract |
+| Insights | Module eyebrow; metric definitions (meaning, calculation, source, window) |
+| Tests | 107 unit/component tests (from 67); new e2e flows for Overview, Risk, Signals, Assistant, Workspace, Register; three new routes in the axe and visual matrices |
 
 ## Round 2 — delivered
 
@@ -69,8 +97,9 @@ The round-2 brief was received **truncated** (it ends inside §3B). The rest of 
 
 ## Next steps
 
-1. **Receive the rest of the round-2 brief** and continue from §3B onwards (feature expansion).
-2. Settings in-page section navigation (DESIGN_AUDIT R6).
+1. Run the client against the live FastAPI stack (`docker compose up`) and use `/auth/refresh` before access-token expiry.
+2. Backend endpoints for the risk/signal profiles and `/assistant/replies` (API_INTEGRATION.md §7).
+3. Settings in-page section navigation (DESIGN_AUDIT R6).
 3. Backend integration (API_INTEGRATION.md §4 and §6) — still blocked on the backend team.
 4. Trader testing per the work plan.
 

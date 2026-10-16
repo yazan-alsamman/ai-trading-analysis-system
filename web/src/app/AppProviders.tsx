@@ -75,6 +75,8 @@ function PreferencesProvider({ children }: { children: ReactNode }) {
           return { ...p, workspaces, activeWorkspaceId };
         }),
       setActiveWorkspace: (id) => update((p) => (p.workspaces.some((w) => w.id === id) ? { ...p, activeWorkspaceId: id } : p)),
+      setRiskProfile: (riskProfile) => update((p) => ({ ...p, riskProfile })),
+      setSignalProfile: (signalProfile) => update((p) => ({ ...p, signalProfile })),
     };
   }, [prefs, resolvedTheme, update]);
 

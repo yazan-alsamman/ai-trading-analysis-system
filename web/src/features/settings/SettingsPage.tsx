@@ -16,6 +16,7 @@ import { formatClock, timeZoneLabel } from '@/lib/format';
 import { config } from '@/services/config';
 import { DEMO_SCENARIOS } from '@/services/demo/scenario';
 import { channelSettingsSchema, type ChannelSettingsForm } from './schemas';
+import { MembershipSettings } from '@/features/membership/MembershipSettings';
 import { WorkspacesSection } from './WorkspacesSection';
 
 function ChannelsSection() {
@@ -177,6 +178,8 @@ export function SettingsPage() {
       </Panel>
 
       <ChannelsSection />
+
+      <MembershipSettings />
 
       <WorkspacesSection
         persistenceNote={

@@ -16,6 +16,10 @@ export interface RequestOptions<T> {
   signal?: AbortSignal;
   /** Every response is validated; contract drift becomes a clear error, not a broken UI. */
   schema: z.ZodType<T>;
+  /** Override the session token for this call (`null` = send none), e.g. during sign-in. */
+  token?: string | null;
+  /** The caller interprets 401 itself (sign-in forms) — do not end the session. */
+  authFailureHandled?: boolean;
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -43,28 +47,49 @@ async function readBody(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * Reads both error shapes the project may meet:
+ *  - FastAPI (this monorepo's backend): `{ detail: "text" }`, or for 422
+ *    `{ detail: [{ loc: ["body", "field"], msg: "..." }] }`
+ *  - Laravel-style: `{ message, errors: { field: [msg] } }`
+ */
+export function parseErrorBody(body: unknown): { message: string; fieldErrors: Record<string, string[]> | undefined } {
+  if (typeof body !== 'object' || body === null) return { message: '', fieldErrors: undefined };
+  const b = body as Record<string, unknown>;
+  if (typeof b.detail === 'string') return { message: b.detail, fieldErrors: undefined };
+  if (Array.isArray(b.detail)) {
+    const fieldErrors: Record<string, string[]> = {};
+    for (const item of b.detail as unknown[]) {
+      if (typeof item !== 'object' || item === null) continue;
+      const { loc, msg } = item as { loc?: unknown; msg?: unknown };
+      const field = Array.isArray(loc) ? String(loc[loc.length - 1]) : 'form';
+      if (typeof msg === 'string') (fieldErrors[field] ??= []).push(msg.replace(/^Value error, /, ''));
+    }
+    return { message: 'Some fields need attention.', fieldErrors };
+  }
+  const message = typeof b.message === 'string' ? b.message : '';
+  const fieldErrors = typeof b.errors === 'object' && b.errors !== null ? (b.errors as Record<string, string[]>) : undefined;
+  return { message, fieldErrors };
+}
+
 function errorFromResponse(status: number, body: unknown): ApiError {
-  const message =
-    typeof body === 'object' && body !== null && 'message' in body && typeof body.message === 'string' ? body.message : '';
-  const fieldErrors =
-    typeof body === 'object' && body !== null && 'errors' in body && typeof body.errors === 'object' && body.errors !== null
-      ? (body.errors as Record<string, string[]>)
-      : undefined;
+  const { message, fieldErrors } = parseErrorBody(body);
 
   if (status === 401) return new ApiError('unauthorized', message, { status });
   if (status === 403) return new ApiError('forbidden', message, { status });
   if (status === 404) return new ApiError('not_found', message, { status });
-  if (status === 422) return new ApiError('validation', message, { status, ...(fieldErrors ? { fieldErrors } : {}) });
+  if (status === 409) return new ApiError('conflict', message, { status });
+  if (status === 400 || status === 422) return new ApiError('validation', message, { status, ...(fieldErrors ? { fieldErrors } : {}) });
   if (status === 429) return new ApiError('rate_limited', message, { status });
   return new ApiError('server', message || `HTTP ${status}`, { status });
 }
 
 export function createHttpClient(options: HttpClientOptions): HttpClient {
   return {
-    async request<T>(method: HttpMethod, path: string, { query, body, signal, schema }: RequestOptions<T>): Promise<T> {
+    async request<T>(method: HttpMethod, path: string, { query, body, signal, schema, token: tokenOverride, authFailureHandled }: RequestOptions<T>): Promise<T> {
       const timeout = AbortSignal.timeout(options.timeoutMs);
       const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
-      const token = options.getToken();
+      const token = tokenOverride === undefined ? options.getToken() : (tokenOverride ?? undefined);
 
       let response: Response;
       try {
@@ -86,7 +111,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
 
       const payload = await readBody(response);
       if (!response.ok) {
-        if (response.status === 401) options.onUnauthorized?.();
+        if (response.status === 401 && !authFailureHandled) options.onUnauthorized?.();
         throw errorFromResponse(response.status, payload);
       }
 

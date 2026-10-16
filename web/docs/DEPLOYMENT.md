@@ -30,14 +30,14 @@ pnpm preview             # serve dist/ at http://localhost:4173
 
 1. **SPA fallback.** Every unknown path must serve `index.html`, because routing is client-side (`/signals`, `/community/news`, …):
    - **Nginx:** `try_files $uri /index.html;`
-   - **Laravel (same domain):** serve `dist/` from `public/` with a catch-all web route that returns `index.html` for non-API paths.
+   - **Same domain as the API:** serve `dist/` behind the same reverse proxy as FastAPI (e.g. nginx `try_files $uri /index.html` for non-`/api` paths).
    - **Netlify / Vercel / Cloudflare Pages:** enable the SPA rewrite to `/index.html`.
 2. **Caching.**
    - `assets/*` are content-hashed: `Cache-Control: public, max-age=31536000, immutable`.
    - `index.html`: `no-cache`.
 3. **HTTPS.** Required in production. Authentication tokens must never travel over HTTP.
 4. **Environment variables are build-time.** Set `VITE_DATA_SOURCE` and `VITE_API_BASE_URL` before `pnpm build`. Changing them requires a rebuild.
-5. **CORS.** If the API is on a different origin, the backend must allow it (Laravel `config/cors.php`). Hosting the web app and the API on the same domain avoids CORS entirely.
+5. **CORS.** If the API is on a different origin, the backend must allow it (FastAPI `CORS_ORIGINS` in the root `.env`). Hosting the web app and the API on the same domain avoids CORS entirely.
 
 ## Suggested release flow (when GitHub is set up)
 

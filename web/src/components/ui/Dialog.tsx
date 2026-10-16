@@ -10,7 +10,7 @@ interface DialogProps {
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 /**
@@ -51,7 +51,7 @@ export function Dialog({ open, onClose, title, description, children, footer, si
       }}
       className={cn(
         'm-auto w-[calc(100vw-2rem)] rounded-lg border border-line-strong bg-raised p-0 text-fg shadow-float backdrop:bg-overlay',
-        size === 'sm' ? 'max-w-md' : 'max-w-xl',
+        size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : 'max-w-xl',
       )}
     >
       {open && (

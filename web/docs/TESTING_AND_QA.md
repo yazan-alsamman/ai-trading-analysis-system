@@ -17,6 +17,17 @@ pnpm check   # typecheck + lint + unit/component tests + build
 pnpm e2e     # builds, serves on :4173, runs all browser suites in Chrome
 ```
 
+## Results — round 4 (16 October 2026)
+
+| Check | Result |
+| --- | --- |
+| Type check / lint | ✅ 0 / 0 |
+| Vitest | ✅ **128 / 128** (adds membership config and store, marketing components, journey, gate, FAQ, motion listener cleanup) |
+| Build | ✅ |
+| Playwright | ✅ **64 / 64**: round-4 flows (landing, scroll sequences, reduced motion, mobile menu, membership journey, SEO), axe on 15 routes × 2 themes, visual matrix 15 routes × 5 widths × 2 themes |
+
+`settle()` now waits for finite animations to end, so axe scans final states.
+
 ## Results — round 2 (15 October 2026)
 
 | Check | Result |

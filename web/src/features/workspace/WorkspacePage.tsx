@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { usePreferences, useServices } from '@/app/contexts';
+import { SideSheet } from '@/components/ui/SideSheet';
 import { EmptyState, ErrorState, Loading, OfflineState, Skeleton } from '@/components/ui/StateViews';
+import type { AssistantContext } from '@/domain/assistant';
 import { getInstrument, INSTRUMENT_SYMBOLS, type InstrumentSymbol } from '@/domain/instruments';
 import type { Timeframe } from '@/domain/market';
 import type { Opportunity } from '@/domain/opportunity';
+import { AssistantPanel } from '@/features/assistant/AssistantPanel';
+import { useShareRisk } from '@/features/assistant/useAssistantContext';
 import { PriceChart } from '@/features/chart/PriceChart';
 import { OpportunityPanel } from '@/features/opportunity/OpportunityPanel';
 import { useMediaQuery, useNow, useOnlineStatus } from '@/hooks/useEnvironment';
@@ -11,6 +16,8 @@ import { useHotkeys } from '@/hooks/useHotkeys';
 import { useLiveCandles, useLiveQuotes } from '@/hooks/useMarketData';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useResource } from '@/hooks/useResource';
+import { useDemoMembership } from '@/app/membershipStore';
+import { getPlan, planIncludes } from '@/domain/membership';
 import { cn } from '@/lib/cn';
 import { ChartToolbar } from './ChartToolbar';
 import { InstrumentHeader } from './InstrumentHeader';
@@ -27,7 +34,7 @@ type SideTab = 'opportunity' | 'watchlist';
  */
 export function WorkspacePage() {
   const services = useServices();
-  const { activeWorkspace: ws, updateWorkspace, resolvedTheme, timeZone } = usePreferences();
+  const { activeWorkspace: ws, updateWorkspace, resolvedTheme, timeZone, prefs } = usePreferences();
   const instrument = getInstrument(ws.symbol);
   usePageTitle(`${instrument.display} ${ws.timeframe} · Workspace`);
   const live = useLiveCandles(ws.symbol, ws.timeframe);
@@ -36,6 +43,11 @@ export function WorkspacePage() {
   const online = useOnlineStatus();
   const wide = useMediaQuery('(min-width: 90rem)');
   const [sideTab, setSideTab] = useState<SideTab>('opportunity');
+  const [askOpen, setAskOpen] = useState(false);
+  const demoPlan = useDemoMembership();
+  // Demo plan preview: Essential covers gold only (UI preview, not access control).
+  const outsidePlan = demoPlan && !planIncludes(demoPlan.plan, 'tf_alignment') && ws.symbol !== 'XAUUSD';
+  const [shareRisk, setShareRisk] = useShareRisk();
 
   const opportunity = useResource(`opportunity:${ws.symbol}:${ws.timeframe}`, (signal) =>
     services.opportunities.getLatest(ws.symbol, ws.timeframe, { signal }),
@@ -123,6 +135,18 @@ export function WorkspacePage() {
     );
   }
 
+  // Exactly what the assistant may use: the data already on this screen.
+  const assistantContext: AssistantContext = {
+    symbol: ws.symbol,
+    timeframe: ws.timeframe,
+    lastPrice: lastPrice ?? null,
+    priceProvenance: series?.provenance ?? null,
+    feedStatus: live.feedStatus,
+    opportunity: opportunity.data ?? null,
+    confluence: confluence.data ?? [],
+    riskProfile: shareRisk ? prefs.riskProfile : null,
+  };
+
   const opportunityPanel = (
     <OpportunityPanel
       resource={opportunity}
@@ -134,6 +158,7 @@ export function WorkspacePage() {
       timeZone={timeZone}
       now={now}
       hideTitle={!wide}
+      onAsk={() => setAskOpen(true)}
     />
   );
   const watchlist = (
@@ -163,6 +188,19 @@ export function WorkspacePage() {
         opportunity={opportunity.data}
         confluence={confluence.data}
       />
+      {outsidePlan && demoPlan && (
+        <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-demo/40 bg-demo-soft px-4 py-2 text-xs text-fg">
+          <span>
+            <strong className="font-semibold">{getPlan(demoPlan.plan).name}</strong> (demo plan preview) covers gold only — {instrument.display} is included from Professional.
+          </span>
+          <button type="button" onClick={() => updateWorkspace({ symbol: 'XAUUSD' })} className="font-medium underline underline-offset-2">
+            Switch to XAU/USD
+          </button>
+          <Link to="/membership#compare" className="text-fg-2 underline underline-offset-2">
+            Compare plans
+          </Link>
+        </div>
+      )}
       <ChartToolbar
         timeframe={ws.timeframe}
         chartType={ws.chartType}
@@ -219,6 +257,9 @@ export function WorkspacePage() {
           )}
         </div>
       </div>
+      <SideSheet open={askOpen} onClose={() => setAskOpen(false)} title="Assistant" meta={<span className="text-xs text-fg-3">{instrument.display} · {ws.timeframe}</span>}>
+        <AssistantPanel context={assistantContext} shareRisk={shareRisk} onShareRisk={setShareRisk} variant="drawer" timeZone={timeZone} />
+      </SideSheet>
     </div>
   );
 }

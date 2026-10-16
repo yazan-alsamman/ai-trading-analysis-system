@@ -4,7 +4,7 @@ The website for **AI Trading Assistance**, a graduation project: an AI-assisted 
 
 > **Analysis only.** The platform shows market data, AI opportunity analysis, prediction statistics and community features. It is **not a broker**, never places, modifies or closes trades, and never promises profit.
 
-Owner (website): **Elias**. Backend: Yazan & Rami (Laravel). AI: Yazan, Rami, Fadi. Mobile: Batoul.
+Owner (website): **Elias**. Backend: Yazan & Rami (FastAPI). AI: Yazan, Rami, Fadi. Mobile: Batoul.
 
 ---
 
@@ -37,13 +37,15 @@ Copy `.env.example` to `.env.local` to change the configuration (see below).
 | `pnpm e2e` | Browser tests in local Google Chrome: flows, accessibility (axe), visual matrix |
 | `pnpm check` | typecheck + lint + test + build — run before every commit |
 | `node scripts/qa-shot.mjs workspace 390,1440 dark,light` | Screenshot one route at the given widths and themes (needs `pnpm dev` running) |
+| `node scripts/qa-page.mjs overview,risk 1440,390 dark,light` | Whole-page screenshots (grows the viewport to the content height); `BASE_URL`, `PREFS_PATCH` |
+| `node scripts/contrast.mjs` | WCAG contrast table for the palette |
 
 ## Configuration
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `VITE_DATA_SOURCE` | `demo` | `demo` = simulated fixtures, `api` = Laravel backend |
-| `VITE_API_BASE_URL` | `http://localhost:8000/api` | Backend REST base URL (API mode only) |
+| `VITE_DATA_SOURCE` | `demo` | `demo` = simulated fixtures, `api` = FastAPI backend (auth live; other endpoints proposed) |
+| `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` | Backend REST base URL (API mode only) |
 | `VITE_API_TIMEOUT_MS` | `10000` | Request timeout |
 
 Invalid values fall back to demo mode, with a console warning.
@@ -52,8 +54,13 @@ Invalid values fall back to demo mode, with a console warning.
 
 | Area | Route | Requirements covered |
 | --- | --- | --- |
-| Trading workspace: chart, watchlist, AI opportunity panel | `/workspace` | SF3, SF4, SF5, SF8, SF9, SF18 · AI Feature 12 |
-| Signals: all AI opportunities, filter and sort | `/signals` | AI Feature 12 |
+| **Public website** (no sign-in): cinematic hero, scroll-driven story (sequences A–E), risk demo, methodology, FAQ | `/` | Marketing |
+| **Membership**: three configurable plans (pricing to be announced), comparison, plan fit, selection → sign-up journey, demo preview | `/membership`, `/welcome` | Membership (frontend only) |
+| **Overview** (first app page): 7-module workflow with honest status, gold research card, today at a glance | `/overview` | — |
+| Trading workspace: chart, watchlist, AI research panel (evidence, invalidation, missing data), assistant side sheet | `/workspace` | SF3, SF4, SF5, SF8, SF9, SF18 · AI Feature 12 |
+| **Capital & risk**: position sizing, money at risk, limit checks (pure, unit-tested; no guessed broker specs) | `/risk` | Risk management |
+| Personalised signals: saved profile, per-signal preference + risk checks, provenance sheet | `/signals` | AI Feature 12 |
+| **AI assistant**: provider-agnostic boundary; rule-based demo answering only from visible context | `/assistant` | Assistant |
 | Alerts: price alerts (CRUD) and opportunity notifications | `/alerts` | SF16, SF2, SF7 |
 | Insights: prediction statistics, calibration, history | `/insights` | SF14, SF15 |
 | Community: news + comments, posts, experts | `/community/*` | SF11, SF12, SF13 |
@@ -67,7 +74,11 @@ These features are **cancelled** and deliberately not implemented: AI 13 (automa
 | Document | Content |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Folder structure, layers, data flow, design decisions |
-| [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Tokens, typography, colour rules, components, interaction rules |
+| [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | "Ink, Aurum and Violet": tokens, measured contrast, typography, motion, components, provenance vocabulary |
+| [docs/GOAI_REFERENCE_ANALYSIS.md](docs/GOAI_REFERENCE_ANALYSIS.md) | Reference-site research (goai.global) and the resulting design direction |
+| [docs/MOTION_DESIGN_DIRECTION.md](docs/MOTION_DESIGN_DIRECTION.md) | Motion language, tokens, sequences, performance and accessibility rules |
+| [docs/MEMBERSHIP_FRONTEND_SPEC.md](docs/MEMBERSHIP_FRONTEND_SPEC.md) | Plan schema, feature matrix, selection flow, demo gating, future contracts |
+| [docs/FRONTEND_BACKEND_DEPENDENCIES.md](docs/FRONTEND_BACKEND_DEPENDENCIES.md) | What is integrated, what exists on the backend but is not used yet, what is missing |
 | [docs/API_INTEGRATION.md](docs/API_INTEGRATION.md) | Proposed endpoint contracts and backend dependencies |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Phases, features, acceptance criteria |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | What is done, current stage, next steps |

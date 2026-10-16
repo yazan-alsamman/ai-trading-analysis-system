@@ -44,7 +44,7 @@ function MarketStatus() {
   const summary = sessionSummary(now);
   const closed = summary.startsWith('Market closed');
   return (
-    <div className="hidden items-center gap-3 rounded-md border border-line bg-inset px-2.5 py-1 text-xs xl:flex" aria-label="Market status">
+    <div className="hidden items-center gap-3 rounded-md border border-line bg-inset px-2.5 py-1 text-xs whitespace-nowrap 2xl:flex" aria-label="Market status">
       <span className="flex items-center gap-1.5">
         <span aria-hidden className={cn('size-1.5 rounded-full', !online ? 'bg-danger' : closed ? 'bg-fg-3' : 'bg-accent')} />
         <span className="text-fg-2">{!online ? 'Offline' : summary}</span>
@@ -62,6 +62,20 @@ function MarketStatus() {
         </>
       )}
     </div>
+  );
+}
+
+/** Below 1440px the full market status is hidden; the demo indicator must stay visible. */
+function DemoPill() {
+  const { source } = useServices();
+  if (source !== 'demo') return null;
+  return (
+    <span
+      title="All market data, AI output and statistics are simulated in the browser."
+      className="hidden h-7 items-center rounded-md border border-dashed border-demo/50 bg-demo-soft px-2 text-xs font-medium whitespace-nowrap text-demo sm:inline-flex 2xl:hidden"
+    >
+      Demo data
+    </span>
   );
 }
 
@@ -96,9 +110,9 @@ function UserMenu({ onShowShortcuts }: { onShowShortcuts: () => void }) {
 
   if (!session) {
     return (
-      <Link to="/login" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-fg-2 hover:bg-hover hover:text-fg">
+      <Link to="/login" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium whitespace-nowrap text-fg-2 hover:bg-hover hover:text-fg">
         <LogIn aria-hidden className="size-4" />
-        <span className="hidden sm:inline">Sign in</span>
+        <span className="sr-only xl:not-sr-only">Sign in</span>
       </Link>
     );
   }
@@ -199,6 +213,7 @@ export function TopBar({ onOpenMenu, onOpenSearch, onShowShortcuts }: { onOpenMe
           <IconButton icon={Search} label="Search instruments and pages" onClick={onOpenSearch} />
         </div>
         <MarketStatus />
+        <DemoPill />
         <NotificationCenter />
         <IconButton
           icon={resolvedTheme === 'dark' ? Sun : Moon}

@@ -1,4 +1,5 @@
 import type { OpportunityAlertPreferences, PriceAlert, PriceAlertDraft } from '@/domain/alerts';
+import type { AssistantContext, AssistantDescription, AssistantMessage, AssistantReply } from '@/domain/assistant';
 import type { ChatMessage, Comment, Expert, NewsItem, Post } from '@/domain/community';
 import type { InstrumentSymbol } from '@/domain/instruments';
 import type { Candle, CandleSeries, FeedStatus, Quote, Timeframe } from '@/domain/market';
@@ -80,6 +81,16 @@ export interface AuthService {
   logout(session: Session): Promise<void>;
 }
 
+/**
+ * AI assistant boundary (provider-agnostic). The browser sends the
+ * conversation and the explicit context; the backend owns the provider and its
+ * credentials. Implementations must not claim data that is not in `context`.
+ */
+export interface AssistantService {
+  describe(): AssistantDescription;
+  reply(messages: readonly AssistantMessage[], context: AssistantContext, options?: CallOptions): Promise<AssistantReply>;
+}
+
 export interface Services {
   source: DataSource;
   market: MarketDataService;
@@ -88,4 +99,5 @@ export interface Services {
   alerts: AlertService;
   community: CommunityService;
   auth: AuthService;
+  assistant: AssistantService;
 }

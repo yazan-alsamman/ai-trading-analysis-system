@@ -19,8 +19,12 @@ export interface User {
 
 export interface Session {
   user: User;
-  /** Bearer token issued by the backend. Absent for demo sessions. */
+  /** Bearer (access) token issued by the backend. Absent for demo sessions. */
   token?: string;
+  /** Refresh token — sent to /auth/logout so the server can revoke it. */
+  refreshToken?: string;
+  /** Access-token expiry (epoch ms). */
+  expiresAt?: number;
   /** True for the local demo session — nothing was verified by a server. */
   isDemo: boolean;
 }

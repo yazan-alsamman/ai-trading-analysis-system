@@ -18,4 +18,4 @@
 | Zod | MIT |
 | React Hook Form, @hookform/resolvers | MIT |
 | Lucide icons (`lucide-react`) | ISC |
-| Inter, JetBrains Mono (via Fontsource) | SIL Open Font License 1.1 |
+| Inter, JetBrains Mono, Instrument Serif (via Fontsource) | SIL Open Font License 1.1 |

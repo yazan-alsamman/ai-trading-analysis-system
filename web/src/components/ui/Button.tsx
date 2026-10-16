@@ -2,47 +2,33 @@ import { Loader2, type LucideIcon } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type Size = 'sm' | 'md';
-
-const VARIANT: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-fg hover:bg-accent-hover border border-transparent',
-  secondary: 'bg-surface text-fg border border-line-strong hover:bg-hover',
-  ghost: 'bg-transparent text-fg-2 border border-transparent hover:bg-hover hover:text-fg',
-  danger: 'bg-transparent text-danger border border-danger/50 hover:bg-danger-soft',
-};
-
-const SIZE: Record<Size, string> = {
-  sm: 'h-7 px-2.5 text-sm gap-1.5',
-  md: 'h-9 px-3.5 text-base gap-2',
-};
+import { buttonClasses, type ButtonShape as Shape, type ButtonSize as Size, type ButtonVariant as Variant } from './buttonClasses';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   icon?: LucideIcon;
+  /** Icon after the label (e.g. an arrow on a call to action). */
+  trailingIcon?: LucideIcon;
+  /** `pill` for narrative calls to action (Overview, auth, empty states); `rect` in dense tools. */
+  shape?: Shape;
   /** Shows a spinner, disables the button and sets aria-busy. */
   loading?: boolean;
   children?: ReactNode;
 }
 
-export function Button({ variant = 'secondary', size = 'md', icon: Icon, loading = false, className, children, disabled, type = 'button', ...rest }: ButtonProps) {
+export function Button({ variant = 'secondary', size = 'md', shape = 'rect', icon: Icon, trailingIcon: Trailing, loading = false, className, children, disabled, type = 'button', ...rest }: ButtonProps) {
   return (
     <button
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-md font-medium whitespace-nowrap transition-colors duration-150',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        VARIANT[variant],
-        SIZE[size],
-        className,
-      )}
+      className={buttonClasses({ variant, size, shape, className })}
       {...rest}
     >
       {loading ? <Loader2 aria-hidden className="size-4 animate-spin" /> : Icon ? <Icon aria-hidden className="size-4" /> : null}
       {children}
+      {Trailing && !loading && <Trailing aria-hidden className="size-4" />}
     </button>
   );
 }

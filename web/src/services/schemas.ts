@@ -157,11 +157,33 @@ export const ChatMessageSchema = z.object({
 export const SessionSchema = z.object({
   user: z.object({ id: z.string(), name: z.string(), email: z.string(), role: RoleSchema }),
   token: z.string().optional(),
+  refreshToken: z.string().optional(),
+  /** Access-token expiry (epoch ms). */
+  expiresAt: z.number().optional(),
   isDemo: z.boolean(),
 });
 
-/** Backend auth response (proposed): user + token. */
-export const AuthResponseSchema = z.object({
-  user: SessionSchema.shape.user,
-  token: z.string(),
+/** FastAPI `POST /api/v1/auth/login` → TokenPair (backend/app/schemas/auth.py). */
+export const TokenPairSchema = z.object({
+  access_token: z.string().min(1),
+  refresh_token: z.string().min(1),
+  token_type: z.literal('bearer'),
+  expires_in: z.number().int().positive(),
+});
+
+/** FastAPI `UserRead` (backend/app/schemas/user.py). */
+export const UserReadSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  full_name: z.string().nullable(),
+  role: RoleSchema,
+  is_active: z.boolean(),
+});
+
+export const AssistantReplySchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  createdAt: z.number(),
+  provider: z.literal('remote').default('remote'),
+  contextUsed: z.array(z.string()).default([]),
 });

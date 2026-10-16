@@ -5,7 +5,7 @@
 | Choice | Reason |
 | --- | --- |
 | **React 19 + TypeScript 5.9 (strict)** | Component model suits a dense, stateful trading UI. Strict mode with `noUncheckedIndexedAccess` catches missing-data bugs that matter for financial values. |
-| **Vite 7 (SPA)**, not Next.js | The backend is a separate Laravel API. Pages are behind login with no SEO need, and charts are client-only canvas. Server rendering would add complexity without benefit, and a static SPA deploys anywhere. |
+| **Vite 7 (SPA)**, not Next.js | The backend is a separate API (FastAPI in this monorepo). Pages are behind login with no SEO need, and charts are client-only canvas. Server rendering would add complexity without benefit, and a static SPA deploys anywhere. |
 | **React Router 7** (library mode) | Real URLs for every page and tab. Filters live in query strings, so views are shareable and Back works. |
 | **Tailwind CSS 4** mapped to **semantic CSS tokens** | One source of truth for both themes (see DESIGN_SYSTEM.md). Utilities keep components small. |
 | **TradingView Lightweight Charts 5** | Purpose-built financial canvas charts: candles, bars, line, area, panes, crosshair and price lines, plus a primitives API for custom overlays. Fast enough for live ticks. Apache-2.0. |
@@ -58,7 +58,7 @@ scripts/qa-shot.mjs          ad-hoc screenshot tool
  Page (features/*)  ──uses──▶  hooks (useResource, useLiveCandles)  ──call──▶  Services interface
        │                                                                        │
        ▼                                                                        ├── demo/*  → fixtures/*  (simulated, provenance: 'demo')
- components/ui + lib/format                                                     └── api/*   → http.ts → Laravel   (validated by zod)
+ components/ui + lib/format                                                     └── api/*   → http.ts → FastAPI   (validated by zod)
 ```
 
 1. **Domain** (`src/domain`): types and pure functions, such as EV in R, staleness, calibration statistics and the market calendar. There is no React here, and it is fully unit-tested.
@@ -108,3 +108,21 @@ The AI layer is drawn by `OpportunityOverlay`, a series primitive. It paints the
 - **Adapter:** service implementations adapt the backend or fixtures to domain types; `chartData.ts` adapts candles to chart series.
 - **Repository-like services:** `MarketDataService.getCandles(symbol, timeframe)` matches the `MarketDataRepository.getCandles(pair, timeframe)` example in the project PDF.
 - **MVVM-style separation:** hooks act as view-models (state, loading, derived values); components only render.
+
+## 6. Round 3 additions
+
+| Area | Files | Notes |
+| --- | --- | --- |
+| Risk domain | `domain/risk.ts` (+ `risk.test.ts`) | Pure position sizing and limit evaluation. Conversion only from known facts: same currency; base currency = account (converted at the exit price); otherwise a user rate. Lots only with a user-entered contract size, rounded **down** to the volume step. |
+| Personalisation | `domain/signalProfile.ts` | `evaluateSignal()` returns data, preference and risk checks with plain-language details. It never alters a model output. |
+| Research notes | `domain/research.ts` | `invalidationNotes()` and `missingNotes()`, shared by the AI panel and the assistant, so both always say the same thing |
+| Assistant contract | `domain/assistant.ts`, `services/types.ts` (`AssistantService`) | Provider-agnostic: `reply(messages, context)`. The demo implementation (`services/demo/assistant.ts`) is a deterministic rule-based composer. The API implementation posts to `/assistant/replies`; provider keys stay on the server. |
+| Preferences | `app/preferencesStore.ts` | `riskProfile` and `signalProfile` are added with zod `.default()`, so preferences stored by earlier versions (and their workspaces) still load |
+| Auth adapter | `services/api/index.ts` (`apiAuthService`), `http.ts` (`parseErrorBody`, `token` override, `authFailureHandled`) | Matches the real FastAPI contract: `login → TokenPair → /users/me`; `register → login`; `logout` with the refresh token |
+| UI | `features/overview`, `features/risk`, `features/assistant`, `features/signals/SignalDetail.tsx`, `components/ui/{SourceTag,SideSheet,Markdown}.tsx` | |
+
+The architecture is unchanged:
+
+- The UI depends only on service interfaces.
+- Business rules live in `domain/` and have no React.
+- Demo and API are interchangeable strategies.

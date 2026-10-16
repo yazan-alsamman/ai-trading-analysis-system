@@ -93,6 +93,32 @@ export function formatNumber(value: number | null | undefined, digits = 0): stri
   return numberFormat(digits, digits).format(value);
 }
 
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY']);
+
+/** Money in an account currency: 1234.5 USD → "$1,234.50", JPY without decimals. */
+export function formatMoney(value: number | null | undefined, currency: string, opts: { signed?: boolean } = {}): string {
+  if (!isFiniteNumber(value)) return MISSING;
+  const digits = ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2;
+  const text = new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(
+    Math.abs(value),
+  );
+  if (opts.signed) return withSign(text, Number(value.toFixed(digits)));
+  return value < 0 ? `${MINUS}${text}` : text;
+}
+
+/** Position size in base units, with the unit name: 10 XAU → "10.00 oz", 20000 EUR → "20,000 EUR". */
+export function formatUnits(units: number | null | undefined, base: string): string {
+  if (!isFiniteNumber(units)) return MISSING;
+  if (base === 'XAU') return `${numberFormat(2, 2).format(units)} oz`;
+  return `${numberFormat(0, 0).format(units)} ${base}`;
+}
+
+/** Plain percentage from a percent value (not a ratio): 1.25 → "1.25%". */
+export function formatPct(value: number | null | undefined, digits = 2): string {
+  if (!isFiniteNumber(value)) return MISSING;
+  return `${numberFormat(0, digits).format(value)}%`;
+}
+
 /* ------------------------------------------------------------------ time */
 
 /** 'local' → browser zone; otherwise the IANA id itself. */
