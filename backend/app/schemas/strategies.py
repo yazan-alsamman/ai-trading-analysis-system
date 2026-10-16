@@ -48,6 +48,9 @@ class UserStrategyCreate(BaseModel):
     name: Name | None = None
     is_active: bool = True
     notify: bool = True
+    risk_override: dict[str, Any] | None = Field(
+        default=None, description="risk config for this activation's plans (null: your profile)"
+    )
 
 
 class UserStrategyUpdate(BaseModel):
@@ -55,6 +58,9 @@ class UserStrategyUpdate(BaseModel):
     params: dict[str, Any] | None = None
     is_active: bool | None = None
     notify: bool | None = None
+    risk_override: dict[str, Any] | None = Field(
+        default=None, description="null clears it (plans then use your risk profile)"
+    )
 
     @model_validator(mode="after")
     def _no_null_for_required(self) -> Self:
@@ -76,6 +82,7 @@ class UserStrategyRead(BaseModel):
     name: str | None
     is_active: bool
     notify: bool
+    risk_override: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
 

@@ -30,8 +30,10 @@ class BacktestCreate(BaseModel):
     end: UtcDatetime = Field(description="inclusive, not in the future")
     config: dict[str, Any] | None = Field(
         default=None,
-        description="initial_capital, fee_bps, slippage_bps, direction, sizing {mode, value}, "
-        "exits {stop_loss_pct, take_profit_pct, max_bars_held, exit_on_opposite_signal}",
+        description="initial_capital, fee_bps, slippage_bps, direction, sizing, stop, trailing, "
+        "take_profit, guards, check_entry_bar, exits {max_bars_held, exit_on_opposite_signal, "
+        "stop_loss_pct, take_profit_pct} (docs/risk-management.md); risk_profile: true uses "
+        "your risk profile",
     )
 
     @model_validator(mode="after")
@@ -105,6 +107,10 @@ class TradeRead(BaseModel):
     bars_held: int
     entry_reason: str | None
     exit_reason: str
+    initial_stop: float | None = None
+    risk_amount: float | None = None
+    r_multiple: float | None = None
+    fills: list[dict[str, Any]] | None = None
 
 
 class CompareRequest(BaseModel):

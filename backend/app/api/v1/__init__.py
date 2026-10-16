@@ -13,6 +13,7 @@ from app.api.v1 import (
     health,
     indicators,
     market,
+    risk,
     strategies,
     users,
     workspaces,
@@ -36,6 +37,7 @@ limited_router.include_router(workspaces.shared_router)
 limited_router.include_router(backtests.router)
 limited_router.include_router(custom_strategies.router)
 limited_router.include_router(custom_strategies.public_router)
+limited_router.include_router(risk.router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)
