@@ -153,6 +153,109 @@ def _security(data: dict[str, Any], lang: str) -> tuple[str, str]:
     return t(lang, f"security.{event}.title"), t(lang, f"security.{event}.body", **fields)
 
 
+def excerpt(text: str | None, limit: int = 160) -> str:
+    """One line of plain-ish text: Markdown markers and whitespace runs removed, cut at a word."""
+    flat = " ".join((text or "").replace("#", " ").replace("*", "").replace("`", "").split())
+    if len(flat) <= limit:
+        return flat
+    cut = flat[:limit].rsplit(" ", 1)[0] or flat[:limit]
+    return cut + "…"
+
+
+def _new_post(data: dict[str, Any], lang: str) -> tuple[str, str]:
+    title = t(
+        lang, "new_post.title", author=data.get("author_name", "?"), title=data.get("title", "")
+    )
+    lines = []
+    if data.get("instrument_symbol"):
+        direction = data.get("direction")
+        lines.append(
+            t(
+                lang,
+                "new_post.instrument",
+                symbol=data["instrument_symbol"],
+                direction=t(lang, f"direction.{direction}") if direction else "-",
+            )
+        )
+    lines.append(data.get("excerpt") or "")
+    return title, "\n".join(x for x in lines if x)
+
+
+def _comment_reply(data: dict[str, Any], lang: str) -> tuple[str, str]:
+    kind = "comment" if data.get("kind") == "comment" else "post"
+    title = t(lang, f"comment_reply.{kind}.title", author=data.get("author_name", "?"))
+    body = t(
+        lang,
+        "comment_reply.body",
+        post=excerpt(data.get("post_title"), 60),
+        excerpt=data.get("excerpt", ""),
+    )
+    return title, body
+
+
+def _post_liked(data: dict[str, Any], lang: str) -> tuple[str, str]:
+    count = int(data.get("count") or 1)
+    key = "post_liked.title.one" if count == 1 else "post_liked.title.many"
+    return t(lang, key, count=count), t(lang, "post_liked.body", post=data.get("post_title", ""))
+
+
+def _content_hidden(data: dict[str, Any], lang: str) -> tuple[str, str]:
+    kind = "comment" if data.get("target_type") == "comment" else "post"
+    lines = [t(lang, "content_hidden.body", excerpt=excerpt(data.get("excerpt"), 80))]
+    if data.get("reason"):
+        lines.append(t(lang, "content_hidden.reason", reason=data["reason"]))
+    return t(lang, f"content_hidden.{kind}.title"), "\n".join(lines)
+
+
+def _price_alert(data: dict[str, Any], lang: str) -> tuple[str, str]:
+    instrument = data.get("instrument") or {}
+    digits = instrument.get("price_precision")
+    digits = 2 if digits is None else int(digits)
+    condition = data.get("condition", "above")
+    value = data.get("value")
+    is_pct = condition == "change_pct"
+    shown_value = num(value, 2) if is_pct else num(value, digits)
+    window = data.get("window_minutes")
+    title = t(
+        lang,
+        "price_alert.title",
+        symbol=instrument.get("symbol", "?"),
+        condition=t(
+            lang,
+            f"cond.{condition}",
+            value=shown_value,
+            change=_signed(data.get("change_pct")),
+            window=window,
+        ),
+    )
+    bar = str(data.get("bar_time", ""))[:16].replace("T", " ")
+    lines = [
+        t(lang, "price_alert.price", price=num(data.get("price"), digits), bar=bar),
+        t(
+            lang,
+            f"rule.{condition}",
+            value=shown_value,
+            window=window,
+            previous=num(data.get("previous_close"), digits),
+            reference=num(data.get("reference_close"), digits),
+        ),
+    ]
+    if data.get("note"):
+        lines.append(t(lang, "price_alert.note", note=data["note"]))
+    if data.get("deactivated"):
+        lines.append(t(lang, "price_alert.once"))
+    return title, "\n".join(lines)
+
+
+SOCIAL_RENDERERS = {
+    "new_post": _new_post,
+    "comment_reply": _comment_reply,
+    "post_liked": _post_liked,
+    "content_hidden": _content_hidden,
+    "price_alert": _price_alert,
+}
+
+
 def inbox(event: str, data: dict[str, Any], lang: str) -> tuple[str, str]:
     """Plain-text title and body (the inbox, and the base of every channel)."""
     if event == "signal":
@@ -161,6 +264,8 @@ def inbox(event: str, data: dict[str, Any], lang: str) -> tuple[str, str]:
         return _backtest(event, data, lang)
     if event == "security":
         return _security(data, lang)
+    if event in SOCIAL_RENDERERS:
+        return SOCIAL_RENDERERS[event](data, lang)
     if data.get("test"):
         channel = CHANNEL_NAMES.get(lang, CHANNEL_NAMES["en"]).get(data.get("channel"), "")
         return t(lang, "test.title"), t(lang, "test.body", channel=channel)
@@ -206,6 +311,16 @@ def deep_link(event: str, data: dict[str, Any], notification_id: str) -> dict[st
         out.update(screen="backtest", backtest_id=str(data.get("backtest_id", "")))
     elif event == "security":
         out.update(screen="security")
+    elif event in ("new_post", "post_liked", "comment_reply", "content_hidden"):
+        out.update(screen="post", post_id=str(data.get("post_id", "")))
+        if data.get("comment_id"):
+            out["comment_id"] = str(data["comment_id"])
+    elif event == "price_alert":
+        out.update(
+            screen="price_alert",
+            alert_id=str(data.get("alert_id", "")),
+            instrument_id=str((data.get("instrument") or {}).get("id", "")),
+        )
     else:
         out.update(screen="notifications")
     return out
