@@ -102,6 +102,20 @@ class Settings(BaseSettings):
     price_alert_limit_analyst: int = 100
     price_alert_limit_expert: int = 100
     price_alert_limit_admin: int = 100
+    # Subscriptions and payments (Y19). Demo only: no real money, no real provider keys.
+    payment_provider: str = "demo"
+    payment_demo_webhook_secret: str = ""  # empty: generated once and shared through Redis
+    payment_demo_tools: bool = False  # admin fast-forward in production (always on elsewhere)
+    payment_return_url: str = ""  # where the demo page sends the browser after paying
+    public_base_url: str = ""  # e.g. http://187.127.76.76:8080; empty: relative checkout URLs
+    platform_fee_pct: float = 20.0  # kept from every paid invoice (expert earnings view)
+    subscription_grace_days: int = 3  # past_due keeps access this long, then expired
+    checkout_ttl_minutes: int = 30
+    # Chat (Y19)
+    chat_messages_per_minute: int = 30
+    chat_messages_per_day: int = 2000
+    chat_edit_window_minutes: int = 15
+    chat_notify_collapse_minutes: int = 5  # one external notification per conversation
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 
@@ -130,6 +144,11 @@ class Settings(BaseSettings):
 
     def custom_strategy_limit(self, role: str) -> int:
         return getattr(self, f"custom_strategy_limit_{role}")
+
+    @property
+    def demo_tools_enabled(self) -> bool:
+        """The admin fast-forward of subscriptions: on outside production, or when asked."""
+        return self.environment != "production" or self.payment_demo_tools
 
     def price_alert_limit(self, role: str) -> int:
         return getattr(self, f"price_alert_limit_{role}")

@@ -41,6 +41,13 @@ class NotificationType(StrEnum):
     post_liked = "post_liked"  # in-app only, batched per post and day
     content_hidden = "content_hidden"
     price_alert = "price_alert"
+    # Y19 (migration 0012)
+    chat_message = "chat_message"
+    subscription_started = "subscription_started"
+    subscription_renewed = "subscription_renewed"
+    subscription_payment_failed = "subscription_payment_failed"
+    subscription_canceled = "subscription_canceled"
+    new_subscriber = "new_subscriber"
 
 
 class Severity(StrEnum):
