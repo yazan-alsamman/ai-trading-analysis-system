@@ -9717,7 +9717,7 @@ components:
         checkout_url:
           type: string
           title: Checkout Url
-          description: absolute with PUBLIC_BASE_URL, else a path
+          description: 'absolute: PUBLIC_BASE_URL, else the scheme and host the request came to'
         checkout_path:
           type: string
           title: Checkout Path

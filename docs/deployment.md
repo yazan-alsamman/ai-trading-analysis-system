@@ -110,7 +110,7 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   `PAYMENT_RETURN_URL=`، `PUBLIC_BASE_URL=`، `PLATFORM_FEE_PCT=20`، `SUBSCRIPTION_GRACE_DAYS=3`،
   `CHECKOUT_TTL_MINUTES=30`، `CHAT_MESSAGES_PER_MINUTE=30`، `CHAT_MESSAGES_PER_DAY=2000`،
   `CHAT_EDIT_WINDOW_MINUTES=15`، `CHAT_NOTIFY_COLLAPSE_MINUTES=5`.
-- اختياري على السيرفر: `PUBLIC_BASE_URL=http://187.127.76.76:8080` لتصبح روابط الدفع مطلقة، و
+- روابط الدفع مطلقة تلقائياً (Nginx يمرّر `Host` مع المنفذ :8080)؛ `PUBLIC_BASE_URL` اختياري لفرض عنوان آخر. و
   `PAYMENT_DEMO_TOOLS=true` لعرض أداة تقديم الوقت (fast-forward) في العروض التقديمية.
 - فحص بعد النشر:
   ```bash

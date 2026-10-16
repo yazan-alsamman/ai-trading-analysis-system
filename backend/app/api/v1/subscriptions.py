@@ -18,6 +18,7 @@ from app.api.deps import AdminUser, CurrentUser, SessionDep
 from app.api.limits import limit_ip
 from app.core.config import get_settings
 from app.core.redis import get_redis
+from app.core.urls import absolute
 from app.experts import service as experts
 from app.models.expert import (
     CheckoutStatus,
@@ -74,15 +75,14 @@ def _check_return_url(url: str | None) -> str | None:
 
 
 @router.post("/subscriptions/checkout", response_model=CheckoutRead, status_code=201)
-async def checkout(data: CheckoutRequest, user: CurrentUser, session: SessionDep):
+async def checkout(data: CheckoutRequest, user: CurrentUser, session: SessionDep, request: Request):
     """Open a checkout (valid 30 minutes) and send the user to ``checkout_url``. The result
     comes back through the payment webhook; follow it with ``GET /me/subscriptions``."""
     return_url = _check_return_url(data.return_url)
     row, path = await service.create_checkout(session, user, data.plan_id, return_url)
-    base = get_settings().public_base_url.rstrip("/")
     return CheckoutRead(
         checkout_id=row.id,
-        checkout_url=f"{base}{path}" if base else path,
+        checkout_url=absolute(request, path),
         checkout_path=path,
         status=row.status.value,
         expires_at=row.expires_at,

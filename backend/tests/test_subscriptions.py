@@ -77,7 +77,8 @@ async def test_checkout_trial_flow(
     user, th = trader
     plan = await make_plan(client, eh, trial_days=7)
     checkout = await start_checkout(client, th, plan["id"])
-    assert checkout["checkout_url"] == checkout["checkout_path"]  # no PUBLIC_BASE_URL
+    # no PUBLIC_BASE_URL: absolute from the request (the test client is http://test)
+    assert checkout["checkout_url"] == "http://test" + checkout["checkout_path"]
     assert checkout["checkout_path"] == f"/api/v1/pay/demo/{checkout['checkout_id']}"
     page = await client.get(checkout["checkout_path"])
     assert page.status_code == 200 and page_title(page.text) == "Demo payment — no real money"
