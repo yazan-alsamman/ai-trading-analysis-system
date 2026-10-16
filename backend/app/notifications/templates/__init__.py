@@ -200,7 +200,7 @@ def _post_liked(data: dict[str, Any], lang: str) -> tuple[str, str]:
 
 
 def _content_hidden(data: dict[str, Any], lang: str) -> tuple[str, str]:
-    kind = "comment" if data.get("target_type") == "comment" else "post"
+    kind = data.get("target_type") if data.get("target_type") in ("comment", "message") else "post"
     lines = [t(lang, "content_hidden.body", excerpt=excerpt(data.get("excerpt"), 80))]
     if data.get("reason"):
         lines.append(t(lang, "content_hidden.reason", reason=data["reason"]))
@@ -256,6 +256,60 @@ SOCIAL_RENDERERS = {
 }
 
 
+def _day(value: Any) -> str:
+    return str(value or "")[:10]
+
+
+def _subscription(event: str, data: dict[str, Any], lang: str) -> tuple[str, str]:
+    f = {
+        "expert": data.get("expert_name", "?"),
+        "subscriber": data.get("subscriber_name", "?"),
+        "plan": data.get("plan_name", ""),
+        "price": num(data.get("price"), 2),
+        "currency": data.get("currency", ""),
+        "interval": t(lang, f"interval.{data.get('interval', 'month')}"),
+        "date": _day(data.get("period_end")),
+        "invoice": data.get("invoice_number", ""),
+        "amount": num(data.get("amount"), 2),
+        "reason": data.get("reason", ""),
+        "grace": str(data.get("grace_end") or "")[:16].replace("T", " "),
+        "days": data.get("trial_days", 0),
+    }
+    if event == "subscription_started":
+        body = t(
+            lang,
+            "subscription_started.trial" if data.get("trial") else "subscription_started.paid",
+            **f,
+        )
+    elif event == "subscription_renewed":
+        body = t(lang, "subscription_renewed.body", **f)
+    elif event == "subscription_payment_failed":
+        body = t(lang, "subscription_payment_failed.body", **f)
+    elif event == "subscription_canceled":
+        reason = str(data.get("reason") or "period_end").split(":", 1)[0]
+        body = t(lang, f"subscription_canceled.{reason}", **f)
+    else:  # new_subscriber
+        body = t(
+            lang, "new_subscriber.trial" if data.get("trial_days") else "new_subscriber.paid", **f
+        )
+    return t(lang, f"{event}.title", **f), body
+
+
+def _chat(data: dict[str, Any], lang: str) -> tuple[str, str]:
+    count = int(data.get("count") or 1)
+    key = "chat_message.title.one" if count == 1 else "chat_message.title.many"
+    return t(lang, key, sender=data.get("sender_name", "?"), count=count), data.get("excerpt", "")
+
+
+SUBSCRIPTION_EVENTS = (
+    "subscription_started",
+    "subscription_renewed",
+    "subscription_payment_failed",
+    "subscription_canceled",
+    "new_subscriber",
+)
+
+
 def inbox(event: str, data: dict[str, Any], lang: str) -> tuple[str, str]:
     """Plain-text title and body (the inbox, and the base of every channel)."""
     if event == "signal":
@@ -266,6 +320,10 @@ def inbox(event: str, data: dict[str, Any], lang: str) -> tuple[str, str]:
         return _security(data, lang)
     if event in SOCIAL_RENDERERS:
         return SOCIAL_RENDERERS[event](data, lang)
+    if event in SUBSCRIPTION_EVENTS:
+        return _subscription(event, data, lang)
+    if event == "chat_message":
+        return _chat(data, lang)
     if data.get("test"):
         channel = CHANNEL_NAMES.get(lang, CHANNEL_NAMES["en"]).get(data.get("channel"), "")
         return t(lang, "test.title"), t(lang, "test.body", channel=channel)
@@ -315,6 +373,12 @@ def deep_link(event: str, data: dict[str, Any], notification_id: str) -> dict[st
         out.update(screen="post", post_id=str(data.get("post_id", "")))
         if data.get("comment_id"):
             out["comment_id"] = str(data["comment_id"])
+    elif event == "chat_message":
+        out.update(screen="chat", conversation_id=str(data.get("conversation_id", "")))
+    elif event == "new_subscriber":
+        out.update(screen="earnings", subscription_id=str(data.get("subscription_id", "")))
+    elif event in SUBSCRIPTION_EVENTS:
+        out.update(screen="subscription", subscription_id=str(data.get("subscription_id", "")))
     elif event == "price_alert":
         out.update(
             screen="price_alert",

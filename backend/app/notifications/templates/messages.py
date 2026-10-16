@@ -90,6 +90,41 @@ TEXTS: dict[str, dict[str, str]] = {
         "rule.change_pct": "Rule: move ≥ {value}% in {window} min (from {reference})",
         "price_alert.note": "Note: {note}",
         "price_alert.once": "This alert is now off (it fires once).",
+        # experts, subscriptions, chat (Y19)
+        "content_hidden.message.title": "Your chat message was hidden by moderation",
+        "interval.month": "month",
+        "interval.year": "year",
+        "chat_message.title.one": "New message from {sender}",
+        "chat_message.title.many": "{count} new messages from {sender}",
+        "subscription_started.title": "Subscription started: {expert}",
+        "subscription_started.trial": (
+            "{plan}: free trial until {date}, then {price} {currency} / {interval}."
+        ),
+        "subscription_started.paid": (
+            "{plan}: {price} {currency} / {interval}. Next renewal on {date}."
+        ),
+        "subscription_renewed.title": "Subscription renewed: {expert}",
+        "subscription_renewed.body": (
+            "Paid {amount} {currency} (invoice {invoice}). Next renewal on {date}."
+        ),
+        "subscription_payment_failed.title": "Payment failed: {expert}",
+        "subscription_payment_failed.body": (
+            "Invoice {invoice} ({amount} {currency}) could not be charged: {reason}. "
+            "Your access continues until {grace}, then the subscription ends."
+        ),
+        "subscription_canceled.title": "Subscription ended: {expert}",
+        "subscription_canceled.period_end": "You canceled the subscription; it ended on {date}.",
+        "subscription_canceled.payment_failed": (
+            "The renewal payment failed and the grace period is over."
+        ),
+        "subscription_canceled.refund": (
+            "Invoice {invoice} was refunded and the subscription ended."
+        ),
+        "new_subscriber.title": "New subscriber: {subscriber}",
+        "new_subscriber.paid": "{plan}: {price} {currency} / {interval}.",
+        "new_subscriber.trial": (
+            "{plan}: {days}-day free trial, then {price} {currency} / {interval}."
+        ),
         # Telegram bot replies
         "bot.linked": "✅ Linked. You will receive your notifications here.",
         "bot.bad_code": "This link code is invalid or expired. Create a new one in the app.",
@@ -180,6 +215,36 @@ TEXTS: dict[str, dict[str, str]] = {
         "rule.change_pct": "الشرط: حركة ≥ {value}% خلال {window} دقيقة (من {reference})",
         "price_alert.note": "ملاحظة: {note}",
         "price_alert.once": "تم إيقاف هذا التنبيه (يعمل مرة واحدة).",
+        "content_hidden.message.title": "تم إخفاء رسالتك في المحادثة من قبل الإشراف",
+        "interval.month": "شهر",
+        "interval.year": "سنة",
+        "chat_message.title.one": "رسالة جديدة من {sender}",
+        "chat_message.title.many": "رسائل جديدة من {sender}: {count}",
+        "subscription_started.title": "بدأ اشتراكك: {expert}",
+        "subscription_started.trial": (
+            "{plan}: تجربة مجانية حتى {date}، ثم {price} {currency} / {interval}."
+        ),
+        "subscription_started.paid": (
+            "{plan}: {price} {currency} / {interval}. التجديد القادم في {date}."
+        ),
+        "subscription_renewed.title": "تم تجديد اشتراكك: {expert}",
+        "subscription_renewed.body": (
+            "تم دفع {amount} {currency} (الفاتورة {invoice}). التجديد القادم في {date}."
+        ),
+        "subscription_payment_failed.title": "فشل الدفع: {expert}",
+        "subscription_payment_failed.body": (
+            "تعذّر تحصيل الفاتورة {invoice} ({amount} {currency}): {reason}. "
+            "يبقى وصولك حتى {grace}، ثم ينتهي الاشتراك."
+        ),
+        "subscription_canceled.title": "انتهى اشتراكك: {expert}",
+        "subscription_canceled.period_end": "ألغيت الاشتراك، وانتهى في {date}.",
+        "subscription_canceled.payment_failed": "فشل دفع التجديد وانتهت مهلة السماح.",
+        "subscription_canceled.refund": "تم استرداد الفاتورة {invoice} وانتهى الاشتراك.",
+        "new_subscriber.title": "مشترك جديد: {subscriber}",
+        "new_subscriber.paid": "{plan}: {price} {currency} / {interval}.",
+        "new_subscriber.trial": (
+            "{plan}: تجربة مجانية {days} يوماً، ثم {price} {currency} / {interval}."
+        ),
         "bot.linked": "✅ تم الربط. ستصلك إشعاراتك هنا.",
         "bot.bad_code": "رمز الربط غير صالح أو منتهي. أنشئ رمزاً جديداً من التطبيق.",
         "bot.help": (

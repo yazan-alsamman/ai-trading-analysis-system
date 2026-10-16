@@ -129,7 +129,7 @@ visibility), comment and like.
 | `body` | Markdown, 1–20,000 characters, **stored as written** |
 | `instrument_id`, `timeframe`, `direction` | optional; `direction`: `bullish` \| `bearish` \| `neutral` |
 | `attachments` | up to 5 references, see below |
-| `visibility` | `public` (default) \| `followers` (the author's followers, the author and admins) |
+| `visibility` | `public` (default) \| `followers` (the author's followers, the author and admins) \| `subscribers` (experts only, Y19: see below) |
 
 Answers 201 with the post. 403 for traders, 422 for invalid input (an unknown instrument, an
 attachment you may not use, raw HTML), 429 over the daily limit (`POSTS_PER_DAY`, default 10
@@ -157,6 +157,14 @@ the target is gone or no longer visible to the reader (a strategy made private a
 workspace unshared). The author's own private strategy is only shown to the author. A 422 lists
 each bad attachment: `{"loc": ["body", "attachments", 2, "id"], "msg": "workspace not found or
 not shared (share it first)"}`.
+
+**Subscriber posts** (`visibility: "subscribers"`, experts only; 422 for other roles). They are
+listed for everyone, but readers without the expert's `premium_posts` perk get a **teaser**:
+`locked: true`, the title, the author, the first 200 characters of the body (ending with "…")
+and no attachments, in the feed and on `GET /posts/{id}`. Their comments are hidden (an empty
+page) and closed (403 on posting). The author, entitled subscribers and admins get the full
+post (`locked: false`). `new_post` notifications of these posts go to the expert's entitled
+subscribers only (not to followers). See [subscriptions.md](subscriptions.md).
 
 ### `GET /posts` (the feed)
 
@@ -302,7 +310,7 @@ No e-mail and no ids of other users. 404 for unknown or deactivated users.
 
 ## Moderation
 
-- `POST /reports` (cost 2): `{"target_type": "post" | "comment", "target_id": "…", "reason":
+- `POST /reports` (cost 2): `{"target_type": "post" | "comment" | "message", "target_id": "…", "reason":
   "3-500 characters"}` → 201. Reporting the same content again returns the first report
   (200). 400 for your own content, 404 for content you cannot see, 429 over `REPORTS_PER_DAY`
   (default 20).

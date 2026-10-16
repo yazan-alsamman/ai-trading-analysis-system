@@ -40,6 +40,7 @@ class PostDirection(StrEnum):
 class PostVisibility(StrEnum):
     public = "public"
     followers = "followers"
+    subscribers = "subscribers"  # Y19: an expert's subscribers (others see a teaser)
 
 
 class ContentStatus(StrEnum):
@@ -51,6 +52,7 @@ class ContentStatus(StrEnum):
 class ReportTarget(StrEnum):
     post = "post"
     comment = "comment"
+    message = "message"  # Y19: a chat message
 
 
 class ReportStatus(StrEnum):

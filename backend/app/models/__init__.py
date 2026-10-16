@@ -3,7 +3,20 @@ from app.db.base import Base
 from app.models.api_key import ApiKey, Scope
 from app.models.backtest import Backtest, BacktestStatus, BacktestTrade
 from app.models.candle import Candle, Timeframe
+from app.models.chat import Conversation, ConversationStatus, Message
 from app.models.custom_strategy import CustomStrategy, CustomStrategyKind, Visibility
+from app.models.expert import (
+    CheckoutSession,
+    CheckoutStatus,
+    ExpertProfile,
+    Invoice,
+    InvoiceStatus,
+    PaymentEvent,
+    PlanInterval,
+    Subscription,
+    SubscriptionPlan,
+    SubscriptionStatus,
+)
 from app.models.instrument import Instrument, MarketType
 from app.models.news import (
     NewsArticle,
@@ -45,6 +58,19 @@ from app.models.user import User, UserRole
 from app.models.workspace import Workspace
 
 __all__ = [
+    "CheckoutSession",
+    "CheckoutStatus",
+    "Conversation",
+    "ConversationStatus",
+    "ExpertProfile",
+    "Invoice",
+    "InvoiceStatus",
+    "Message",
+    "PaymentEvent",
+    "PlanInterval",
+    "Subscription",
+    "SubscriptionPlan",
+    "SubscriptionStatus",
     "AlertCondition",
     "AlertRepeat",
     "Comment",

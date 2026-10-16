@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models.backtest import Backtest
+from app.models.chat import Conversation, Message
 from app.models.custom_strategy import CustomStrategy, Visibility
 from app.models.instrument import Instrument
 from app.models.social import (
@@ -38,6 +40,7 @@ from app.models.user import User, UserRole
 from app.models.workspace import Workspace
 from app.notifications import service as notifications
 from app.notifications import templates
+from app.payments.entitlements import Entitlements
 from app.schemas.posts import (
     AttachmentRef,
     CommentCreate,
@@ -51,6 +54,7 @@ from app.social.notify import display_name
 
 FOLLOWABLE = frozenset({UserRole.analyst, UserRole.expert})
 REPLIES_INLINE = 20
+TEASER_CHARS = 200
 PUBLISHED = ContentStatus.published
 HIDDEN = ContentStatus.hidden
 DELETED = ContentStatus.deleted
@@ -123,6 +127,14 @@ async def validate_attachments(
             row = await session.get(Workspace, ref.id)
             ok = row is not None and row.is_shared and row.share_slug is not None
             message = "workspace not found or not shared (share it first)"
+        elif ref.type == "post":
+            row = await session.get(Post, ref.id)
+            ok = (
+                row is not None
+                and row.status == PUBLISHED
+                and (row.visibility != PostVisibility.followers or row.author_id == author.id)
+            )
+            message = "post not found or not shareable"
         else:
             ok = await session.get(Signal, ref.id) is not None
             message = "signal not found"
@@ -209,6 +221,21 @@ async def resolve_attachments(
                 "strength": sig.strength,
                 "bar_time": sig.bar_time,
             }
+    if wanted.get("post"):
+        rows = await session.execute(
+            select(Post, User)
+            .join(User, User.id == Post.author_id)
+            .where(Post.id.in_(wanted["post"]))
+        )
+        for p, author in rows.all():
+            found[("post", str(p.id))] = {
+                "owner_id": p.author_id,
+                "shown": p.status == PUBLISHED and p.visibility != PostVisibility.followers,
+                "title": p.title,
+                "author": display_name(author),
+                "visibility": p.visibility.value,
+                "created_at": p.created_at,
+            }
     out: dict[uuid.UUID, list[dict[str, Any]]] = {}
     for post in posts:
         items = []
@@ -220,6 +247,8 @@ async def resolve_attachments(
                 available = summary.pop("public") or summary["owner_id"] == viewer.id
             if ref["type"] == "shared_workspace" and summary:
                 available = summary.pop("shared")
+            if ref["type"] == "post" and summary:
+                available = summary.pop("shown") or summary["owner_id"] == viewer.id
             summary.pop("owner_id", None)
             items.append(
                 {"type": ref["type"], "id": ref["id"], "available": available}
@@ -258,7 +287,8 @@ def _visible_clause(viewer: User):
     if _is_admin(viewer):
         return shown
     audience = or_(
-        Post.visibility == PostVisibility.public,
+        # subscriber posts are listed for everyone; non-subscribers get a locked teaser
+        Post.visibility.in_((PostVisibility.public, PostVisibility.subscribers)),
         Post.author_id == viewer.id,
         Post.author_id.in_(_followees(viewer.id)),
     )
@@ -288,6 +318,30 @@ async def visible_post(session: AsyncSession, viewer: User, post_id: uuid.UUID) 
     return post
 
 
+def _check_visibility(author: User, visibility: PostVisibility) -> None:
+    if visibility == PostVisibility.subscribers and author.role != UserRole.expert:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            [
+                {
+                    "loc": ["body", "visibility"],
+                    "msg": "only experts can publish subscriber posts",
+                    "type": "value_error",
+                }
+            ],
+        )
+
+
+async def locked(
+    session: AsyncSession, viewer: User, post: Post, ent: Entitlements | None = None
+) -> bool:
+    """A subscriber post the viewer is not entitled to (premium_posts)."""
+    if post.visibility != PostVisibility.subscribers:
+        return False
+    ent = ent or Entitlements(session, viewer)
+    return not (await ent.get(post.author_id))["premium_posts"]
+
+
 async def create_post(session: AsyncSession, user: User, data: PostCreate) -> Post:
     if not can_post(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Your role cannot publish posts")
@@ -303,6 +357,7 @@ async def create_post(session: AsyncSession, user: User, data: PostCreate) -> Po
     )
     if data.instrument_id is not None and await session.get(Instrument, data.instrument_id) is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown instrument_id")
+    _check_visibility(user, data.visibility)
     attachments = await validate_attachments(session, user, data.attachments)
     post = Post(
         author_id=user.id,
@@ -330,6 +385,8 @@ async def update_post(session: AsyncSession, user: User, post: Post, data: PostU
             raise HTTPException(status.HTTP_403_FORBIDDEN, "This post was hidden by moderation")
         raise HTTPException(status.HTTP_403_FORBIDDEN, f"Posts can be edited within {hours} hours")
     fields = data.model_dump(exclude_unset=True)
+    if "visibility" in fields:
+        _check_visibility(await session.get(User, post.author_id), data.visibility)
     if "instrument_id" in fields and data.instrument_id is not None:
         if await session.get(Instrument, data.instrument_id) is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown instrument_id")
@@ -384,10 +441,15 @@ async def feed(
 
 
 async def serialize_posts(
-    session: AsyncSession, viewer: User, posts: list[Post]
+    session: AsyncSession, viewer: User, posts: list[Post], ent: Entitlements | None = None
 ) -> list[dict[str, Any]]:
+    """Posts as the API returns them. A subscriber post the viewer is not entitled to is a
+    teaser: the first 200 characters of the body, no attachments, ``locked: true``."""
     if not posts:
         return []
+    ent = ent or Entitlements(session, viewer)
+    await ent.load({p.author_id for p in posts if p.visibility == PostVisibility.subscribers})
+    locks = {p.id: await locked(session, viewer, p, ent) for p in posts}
     ids = [p.id for p in posts]
     authors = {
         u.id: u
@@ -421,7 +483,8 @@ async def serialize_posts(
             "id": p.id,
             "author": author_of(authors[p.author_id]),
             "title": p.title,
-            "body": p.body,
+            "body": _teaser(p.body) if locks[p.id] else p.body,
+            "locked": locks[p.id],
             "instrument": (
                 {"id": p.instrument_id, "symbol": symbols.get(p.instrument_id, "?")}
                 if p.instrument_id
@@ -429,7 +492,7 @@ async def serialize_posts(
             ),
             "timeframe": p.timeframe,
             "direction": p.direction,
-            "attachments": attachments.get(p.id, []),
+            "attachments": [] if locks[p.id] else attachments.get(p.id, []),
             "visibility": p.visibility,
             "status": p.status,
             "comments_count": p.comments_count,
@@ -442,6 +505,10 @@ async def serialize_posts(
         }
         for p in posts
     ]
+
+
+def _teaser(body: str) -> str:
+    return body if len(body) <= TEASER_CHARS else body[:TEASER_CHARS].rstrip() + "…"
 
 
 # --- likes ---------------------------------------------------------------------------------------
@@ -500,6 +567,10 @@ async def create_comment(
 ) -> Comment:
     if post.status != PUBLISHED:
         raise HTTPException(status.HTTP_409_CONFLICT, "Comments are closed on this post")
+    if await locked(session, user, post):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Comments on this post are for the expert's subscribers"
+        )
     settings = get_settings()
     await _quota(
         session,
@@ -573,7 +644,10 @@ async def _authors(session: AsyncSession, comments) -> dict[uuid.UUID, User]:
 async def threads(
     session: AsyncSession, viewer: User, post: Post, *, limit: int, offset: int
 ) -> tuple[list[dict[str, Any]], int]:
-    """Top-level comments oldest first (paginated), each with its first 20 replies inline."""
+    """Top-level comments oldest first (paginated), each with its first 20 replies inline.
+    Hidden (empty) on a subscriber post the viewer is not entitled to."""
+    if await locked(session, viewer, post):
+        return [], 0
     top_filter = and_(Comment.post_id == post.id, Comment.parent_id.is_(None))
     total = await session.scalar(select(func.count()).select_from(Comment).where(top_filter))
     tops = list(
@@ -636,6 +710,8 @@ async def replies_page(
     parent = await session.get(Comment, parent_id)
     if parent is None or parent.post_id != post.id or parent.parent_id is not None:
         raise _404("Comment")
+    if await locked(session, viewer, post):
+        return [], 0
     where = Comment.parent_id == parent_id
     total = await session.scalar(select(func.count()).select_from(Comment).where(where))
     rows = list(
@@ -805,27 +881,61 @@ async def profile(session: AsyncSession, viewer: User, user_id: uuid.UUID) -> di
 # --- reports and moderation ----------------------------------------------------------------------
 
 
+@dataclass
+class _Target:
+    """A reported post, comment or chat message, the same way for every kind."""
+
+    author_id: uuid.UUID
+    post_id: uuid.UUID | None
+    conversation_id: uuid.UUID | None
+    status: str  # published | hidden | deleted
+    title: str | None
+    body: str
+    row: Any
+
+
 async def _target(session: AsyncSession, target_type: ReportTarget, target_id: uuid.UUID):
-    """(author id, post id, row) of a post or comment, or None."""
     if target_type == ReportTarget.post:
         post = await session.get(Post, target_id)
-        return None if post is None else (post.author_id, post.id, post)
-    comment = await session.get(Comment, target_id)
-    return None if comment is None else (comment.author_id, comment.post_id, comment)
+        if post is None:
+            return None
+        return _Target(
+            post.author_id, post.id, None, post.status.value, post.title, post.body, post
+        )
+    if target_type == ReportTarget.comment:
+        c = await session.get(Comment, target_id)
+        if c is None:
+            return None
+        return _Target(c.author_id, c.post_id, None, c.status.value, None, c.body, c)
+    m = await session.get(Message, target_id)
+    if m is None:
+        return None
+    state = "deleted" if m.deleted_at is not None else "published"
+    return _Target(m.sender_id, None, m.conversation_id, state, None, m.body, m)
+
+
+async def _can_see_target(session: AsyncSession, user: User, target: _Target) -> bool:
+    if target.conversation_id is not None:
+        conv = await session.get(Conversation, target.conversation_id)
+        return _is_admin(user) or user.id in (conv.expert_id, conv.user_id)
+    try:
+        post = await visible_post(session, user, target.post_id)
+    except HTTPException:
+        return False
+    return not await locked(session, user, post)
 
 
 async def report(
     session: AsyncSession, user: User, data: ReportCreate
 ) -> tuple[ContentReport, bool]:
     """(report, created). Reporting the same content twice returns the first report."""
-    found = await _target(session, data.target_type, data.target_id)
-    if found is None:
-        raise _404(data.target_type.value.capitalize())
-    author_id, post_id, row = found
-    await visible_post(session, user, post_id)
-    if row.status != PUBLISHED:
-        raise _404(data.target_type.value.capitalize())
-    if author_id == user.id:
+    target = await _target(session, data.target_type, data.target_id)
+    what = data.target_type.value.capitalize()
+    if target is None or not await _can_see_target(session, user, target):
+        raise _404(what)
+    if target.status != PUBLISHED.value:
+        raise _404(what)
+    if target.author_id == user.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot report your own content")
     existing = await session.scalar(
         select(ContentReport).where(
@@ -889,14 +999,14 @@ async def list_reports(
         found = await _target(session, r.target_type, r.target_id)
         target = None
         if found is not None:
-            author_id, post_id, row = found
-            author = await session.get(User, author_id)
+            author = await session.get(User, found.author_id)
             target = {
-                "status": row.status.value,
-                "post_id": str(post_id),
+                "status": found.status,
+                "post_id": str(found.post_id) if found.post_id else None,
+                "conversation_id": str(found.conversation_id) if found.conversation_id else None,
                 "author": {"id": str(author.id), "display_name": display_name(author)},
-                "title": getattr(row, "title", None),
-                "excerpt": templates.excerpt(row.body, 300),
+                "title": found.title,
+                "excerpt": templates.excerpt(found.body, 300),
             }
         out.append(
             {
@@ -923,32 +1033,38 @@ async def resolve(
     report_id: uuid.UUID,
     data: ReportResolve,
 ) -> ContentReport:
-    """``hide``: the content is hidden and its author notified; ``dismiss``: nothing changes.
-    Either way every open report on the same content is resolved with this decision."""
+    """``hide``: the content is hidden (a chat message becomes a tombstone) and its author
+    notified; ``dismiss``: nothing changes. Either way every open report on the same content
+    is resolved with this decision."""
     row = await session.get(ContentReport, report_id)
     if row is None:
         raise _404("Report")
     if row.status == ReportStatus.resolved:
         raise HTTPException(status.HTTP_409_CONFLICT, "Report already resolved")
     prepared = notifications.Prepared()
+    now = datetime.now(UTC)
+    hidden_message: Message | None = None
     if data.action == "hide":
         found = await _target(session, row.target_type, row.target_id)
-        if found is not None:
-            author_id, post_id, target = found
-            if target.status == PUBLISHED:
-                target.status = HIDDEN
+        if found is not None and found.status == PUBLISHED.value:
+            excerpt = found.title or templates.excerpt(found.body, 80)
+            if row.target_type == ReportTarget.message:
+                found.row.deleted_at, found.row.body = now, ""
+                hidden_message = found.row
+            else:
+                found.row.status = HIDDEN
                 if row.target_type == ReportTarget.comment:
-                    await _decrement_comments(session, post_id)
-                item = notify.hidden_item(
-                    author_id=author_id,
-                    target_type=row.target_type.value,
-                    target_id=row.target_id,
-                    post_id=post_id,
-                    excerpt=getattr(target, "title", None) or templates.excerpt(target.body, 80),
-                    reason=data.note or row.reason,
-                )
-                prepared = await notify.prepare_safely(session, redis, [item])
-    now = datetime.now(UTC)
+                    await _decrement_comments(session, found.post_id)
+            item = notify.hidden_item(
+                author_id=found.author_id,
+                target_type=row.target_type.value,
+                target_id=row.target_id,
+                post_id=found.post_id,
+                conversation_id=found.conversation_id,
+                excerpt=excerpt,
+                reason=data.note or row.reason,
+            )
+            prepared = await notify.prepare_safely(session, redis, [item])
     await session.execute(
         update(ContentReport)
         .where(
@@ -967,4 +1083,8 @@ async def resolve(
     await session.commit()
     await session.refresh(row)
     await notifications.after_commit(redis, prepared)
+    if hidden_message is not None:
+        from app.chat import service as chat  # noqa: PLC0415 - chat imports this module
+
+        await chat.publish_message(redis, hidden_message, "chat_message_updated")
     return row

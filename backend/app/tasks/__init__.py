@@ -18,6 +18,7 @@ celery_app = Celery(
         "app.tasks.notifications",
         "app.tasks.alerts",
         "app.tasks.news",
+        "app.tasks.subscriptions",
     ],
 )
 celery_app.conf.update(
@@ -59,6 +60,8 @@ celery_app.conf.update(
         "news-fetch": {"task": "news.fetch", "schedule": crontab(minute="*/5")},
         # news retention (NEWS_RETENTION_DAYS)
         "news-cleanup": {"task": "news.cleanup", "schedule": crontab(hour=3, minute=45)},
+        # renewals, trial ends, grace periods and expired checkouts (Y19)
+        "subscriptions-renew": {"task": "subscriptions.renew", "schedule": crontab(minute=7)},
     },
 )
 
