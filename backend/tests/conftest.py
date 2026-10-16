@@ -267,8 +267,8 @@ def notification_queue(monkeypatch: pytest.MonkeyPatch) -> list[tuple[list, floa
 @pytest.fixture(autouse=True)
 async def _clean_notification_keys(redis_client: Redis) -> AsyncIterator[None]:
     """Hourly caps, circuit breakers, cached FCM token and link codes start empty."""
-    for pattern in ("notif:*", "chat:*", "lock:alerts:*"):
+    for pattern in ("notif:*", "chat:*", "lock:alerts:*", "alerts:bar:*"):
         await _delete_keys(redis_client, pattern)
     yield
-    for pattern in ("notif:*", "chat:*", "lock:alerts:*"):
+    for pattern in ("notif:*", "chat:*", "lock:alerts:*", "alerts:bar:*"):
         await _delete_keys(redis_client, pattern)

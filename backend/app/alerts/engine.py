@@ -8,6 +8,9 @@ never read). One run:
 2. loads every active alert in one query and groups them by instrument;
 3. per instrument, one query returns the closed bar, the previous close and the reference close
    of every ``change_pct`` window; the conditions are checked for all alerts at once (numpy);
+   **Catch-up**: the run also evaluates the 4 bars before, when they were not evaluated yet
+   (their candle arrived after their own run); each evaluated (instrument, bar) is marked in
+   Redis for 15 minutes, so a bar is normally checked once;
 4. stores one ``price_alert`` notification per fired alert (dedup
    ``price_alert:<alert_id>:<bar_time>``, so a re-run never notifies twice), updates the alerts
    (``once`` -> inactive) in the same transaction, then publishes and enqueues the sends.
@@ -25,7 +28,7 @@ from typing import Any
 
 import numpy as np
 from redis.asyncio import Redis
-from sqlalchemy import case, select, text, update
+from sqlalchemy import bindparam, case, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.instrument import Instrument
@@ -38,6 +41,8 @@ from app.realtime.topics import channel_for, user_topic
 logger = logging.getLogger(__name__)
 
 MINUTE = timedelta(minutes=1)
+CATCH_UP_BARS = 5  # the closed bar and the 4 before it
+BAR_DONE_TTL = 900  # seconds a bar stays marked as evaluated
 PREVIOUS_LOOKBACK_MINUTES = 60  # a gap longer than this: crosses cannot be evaluated
 LOCK_TTL = timedelta(seconds=120)
 DONE_TTL = timedelta(hours=6)
@@ -74,6 +79,8 @@ class AlertRun:
     fired: int = 0
     notifications: int = 0
     deactivated: int = 0
+    caught_up: int = 0  # earlier bars evaluated late (their candle arrived after their run)
+    done_marks: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     duration_ms: float = 0.0
 
@@ -187,6 +194,10 @@ def _payload(alert: dict[str, Any], instrument: Instrument, bars: Bars, bar_time
     return data
 
 
+def _done_key(instrument_id: uuid.UUID, bar: datetime) -> str:
+    return f"alerts:bar:{instrument_id}:{bar.isoformat()}"
+
+
 async def _acquire(redis: Redis, key: str, token: str) -> str | None:
     if await redis.set(key, token, nx=True, px=int(LOCK_TTL.total_seconds() * 1000)):
         return None
@@ -212,6 +223,11 @@ async def evaluate(
         return _done(run, started)
     try:
         prepared, fired_messages = await _evaluate(factory, redis, run, bar_time, bar_end, now)
+        if run.done_marks:
+            pipe = redis.pipeline(transaction=False)
+            for mark in run.done_marks:
+                pipe.set(mark, "1", ex=BAR_DONE_TTL)
+            await pipe.execute()
         await notifications.after_commit(redis, prepared)
         await _publish(redis, fired_messages)
         await redis.set(key, "done", px=int(DONE_TTL.total_seconds() * 1000))
@@ -257,51 +273,77 @@ async def _evaluate(factory, redis, run: AlertRun, bar_time, bar_end, now):
             by_instrument[r.instrument_id].append(dict(r._mapping))
         run.instruments = len(by_instrument)
         items: list[notifications.NotifyItem] = []
-        by_key: dict[str, dict[str, Any]] = {}
+        by_key: dict[str, tuple[dict[str, Any], datetime]] = {}
+        # the closed bar, plus the previous ones not evaluated yet (their candle came late)
+        candidates = [bar_time - MINUTE * k for k in range(CATCH_UP_BARS - 1, -1, -1)]
         for instrument_id, alerts in by_instrument.items():
             windows = sorted({a["window_minutes"] for a in alerts if a["window_minutes"]})
-            bars = await _bars(session, instrument_id, bar_time, windows)
-            if bars is None:
-                run.no_bar += 1
-                continue
-            mask = check(alerts, bars, bar_end)
-            if not mask.any():
-                continue
-            instrument = await session.get(Instrument, instrument_id)
-            for alert in (a for a, hit in zip(alerts, mask, strict=True) if hit):
-                data = _payload(alert, instrument, bars, bar_time)
-                dedup = f"price_alert:{alert['id']}:{bar_time.isoformat()}"
-                items.append(
-                    notifications.NotifyItem(
-                        user_id=alert["user_id"],
-                        type=NotificationType.price_alert,
-                        data=data,
-                        dedup_key=dedup,
-                        severity=Severity.warning,
+            flags = await redis.mget([_done_key(instrument_id, b) for b in candidates])
+            instrument = None
+            for bar, flag in zip(candidates, flags, strict=True):
+                if flag:
+                    continue
+                bars = await _bars(session, instrument_id, bar, windows)
+                if bars is None:
+                    if bar == bar_time:
+                        run.no_bar += 1
+                    continue
+                run.done_marks.append(_done_key(instrument_id, bar))
+                if bar != bar_time:
+                    run.caught_up += 1
+                end = bar + MINUTE
+                live = [a for a in alerts if not a.get("_fired_once")]
+                if not live:
+                    continue
+                mask = check(live, bars, end)
+                if not mask.any():
+                    continue
+                instrument = instrument or await session.get(Instrument, instrument_id)
+                for alert in (a for a, hit in zip(live, mask, strict=True) if hit):
+                    data = _payload(alert, instrument, bars, bar)
+                    dedup = f"price_alert:{alert['id']}:{bar.isoformat()}"
+                    items.append(
+                        notifications.NotifyItem(
+                            user_id=alert["user_id"],
+                            type=NotificationType.price_alert,
+                            data=data,
+                            dedup_key=dedup,
+                            severity=Severity.warning,
+                        )
                     )
-                )
-                by_key[dedup] = alert
+                    by_key[dedup] = (alert, end)
+                    # later bars of this run see the alert as it will be after this one
+                    if alert["repeat"] == AlertRepeat.once:
+                        alert["_fired_once"] = True
+                    else:
+                        alert["last_triggered_at"] = end
         run.fired = len(items)
         prepared = notifications.Prepared()
         if items:
             prepared = await notifications.prepare(session, redis, items)
-            stored = [by_key[n["dedup_key"]] for n in prepared.notifications]
-            ids = [a["id"] for a in stored]
-            if ids:
+            fired: dict[uuid.UUID, list] = {}
+            for note in prepared.notifications:
+                alert, end = by_key[note["dedup_key"]]
+                last, count = fired.get(alert["id"], (end, 0))
+                fired[alert["id"]] = [max(last, end), count + 1]
+            if fired:
+                table = PriceAlert.__table__
                 await session.execute(
-                    update(PriceAlert)
-                    .where(PriceAlert.id.in_(ids))
+                    update(table)
+                    .where(table.c.id == bindparam("b_id"))
                     .values(
-                        last_triggered_at=bar_end,
-                        trigger_count=PriceAlert.trigger_count + 1,
+                        last_triggered_at=bindparam("b_at"),
+                        trigger_count=table.c.trigger_count + bindparam("b_n"),
                         is_active=case(
-                            (PriceAlert.repeat == AlertRepeat.once, False),
-                            else_=PriceAlert.is_active,
+                            (table.c.repeat == AlertRepeat.once.value, False),
+                            else_=table.c.is_active,
                         ),
-                    )
+                    ),
+                    [{"b_id": i, "b_at": at, "b_n": n} for i, (at, n) in fired.items()],
                 )
+            stored = [by_key[n["dedup_key"]][0] for n in prepared.notifications]
             run.notifications = len(prepared.notifications)
-            run.deactivated = sum(1 for a in stored if a["repeat"] == AlertRepeat.once)
+            run.deactivated = len({a["id"] for a in stored if a["repeat"] == AlertRepeat.once})
             for note in prepared.notifications:
                 fired_messages.append(
                     (note["user_id"], {**note["data"], "notification_id": str(note["id"])})
@@ -332,7 +374,7 @@ def _done(run: AlertRun, started: float) -> AlertRun:
     if run.status != "done" or run.alerts or run.expired:
         logger.info(
             "alerts.evaluate bar=%s status=%s alerts=%d instruments=%d no_bar=%d fired=%d "
-            "notifications=%d deactivated=%d expired=%d duration_ms=%.1f",
+            "notifications=%d deactivated=%d expired=%d caught_up=%d duration_ms=%.1f",
             run.bar_time.isoformat(),
             run.status,
             run.alerts,
@@ -342,6 +384,7 @@ def _done(run: AlertRun, started: float) -> AlertRun:
             run.notifications,
             run.deactivated,
             run.expired,
+            run.caught_up,
             run.duration_ms,
         )
     return run
