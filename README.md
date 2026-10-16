@@ -13,6 +13,10 @@
 | `libs/strategies/` | الاستراتيجيات العامة (`trading-strategies`، نمط Strategy) | Yazan |
 | `libs/backtest/` | محرك الاختبار التاريخي (`trading-backtest`) | Yazan |
 
+## النشر
+
+المنصة منشورة على http://187.127.76.76:8080/docs ، وكل دمج إلى `main` ينشر تلقائياً بعد نجاح CI. التفاصيل وقواعد السيرفر المشترك في [docs/deployment.md](docs/deployment.md).
+
 ## التشغيل محلياً
 
 ```bash
