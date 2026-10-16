@@ -242,11 +242,12 @@ def url_object(
         if path_override and name in path_override:
             value = path_override[name]
         variables.append({"key": name, "value": value, "description": desc})
-    raw = "{{api_url}}" + raw_path
+    # {{base_url}} directly (not the nested {{api_url}}), so the URL bar always shows the full path
+    raw = "{{base_url}}/api/v1" + raw_path
     enabled = [q for q in query if not q.get("disabled")]
     if enabled:
         raw += "?" + "&".join(f"{q['key']}={q['value']}" for q in enabled)
-    out: dict[str, Any] = {"raw": raw, "host": ["{{api_url}}"], "path": segments}
+    out: dict[str, Any] = {"raw": raw, "host": ["{{base_url}}"], "path": ["api", "v1", *segments]}
     if query:
         out["query"] = query
     if variables:

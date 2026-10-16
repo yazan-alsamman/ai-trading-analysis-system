@@ -43,11 +43,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/health",
+              "raw": "{{base_url}}/api/v1/health",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "health"
               ]
             },
@@ -64,11 +66,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/health",
+                  "raw": "{{base_url}}/api/v1/health",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "health"
                   ]
                 }
@@ -119,11 +123,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/health/ready",
+              "raw": "{{base_url}}/api/v1/health/ready",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "health",
                 "ready"
               ]
@@ -141,11 +147,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/health/ready",
+                  "raw": "{{base_url}}/api/v1/health/ready",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "health",
                     "ready"
                   ]
@@ -226,11 +234,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/auth/register",
+              "raw": "{{base_url}}/api/v1/auth/register",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "auth",
                 "register"
               ]
@@ -262,11 +272,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/auth/register",
+                  "raw": "{{base_url}}/api/v1/auth/register",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "register"
                   ]
@@ -317,11 +329,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/auth/register",
+                  "raw": "{{base_url}}/api/v1/auth/register",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "register"
                   ]
@@ -372,11 +386,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/auth/register",
+                  "raw": "{{base_url}}/api/v1/auth/register",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "register"
                   ]
@@ -462,11 +478,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/auth/login",
+              "raw": "{{base_url}}/api/v1/auth/login",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "auth",
                 "login"
               ]
@@ -498,11 +516,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/auth/login",
+                  "raw": "{{base_url}}/api/v1/auth/login",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "login"
                   ]
@@ -553,11 +573,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/auth/login",
+                  "raw": "{{base_url}}/api/v1/auth/login",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "login"
                   ]
@@ -630,11 +652,13 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/auth/token",
+              "raw": "{{base_url}}/api/v1/auth/token",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "auth",
                 "token"
               ]
@@ -669,11 +693,13 @@
                 "method": "POST",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/auth/token",
+                  "raw": "{{base_url}}/api/v1/auth/token",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "token"
                   ]
@@ -767,11 +793,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/auth/refresh",
+              "raw": "{{base_url}}/api/v1/auth/refresh",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "auth",
                 "refresh"
               ]
@@ -803,11 +831,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/auth/refresh",
+                  "raw": "{{base_url}}/api/v1/auth/refresh",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "refresh"
                   ]
@@ -858,11 +888,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/auth/refresh",
+                  "raw": "{{base_url}}/api/v1/auth/refresh",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "refresh"
                   ]
@@ -937,11 +969,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/auth/logout",
+              "raw": "{{base_url}}/api/v1/auth/logout",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "auth",
                 "logout"
               ]
@@ -970,11 +1004,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/auth/logout",
+                  "raw": "{{base_url}}/api/v1/auth/logout",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "auth",
                     "logout"
                   ]
@@ -1060,11 +1096,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/users/me",
+              "raw": "{{base_url}}/api/v1/users/me",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "users",
                 "me"
               ]
@@ -1079,11 +1117,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/users/me",
+                  "raw": "{{base_url}}/api/v1/users/me",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "users",
                     "me"
                   ]
@@ -1120,11 +1160,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/users/me",
+                  "raw": "{{base_url}}/api/v1/users/me",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "users",
                     "me"
                   ]
@@ -1184,11 +1226,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/users/me",
+              "raw": "{{base_url}}/api/v1/users/me",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "users",
                 "me"
               ]
@@ -1217,11 +1261,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/users/me",
+                  "raw": "{{base_url}}/api/v1/users/me",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "users",
                     "me"
                   ]
@@ -1300,11 +1346,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/users/me/password",
+              "raw": "{{base_url}}/api/v1/users/me/password",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "users",
                 "me",
                 "password"
@@ -1334,11 +1382,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/users/me/password",
+                  "raw": "{{base_url}}/api/v1/users/me/password",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "users",
                     "me",
                     "password"
@@ -1390,11 +1440,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/users/me/password",
+                  "raw": "{{base_url}}/api/v1/users/me/password",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "users",
                     "me",
                     "password"
@@ -1481,11 +1533,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/market/instruments?limit=50&offset=0&q=BTC",
+              "raw": "{{base_url}}/api/v1/market/instruments?limit=50&offset=0&q=BTC",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "market",
                 "instruments"
               ],
@@ -1535,11 +1589,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments?limit=50&offset=0&q=BTC",
+                  "raw": "{{base_url}}/api/v1/market/instruments?limit=50&offset=0&q=BTC",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments"
                   ],
@@ -1638,11 +1694,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/market/instruments/:instrument_id",
+              "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "market",
                 "instruments",
                 ":instrument_id"
@@ -1665,11 +1723,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments/:instrument_id",
+                  "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments",
                     ":instrument_id"
@@ -1714,11 +1774,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments/:instrument_id",
+                  "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments",
                     ":instrument_id"
@@ -1790,11 +1852,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/market/instruments/:instrument_id/candles?timeframe={{timeframe}}&limit=200",
+              "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id/candles?timeframe={{timeframe}}&limit=200",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "market",
                 "instruments",
                 ":instrument_id",
@@ -1842,11 +1906,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments/:instrument_id/candles?timeframe={{timeframe}}&limit=200",
+                  "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id/candles?timeframe={{timeframe}}&limit=200",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments",
                     ":instrument_id",
@@ -1916,11 +1982,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments/:instrument_id/candles?timeframe=2h&limit=200",
+                  "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id/candles?timeframe=2h&limit=200",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments",
                     ":instrument_id",
@@ -2010,11 +2078,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/indicators",
+              "raw": "{{base_url}}/api/v1/indicators",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "indicators"
               ]
             },
@@ -2028,11 +2098,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/indicators",
+                  "raw": "{{base_url}}/api/v1/indicators",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "indicators"
                   ]
                 }
@@ -2100,11 +2172,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/market/instruments/:instrument_id/indicators",
+              "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id/indicators",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "market",
                 "instruments",
                 ":instrument_id",
@@ -2142,11 +2216,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments/:instrument_id/indicators",
+                  "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id/indicators",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments",
                     ":instrument_id",
@@ -2206,11 +2282,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments/:instrument_id/indicators",
+                  "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id/indicators",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments",
                     ":instrument_id",
@@ -2297,11 +2375,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/strategies",
+              "raw": "{{base_url}}/api/v1/strategies",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "strategies"
               ]
             },
@@ -2315,11 +2395,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/strategies",
+                  "raw": "{{base_url}}/api/v1/strategies",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "strategies"
                   ]
                 }
@@ -2387,11 +2469,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/strategies/:key/preview",
+              "raw": "{{base_url}}/api/v1/strategies/:key/preview",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "strategies",
                 ":key",
                 "preview"
@@ -2428,11 +2512,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/strategies/:key/preview",
+                  "raw": "{{base_url}}/api/v1/strategies/:key/preview",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "strategies",
                     ":key",
                     "preview"
@@ -2491,11 +2577,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/strategies/:key/preview",
+                  "raw": "{{base_url}}/api/v1/strategies/:key/preview",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "strategies",
                     ":key",
                     "preview"
@@ -2554,11 +2642,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/strategies/:key/preview",
+                  "raw": "{{base_url}}/api/v1/strategies/:key/preview",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "strategies",
                     ":key",
                     "preview"
@@ -2650,11 +2740,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/strategies",
+              "raw": "{{base_url}}/api/v1/me/strategies",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "strategies"
               ]
@@ -2683,11 +2775,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/strategies",
+                  "raw": "{{base_url}}/api/v1/me/strategies",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "strategies"
                   ]
@@ -2758,11 +2852,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/strategies",
+              "raw": "{{base_url}}/api/v1/me/strategies",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "strategies"
               ]
@@ -2777,11 +2873,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/strategies",
+                  "raw": "{{base_url}}/api/v1/me/strategies",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "strategies"
                   ]
@@ -2850,11 +2948,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/strategies/:user_strategy_id",
+              "raw": "{{base_url}}/api/v1/me/strategies/:user_strategy_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "strategies",
                 ":user_strategy_id"
@@ -2891,11 +2991,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/strategies/:user_strategy_id",
+                  "raw": "{{base_url}}/api/v1/me/strategies/:user_strategy_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "strategies",
                     ":user_strategy_id"
@@ -2976,11 +3078,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/signals?limit=20&offset=0",
+              "raw": "{{base_url}}/api/v1/signals?limit=20&offset=0",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "signals"
               ],
               "query": [
@@ -3036,11 +3140,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/signals?limit=20&offset=0",
+                  "raw": "{{base_url}}/api/v1/signals?limit=20&offset=0",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "signals"
                   ],
                   "query": [
@@ -3139,11 +3245,13 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/strategies/:user_strategy_id",
+              "raw": "{{base_url}}/api/v1/me/strategies/:user_strategy_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "strategies",
                 ":user_strategy_id"
@@ -3166,11 +3274,13 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/strategies/:user_strategy_id",
+                  "raw": "{{base_url}}/api/v1/me/strategies/:user_strategy_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "strategies",
                     ":user_strategy_id"
@@ -3249,11 +3359,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/risk/schema",
+              "raw": "{{base_url}}/api/v1/risk/schema",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "risk",
                 "schema"
               ]
@@ -3268,11 +3380,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/risk/schema",
+                  "raw": "{{base_url}}/api/v1/risk/schema",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "risk",
                     "schema"
                   ]
@@ -3336,11 +3450,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/risk-profile",
+              "raw": "{{base_url}}/api/v1/me/risk-profile",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "risk-profile"
               ]
@@ -3355,11 +3471,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/risk-profile",
+                  "raw": "{{base_url}}/api/v1/me/risk-profile",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "risk-profile"
                   ]
@@ -3428,11 +3546,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/risk-profile",
+              "raw": "{{base_url}}/api/v1/me/risk-profile",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "risk-profile"
               ]
@@ -3461,11 +3581,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/risk-profile",
+                  "raw": "{{base_url}}/api/v1/me/risk-profile",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "risk-profile"
                   ]
@@ -3516,11 +3638,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/risk-profile",
+                  "raw": "{{base_url}}/api/v1/me/risk-profile",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "risk-profile"
                   ]
@@ -3571,11 +3695,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/risk-profile",
+                  "raw": "{{base_url}}/api/v1/me/risk-profile",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "risk-profile"
                   ]
@@ -3653,11 +3779,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/risk/position-size",
+              "raw": "{{base_url}}/api/v1/risk/position-size",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "risk",
                 "position-size"
               ]
@@ -3686,11 +3814,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/risk/position-size",
+                  "raw": "{{base_url}}/api/v1/risk/position-size",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "risk",
                     "position-size"
                   ]
@@ -3741,11 +3871,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/risk/position-size",
+                  "raw": "{{base_url}}/api/v1/risk/position-size",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "risk",
                     "position-size"
                   ]
@@ -3818,11 +3950,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/signal-plans?limit=20&offset=0",
+              "raw": "{{base_url}}/api/v1/me/signal-plans?limit=20&offset=0",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "signal-plans"
               ],
@@ -3873,11 +4007,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/signal-plans?limit=20&offset=0",
+                  "raw": "{{base_url}}/api/v1/me/signal-plans?limit=20&offset=0",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "signal-plans"
                   ],
@@ -3984,11 +4120,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/custom-strategies/schema",
+              "raw": "{{base_url}}/api/v1/custom-strategies/schema",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "custom-strategies",
                 "schema"
               ]
@@ -4003,11 +4141,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/custom-strategies/schema",
+                  "raw": "{{base_url}}/api/v1/custom-strategies/schema",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "custom-strategies",
                     "schema"
                   ]
@@ -4076,11 +4216,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/custom-strategies/validate",
+              "raw": "{{base_url}}/api/v1/custom-strategies/validate",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "custom-strategies",
                 "validate"
               ]
@@ -4109,11 +4251,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/custom-strategies/validate",
+                  "raw": "{{base_url}}/api/v1/custom-strategies/validate",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "custom-strategies",
                     "validate"
                   ]
@@ -4164,11 +4308,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/custom-strategies/validate",
+                  "raw": "{{base_url}}/api/v1/custom-strategies/validate",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "custom-strategies",
                     "validate"
                   ]
@@ -4256,11 +4402,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/custom-strategies",
+              "raw": "{{base_url}}/api/v1/me/custom-strategies",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "custom-strategies"
               ]
@@ -4289,11 +4437,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies"
                   ]
@@ -4344,11 +4494,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies"
                   ]
@@ -4399,11 +4551,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies"
                   ]
@@ -4476,11 +4630,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/custom-strategies?limit=50&offset=0",
+              "raw": "{{base_url}}/api/v1/me/custom-strategies?limit=50&offset=0",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "custom-strategies"
               ],
@@ -4513,11 +4669,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies?limit=50&offset=0",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies?limit=50&offset=0",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies"
                   ],
@@ -4599,11 +4757,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+              "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "custom-strategies",
                 ":strategy_id"
@@ -4626,11 +4786,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies",
                     ":strategy_id"
@@ -4713,11 +4875,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+              "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "custom-strategies",
                 ":strategy_id"
@@ -4754,11 +4918,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies",
                     ":strategy_id"
@@ -4817,11 +4983,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies",
                     ":strategy_id"
@@ -4911,11 +5079,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+              "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "custom-strategies",
                 ":strategy_id"
@@ -4952,11 +5122,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies",
                     ":strategy_id"
@@ -5043,11 +5215,13 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/custom-strategies/:strategy_id/clone",
+              "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id/clone",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "custom-strategies",
                 ":strategy_id",
@@ -5071,11 +5245,13 @@
                 "method": "POST",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies/:strategy_id/clone",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id/clone",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies",
                     ":strategy_id",
@@ -5154,11 +5330,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/custom-strategies/public?limit=20&offset=0",
+              "raw": "{{base_url}}/api/v1/custom-strategies/public?limit=20&offset=0",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "custom-strategies",
                 "public"
               ],
@@ -5197,11 +5375,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/custom-strategies/public?limit=20&offset=0",
+                  "raw": "{{base_url}}/api/v1/custom-strategies/public?limit=20&offset=0",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "custom-strategies",
                     "public"
                   ],
@@ -5295,11 +5475,13 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/custom-strategies/public/:strategy_id/clone",
+              "raw": "{{base_url}}/api/v1/custom-strategies/public/:strategy_id/clone",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "custom-strategies",
                 "public",
                 ":strategy_id",
@@ -5323,11 +5505,13 @@
                 "method": "POST",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/custom-strategies/public/:strategy_id/clone",
+                  "raw": "{{base_url}}/api/v1/custom-strategies/public/:strategy_id/clone",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "custom-strategies",
                     "public",
                     ":strategy_id",
@@ -5405,11 +5589,13 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+              "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "custom-strategies",
                 ":strategy_id"
@@ -5432,11 +5618,13 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/custom-strategies/:strategy_id",
+                  "raw": "{{base_url}}/api/v1/me/custom-strategies/:strategy_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "custom-strategies",
                     ":strategy_id"
@@ -5540,11 +5728,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/backtests",
+              "raw": "{{base_url}}/api/v1/backtests",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "backtests"
               ]
             },
@@ -5572,11 +5762,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/backtests",
+                  "raw": "{{base_url}}/api/v1/backtests",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests"
                   ]
                 },
@@ -5626,11 +5818,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/backtests",
+                  "raw": "{{base_url}}/api/v1/backtests",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests"
                   ]
                 },
@@ -5714,11 +5908,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/backtests/:backtest_id",
+              "raw": "{{base_url}}/api/v1/backtests/:backtest_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "backtests",
                 ":backtest_id"
               ],
@@ -5740,11 +5936,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/backtests/:backtest_id",
+                  "raw": "{{base_url}}/api/v1/backtests/:backtest_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests",
                     ":backtest_id"
                   ],
@@ -5815,11 +6013,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/backtests/:backtest_id/trades?limit=100&offset=0",
+              "raw": "{{base_url}}/api/v1/backtests/:backtest_id/trades?limit=100&offset=0",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "backtests",
                 ":backtest_id",
                 "trades"
@@ -5854,11 +6054,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/backtests/:backtest_id/trades?limit=100&offset=0",
+                  "raw": "{{base_url}}/api/v1/backtests/:backtest_id/trades?limit=100&offset=0",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests",
                     ":backtest_id",
                     "trades"
@@ -5936,11 +6138,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/backtests/:backtest_id/trades.csv",
+              "raw": "{{base_url}}/api/v1/backtests/:backtest_id/trades.csv",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "backtests",
                 ":backtest_id",
                 "trades.csv"
@@ -5963,11 +6167,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/backtests/:backtest_id/trades.csv",
+                  "raw": "{{base_url}}/api/v1/backtests/:backtest_id/trades.csv",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests",
                     ":backtest_id",
                     "trades.csv"
@@ -6068,11 +6274,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/backtests",
+              "raw": "{{base_url}}/api/v1/backtests",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "backtests"
               ]
             },
@@ -6100,11 +6308,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/backtests",
+                  "raw": "{{base_url}}/api/v1/backtests",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests"
                   ]
                 },
@@ -6176,11 +6386,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/backtests?limit=20&offset=0",
+              "raw": "{{base_url}}/api/v1/backtests?limit=20&offset=0",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "backtests"
               ],
               "query": [
@@ -6224,11 +6436,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/backtests?limit=20&offset=0",
+                  "raw": "{{base_url}}/api/v1/backtests?limit=20&offset=0",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests"
                   ],
                   "query": [
@@ -6346,11 +6560,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/backtests/compare",
+              "raw": "{{base_url}}/api/v1/backtests/compare",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "backtests",
                 "compare"
               ]
@@ -6379,11 +6595,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/backtests/compare",
+                  "raw": "{{base_url}}/api/v1/backtests/compare",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests",
                     "compare"
                   ]
@@ -6459,11 +6677,13 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/backtests/:backtest_id",
+              "raw": "{{base_url}}/api/v1/backtests/:backtest_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "backtests",
                 ":backtest_id"
               ],
@@ -6485,11 +6705,13 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/backtests/:backtest_id",
+                  "raw": "{{base_url}}/api/v1/backtests/:backtest_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "backtests",
                     ":backtest_id"
                   ],
@@ -6567,11 +6789,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/workspaces",
+              "raw": "{{base_url}}/api/v1/me/workspaces",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces"
               ]
@@ -6586,11 +6810,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces",
+                  "raw": "{{base_url}}/api/v1/me/workspaces",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces"
                   ]
@@ -6667,11 +6893,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/workspaces",
+              "raw": "{{base_url}}/api/v1/me/workspaces",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces"
               ]
@@ -6700,11 +6928,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces",
+                  "raw": "{{base_url}}/api/v1/me/workspaces",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces"
                   ]
@@ -6759,11 +6989,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces",
+                  "raw": "{{base_url}}/api/v1/me/workspaces",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces"
                   ]
@@ -6818,11 +7050,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces",
+                  "raw": "{{base_url}}/api/v1/me/workspaces",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces"
                   ]
@@ -6904,11 +7138,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/workspaces/:workspace_id",
+              "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces",
                 ":workspace_id"
@@ -6931,11 +7167,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id"
@@ -7027,11 +7265,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/workspaces/:workspace_id",
+              "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces",
                 ":workspace_id"
@@ -7073,11 +7313,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id"
@@ -7144,11 +7386,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id"
@@ -7211,11 +7455,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id"
@@ -7301,11 +7547,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/workspaces/:workspace_id",
+              "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces",
                 ":workspace_id"
@@ -7342,11 +7590,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id"
@@ -7437,11 +7687,13 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/workspaces/:workspace_id/duplicate",
+              "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id/duplicate",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces",
                 ":workspace_id",
@@ -7465,11 +7717,13 @@
                 "method": "POST",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id/duplicate",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id/duplicate",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id",
@@ -7542,11 +7796,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/workspaces",
+              "raw": "{{base_url}}/api/v1/me/workspaces",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces"
               ]
@@ -7561,11 +7817,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces",
+                  "raw": "{{base_url}}/api/v1/me/workspaces",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces"
                   ]
@@ -7644,11 +7902,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/workspaces/order",
+              "raw": "{{base_url}}/api/v1/me/workspaces/order",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces",
                 "order"
@@ -7678,11 +7938,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/order",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/order",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     "order"
@@ -7765,11 +8027,13 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/workspaces/:workspace_id/share",
+              "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id/share",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces",
                 ":workspace_id",
@@ -7793,11 +8057,13 @@
                 "method": "POST",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id/share",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id/share",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id",
@@ -7870,11 +8136,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/workspaces/shared/:slug",
+              "raw": "{{base_url}}/api/v1/workspaces/shared/:slug",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "workspaces",
                 "shared",
                 ":slug"
@@ -7897,11 +8165,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/workspaces/shared/:slug",
+                  "raw": "{{base_url}}/api/v1/workspaces/shared/:slug",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "workspaces",
                     "shared",
                     ":slug"
@@ -7984,11 +8254,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/workspaces/shared/:slug/import",
+              "raw": "{{base_url}}/api/v1/workspaces/shared/:slug/import",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "workspaces",
                 "shared",
                 ":slug",
@@ -8026,11 +8298,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/workspaces/shared/:slug/import",
+                  "raw": "{{base_url}}/api/v1/workspaces/shared/:slug/import",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "workspaces",
                     "shared",
                     ":slug",
@@ -8112,11 +8386,13 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/workspaces/:workspace_id/share",
+              "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id/share",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces",
                 ":workspace_id",
@@ -8140,11 +8416,13 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id/share",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id/share",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id",
@@ -8222,11 +8500,13 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/workspaces/:workspace_id",
+              "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "workspaces",
                 ":workspace_id"
@@ -8249,11 +8529,13 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/workspaces/:workspace_id",
+                  "raw": "{{base_url}}/api/v1/me/workspaces/:workspace_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "workspaces",
                     ":workspace_id"
@@ -8345,11 +8627,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/api-keys",
+              "raw": "{{base_url}}/api/v1/me/api-keys",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "api-keys"
               ]
@@ -8378,11 +8662,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/api-keys",
+                  "raw": "{{base_url}}/api/v1/me/api-keys",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "api-keys"
                   ]
@@ -8453,11 +8739,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/api-keys",
+              "raw": "{{base_url}}/api/v1/me/api-keys",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "api-keys"
               ]
@@ -8472,11 +8760,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/api-keys",
+                  "raw": "{{base_url}}/api/v1/me/api-keys",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "api-keys"
                   ]
@@ -8545,11 +8835,13 @@
               }
             ],
             "url": {
-              "raw": "{{api_url}}/me/api-keys/:key_id",
+              "raw": "{{base_url}}/api/v1/me/api-keys/:key_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "api-keys",
                 ":key_id"
@@ -8586,11 +8878,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/me/api-keys/:key_id",
+                  "raw": "{{base_url}}/api/v1/me/api-keys/:key_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "api-keys",
                     ":key_id"
@@ -8682,11 +8976,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments?q=BTC&limit=5",
+                  "raw": "{{base_url}}/api/v1/market/instruments?q=BTC&limit=5",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments"
                   ],
@@ -8722,11 +9018,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/market/instruments?q=BTC&limit=5",
+                      "raw": "{{base_url}}/api/v1/market/instruments?q=BTC&limit=5",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "market",
                         "instruments"
                       ],
@@ -8781,11 +9079,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/market/instruments?q=BTC&limit=5",
+                      "raw": "{{base_url}}/api/v1/market/instruments?q=BTC&limit=5",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "market",
                         "instruments"
                       ],
@@ -8871,11 +9171,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/market/instruments/:instrument_id/candles?timeframe=1h&limit=3",
+                  "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id/candles?timeframe=1h&limit=3",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "market",
                     "instruments",
                     ":instrument_id",
@@ -8920,11 +9222,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/market/instruments/:instrument_id/candles?timeframe=1h&limit=3",
+                      "raw": "{{base_url}}/api/v1/market/instruments/:instrument_id/candles?timeframe=1h&limit=3",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "market",
                         "instruments",
                         ":instrument_id",
@@ -9015,11 +9319,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/signals?limit=5",
+                  "raw": "{{base_url}}/api/v1/signals?limit=5",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "signals"
                   ],
                   "query": [
@@ -9049,11 +9355,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/signals?limit=5",
+                      "raw": "{{base_url}}/api/v1/signals?limit=5",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "signals"
                       ],
                       "query": [
@@ -9129,11 +9437,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/users/me",
+                  "raw": "{{base_url}}/api/v1/users/me",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "users",
                     "me"
                   ]
@@ -9157,11 +9467,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/users/me",
+                      "raw": "{{base_url}}/api/v1/users/me",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "users",
                         "me"
                       ]
@@ -9204,11 +9516,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/backtests",
+                      "raw": "{{base_url}}/api/v1/backtests",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "backtests"
                       ]
                     }
@@ -9271,11 +9585,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/api-keys/:key_id/usage",
+              "raw": "{{base_url}}/api/v1/me/api-keys/:key_id/usage",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "api-keys",
                 ":key_id",
@@ -9299,11 +9615,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/api-keys/:key_id/usage",
+                  "raw": "{{base_url}}/api/v1/me/api-keys/:key_id/usage",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "api-keys",
                     ":key_id",
@@ -9370,11 +9688,13 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{api_url}}/me/api-keys/:key_id",
+              "raw": "{{base_url}}/api/v1/me/api-keys/:key_id",
               "host": [
-                "{{api_url}}"
+                "{{base_url}}"
               ],
               "path": [
+                "api",
+                "v1",
                 "me",
                 "api-keys",
                 ":key_id"
@@ -9397,11 +9717,13 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/me/api-keys/:key_id",
+                  "raw": "{{base_url}}/api/v1/me/api-keys/:key_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "me",
                     "api-keys",
                     ":key_id"
@@ -9491,11 +9813,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/admin/users?limit=20&offset=0&q={{user_email}}",
+                  "raw": "{{base_url}}/api/v1/admin/users?limit=20&offset=0&q={{user_email}}",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "users"
                   ],
@@ -9539,11 +9863,13 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{api_url}}/admin/users?limit=20&offset=0&q={{user_email}}",
+                      "raw": "{{base_url}}/api/v1/admin/users?limit=20&offset=0&q={{user_email}}",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "users"
                       ],
@@ -9641,11 +9967,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/admin/users/:user_id/role",
+                  "raw": "{{base_url}}/api/v1/admin/users/:user_id/role",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "users",
                     ":user_id",
@@ -9683,11 +10011,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/admin/users/:user_id/role",
+                      "raw": "{{base_url}}/api/v1/admin/users/:user_id/role",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "users",
                         ":user_id",
@@ -9747,11 +10077,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/admin/users/:user_id/role",
+                      "raw": "{{base_url}}/api/v1/admin/users/:user_id/role",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "users",
                         ":user_id",
@@ -9838,11 +10170,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/admin/users/:user_id/status",
+                  "raw": "{{base_url}}/api/v1/admin/users/:user_id/status",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "users",
                     ":user_id",
@@ -9880,11 +10214,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/admin/users/:user_id/status",
+                      "raw": "{{base_url}}/api/v1/admin/users/:user_id/status",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "users",
                         ":user_id",
@@ -9984,11 +10320,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/admin/instruments",
+                  "raw": "{{base_url}}/api/v1/admin/instruments",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "instruments"
                   ]
@@ -10017,11 +10355,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/admin/instruments",
+                      "raw": "{{base_url}}/api/v1/admin/instruments",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "instruments"
                       ]
@@ -10072,11 +10412,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/admin/instruments",
+                      "raw": "{{base_url}}/api/v1/admin/instruments",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "instruments"
                       ]
@@ -10154,11 +10496,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/admin/instruments/:instrument_id",
+                  "raw": "{{base_url}}/api/v1/admin/instruments/:instrument_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "instruments",
                     ":instrument_id"
@@ -10195,11 +10539,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/admin/instruments/:instrument_id",
+                      "raw": "{{base_url}}/api/v1/admin/instruments/:instrument_id",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "instruments",
                         ":instrument_id"
@@ -10298,11 +10644,13 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{api_url}}/admin/instruments/:instrument_id/candles",
+                  "raw": "{{base_url}}/api/v1/admin/instruments/:instrument_id/candles",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "instruments",
                     ":instrument_id",
@@ -10340,11 +10688,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/admin/instruments/:instrument_id/candles",
+                      "raw": "{{base_url}}/api/v1/admin/instruments/:instrument_id/candles",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "instruments",
                         ":instrument_id",
@@ -10404,11 +10754,13 @@
                       }
                     ],
                     "url": {
-                      "raw": "{{api_url}}/admin/instruments/:instrument_id/candles",
+                      "raw": "{{base_url}}/api/v1/admin/instruments/:instrument_id/candles",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "instruments",
                         ":instrument_id",
@@ -10503,11 +10855,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/admin/api-keys?limit=50&offset=0",
+                  "raw": "{{base_url}}/api/v1/admin/api-keys?limit=50&offset=0",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "api-keys"
                   ],
@@ -10546,11 +10900,13 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{api_url}}/admin/api-keys?limit=50&offset=0",
+                      "raw": "{{base_url}}/api/v1/admin/api-keys?limit=50&offset=0",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "api-keys"
                       ],
@@ -10632,11 +10988,13 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/admin/api-keys/:key_id",
+                  "raw": "{{base_url}}/api/v1/admin/api-keys/:key_id",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "api-keys",
                     ":key_id"
@@ -10659,11 +11017,13 @@
                     "method": "DELETE",
                     "header": [],
                     "url": {
-                      "raw": "{{api_url}}/admin/api-keys/:key_id",
+                      "raw": "{{base_url}}/api/v1/admin/api-keys/:key_id",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "api-keys",
                         ":key_id"
@@ -10708,11 +11068,13 @@
                     "method": "DELETE",
                     "header": [],
                     "url": {
-                      "raw": "{{api_url}}/admin/api-keys/:key_id",
+                      "raw": "{{base_url}}/api/v1/admin/api-keys/:key_id",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "api-keys",
                         ":key_id"
@@ -10784,11 +11146,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/admin/rate-limits/stats",
+                  "raw": "{{base_url}}/api/v1/admin/rate-limits/stats",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "rate-limits",
                     "stats"
@@ -10804,11 +11168,13 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{api_url}}/admin/rate-limits/stats",
+                      "raw": "{{base_url}}/api/v1/admin/rate-limits/stats",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "rate-limits",
                         "stats"
@@ -10873,11 +11239,13 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{api_url}}/admin/realtime/stats",
+                  "raw": "{{base_url}}/api/v1/admin/realtime/stats",
                   "host": [
-                    "{{api_url}}"
+                    "{{base_url}}"
                   ],
                   "path": [
+                    "api",
+                    "v1",
                     "admin",
                     "realtime",
                     "stats"
@@ -10893,11 +11261,13 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{api_url}}/admin/realtime/stats",
+                      "raw": "{{base_url}}/api/v1/admin/realtime/stats",
                       "host": [
-                        "{{api_url}}"
+                        "{{base_url}}"
                       ],
                       "path": [
+                        "api",
+                        "v1",
                         "admin",
                         "realtime",
                         "stats"
