@@ -25,6 +25,11 @@ No account? Send **Auth → Register**: with `user_email` empty, the new account
 collection's user. Some requests (sharing a workspace, publishing a strategy) need the analyst
 role; for a trader they answer 403 and the runner skips what depends on them.
 
+The formal contract is [`docs/api/openapi.json`](../api/openapi.json) (WebSocket:
+[`asyncapi.yaml`](../api/asyncapi.yaml)). Swagger UI `/docs`, ReDoc `/redoc` and `/openapi.json`
+answer on a local stack but are **off in production** unless `API_DOCS_ENABLED=true`, so use this
+collection or the committed file against the VPS.
+
 ### بالعربي
 
 استورد ملف الـ collection وملفّي الـ environments، اختر بيئة (السيرفر أو المحلي) واكتب بريدك

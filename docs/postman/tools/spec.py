@@ -399,6 +399,16 @@ FOLDERS: list[Folder] = [
                 auth="none",
             ),
             Req(
+                "health_live",
+                "Liveness probe",
+                "GET",
+                "/health/live",
+                'Returns `200 {"status": "ok"}` as long as the process answers; no dependency is '
+                "checked. Meant for container liveness probes (a slow database must not get the "
+                "API restarted). Successful health calls are not written to the request log.",
+                auth="none",
+            ),
+            Req(
                 "health_ready",
                 "Readiness (DB + Redis)",
                 "GET",
@@ -483,7 +493,8 @@ FOLDERS: list[Folder] = [
                 "POST",
                 "/auth/token",
                 "The same login as an OAuth2 password form (`username` = e-mail). It exists for "
-                "the **Authorize** button of Swagger UI (`/docs`); apps use `/auth/login`.",
+                "the **Authorize** button of Swagger UI (`/docs`, served outside production only, or when "
+                "`API_DOCS_ENABLED=true`); apps use `/auth/login`.",
                 auth="none",
                 form=[
                     ("username", "{{user_email}}", "The account e-mail"),
@@ -2985,7 +2996,7 @@ FOLDERS: list[Folder] = [
             ),
             Folder(
                 "API Keys & Rate Limits",
-                "Every user's keys, and rate-limit monitoring.",
+                "Every user's keys, rate-limit monitoring and the system status.",
                 [
                     Req(
                         "admin_keys",
@@ -3037,6 +3048,19 @@ FOLDERS: list[Folder] = [
                         "/admin/realtime/stats",
                         "Connections, subscriptions and message counters of the WebSocket hub of "
                         "the API process that serves the request.",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_system_status",
+                        "System status",
+                        "GET",
+                        "/admin/system/status",
+                        "The operations view in one call: version and uptime, database (size, "
+                        "connections, migration, slowest queries when `pg_stat_statements` is "
+                        "installed), Redis, Celery (queue lengths, live workers, last run of each "
+                        "scheduled task), market data freshness per active instrument, WebSocket "
+                        "clients of this API process, notification channels, unhandled errors in "
+                        "the last hour and the last daily summary.",
                         auth="admin",
                     ),
                 ],

@@ -158,8 +158,10 @@ Backend of the AI trading analysis platform (FastAPI, PostgreSQL/TimescaleDB, Re
 This collection covers **every endpoint** ({total} requests) with a saved example response for \
 each request and its main error cases.
 
-**Synced with backend commit `{commit}`** of `main`. Interactive OpenAPI docs: \
-`{{{{base_url}}}}/docs`.
+**Synced with backend commit `{commit}`** of `main`. The API contract is \
+`docs/api/openapi.json` in the repository (WebSocket: `docs/api/asyncapi.yaml`). Swagger UI \
+(`/docs`), ReDoc (`/redoc`) and `/openapi.json` are served locally, but **off in production** \
+unless `API_DOCS_ENABLED=true`.
 
 ## Quick start
 
@@ -191,6 +193,9 @@ Roles: `trader` (default on registration), `analyst`, `expert`, `admin`.
 * Errors: `{{"detail": "message"}}`, or for validation (422) \
 `{{"detail": [{{"loc": ["body", "field"], "msg": "...", "type": "..."}}]}}`.
 * Someone else's resource answers **404**, never 403.
+* Every response carries `X-Request-ID` (yours, if you send a sane one, else a new id): quote \
+it when reporting a problem, it is on the server's log line for that request.
+* An overloaded database answers **503** with `Retry-After` and `retry_after` in the body.
 
 ## Rate limits
 
