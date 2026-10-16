@@ -66,9 +66,9 @@ services:
       start_period: 30s
 
   # Workers start after the backend is healthy, i.e. after migrations ran.
-  worker:
+  worker:  # the signal engine (default queue) and notification sends (notifications queue)
     <<: *backend
-    command: celery -A app.tasks worker --loglevel=info --concurrency 2
+    command: celery -A app.tasks worker -Q celery,notifications --loglevel=info --concurrency 2
     depends_on:
       backend:
         condition: service_healthy
@@ -93,6 +93,17 @@ services:
       backend:
         condition: service_healthy
     mem_limit: 192m  # beat sits at ~106MiB after start
+    cpus: 0.25
+
+  # Telegram long polling (/start linking, /stop, /status). Idles when TELEGRAM_BOT_TOKEN is
+  # empty or TELEGRAM_MODE=webhook. No port: it only makes outbound calls.
+  telegram-bot:
+    <<: *backend
+    command: python -m app.notifications.telegram_bot
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 128m
     cpus: 0.25
 
   ai-service:

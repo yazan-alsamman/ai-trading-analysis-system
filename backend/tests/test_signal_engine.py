@@ -104,13 +104,18 @@ class Listener:
     async def listen(self, *topics: str) -> None:
         await self.pubsub.subscribe(*(channel_for(t) for t in topics))
 
-    async def messages(self, wait: float = 0.3) -> list[tuple[str, dict]]:
+    async def messages(
+        self, wait: float = 0.3, notifications: bool = False
+    ) -> list[tuple[str, dict]]:
+        """(topic, message); the Y15 ``notification`` messages only with ``notifications``."""
         out, loop = [], asyncio.get_running_loop()
         deadline = loop.time() + wait
         while loop.time() < deadline:
             msg = await self.pubsub.get_message(ignore_subscribe_messages=True, timeout=0.05)
             if msg:
-                out.append((msg["channel"].removeprefix("ws:"), json.loads(msg["data"])))
+                data = json.loads(msg["data"])
+                if notifications or data.get("type") != "notification":
+                    out.append((msg["channel"].removeprefix("ws:"), data))
         return out
 
 

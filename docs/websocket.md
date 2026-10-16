@@ -96,6 +96,11 @@ strategy setup that users run on it. It has no `timeframe` field and sends no sn
   definition hash as `params_hash`, `reason` `builder_buy`/`builder_sell` or
   `composite_buy`/`composite_sell`, and `details` explaining the rules or the members' votes
   ([custom-strategies.md](custom-strategies.md)).
+- Every notification stored for the user (signals, backtests, security events, admin
+  messages; [notifications.md](notifications.md)) also arrives as
+  `{"type": "notification", "notification": {"id", "type", "title", "body", "data", "severity",
+  "created_at", "read_at"}}`. The `signal` and `backtest_*` messages above are unchanged; an
+  inbox UI can rely on `notification` alone.
 - When one of the user's workspaces changes (on any device), every connection of that user gets
   `{"type": "workspace_updated", "workspace_id": "<uuid>" | null, "version": 8 | null,
   "action": "created" | "state_updated" | "renamed" | "default_changed" | "deleted" |

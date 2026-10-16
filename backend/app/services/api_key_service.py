@@ -147,6 +147,10 @@ async def create(session: AsyncSession, user: User, data: ApiKeyCreate) -> tuple
     session.add(row)
     await session.commit()
     await session.refresh(row)
+    from app.notifications import security  # noqa: PLC0415
+
+    await security.api_key(session, user.id, True, row.name, row.prefix)
+    await session.refresh(row)
     return row, key
 
 
@@ -184,6 +188,9 @@ async def revoke(session: AsyncSession, row: ApiKey) -> None:
     if row.revoked_at is None:
         row.revoked_at = datetime.now(UTC)
         await session.commit()
+        from app.notifications import security  # noqa: PLC0415
+
+        await security.api_key(session, row.user_id, False, row.name, row.prefix)
 
 
 async def list_all(

@@ -86,14 +86,17 @@ async def run(session_factory, redis_client, backtest_id) -> BacktestStatus | No
     return await backtest_service.execute(session_factory, redis_client, uuid.UUID(backtest_id))
 
 
-async def collect(pubsub, timeout: float = 1.0) -> list[dict]:
+async def collect(pubsub, timeout: float = 1.0, notifications: bool = False) -> list[dict]:
+    """Messages received; the Y15 ``notification`` messages only with ``notifications``."""
     out = []
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     while loop.time() < deadline:
         msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1)
         if msg is not None:
-            out.append(json.loads(msg["data"]))
+            data = json.loads(msg["data"])
+            if notifications or data.get("type") != "notification":
+                out.append(data)
     return out
 
 

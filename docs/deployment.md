@@ -53,6 +53,29 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
 # ثم اتصل بـ localhost:5435، واسم المستخدم وكلمة السر موجودان في /opt/trading/.env
 ```
 
+## الإشعارات (Y15)
+- خدمة جديدة **`telegram-bot`** (نفس صورة الـ backend، 128MB، بلا منفذ): تستقبل أوامر تيليغرام
+  بالـ long polling. إذا كان `TELEGRAM_BOT_TOKEN` فارغاً تبقى خاملة (لا تخرج، حتى لا يفشل
+  `up --wait`).
+- الـ `worker` يستهلك الآن الطابورين `celery,notifications`، ولم نضف worker جديداً.
+- القنوات معطّلة طالما إعداداتها فارغة، والتطبيق يعمل عادياً. لتفعيلها أضف القيم في
+  `/opt/trading/.env` ثم أعد النشر (Actions ← Deploy ← Run workflow):
+
+| القناة | المتغيرات |
+|---|---|
+| تيليغرام | `TELEGRAM_BOT_TOKEN` (من @BotFather)، اختياري `TELEGRAM_BOT_USERNAME`، `TELEGRAM_MODE=polling` |
+| البريد | `SMTP_HOST`، `SMTP_PORT=587`، `SMTP_USER`، `SMTP_PASSWORD`، `SMTP_FROM`، `SMTP_STARTTLS=true` |
+| Push | `FCM_PROJECT_ID`، `FCM_CREDENTIALS_JSON` (ملف service account كـ JSON في سطر واحد، أو مسار ملف داخل الحاوية) |
+
+- فحص بعد النشر (من أي جهاز، بتوكن مستخدم):
+  ```bash
+  curl -s http://187.127.76.76:8080/api/v1/health/ready
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/notifications/channels
+  curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+       -d '{"channel":"in_app"}' http://187.127.76.76:8080/api/v1/me/notifications/test
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/notifications/unread-count
+  ```
+
 ## للبرومبتات القادمة
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.
 - أي خدمة جديدة تُضاف إلى `docker-compose.yml` (للتطوير) **وإلى** `infra/deploy/docker-compose.prod.yml` (للإنتاج) مع `mem_limit` و`cpus` و`restart: unless-stopped`، ومن دون أي منفذ عام.

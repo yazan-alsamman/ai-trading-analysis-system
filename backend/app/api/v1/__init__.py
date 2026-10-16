@@ -13,6 +13,7 @@ from app.api.v1 import (
     health,
     indicators,
     market,
+    notifications,
     risk,
     strategies,
     users,
@@ -38,7 +39,10 @@ limited_router.include_router(backtests.router)
 limited_router.include_router(custom_strategies.router)
 limited_router.include_router(custom_strategies.public_router)
 limited_router.include_router(risk.router)
+limited_router.include_router(notifications.router)
+limited_router.include_router(notifications.admin_router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)
+api_router.include_router(notifications.webhook_router)  # Telegram calls it: no identity limit
 api_router.include_router(limited_router)
