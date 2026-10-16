@@ -138,6 +138,34 @@ python -m app.cli purge-demo --prefix e2e- --instrument-prefix E2E --yes
 يرفض البادئات القصيرة (أقل من 3 أحرف) وحذف آخر مدير. **لا يُشغَّل على سيرفر الإنتاج من هنا** (لا SSH)؛ على
 الإنتاج يحتاج تنفيذاً يدوياً مقصوداً عبر workflow مخصص لاحقاً.
 
+## النسخ الاحتياطي والاستعادة
+- **النسخ**: `backup.sh` يعمل يومياً الساعة 03:17 من crontab المستخدم `deploy-trading`:
+  `pg_dump -Fc` إلى `/opt/trading/backups/trading-YYYY-MM-DD.dump`، ويحتفظ بـ 7 أيام.
+- **اختبار الاستعادة** (محلياً، يلمس حاوية مؤقتة فقط ثم يحذفها):
+  ```bash
+  docker compose exec -T db pg_dump -U trading -Fc trading > /tmp/trading.dump
+  bash infra/deploy/restore-test.sh /tmp/trading.dump aitradinganalysissystem-db-1 trading trading
+  ```
+  يقارن عدد الصفوف في الجداول الرئيسية (ومنها `candles_1m` و`candles_1h`) بين المصدر والنسخة المستعادة.
+  آخر نتيجة: كل الجداول متطابقة (candles_1m 331,303 صف)، الاستعادة 13 ثانية لنسخة 16.6MB.
+- **الاستعادة على السيرفر** (يدوياً عند الحاجة فقط، وتلمس stack الـ trading وحده). TimescaleDB يحتاج
+  `timescaledb_pre_restore()` قبل `pg_restore` و`timescaledb_post_restore()` بعده:
+  ```bash
+  cd /opt/trading
+  dc() { docker compose -f docker-compose.yml --env-file .env --env-file image.env "$@"; }
+  dc stop backend worker worker-backtest beat telegram-bot          # لا كتابة أثناء الاستعادة
+  dc exec -T db psql -U trading -d postgres -c "DROP DATABASE trading WITH (FORCE)"
+  dc exec -T db psql -U trading -d postgres -c "CREATE DATABASE trading"
+  dc exec -T db psql -U trading -d trading -c "CREATE EXTENSION IF NOT EXISTS timescaledb"
+  dc exec -T db psql -U trading -d trading -c "SELECT timescaledb_pre_restore()"
+  dc exec -T db pg_restore -U trading -d trading --no-owner < backups/trading-YYYY-MM-DD.dump
+  dc exec -T db psql -U trading -d trading -c "SELECT timescaledb_post_restore()"
+  dc up -d --wait                                                  # يعيد تشغيل الخدمات
+  ```
+  (`pg_restore` يقرأ الملف من stdin، فلا حاجة لنسخه داخل الحاوية.)
+- **اقتراح**: النسخ موجودة على نفس السيرفر فقط؛ فقدان القرص يفقدها معها. يُقترح نسخ أسبوعي إلى مكان
+  آخر (مثلاً workflow يدوي يسحب آخر نسخة كـ artifact خاص بمدة احتفاظ محدودة، أو تخزين خارجي).
+
 ## للبرومبتات القادمة
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.
 - أي خدمة جديدة تُضاف إلى `docker-compose.yml` (للتطوير) **وإلى** `infra/deploy/docker-compose.prod.yml` (للإنتاج) مع `mem_limit` و`cpus` و`restart: unless-stopped`، ومن دون أي منفذ عام.
