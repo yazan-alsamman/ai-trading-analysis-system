@@ -12,7 +12,7 @@ from app.api import ws
 from app.api.limits import RateLimitHeadersMiddleware, rate_limit_exceeded_handler
 from app.api.v1 import api_router
 from app.core.config import get_settings
-from app.core.logging import install_token_redaction
+from app.core.logging import install_token_redaction, quiet_http_clients
 from app.core.rate_limit import RATE_LIMIT_HEADERS, RateLimitExceeded
 from app.core.redis import close_redis, get_redis
 from app.db.session import SessionLocal, engine
@@ -24,7 +24,8 @@ from app.services.workspace_service import VersionConflict
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
-install_token_redaction()  # ?token= / ?api_key= must not end up in access logs
+install_token_redaction()  # ?token=, ?api_key= and the Telegram webhook secret stay out of logs
+quiet_http_clients()  # httpx logs URLs (the Telegram bot token is in them)
 
 
 async def bootstrap_first_admin() -> None:
