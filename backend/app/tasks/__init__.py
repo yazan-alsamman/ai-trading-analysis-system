@@ -30,11 +30,20 @@ celery_app.conf.update(
     # unacked messages of a dead worker are redelivered after this (default: 1 hour)
     broker_transport_options={"visibility_timeout": 300},
     worker_prefetch_multiplier=1,
-    # backtests run on their own queue / worker service (docker-compose: worker-backtest)
-    # notifications on their own queue, consumed by the worker service next to "celery"
+    # Queues (consumers in docker-compose.yml and infra/deploy/docker-compose.prod.yml):
+    # - celery (default) + notifications -> "worker": the live path (signal engine, price
+    #   alerts, notification sends) that must never wait;
+    # - backtests + maintenance -> "worker-backtest": heavy or non-urgent work (backtests, RSS,
+    #   retention, cleanups, subscription renewals, the daily summary).
+    # Exact task names are matched before the patterns below them.
     task_routes={
+        "notifications.cleanup": {"queue": "maintenance"},
         "backtests.*": {"queue": "backtests"},
         "notifications.*": {"queue": "notifications"},
+        "news.*": {"queue": "maintenance"},
+        "housekeeping.*": {"queue": "maintenance"},
+        "subscriptions.*": {"queue": "maintenance"},
+        "ops.*": {"queue": "maintenance"},
     },
     task_ignore_result=True,
     beat_schedule={
@@ -60,8 +69,11 @@ celery_app.conf.update(
         "news-fetch": {"task": "news.fetch", "schedule": crontab(minute="*/5")},
         # news retention (NEWS_RETENTION_DAYS)
         "news-cleanup": {"task": "news.cleanup", "schedule": crontab(hour=3, minute=45)},
-        # renewals, trial ends, grace periods and expired checkouts (Y19)
-        "subscriptions-renew": {"task": "subscriptions.renew", "schedule": crontab(minute=7)},
+        # renewals, trial ends, grace periods and expired checkouts (Y19), every 10 minutes
+        "subscriptions-renew": {
+            "task": "subscriptions.renew",
+            "schedule": crontab(minute="*/10"),
+        },
     },
 )
 

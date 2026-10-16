@@ -68,7 +68,7 @@ services:
     env_file: .env
     environment: *dev-smtp
     command: >-
-      celery -A app.tasks worker -Q backtests --concurrency 2 --hostname backtests@%h
+      celery -A app.tasks worker -Q backtests,maintenance --concurrency 2 --hostname backtests@%h
       --loglevel=info
     depends_on:
       - redis

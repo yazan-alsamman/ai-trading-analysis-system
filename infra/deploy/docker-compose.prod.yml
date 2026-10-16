@@ -78,7 +78,7 @@ services:
   worker-backtest:
     <<: *backend
     command: >-
-      celery -A app.tasks worker -Q backtests --concurrency 2 --hostname backtests@%h
+      celery -A app.tasks worker -Q backtests,maintenance --concurrency 2 --hostname backtests@%h
       --loglevel=info
     depends_on:
       backend:
