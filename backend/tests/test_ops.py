@@ -97,3 +97,14 @@ def test_docs_are_off_in_production() -> None:
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.split() == ["None", "None"]
+
+
+def test_uvicorn_access_log_is_off():
+    """One log line per request (the middleware's), not a second one from uvicorn: the access
+    logger neither propagates to the root handler nor has one of its own (pytest adds its
+    capture handlers to it during tests, so those are ignored)."""
+    import app.main  # noqa: F401  (configures logging on import)
+
+    access = logging.getLogger("uvicorn.access")
+    assert access.propagate is False
+    assert [h for h in access.handlers if not type(h).__module__.startswith("_pytest")] == []

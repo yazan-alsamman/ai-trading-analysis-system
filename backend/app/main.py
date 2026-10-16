@@ -29,7 +29,13 @@ POOL_RETRY_AFTER = 2  # seconds, on 503 when the database pool is exhausted
 
 settings = get_settings()
 # one root handler (JSON in production): uvicorn's loggers propagate to it
-setup_logging(loggers=("uvicorn", "uvicorn.error", "uvicorn.access"))
+setup_logging(loggers=("uvicorn", "uvicorn.error"))
+# RequestContextMiddleware logs one line per request; uvicorn's access log would repeat it.
+# uvicorn logs access lines whenever this logger has handlers (it checks hasHandlers()), so
+# --no-access-log alone is undone as soon as the logger propagates to the root handler.
+_access_log = logging.getLogger("uvicorn.access")
+_access_log.handlers = []
+_access_log.propagate = False
 install_token_redaction()  # ?token=, ?api_key= and the Telegram webhook secret stay out of logs
 quiet_http_clients()  # httpx logs URLs (the Telegram bot token is in them)
 
