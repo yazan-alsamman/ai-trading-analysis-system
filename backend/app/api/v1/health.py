@@ -13,6 +13,12 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+@router.get("/health/live")
+async def live() -> dict:
+    """The process answers (no dependency checked): for liveness probes."""
+    return {"status": "ok"}
+
+
 @router.get("/health/ready")
 async def ready() -> dict:
     checks: dict[str, str] = {}

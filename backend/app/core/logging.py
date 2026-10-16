@@ -1,7 +1,11 @@
-"""Logging helpers."""
+"""Logging helpers: secret redaction, quiet HTTP clients, and structured logs (request id,
+user id, route, status, duration) in JSON or text."""
 
+import json
 import logging
 import re
+from contextvars import ContextVar
+from datetime import UTC, datetime
 
 _TOKEN_IN_URL = re.compile(r"((?:token|api_key)=)[^&\s\"']+")
 _TELEGRAM_TOKEN = re.compile(r"bot\d+:[A-Za-z0-9_-]+")  # in Telegram API URLs
@@ -44,4 +48,79 @@ def quiet_http_clients() -> None:
 def configure_logging(level: int = logging.INFO) -> None:
     """Plain logging for standalone processes (telegram-bot)."""
     logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    quiet_http_clients()
+
+
+# --- structured logs (production) ----------------------------------------------------------------
+
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)
+REQUEST_FIELDS = ("method", "route", "path", "status", "duration_ms", "client")
+
+
+class ContextFilter(logging.Filter):
+    """Adds the current request id and user id to every record (None outside requests)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if getattr(record, "request_id", None) is None:
+            record.request_id = request_id_var.get()
+        if getattr(record, "user_id", None) is None:
+            record.user_id = user_id_var.get()
+        return True
+
+
+class JsonFormatter(logging.Formatter):
+    """One JSON object per line; the message is redacted like every other log line."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        out = {
+            "ts": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": redact_tokens(record.getMessage()),
+        }
+        for name in ("request_id", "user_id", *REQUEST_FIELDS):
+            value = getattr(record, name, None)
+            if value is not None:
+                out[name] = value
+        if record.exc_info:
+            out["exc"] = redact_tokens(self.formatException(record.exc_info))
+        return json.dumps(out, ensure_ascii=False, default=str)
+
+
+class TextFormatter(logging.Formatter):
+    def __init__(self) -> None:
+        super().__init__("%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    def format(self, record: logging.LogRecord) -> str:
+        text = redact_tokens(super().format(record))
+        extra = " ".join(
+            f"{name}={getattr(record, name)}"
+            for name in ("request_id", "user_id", *REQUEST_FIELDS)
+            if getattr(record, name, None) is not None
+        )
+        return f"{text} {extra}" if extra else text
+
+
+def use_json(fmt: str | None = None) -> bool:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    fmt = (fmt or settings.log_format).lower()
+    return fmt == "json" or (fmt == "auto" and settings.environment == "production")
+
+
+def setup_logging(level: int = logging.INFO, loggers: tuple[str, ...] = ()) -> None:
+    """One handler on the root logger (JSON in production with LOG_FORMAT=auto, text
+    elsewhere); ``loggers`` (e.g. uvicorn's) drop their own handlers and propagate to it."""
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter() if use_json() else TextFormatter())
+    handler.addFilter(ContextFilter())
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(level)
+    for name in loggers:
+        logger = logging.getLogger(name)
+        logger.handlers = []
+        logger.propagate = True
     quiet_http_clients()

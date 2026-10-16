@@ -10,10 +10,11 @@ from sqlalchemy import text
 
 from app.api import ws
 from app.api.limits import RateLimitHeadersMiddleware, rate_limit_exceeded_handler
+from app.api.middleware import RequestContextMiddleware
 from app.api.openapi import install as install_openapi
 from app.api.v1 import api_router
 from app.core.config import get_settings
-from app.core.logging import install_token_redaction, quiet_http_clients
+from app.core.logging import install_token_redaction, quiet_http_clients, setup_logging
 from app.core.rate_limit import RATE_LIMIT_HEADERS, RateLimitExceeded
 from app.core.redis import close_redis, get_redis
 from app.db.session import SessionLocal, engine
@@ -25,6 +26,8 @@ from app.services.workspace_service import VersionConflict
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+# one root handler (JSON in production): uvicorn's loggers propagate to it
+setup_logging(loggers=("uvicorn", "uvicorn.error", "uvicorn.access"))
 install_token_redaction()  # ?token=, ?api_key= and the Telegram webhook secret stay out of logs
 quiet_http_clients()  # httpx logs URLs (the Telegram bot token is in them)
 
@@ -74,13 +77,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="AI Trading Platform API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(RateLimitHeadersMiddleware)
+app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=list(RATE_LIMIT_HEADERS),
+    expose_headers=[*RATE_LIMIT_HEADERS, "X-Request-ID"],
 )
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 

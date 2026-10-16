@@ -116,6 +116,9 @@ class Settings(BaseSettings):
     chat_messages_per_day: int = 2000
     chat_edit_window_minutes: int = 15
     chat_notify_collapse_minutes: int = 5  # one external notification per conversation
+    # Operations (T05/T07 + hardening)
+    log_format: str = "auto"  # auto: JSON when ENVIRONMENT=production, text otherwise | json | text
+    app_version: str = "dev"  # the image tag / git sha, baked in at build time (APP_VERSION)
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
 

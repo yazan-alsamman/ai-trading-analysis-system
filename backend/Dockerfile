@@ -19,6 +19,11 @@ RUN pip install --no-cache-dir .
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 
+# the image tag (git sha) shown by GET /admin/system/status; set by the Deploy workflow
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 EXPOSE 8000
-# X-Forwarded-For is trusted only from FORWARDED_ALLOW_IPS (the Nginx container, see compose)
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]
+# X-Forwarded-For is trusted only from FORWARDED_ALLOW_IPS (the Nginx container, see compose).
+# Access lines come from app.api.middleware (request id, route, status, duration, user).
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]

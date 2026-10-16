@@ -1,9 +1,16 @@
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import after_setup_logger
+from celery.signals import (
+    after_setup_logger,
+    after_setup_task_logger,
+    task_failure,
+    task_success,
+    worker_ready,
+)
 
+from app.core import ops as ops_state
 from app.core.config import get_settings
-from app.core.logging import quiet_http_clients
+from app.core.logging import ContextFilter, JsonFormatter, quiet_http_clients, use_json
 
 settings = get_settings()
 
@@ -19,6 +26,7 @@ celery_app = Celery(
         "app.tasks.alerts",
         "app.tasks.news",
         "app.tasks.subscriptions",
+        "app.tasks.ops",
     ],
 )
 celery_app.conf.update(
@@ -70,6 +78,8 @@ celery_app.conf.update(
         # news retention (NEWS_RETENTION_DAYS)
         "news-cleanup": {"task": "news.cleanup", "schedule": crontab(hour=3, minute=45)},
         # renewals, trial ends, grace periods and expired checkouts (Y19), every 10 minutes
+        # one log line a day: signals, notifications, users, subscriptions (maintenance queue)
+        "ops-daily-summary": {"task": "ops.daily_summary", "schedule": crontab(hour=0, minute=5)},
         "subscriptions-renew": {
             "task": "subscriptions.renew",
             "schedule": crontab(minute="*/10"),
@@ -81,8 +91,33 @@ quiet_http_clients()
 
 
 @after_setup_logger.connect
-def _quiet(**_kwargs) -> None:
+@after_setup_task_logger.connect
+def _setup_logging(logger=None, **_kwargs) -> None:
     quiet_http_clients()  # httpx would log Telegram URLs, which contain the bot token
+    if logger is not None and use_json():
+        for handler in logger.handlers:
+            handler.setFormatter(JsonFormatter())
+            handler.addFilter(ContextFilter())
+
+
+@worker_ready.connect
+def _heartbeat(sender=None, **_kwargs) -> None:
+    try:
+        queues = sorted(q.name for q in sender.task_consumer.queues)
+    except Exception:  # noqa: BLE001
+        queues = []
+    ops_state.start_worker_heartbeat(getattr(sender, "hostname", "worker"), queues)
+
+
+@task_success.connect
+def _task_ok(sender=None, **_kwargs) -> None:
+    ops_state.task_finished(getattr(sender, "name", "?"), True)
+
+
+@task_failure.connect
+def _task_failed(sender=None, **_kwargs) -> None:
+    ops_state.task_finished(getattr(sender, "name", "?"), False)
+    ops_state.count_error_sync()
 
 
 @celery_app.task(name="ping")
