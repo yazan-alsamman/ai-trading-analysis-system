@@ -3,6 +3,7 @@ counter, the admin system status, the daily summary, the Celery hooks."""
 
 import json
 import logging
+import os
 
 from httpx import AsyncClient
 
@@ -56,6 +57,37 @@ async def test_system_status(
     assert (
         await client.get("/api/v1/admin/system/status", headers=trader_headers)
     ).status_code == 403
+
+
+async def test_status_adds_up_api_processes(
+    client: AsyncClient, admin_headers, redis_client
+) -> None:
+    """With several uvicorn workers each process reports its WebSocket numbers to Redis."""
+    stale = [k async for k in redis_client.scan_iter(match=f"{ops.API_PREFIX}*")]
+    if stale:
+        await redis_client.delete(*stale)
+    await ops.publish_api_process(
+        redis_client, {"clients": 3, "subscriptions": 5, "topics_by_kind": {"candles": 2}}
+    )
+    other = {
+        "host": "other",
+        "pid": 7,
+        "clients": 4,
+        "subscriptions": 6,
+        "topics_by_kind": {"candles": 1, "user": 1},
+    }
+    await redis_client.set(f"{ops.API_PREFIX}other:7", json.dumps(other), ex=60)
+    try:
+        res = await client.get("/api/v1/admin/system/status", headers=admin_headers)
+        ws = res.json()["websocket"]
+        assert ws["api_processes"] == 2
+        assert (ws["clients"], ws["subscriptions"]) == (7, 11)
+        assert ws["topics_by_kind"] == {"candles": 3, "user": 1}
+        assert {p["pid"] for p in ws["processes"]} == {7, os.getpid()}
+        await ops.forget_api_process(redis_client)
+        assert len(await ops.api_processes(redis_client)) == 1
+    finally:
+        await redis_client.delete(ops.api_process_key(), f"{ops.API_PREFIX}other:7")
 
 
 async def test_daily_summary(session_factory, make_user) -> None:

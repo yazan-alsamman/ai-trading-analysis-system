@@ -14,6 +14,7 @@ from app.api.limits import RateLimitHeadersMiddleware, rate_limit_exceeded_handl
 from app.api.middleware import RequestContextMiddleware
 from app.api.openapi import install as install_openapi
 from app.api.v1 import api_router
+from app.core import ops
 from app.core.config import get_settings
 from app.core.logging import install_token_redaction, quiet_http_clients, setup_logging
 from app.core.rate_limit import RATE_LIMIT_HEADERS, RateLimitExceeded
@@ -26,6 +27,7 @@ from app.services.workspace_service import VersionConflict
 
 logger = logging.getLogger(__name__)
 POOL_RETRY_AFTER = 2  # seconds, on 503 when the database pool is exhausted
+FIRST_ADMIN_LOCK = 7_204_118  # pg advisory lock id: one first-admin bootstrap at a time
 
 settings = get_settings()
 # one root handler (JSON in production): uvicorn's loggers propagate to it
@@ -45,6 +47,9 @@ async def bootstrap_first_admin() -> None:
     if not (settings.first_admin_email and settings.first_admin_password):
         return
     async with SessionLocal() as session:
+        # every uvicorn worker process runs this at start-up: the lock (released at commit or
+        # rollback) makes the others see the admin the first one created
+        await session.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": FIRST_ADMIN_LOCK})
         if await user_service.admin_exists(session):
             return
         user, created = await user_service.ensure_admin(
@@ -63,6 +68,14 @@ async def warm_up() -> None:
     await asyncio.to_thread(indicator_service.warm_up)
 
 
+async def publish_process_stats(hub: WebSocketHub) -> None:
+    """Every 30 s, this process's WebSocket numbers to Redis (GET /admin/system/status adds up
+    all API processes)."""
+    while True:
+        await ops.publish_api_process(get_redis(), hub.stats())
+        await asyncio.sleep(ops.HEARTBEAT_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
@@ -76,9 +89,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     hub = WebSocketHub(get_redis(), HubConfig.from_settings(settings))
     await hub.start()
     app.state.hub = hub
+    reporter = asyncio.create_task(publish_process_stats(hub), name="ops-api-process")
     try:
         yield
     finally:
+        reporter.cancel()
+        await asyncio.gather(reporter, return_exceptions=True)
+        await ops.forget_api_process(get_redis())
         await hub.stop()
         await close_redis()
 

@@ -2071,7 +2071,7 @@
           "admin"
         ],
         "summary": "System Status View",
-        "description": "Version, uptime, database (size, connections, migration, slowest queries when\npg_stat_statements is installed), Redis, Celery (queue lengths, live workers, last run of the\nscheduled tasks), market data freshness per active instrument, WebSocket clients of this API\nprocess, notification channels, unhandled errors in the last hour, the last daily summary.",
+        "description": "Version, uptime, database (size, connections, migration, slowest queries when\npg_stat_statements is installed), Redis, Celery (queue lengths, live workers, last run of the\nscheduled tasks), market data freshness per active instrument, WebSocket clients of every API\nprocess, notification channels, unhandled errors in the last hour, the last daily summary.",
         "operationId": "admin_system_status_view",
         "responses": {
           "200": {

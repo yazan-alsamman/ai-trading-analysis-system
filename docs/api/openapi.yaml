@@ -1273,7 +1273,7 @@ paths:
 
         pg_stat_statements is installed), Redis, Celery (queue lengths, live workers, last run of the
 
-        scheduled tasks), market data freshness per active instrument, WebSocket clients of this API
+        scheduled tasks), market data freshness per active instrument, WebSocket clients of every API
 
         process, notification channels, unhandled errors in the last hour, the last daily summary.'
       operationId: admin_system_status_view
