@@ -3059,7 +3059,8 @@ FOLDERS: list[Folder] = [
                         "connections, migration, slowest queries when `pg_stat_statements` is "
                         "installed), Redis, Celery (queue lengths, live workers, last run of each "
                         "scheduled task), market data freshness per active instrument, WebSocket "
-                        "clients of this API process, notification channels, unhandled errors in "
+                        "clients summed over every API process (each reports every 30 s), "
+                        "notification channels, unhandled errors in "
                         "the last hour and the last daily summary.",
                         auth="admin",
                     ),
