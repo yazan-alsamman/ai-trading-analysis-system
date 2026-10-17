@@ -3,7 +3,10 @@
 #   CREATE EXTENSION timescaledb; SELECT timescaledb_pre_restore(); pg_restore;
 #   SELECT timescaledb_post_restore();
 # into a FRESH, throw-away TimescaleDB container, then compares row counts of the main tables with
-# a source database. Touches nothing else (its own container, removed at the end).
+# a source database. Touches nothing else (its own container, removed at the end). Fails (exit 1)
+# when a table is missing or differs from the source, there is no alembic revision, or candles_1m
+# is not a hypertable; the last line says "restore test: ok" or "restore test: FAILED".
+# Also run by .github/workflows/backup-offsite.yml on the decrypted off-site copy (no source).
 #
 #   bash infra/deploy/restore-test.sh <dump file> [<source container> <source user> <source db>]
 #
@@ -63,9 +66,19 @@ for t in $TABLES; do
   source="-"
   [ -n "$SRC" ] && source="$(count "$SRC" "$SRC_USER" "$SRC_DB" "$t")"
   mark=""
+  if [ "$restored" = "-" ]; then mark=" <-- missing"; status=1; fi
   if [ -n "$SRC" ] && [ "$source" != "$restored" ]; then mark=" <-- differs"; status=1; fi
   printf '%-22s %12s %12s%s\n' "$t" "$source" "$restored" "$mark"
 done
-echo "alembic revision: $(docker exec "$NAME" psql -U trading -d trading -qAt -c 'SELECT version_num FROM alembic_version')"
-echo "hypertables: $(docker exec "$NAME" psql -U trading -d trading -qAt -c "SELECT string_agg(hypertable_name, ',') FROM timescaledb_information.hypertables")"
+rev="$(psql_r -d trading -c 'SELECT version_num FROM alembic_version' 2>/dev/null || true)"
+hyper="$(psql_r -d trading -c "SELECT string_agg(hypertable_name, ',') FROM timescaledb_information.hypertables" 2>/dev/null || true)"
+echo "alembic revision: ${rev:-none}"
+echo "hypertables: ${hyper:-none}"
+if [[ ",$hyper," == *",candles_1m,"* ]]; then
+  echo "candles_1m is a hypertable: yes"
+else
+  echo "candles_1m is a hypertable: NO"; status=1
+fi
+[ -n "$rev" ] || status=1
+if [ "$status" = 0 ]; then echo "restore test: ok"; else echo "restore test: FAILED"; fi
 exit $status
