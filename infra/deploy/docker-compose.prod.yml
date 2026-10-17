@@ -138,11 +138,14 @@ services:
     mem_limit: 64m
     cpus: 0.25
 
+# Dynamic addresses come from DOCKER_IP_RANGE only, so no container can take NGINX_IP (outside it).
+# remote-deploy.sh recreates the network once when the existing one has no such range.
 networks:
   default:
     ipam:
       config:
         - subnet: ${DOCKER_SUBNET:-172.30.57.0/24}
+          ip_range: ${DOCKER_IP_RANGE:-172.30.57.128/25}
 
 volumes:
   db_data:
