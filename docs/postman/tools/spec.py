@@ -341,11 +341,17 @@ if (json && pm.response.code === 200) {
 
 EXPERT_TESTS = """if (json && pm.response.code === 200 && !_.get(json, "plans.0.id")) store.unset("plan_id");"""
 
+SKIP_NO_PUBLIC_STRATEGY = """// Nobody has published a strategy yet: nothing to clone.
+if (!pm.variables.get("public_strategy_id")) pm.execution.skipRequest();"""
+
 SKIP_NO_EXPERT = """// No other expert listed yet: nothing to subscribe to.
 if (!pm.variables.get("expert_id")) pm.execution.skipRequest();"""
 
 SKIP_NO_PLAN = """// The expert has no active plan: nothing to buy.
 if (!pm.variables.get("plan_id")) pm.execution.skipRequest();"""
+
+SKIP_NO_CHECKOUT = """// No checkout was opened (no expert with an active plan yet): nothing to pay.
+if (!pm.variables.get("checkout_id")) pm.execution.skipRequest();"""
 
 CHECKOUT_TESTS = """// Already subscribed to this expert (one live subscription per expert): skip the payment.
 if (pm.response.code === 409) pm.execution.setNextRequest("My subscriptions");"""
@@ -1118,6 +1124,7 @@ FOLDERS: list[Folder] = [
                 "applies).",
                 path_vars={"strategy_id": ("{{public_strategy_id}}", "Public strategy UUID")},
                 expect=[201],
+                pre=SKIP_NO_PUBLIC_STRATEGY,
                 captures={"public_clone_id": "id"},
             ),
             Req(
@@ -1388,7 +1395,8 @@ FOLDERS: list[Folder] = [
                 "PATCH",
                 "/me/workspaces/:workspace_id",
                 "`name` and/or `is_default: true` (the previous default is unset in the same "
-                "transaction). Does not change `version`.",
+                "transaction). Does not change `version`. An optional `version` in the body (or an "
+                "`If-Match` header) is checked first: 409 if the workspace changed since.",
                 path_vars={"workspace_id": ("{{workspace_id}}", "Workspace UUID")},
                 body={"name": "Scalping BTC {{$timestamp}}", "is_default": True},
             ),
@@ -1558,6 +1566,12 @@ FOLDERS: list[Folder] = [
                         "Needs `market:read`.",
                         auth="apikey",
                         query=[("q", "BTC", "Symbol contains"), ("limit", "5", "")],
+                        optional_query=[
+                            ("offset", "0", ""),
+                            ("market", "crypto", "crypto | forex | stock | index | commodity"),
+                            ("source", "binance", "Data source"),
+                            ("is_active", "true", ""),
+                        ],
                     ),
                     Req(
                         "apikey_candles",
@@ -1568,6 +1582,10 @@ FOLDERS: list[Folder] = [
                         auth="apikey",
                         path_vars={"instrument_id": ("{{instrument_id}}", "Instrument UUID")},
                         query=[("timeframe", "1h", ""), ("limit", "3", "")],
+                        optional_query=[
+                            ("start", "2026-10-01T00:00:00Z", "ISO 8601, inclusive"),
+                            ("end", "2026-10-15T00:00:00Z", "ISO 8601, inclusive"),
+                        ],
                     ),
                     Req(
                         "apikey_signals",
@@ -1578,6 +1596,14 @@ FOLDERS: list[Folder] = [
                         "strategies.",
                         auth="apikey",
                         query=[("limit", "5", "")],
+                        optional_query=[
+                            ("offset", "0", ""),
+                            ("instrument_id", "{{instrument_id}}", ""),
+                            ("timeframe", "{{timeframe}}", ""),
+                            ("strategy_key", "{{strategy_key}}", ""),
+                            ("since", "2026-10-01T00:00:00Z", "bar_time >= since"),
+                            ("mine", "true", "Only the key owner's active strategies"),
+                        ],
                     ),
                     Req(
                         "apikey_news",
@@ -1587,6 +1613,15 @@ FOLDERS: list[Folder] = [
                         "Needs `news:read`.",
                         auth="apikey",
                         query=[("limit", "3", "")],
+                        optional_query=[
+                            ("offset", "0", ""),
+                            ("instrument_id", "{{instrument_id}}", "Only articles tagged with it"),
+                            ("sentiment", "positive", "positive | neutral | negative"),
+                            ("source", "coindesk_rss", "Source key"),
+                            ("language", "en", ""),
+                            ("since", "2026-10-01T00:00:00Z", "Published at or after"),
+                            ("q", "bitcoin etf", "Full-text search"),
+                        ],
                     ),
                     Req(
                         "apikey_forbidden",
@@ -2220,6 +2255,7 @@ FOLDERS: list[Folder] = [
                 "expired checkout. Open it in a browser to see it as users do.",
                 auth="none",
                 path_vars={"checkout_id": ("{{checkout_id}}", "Checkout UUID")},
+                pre=SKIP_NO_CHECKOUT,
             ),
             Req(
                 "pay_confirm",
@@ -2234,6 +2270,7 @@ FOLDERS: list[Folder] = [
                 "re-show the form (422). Only the brand and last 4 digits are kept.",
                 auth="none",
                 path_vars={"checkout_id": ("{{checkout_id}}", "Checkout UUID")},
+                pre=SKIP_NO_CHECKOUT,
                 form=[
                     (
                         "card_number",
@@ -2256,6 +2293,7 @@ FOLDERS: list[Folder] = [
                 "reason.",
                 auth="none",
                 path_vars={"checkout_id": ("{{checkout_id}}", "Checkout UUID")},
+                pre=SKIP_NO_CHECKOUT,
             ),
             Req(
                 "subs_mine",
@@ -3300,6 +3338,7 @@ and reconnect.
 
 ```json
 {"type": "subscribed", "topic": "candles:<uuid>:1m"}
+{"type": "unsubscribed", "topic": "candles:<uuid>:1m"}
 {"type": "snapshot",   "topic": "candles:<uuid>:1m", "candle": {"time": 1760000000, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}}
 {"type": "candle",     "topic": "candles:<uuid>:1m", "instrument_id": "<uuid>", "timeframe": "1m", "candle": {"time": 1760000040, "open": 1.0, "high": 1.2, "low": 0.9, "close": 1.1, "volume": 3.5}, "sent_at": 1760000041234}
 {"type": "signal",     "topic": "signals:<uuid>", "signal": {"strategy_key": "rsi_reversal", "side": "buy", "time": 1760000000, "price": 61234.5, "...": "..."}}
