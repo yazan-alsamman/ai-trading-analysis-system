@@ -5,6 +5,7 @@
 ## الروابط
 | | |
 |---|---|
+| موقع الويب | http://187.127.76.76:8080/ |
 | API | `http://187.127.76.76:8080/api/v1/...` |
 | التوثيق (Swagger) | http://187.127.76.76:8080/docs (مطفأ افتراضياً، انظر «تشغيل /docs يوم العرض») |
 | الجاهزية | http://187.127.76.76:8080/api/v1/health/ready |
@@ -15,7 +16,7 @@
 ## كيف يعمل
 1. كل PR يشغّل CI (`.github/workflows/ci.yml`)، ولا يتم الدمج إلا وهو أخضر.
 2. بعد الدمج إلى `main` ونجاح CI عليه، يعمل `Deploy` (`.github/workflows/deploy.yml`) تلقائياً:
-   - يبني صورتي `ai-trading-backend` و`ai-trading-ai-service` ويرفعهما إلى GHCR بوسم هو أول 12 حرفاً من الـ commit.
+   - يبني صور `ai-trading-backend` و`ai-trading-ai-service` و`ai-trading-web` (nginx مع موقع الويب المبني من `web/`) ويرفعها إلى GHCR بوسم هو أول 12 حرفاً من الـ commit.
    - يتصل بالسيرفر عبر SSH بالمستخدم `deploy-trading`، وينسخ ملفات الـ stack إلى `/opt/trading`، ثم يشغّل `infra/deploy/remote-deploy.sh`.
    - السكربت يسحب الصور ويشغّل الـ stack. الـ backend يطبّق `alembic upgrade head` عند الإقلاع، والـ workers لا تبدأ إلا بعد أن يصبح الـ backend سليماً.
    - إذا فشل فحص `/api/v1/health/ready` يعود السكربت تلقائياً إلى الوسم السابق ويفشل الـ workflow.

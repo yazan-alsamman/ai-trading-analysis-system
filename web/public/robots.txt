@@ -1,0 +1,16 @@
+# Public pages may be indexed; the application, account and onboarding pages may not.
+User-agent: *
+Allow: /$
+Allow: /membership
+Disallow: /overview
+Disallow: /workspace
+Disallow: /signals
+Disallow: /risk
+Disallow: /assistant
+Disallow: /alerts
+Disallow: /insights
+Disallow: /community
+Disallow: /settings
+Disallow: /login
+Disallow: /register
+Disallow: /welcome

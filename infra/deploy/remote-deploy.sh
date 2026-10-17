@@ -109,7 +109,8 @@ else
 fi
 
 # 3. keep only the current and previous image tags of OUR images (never a global prune)
-for repo in ghcr.io/yazan-alsamman/ai-trading-backend ghcr.io/yazan-alsamman/ai-trading-ai-service; do
+for repo in ghcr.io/yazan-alsamman/ai-trading-backend ghcr.io/yazan-alsamman/ai-trading-ai-service \
+            ghcr.io/yazan-alsamman/ai-trading-web; do
   docker image ls "$repo" --format '{{.Tag}}' | while read -r t; do
     if [ "$t" != "$TAG" ] && [ "$t" != "$prev" ]; then docker image rm "$repo:$t" >/dev/null || true; fi
   done

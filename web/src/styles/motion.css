@@ -1,0 +1,458 @@
+/*
+ * Motion system (docs/MOTION_DESIGN_DIRECTION.md). Mirrors src/motion/tokens.ts.
+ * Only transform, opacity, filter (short) and SVG stroke-dashoffset animate.
+ */
+
+:root {
+  --m-instant: 120ms;
+  --m-fast: 180ms;
+  --m-base: 260ms;
+  --m-slow: 600ms;
+  --m-cinematic: 1100ms;
+  --m-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --m-ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --m-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --m-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --m-rise: 18px;
+}
+
+@media (max-width: 47.99rem) {
+  :root {
+    --m-rise: 10px;
+  }
+}
+
+/* ------------------------------------------------------------ reveals */
+
+[data-reveal] {
+  transition:
+    opacity var(--m-slow) var(--m-ease-out) var(--reveal-delay, 0ms),
+    transform var(--m-slow) var(--m-ease-out) var(--reveal-delay, 0ms),
+    filter var(--m-slow) var(--m-ease-out) var(--reveal-delay, 0ms);
+}
+[data-reveal][data-shown='false'] {
+  opacity: 0;
+}
+[data-reveal='rise'][data-shown='false'] {
+  transform: translate3d(0, var(--m-rise), 0);
+}
+[data-reveal='scale'][data-shown='false'] {
+  transform: scale(0.97);
+}
+[data-reveal='blur'][data-shown='false'] {
+  transform: translate3d(0, var(--m-rise), 0);
+  filter: blur(6px);
+}
+[data-reveal='left'][data-shown='false'] {
+  transform: translate3d(calc(var(--m-rise) * -1.5), 0, 0);
+}
+[data-reveal='right'][data-shown='false'] {
+  transform: translate3d(calc(var(--m-rise) * 1.5), 0, 0);
+}
+
+/* Line-mask headline reveal. */
+.reveal-line {
+  display: block;
+  overflow: hidden;
+  /* room for descenders and italic overhang inside the mask */
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+.reveal-line-inner {
+  display: block;
+  transform: translate3d(0, 105%, 0);
+  transition: transform var(--m-cinematic) var(--m-ease-out) var(--line-delay, 0ms);
+}
+.reveal-lines[data-shown='true'] .reveal-line-inner {
+  transform: none;
+}
+.reveal-lines[data-trigger='mount'] .reveal-line-inner {
+  transition: none;
+  animation: m-mask-up var(--m-cinematic) var(--m-ease-out) var(--line-delay, 0ms) both;
+}
+
+/* ------------------------------------------------------- keyframes */
+
+@keyframes m-mask-up {
+  from {
+    transform: translate3d(0, 105%, 0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes m-fade-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--m-rise), 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes m-fade-rise-blur {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--m-rise), 0);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes m-stage-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes m-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* SVG path drawing: set --len to the path length (pathLength="1" → 1). */
+@keyframes m-draw {
+  from {
+    stroke-dashoffset: var(--len, 1);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes m-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes m-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes m-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* One slow atmospheric drift — the only loop at rest. Paused off-screen by JS. */
+@keyframes m-drift {
+  0%,
+  100% {
+    transform: translate3d(-2%, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2%, -1.5%, 0) scale(1.06);
+  }
+}
+
+/* Timeline helpers: elements opt in with a class and an --at delay. */
+.m-in {
+  animation: m-fade-rise var(--m-slow) var(--m-ease-out) var(--at, 0ms) both;
+}
+.m-in-blur {
+  animation: m-fade-rise-blur var(--m-slow) var(--m-ease-out) var(--at, 0ms) both;
+}
+.m-stage {
+  animation: m-stage-in 900ms var(--m-ease-out) var(--at, 0ms) both;
+}
+.m-fade {
+  animation: m-fade var(--m-slow) var(--m-ease-out) var(--at, 0ms) both;
+}
+.m-draw {
+  stroke-dasharray: var(--len, 1);
+  animation: m-draw var(--dur, 1300ms) var(--m-ease-in-out) var(--at, 0ms) both;
+}
+.m-grow-x {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: m-grow-x var(--m-slow) var(--m-ease-out) var(--at, 0ms) both;
+}
+.m-grow-y {
+  transform-box: fill-box;
+  transform-origin: center top;
+  animation: m-grow-y var(--m-base) var(--m-ease-out) var(--at, 0ms) both;
+}
+.m-pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: m-pop 420ms var(--m-ease-spring) var(--at, 0ms) both;
+}
+
+/* Animations that should only run once their container is in view. */
+[data-play='false'] .m-in,
+[data-play='false'] .m-in-blur,
+[data-play='false'] .m-stage,
+[data-play='false'] .m-fade,
+[data-play='false'] .m-draw,
+[data-play='false'] .m-grow-x,
+[data-play='false'] .m-grow-y,
+[data-play='false'] .m-pop {
+  animation-play-state: paused;
+}
+
+/* Pointer parallax layers: set --depth (0–1) on the layer, --px/--py on an ancestor. */
+.parallax {
+  transform: translate3d(calc(var(--px, 0) * var(--depth, 0.5) * 14px), calc(var(--py, 0) * var(--depth, 0.5) * 10px), 0);
+  transition: transform 500ms var(--m-ease-out);
+  will-change: transform;
+}
+
+.atmos-drift {
+  animation: m-drift 60s ease-in-out infinite;
+}
+.atmos-drift[data-paused='true'] {
+  animation-play-state: paused;
+}
+
+/* Step-driven layers inside pinned sequences: on/off by data-on, with a stagger var. */
+[data-layer] {
+  transition:
+    opacity var(--m-slow) var(--m-ease-out) var(--layer-delay, 0ms),
+    transform var(--m-slow) var(--m-ease-out) var(--layer-delay, 0ms);
+}
+[data-layer][data-on='false'] {
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+}
+[data-layer='fade'][data-on='false'] {
+  transform: none;
+}
+
+/* Accordion (FAQ, expandable details): grid rows 0fr → 1fr. */
+.accordion-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--m-base) var(--m-ease-out);
+}
+.accordion-panel[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+.accordion-panel > div {
+  overflow: hidden;
+}
+
+/* Nav links: underline grows from the left on hover / for the current section. */
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.3rem;
+  height: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--m-base) var(--m-ease-out);
+}
+.nav-link:hover::after,
+.nav-link[aria-current='page']::after {
+  transform: scaleX(1);
+}
+
+/* Sequence A fragments: messy label → module label, driven by --t (0–1). */
+.fragment-messy {
+  opacity: calc(1 - var(--t, 0));
+  color: var(--fg-muted);
+}
+.fragment-clean {
+  opacity: var(--t, 0);
+  color: var(--fg-primary);
+}
+.fragment-label {
+  border-color: var(--line-strong);
+  border-style: dashed;
+  /* A backing so the label never sits directly on the background footage. */
+  background: color-mix(in srgb, var(--bg-canvas) 82%, transparent);
+  transition:
+    background-color var(--m-base) var(--m-ease-out),
+    border-color var(--m-base) var(--m-ease-out);
+}
+.fragment-num {
+  border-color: var(--line-strong);
+  border-style: dashed;
+  color: var(--fg-muted);
+  background: var(--bg-canvas);
+  transition:
+    color var(--m-base) var(--m-ease-out),
+    border-color var(--m-base) var(--m-ease-out);
+}
+.fragment[data-ordered='true'] .fragment-label {
+  border-style: solid;
+  background: var(--bg-surface);
+}
+.fragment[data-ordered='true'] .fragment-num {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Range slider (public risk demo): gold fill up to --fill. */
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+.range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--fill, 50%), var(--line-strong) var(--fill, 50%));
+}
+.range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--fill, 50%), var(--line-strong) var(--fill, 50%));
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  margin-top: -7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--fg-primary);
+  border: 3px solid var(--accent);
+  transition: transform var(--m-instant) var(--m-ease-out);
+}
+.range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--fg-primary);
+  border: 3px solid var(--accent);
+}
+.range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.range:focus-visible {
+  outline: none;
+}
+.range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 2px var(--focus);
+}
+.range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 2px var(--focus);
+}
+
+/* Plan selection: a small lift on the spring curve; the check mark pops in. */
+.plan-card {
+  transition:
+    opacity var(--m-slow) var(--m-ease-out) var(--reveal-delay, 0ms),
+    transform 380ms var(--m-ease-spring),
+    border-color var(--m-base) var(--m-ease-out),
+    box-shadow var(--m-base) var(--m-ease-out);
+}
+.plan-card[data-shown='true']:has(.plan-card-inner[data-selected='true']) {
+  transform: translate3d(0, -6px, 0);
+}
+.plan-check {
+  transition:
+    transform 380ms var(--m-ease-spring),
+    opacity var(--m-fast) var(--m-ease-out);
+}
+
+/* Anchored public sections land below the fixed header. */
+[data-section] {
+  scroll-margin-top: 88px;
+}
+
+/* --------------------------------------------- page (view) transitions */
+
+::view-transition-old(root) {
+  animation: m-vt-out var(--m-fast) var(--m-ease-in) both;
+}
+::view-transition-new(root) {
+  animation: m-vt-in var(--m-base) var(--m-ease-out) both;
+}
+@keyframes m-vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes m-vt-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+}
+::view-transition-group(brand),
+::view-transition-group(auth-card) {
+  animation-duration: 360ms;
+  animation-timing-function: var(--m-ease-out);
+}
+/* The selected plan card morphs into the plan summary on sign-up (and back). */
+::view-transition-group(selected-plan) {
+  animation-duration: 460ms;
+  animation-timing-function: var(--m-ease-out);
+}
+::view-transition-old(selected-plan),
+::view-transition-new(selected-plan) {
+  height: 100%;
+  object-fit: cover;
+  overflow: clip;
+}
+
+/* ------------------------------------------------ reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Durations are already ~0 (index.css); delays must go too, or staged items stay hidden until their delay. */
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+  [data-reveal],
+  [data-reveal][data-shown='false'],
+  [data-layer],
+  [data-layer][data-on='false'] {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .reveal-line-inner {
+    transform: none !important;
+  }
+  .parallax {
+    transform: none !important;
+  }
+  .atmos-drift {
+    animation: none !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

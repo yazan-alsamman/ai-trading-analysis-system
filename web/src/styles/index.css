@@ -1,0 +1,235 @@
+@import 'tailwindcss';
+@import './tokens.css';
+@import './motion.css';
+@import './cinematic.css';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Map semantic tokens into Tailwind utilities (bg-surface, text-fg, border-line…). */
+@theme inline {
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-raised: var(--bg-raised);
+  --color-inset: var(--bg-inset);
+  --color-hover: var(--bg-hover);
+  --color-selected: var(--bg-selected);
+
+  --color-line: var(--line-subtle);
+  --color-line-strong: var(--line-strong);
+
+  --color-fg: var(--fg-primary);
+  --color-fg-2: var(--fg-secondary);
+  --color-fg-3: var(--fg-muted);
+  --color-fg-disabled: var(--fg-disabled);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-up: var(--up);
+  --color-up-soft: var(--up-soft);
+  --color-down: var(--down);
+  --color-down-soft: var(--down-soft);
+  --color-forecast: var(--forecast);
+  --color-forecast-soft: var(--forecast-soft);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-demo: var(--demo);
+  --color-demo-soft: var(--demo-soft);
+  --color-focus: var(--focus);
+  --color-overlay: var(--overlay);
+
+  --shadow-float: var(--shadow-float);
+  --shadow-glow-aurum: var(--shadow-glow-aurum);
+}
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* Editorial display face — hero, auth and section openers only, never inside dense panels. */
+  --font-display: 'Instrument Serif', ui-serif, Georgia, 'Times New Roman', serif;
+
+  /* Type scale — 12px is the floor. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+  --text-md: 1rem;
+  --text-md--line-height: 1.5rem;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 2rem;
+  /* Display steps (serif). Tight leading; tracking set by the .display utility. */
+  --text-d3: 2rem;
+  --text-d3--line-height: 2.25rem;
+  --text-d2: 2.75rem;
+  --text-d2--line-height: 2.875rem;
+  --text-d1: 4rem;
+  --text-d1--line-height: 4rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 90rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background: var(--bg-canvas);
+    color: var(--fg-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+  }
+
+  :focus-visible {
+    transition: outline-offset var(--dur-fast) var(--ease-out);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+@layer utilities {
+  /* Every financial number: fixed-width digits so values do not jump on update. */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums slashed-zero;
+    font-feature-settings: 'tnum', 'zero';
+    letter-spacing: -0.01em;
+  }
+
+  .h-row {
+    height: var(--row-h);
+  }
+
+  /* Editorial display type (serif). The muted second clause is set with <em> or .display-muted. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  .display em,
+  .display-muted {
+    font-style: italic;
+    color: var(--fg-secondary);
+  }
+
+  /* Section eyebrow: mono, uppercase, tracked. 12px is the floor. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+  }
+
+  /* Narrative atmosphere: a faint grid plus two soft glows. Overview hero and auth only. */
+  .atmosphere {
+    background-color: var(--bg-canvas);
+    background-image:
+      radial-gradient(60% 50% at 85% 0%, var(--atmos-violet), transparent 70%),
+      radial-gradient(50% 45% at 10% 10%, var(--atmos-aurum), transparent 70%),
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: auto, auto, 48px 48px, 48px 48px;
+    background-position: center, center, -1px -1px, -1px -1px;
+  }
+
+  /* Entrance for narrative blocks only. Never applied to prices or data tables. */
+  .reveal {
+    animation: reveal var(--dur-slow) var(--ease-out) both;
+  }
+  .reveal-1 {
+    animation-delay: 60ms;
+  }
+  .reveal-2 {
+    animation-delay: 120ms;
+  }
+  .reveal-3 {
+    animation-delay: 180ms;
+  }
+  .reveal-4 {
+    animation-delay: 240ms;
+  }
+}
+
+/* Side sheets slide in from the right (disabled by reduced motion below). */
+dialog.sheet[open] {
+  animation: sheet-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

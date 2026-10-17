@@ -1,0 +1,176 @@
+/*
+ * Semantic design tokens — "Ink, Aurum and Violet" (docs/DESIGN_SYSTEM.md).
+ * Components reference ONLY these names (via the Tailwind theme mapping in
+ * index.css), never raw hex values, so both themes stay consistent.
+ *
+ * Colour rules:
+ *  - --accent (aurum gold) is brand + selection + focus. Never market direction.
+ *  - --primary is the inverted neutral used for the single primary action.
+ *  - --up / --down are reserved for market direction (always paired with a
+ *    sign and an arrow, never colour alone).
+ *  - --forecast (violet) is reserved for AI model output so a prediction can
+ *    never be mistaken for an observed price or an interactive control.
+ *  - --demo (sky) marks simulated content; --warning (amber) and --danger
+ *    (orange) are system feedback, always with an icon and a text label.
+ * Every text/background pair is measured ≥ 4.5:1 (see DESIGN_SYSTEM.md §2).
+ */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Ink surfaces, back to front. A faint violet cast keeps black from feeling flat. */
+  --bg-canvas: #07070a;
+  --bg-surface: #0d0d12;
+  --bg-raised: #13131a;
+  --bg-inset: #0a0a0e;
+  --bg-hover: #17171f;
+  --bg-selected: #1c1b26;
+
+  --line-subtle: #1e1d28;
+  --line-strong: #2f2e3d;
+
+  /* One lavender-grey family for secondary text (hierarchy by tone, not by hue). */
+  --fg-primary: #f2f1f6;
+  --fg-secondary: #b0afbf;
+  --fg-muted: #8f8ea0;
+  --fg-disabled: #4d4c5a;
+
+  --primary: #f2f1f6;
+  --primary-hover: #ffffff;
+  --primary-fg: #0a0a0e;
+
+  --accent: #e2bd72;
+  --accent-hover: #edcd8e;
+  --accent-fg: #17110a;
+  --accent-soft: rgb(226 189 114 / 0.13);
+
+  --up: #2fc68f;
+  --up-soft: rgb(47 198 143 / 0.13);
+  --down: #ff6f77;
+  --down-soft: rgb(255 111 119 / 0.13);
+
+  --forecast: #b9a0ff;
+  --forecast-soft: rgb(185 160 255 / 0.14);
+
+  --danger: #ff8a4c;
+  --danger-soft: rgb(255 138 76 / 0.13);
+  --warning: #f2a541;
+  --warning-soft: rgb(242 165 65 / 0.13);
+  --info: #6cbcff;
+  --info-soft: rgb(108 188 255 / 0.13);
+
+  --demo: #6cbcff;
+  --demo-soft: rgb(108 188 255 / 0.11);
+
+  --focus: #e2bd72;
+  --overlay: rgb(3 3 6 / 0.72);
+  --shadow-float: 0 16px 40px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.35);
+  --shadow-glow-aurum: 0 0 0 1px rgb(226 189 114 / 0.18), 0 12px 40px -12px rgb(226 189 114 / 0.25);
+
+  /* Atmosphere for narrative surfaces only (Overview hero, auth). Never on data panels. */
+  --atmos-aurum: rgb(226 189 114 / 0.09);
+  --atmos-violet: rgb(185 160 255 / 0.08);
+  --grid-line: rgb(242 241 246 / 0.035);
+
+  /* Chart-specific (consumed by src/features/chart/chartTheme.ts). */
+  --chart-grid: #121219;
+  --chart-crosshair: #5d5c6e;
+  --chart-zone-entry: rgb(226 189 114 / 0.12);
+  --chart-zone-tp: rgb(47 198 143 / 0.1);
+  --chart-zone-sl: rgb(255 111 119 / 0.1);
+  --chart-ind-1: #6cbcff;
+  --chart-ind-2: #d99a5b;
+  --chart-ind-3: #8f8ea0;
+  --chart-vol-up: rgb(47 198 143 / 0.22);
+  --chart-vol-down: rgb(255 111 119 / 0.22);
+  --chart-forecast-region: rgb(185 160 255 / 0.05);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Paper: warm off-white canvas, white working surfaces, ink text. */
+  --bg-canvas: #f4f3ef;
+  --bg-surface: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-inset: #f8f7f4;
+  --bg-hover: #efeee9;
+  --bg-selected: #f2ede1;
+
+  --line-subtle: #e4e2db;
+  --line-strong: #cbc8bf;
+
+  --fg-primary: #141318;
+  --fg-secondary: #4a4853;
+  --fg-muted: #5e5c67;
+  --fg-disabled: #a9a7b0;
+
+  --primary: #141318;
+  --primary-hover: #2a2930;
+  --primary-fg: #ffffff;
+
+  --accent: #7c540d;
+  --accent-hover: #664409;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(160 112 20 / 0.11);
+
+  --up: #066b47;
+  --up-soft: rgb(6 107 71 / 0.1);
+  --down: #b3262f;
+  --down-soft: rgb(179 38 47 / 0.09);
+
+  --forecast: #6534c8;
+  --forecast-soft: rgb(101 52 200 / 0.1);
+
+  --danger: #a33c0b;
+  --danger-soft: rgb(163 60 11 / 0.09);
+  --warning: #7f4700;
+  --warning-soft: rgb(196 120 20 / 0.12);
+  --info: #0b5a96;
+  --info-soft: rgb(11 90 150 / 0.09);
+
+  --demo: #0b5a96;
+  --demo-soft: rgb(11 90 150 / 0.08);
+
+  --focus: #7c540d;
+  --overlay: rgb(20 19 24 / 0.4);
+  --shadow-float: 0 16px 40px rgb(20 19 24 / 0.12), 0 2px 6px rgb(20 19 24 / 0.07);
+  --shadow-glow-aurum: 0 0 0 1px rgb(124 84 13 / 0.16), 0 12px 32px -14px rgb(124 84 13 / 0.3);
+
+  --atmos-aurum: rgb(196 150 60 / 0.12);
+  --atmos-violet: rgb(101 52 200 / 0.06);
+  --grid-line: rgb(20 19 24 / 0.045);
+
+  --chart-grid: #efeee9;
+  --chart-crosshair: #8b8995;
+  --chart-zone-entry: rgb(160 112 20 / 0.1);
+  --chart-zone-tp: rgb(6 107 71 / 0.08);
+  --chart-zone-sl: rgb(179 38 47 / 0.07);
+  --chart-ind-1: #1b6ca8;
+  --chart-ind-2: #a8661c;
+  --chart-ind-3: #6b6977;
+  --chart-vol-up: rgb(6 107 71 / 0.18);
+  --chart-vol-down: rgb(179 38 47 / 0.16);
+  --chart-forecast-region: rgb(101 52 200 / 0.045);
+}
+
+:root {
+  /* Layout constants. */
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 64px;
+  --topbar-h: 52px;
+  --row-h: 36px;
+  --content-wide: 1600px;
+  --content-reading: 1024px;
+
+  /* Motion: short, purposeful, never on prices. Disabled by prefers-reduced-motion. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 420ms;
+}
+
+:root[data-density='compact'] {
+  --row-h: 30px;
+}
