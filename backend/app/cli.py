@@ -4,6 +4,8 @@ python -m app.cli create-admin --email admin@example.com --password 'Secret123'
 python -m app.cli seed-instruments
 python -m app.cli seed-demo-candles --symbol BTC/USDT --source binance --days 30
 python -m app.cli simulate-live --symbol BTC/USDT --source binance --interval 2
+python -m app.cli purge-demo --prefix y19-            # dry run: lists what would go
+python -m app.cli purge-demo --prefix e2e- --instrument-prefix E2E --yes
 """
 
 import argparse
@@ -190,6 +192,32 @@ async def simulate_live(
     return 0
 
 
+async def purge_demo(prefix: str, instrument_prefix: str | None, execute: bool) -> int:
+    from app.services import purge
+
+    try:
+        report = await purge.purge_demo(
+            _default_session_factory(),
+            prefix,
+            instrument_prefix=instrument_prefix,
+            execute=execute,
+        )
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    print(
+        f"{'DELETED' if report.deleted else 'DRY RUN (add --yes to delete)'}: "
+        f"{len(report.users)} accounts with e-mail prefix {prefix!r}"
+    )
+    for email, role in report.users:
+        print(f"  {email} ({role})")
+    for table, count in report.owned.items():
+        print(f"  {table}: {count}")
+    if instrument_prefix:
+        print(f"  instruments {instrument_prefix!r}*: {', '.join(report.instruments) or 'none'}")
+    return 0
+
+
 async def _run(coro: Awaitable[int]) -> int:
     try:
         return await coro
@@ -232,6 +260,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--ticks", type=int, default=None, help="stop after N updates")
     p.add_argument("--seed", type=int, default=None)
 
+    p = sub.add_parser(
+        "purge-demo",
+        help="List (dry run) or delete accounts of verification scripts by e-mail prefix, with "
+        "everything they own. Never run it against production without a dry run first.",
+    )
+    p.add_argument("--prefix", required=True, help="e-mail prefix, e.g. y19- or e2e-")
+    p.add_argument("--instrument-prefix", default=None, help="also delete these test markets")
+    p.add_argument("--yes", action="store_true", help="really delete (default: dry run)")
+
     args = parser.parse_args(argv)
     if args.command == "create-admin":
         return asyncio.run(create_admin(args.email, args.password))
@@ -249,6 +286,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         )
+    if args.command == "purge-demo":
+        return asyncio.run(purge_demo(args.prefix, args.instrument_prefix, args.yes))
     if args.command == "simulate-live":
         try:
             return asyncio.run(

@@ -6,7 +6,7 @@
 | | |
 |---|---|
 | API | `http://187.127.76.76:8080/api/v1/...` |
-| التوثيق (Swagger) | http://187.127.76.76:8080/docs |
+| التوثيق (Swagger) | http://187.127.76.76:8080/docs (مطفأ افتراضياً، انظر «تشغيل /docs يوم العرض») |
 | الجاهزية | http://187.127.76.76:8080/api/v1/health/ready |
 | WebSocket | `ws://187.127.76.76:8080/ws/market` |
 
@@ -21,13 +21,17 @@
    - إذا فشل فحص `/api/v1/health/ready` يعود السكربت تلقائياً إلى الوسم السابق ويفشل الـ workflow.
 3. لإعادة النشر يدوياً: Actions ← Deploy ← Run workflow.
 4. لفحص حالة السيرفر للقراءة فقط: Actions ← Server inspect ← Run workflow.
+5. نسخة احتياطية مشفّرة خارج السيرفر يومياً: Actions ← Off-site backup (انظر «النسخ خارج السيرفر»).
 
 ## قواعد السيرفر المشترك (لا تُكسر)
 - لا نلمس أي حاوية أو شبكة أو volume أو موقع nginx لا يخص مشروع Compose المسمى `trading`.
 - ممنوع `docker system prune` و`docker image prune` العام، وممنوع إعادة تشغيل Docker أو السيرفر، وممنوع `apt upgrade`.
 - المنفذ العام الوحيد لمشروعنا هو `8080` (حاوية nginx). قاعدة البيانات مربوطة على `127.0.0.1:5435` فقط، وRedis والـ backend بلا منافذ على المضيف.
-- الشبكة المستخدمة `172.30.57.0/24`، ومنافذ المشاريع الأخرى المحجوزة هي 80، 443، 3000-3005، 5000، 5432-5434، 6380، 9000، 9001، 27017.
-- لكل حاوية حد للذاكرة والمعالج، ومجموع الحدود حوالي 2.7GB، وسجلات Docker محدودة بـ 30MB لكل حاوية.
+- الشبكة المستخدمة `172.30.57.0/24`: العناوين الديناميكية من `172.30.57.128/25` فقط (`DOCKER_IP_RANGE`)، وعنوان Nginx
+  الثابت `172.30.57.10` خارجها. منافذ المشاريع الأخرى المحجوزة هي 80، 443، 3000-3005، 5000، 5432-5434، 6380، 9000، 9001، 27017.
+- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3040MiB (≈2.97GiB)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
+- `cpus:` سقف وليس حجزاً (مجموع سقوفنا 6.5 على سيرفر بـ 2 vCPU)، لذلك لكل خدماتنا `cpu_shares: 512` (الافتراضي 1024):
+  عند انشغال السيرفر تأخذ المشاريع الأخرى ضعف وزننا من المعالج، وعندما يكون هادئاً نستطيع استخدام سقوفنا.
 
 ## على السيرفر
 ```
@@ -76,7 +80,186 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/notifications/unread-count
   ```
 
+## الأخبار والمنشورات وتنبيهات الأسعار (Y18)
+- لا خدمات جديدة. الـ `worker` الحالي ينفّذ جلب RSS (`news.fetch` كل 5 دقائق) وتقييم تنبيهات
+  الأسعار (`alerts.evaluate` كل دقيقة)، والـ `beat` يجدولهما.
+- Migration `0011` إضافية فقط: جداول جديدة، وقيم جديدة لـ `notification_type` عبر
+  `ALTER TYPE ... ADD VALUE IF NOT EXISTS` خارج المعاملة (autocommit). عند الرجوع تبقى القيم.
+- متغيرات جديدة (كلها لها قيم افتراضية آمنة، تُضاف تلقائياً إلى `.env` على السيرفر):
+  `NEWS_RSS_ENABLED=true`، `NEWS_FETCH_TIMEOUT_SECONDS=10`، `NEWS_FETCH_MAX_BYTES=2097152`،
+  `NEWS_RETENTION_DAYS=180`، `POST_ROLES=analyst,expert,admin`، `POST_EDIT_WINDOW_HOURS=24`،
+  `POSTS_PER_DAY=10`، `COMMENTS_PER_HOUR=60`، `REPORTS_PER_DAY=20`، `CONTENT_CREATE_COST=2`،
+  `PRICE_ALERT_LIMIT_TRADER=20`، `PRICE_ALERT_LIMIT_ANALYST=100`،
+  `PRICE_ALERT_LIMIT_EXPERT=100`، `PRICE_ALERT_LIMIT_ADMIN=100`.
+- لإيقاف جلب RSS: `NEWS_RSS_ENABLED=false` ثم إعادة النشر، أو تعطيل مصدر واحد من
+  `PATCH /api/v1/admin/news/sources/{id}`.
+- مفتاح `news:write` لفادي يُنشئه حساب مدير (`POST /api/v1/me/api-keys`).
+- فحص بعد النشر:
+  ```bash
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/news?limit=3"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/news/sources"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/news/sentiment?window=24h"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/posts?limit=5"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/me/price-alerts"
+  ```
+
+## الخبراء والاشتراكات والمحادثة (Y19)
+- لا خدمات جديدة. التجديدات الشهرية/السنوية تنفّذها مهمة `subscriptions.renew` كل 10 دقائق (طابور `maintenance`).
+- الدفع **تجريبي فقط** (`PAYMENT_PROVIDER=demo`): لا أموال حقيقية ولا مفاتيح مزوّد. صفحة الدفع التجريبية
+  على `/api/v1/pay/demo/{checkout_id}`، وتقبل البطاقات التجريبية فقط.
+- Migration `0012` إضافية فقط، وقيم enum الجديدة (`notification_type`، `post_visibility=subscribers`،
+  `report_target=message`) تُضاف خارج المعاملة كما في 0011.
+- متغيرات جديدة (قيم افتراضية آمنة، تُضاف تلقائياً إلى `.env`): `PAYMENT_PROVIDER=demo`،
+  `PAYMENT_DEMO_WEBHOOK_SECRET=` (فارغ = سرّ يُولَّد ويُحفظ في Redis)، `PAYMENT_DEMO_TOOLS=false`،
+  `PAYMENT_RETURN_URL=`، `PUBLIC_BASE_URL=`، `PLATFORM_FEE_PCT=20`، `SUBSCRIPTION_GRACE_DAYS=3`،
+  `CHECKOUT_TTL_MINUTES=30`، `CHAT_MESSAGES_PER_MINUTE=30`، `CHAT_MESSAGES_PER_DAY=2000`،
+  `CHAT_EDIT_WINDOW_MINUTES=15`، `CHAT_NOTIFY_COLLAPSE_MINUTES=5`.
+- روابط الدفع مطلقة تلقائياً (Nginx يمرّر `Host` مع المنفذ :8080)؛ `PUBLIC_BASE_URL` اختياري لفرض عنوان آخر. و
+  `PAYMENT_DEMO_TOOLS=true` لعرض أداة تقديم الوقت (fast-forward) في العروض التقديمية.
+- فحص بعد النشر:
+  ```bash
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/experts"
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/conversations"
+  # checkout تجريبي (بحساب متداول وخطة موجودة) ثم فتح صفحة الدفع التجريبية:
+  curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'        -d '{"plan_id":"<plan id>"}' http://187.127.76.76:8080/api/v1/subscriptions/checkout
+  curl -s "http://187.127.76.76:8080/api/v1/pay/demo/<checkout_id>" | grep -o '<title>[^<]*'
+  ```
+
+## توزيع المهام على الـ workers (T05/T07 + hardening)
+- `worker` (`-Q celery,notifications`): المسار الحي فقط: محرك الإشارات (`signals.*`)، تنبيهات الأسعار
+  (`alerts.*`)، وإرسال الإشعارات والملخصات.
+- `worker-backtest` (`-Q backtests,maintenance`): الاختبارات التاريخية، والمهام غير العاجلة على طابور
+  `maintenance`: جلب RSS وتنظيف الأخبار (`news.*`)، تنظيف التوكنات والمفاتيح (`housekeeping.*`)،
+  احتفاظ صندوق الإشعارات (`notifications.cleanup`)، التجديدات (`subscriptions.renew`)، والملخص اليومي (`ops.*`).
+
+## حذف حسابات التجربة (purge-demo)
+سكربتات التحقق تنشئ حسابات بأسماء مثل `y19-…@example.com` و`e2e-…`. لحذفها مع كل ما تملكه:
+```bash
+python -m app.cli purge-demo --prefix y19-              # تجربة فقط: يعرض ما سيُحذف
+python -m app.cli purge-demo --prefix y19- --yes        # حذف فعلي
+python -m app.cli purge-demo --prefix e2e- --instrument-prefix E2E --yes
+```
+يرفض البادئات القصيرة (أقل من 3 أحرف) وحذف آخر مدير. **لا يُشغَّل على سيرفر الإنتاج من هنا** (لا SSH)؛ على
+الإنتاج يحتاج تنفيذاً يدوياً مقصوداً عبر workflow مخصص لاحقاً.
+
+## النسخ الاحتياطي والاستعادة
+- **النسخ**: `backup.sh` يعمل يومياً الساعة 03:17 من crontab المستخدم `deploy-trading`:
+  `pg_dump -Fc` إلى `/opt/trading/backups/trading-YYYY-MM-DD.dump`، ويحتفظ بـ 7 أيام.
+- **اختبار الاستعادة** (محلياً، يلمس حاوية مؤقتة فقط ثم يحذفها):
+  ```bash
+  docker compose exec -T db pg_dump -U trading -Fc trading > /tmp/trading.dump
+  bash infra/deploy/restore-test.sh /tmp/trading.dump aitradinganalysissystem-db-1 trading trading
+  ```
+  يقارن عدد الصفوف في الجداول الرئيسية (ومنها `candles_1m` و`candles_1h`) بين المصدر والنسخة المستعادة.
+  آخر نتيجة: كل الجداول متطابقة (candles_1m 331,303 صف)، الاستعادة 13 ثانية لنسخة 16.6MB.
+- **الاستعادة على السيرفر** (يدوياً عند الحاجة فقط، وتلمس stack الـ trading وحده). TimescaleDB يحتاج
+  `timescaledb_pre_restore()` قبل `pg_restore` و`timescaledb_post_restore()` بعده:
+  ```bash
+  cd /opt/trading
+  dc() { docker compose -f docker-compose.yml --env-file .env --env-file image.env "$@"; }
+  dc stop backend worker worker-backtest beat telegram-bot          # لا كتابة أثناء الاستعادة
+  dc exec -T db psql -U trading -d postgres -c "DROP DATABASE trading WITH (FORCE)"
+  dc exec -T db psql -U trading -d postgres -c "CREATE DATABASE trading"
+  dc exec -T db psql -U trading -d trading -c "CREATE EXTENSION IF NOT EXISTS timescaledb"
+  dc exec -T db psql -U trading -d trading -c "SELECT timescaledb_pre_restore()"
+  dc exec -T db pg_restore -U trading -d trading --no-owner < backups/trading-YYYY-MM-DD.dump
+  dc exec -T db psql -U trading -d trading -c "SELECT timescaledb_post_restore()"
+  dc up -d --wait                                                  # يعيد تشغيل الخدمات
+  ```
+  (`pg_restore` يقرأ الملف من stdin، فلا حاجة لنسخه داخل الحاوية.)
+
+## النسخ خارج السيرفر (GitHub Actions)
+النسخ اليومية على السيرفر وحده تضيع مع قرصه، لذلك يعمل workflow **Off-site backup**
+(`.github/workflows/backup-offsite.yml`) يومياً الساعة 06:40 UTC، ويمكن تشغيله يدوياً من Actions ← Off-site backup ← Run workflow:
+1. **على السيرفر قراءة فقط**: أمر `find` واحد في `/opt/trading/backups` يحدد أحدث `trading-*.dump`، ثم `scp` لهذا
+   الملف. لا كتابة ولا أي أمر آخر. يفشل إذا كان عمر أحدث نسخة أكثر من 26 ساعة (أي أن النسخ اليومي على السيرفر لم يعمل).
+2. يشفّر النسخة على الـ runner بـ `gpg --symmetric --cipher-algo AES256` بكلمة السر `BACKUP_PASSPHRASE`.
+3. يفك التشفير مرة أخرى ويستعيد النسخة في حاوية TimescaleDB جديدة (`infra/deploy/restore-test.sh`): عدد الصفوف،
+   الـ alembic revision، وهل `candles_1m` hypertable. أي خلل يُفشل التشغيل.
+4. يرفع **الملف المشفّر فقط** كـ artifact باسم `trading-db-YYYY-MM-DD`. النسخة غير المشفّرة لا تُرفع أبداً، لأن أي شخص
+   يستطيع قراءة الريبو يستطيع تنزيل الـ artifacts.
+5. ملخص التشغيل يعرض اسم النسخة وحجمها وعمرها وsha256 ونتيجة اختبار الاستعادة.
+
+**إعداد لمرة واحدة**: Settings ← Secrets and variables ← Actions ← New repository secret، الاسم `BACKUP_PASSPHRASE`،
+والقيمة كلمة سر طويلة عشوائية (مثلاً ناتج `openssl rand -base64 32`). **احتفظ بنسخة منها خارج GitHub** (في مدير كلمات
+سر مثلاً): GitHub لا يعرض الـ secret بعد حفظه، وبدونها لا يمكن فك أي نسخة. إذا لم يكن الـ secret موجوداً يفشل الـ workflow
+برسالة واضحة ولا ينسخ شيئاً.
+
+**الاحتفاظ**: 14 يوماً على GitHub (نسخة يومية بحجم ~16MB، أي حوالي 250MB من مساحة Actions)، و7 أيام على السيرفر.
+
+**التنزيل وفك التشفير** (على جهازك):
+```bash
+gh run list --workflow "Off-site backup" --limit 5
+gh run download <run-id> -n trading-db-YYYY-MM-DD        # أو من صفحة التشغيل ← Artifacts (ملف zip، فكّه أولاً)
+gpg --decrypt --output trading-YYYY-MM-DD.dump trading-YYYY-MM-DD.dump.gpg   # يطلب كلمة السر
+```
+**الاستعادة محلياً** (للتحقق، حاوية مؤقتة فقط): `bash infra/deploy/restore-test.sh trading-YYYY-MM-DD.dump`
+
+**الاستعادة على السيرفر** (عند فقدان النسخ هناك): انسخ الملف المفكوك إلى مجلد النسخ ثم اتبع خطوات «الاستعادة على
+السيرفر» أعلاه بنفس الاسم:
+```bash
+scp -i ~/.ssh/trading_deploy trading-YYYY-MM-DD.dump deploy-trading@187.127.76.76:/opt/trading/backups/
+```
+
+## المراقبة والسجلات والحِمل
+- `GET /api/v1/admin/system/status` (للمدير): الإصدار ومدة التشغيل، قاعدة البيانات (الحجم، الاتصالات،
+  الـ migration)، Redis، طوابير Celery والـ workers وآخر تشغيل لكل مهمة مجدولة، حداثة بيانات السوق،
+  قنوات الإشعارات، أخطاء 5xx في آخر ساعة، والـ WebSocket لكل عمليات الـ API (كل عملية تكتب أرقامها في Redis كل
+  30 ثانية: `api_processes` و`clients` و`processes`) مع أرقام العملية التي خدمت الطلب (`process_*`). `GET /api/v1/health/live` للحياة فقط.
+- السجلات: سطر واحد لكل طلب (`app.request`) فيه `request_id` (يُعاد في ترويسة `X-Request-ID`) والمسار
+  والحالة والمدة والمستخدم. `LOG_FORMAT=auto` يعني JSON في الإنتاج. `APP_VERSION` يُثبَّت في الصورة عند البناء.
+- اتصالات قاعدة البيانات: `DB_POOL_SIZE=5` و`DB_MAX_OVERFLOW=10` لكل عملية، و`DB_POOL_TIMEOUT=10`: عند
+  الضغط ينتظر الطلب 10 ثوانٍ على الأكثر ثم يحصل على `503` مع `Retry-After` بدل 500.
+- اختبار الحِمل: `infra/loadtest/` (k6 على الـ stack المحلي بحدود الإنتاج، **لا يُشغَّل على السيرفر**). آخر نتيجة
+  (عمليتا backend، 1.5 CPU للـ backend ولقاعدة البيانات): 40 طلباً في الثانية، p50 بين 1.6 و2.4 ثانية (كان ~3.2)، وفشل
+  ~2% كلها `503` (كان 6.3%). الـ backend وقاعدة البيانات ما زالا عند سقفيهما. التفاصيل في `infra/loadtest/README.md`.
+
+## السعة (Y20 الجزء الثاني)
+- الـ backend يعمل بعمليتي uvicorn (`API_WORKERS`، فارغ = 2 في الإنتاج و1 في التطوير). الاسم ليس `WEB_CONCURRENCY`
+  لأن uvicorn يقرأ هذا المتغير بنفسه ويتعطل إذا وُجد فارغاً.
+- ما تم فحصه لعمليتين: تحديد المعدل وقفل الدخول وحدود اتصالات WebSocket في Redis (مشتركة)؛ توزيع WebSocket عبر
+  Redis Pub/Sub (كل عملية تستقبل كل رسالة لعملائها)؛ حضور المحادثة في Redis؛ عدّاد 5xx في Redis؛ سرّ webhook الدفع
+  التجريبي يُنشأ بـ `SET NX`؛ الـ warm-up لكل عملية؛ إنشاء المدير الأول عند الإقلاع صار تحت قفل `pg_advisory_xact_lock`
+  (كانت العمليتان تتسابقان)؛ وأرقام WebSocket في `/admin/system/status` صارت مجموع كل العمليات.
+- أسوأ حالة لاتصالات قاعدة البيانات (`max_connections=100`): الـ backend 2 × (5 + 10) = 30، والـ `worker` عمليتا Celery
+  × 8 (دفعة الإشعارات، NullPool) = 16، والـ `worker-backtest` 2 × 2 = 4، و`telegram-bot` 2، و`beat` 0، و`pg_dump` 1،
+  وجلسات يدوية ~3، أي ~56 من 100.
+- الحدود قبل/بعد: الـ backend من 384m / 1.0 CPU إلى 544m / 1.5 CPU (أعلى قمة 400MiB)، وقاعدة البيانات من 1.0 إلى 1.5
+  CPU، و`cpu_shares: 512` للجميع. مجموع الذاكرة من 2880MiB إلى 3040MiB، ومجموع سقوف المعالج من 5.5 إلى 6.5.
+
+## ترحيل الشبكة لمرة واحدة (Y20 الجزء الثاني)
+كان عنوان Nginx ثابتاً (`172.30.57.10`) والعناوين الأخرى ديناميكية من نفس الشبكة، فقد تأخذ حاويةٌ أُعيد إنشاؤها مع Nginx
+في نفس `up` عنوانَه. الآن للشبكة `ip_range: 172.30.57.128/25` (`DOCKER_IP_RANGE`)، وNginx خارجه. Docker لا يغيّر IPAM
+لشبكة موجودة، لذلك `remote-deploy.sh` يفعل ذلك **مرة واحدة**:
+- يجد شبكتنا بوسوم compose (`com.docker.compose.project=trading`، الشبكة `trading_default`) ويقارن `IPAM.Config` بالـ
+  `ip_range` المطلوب.
+- إذا لم يكن موجوداً: يطبع `=== ONE-TIME NETWORK MIGRATION`، ثم `docker compose down --remove-orphans` لمشروعنا فقط
+  (**بدون `-v`**، فالبيانات تبقى)، ويحذف شبكتنا إن بقيت، ثم `up -d --wait` العادي يعيد إنشاءها.
+- في النشر التالي يجد الـ `ip_range` فيتخطى ذلك. لا `prune` ولا أي شبكة أو حاوية لمشروع آخر.
+- **توقف المنصة** من `down` حتى ينجح فحص الصحة: ~45 ثانية محلياً، ومتوقع 1-2 دقيقة على السيرفر، مرة واحدة عند دمج Y20
+  الجزء الثاني.
+- إذا فشل الإقلاع بعد الترحيل يعود السكربت إلى الصورة السابقة على الشبكة الجديدة كالعادة (جُرّب محلياً).
+
+## تشغيل /docs يوم العرض
+في الإنتاج Swagger UI و`/redoc` و`/openapi.json` مطفأة افتراضياً (`API_DOCS_ENABLED=` فارغ). لتشغيلها:
+```bash
+cd /opt/trading
+sed -i 's/^API_DOCS_ENABLED=.*/API_DOCS_ENABLED=true/' .env
+docker compose -p trading -f docker-compose.yml --env-file .env --env-file image.env up -d --no-deps --force-recreate backend
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 200
+```
+لإطفائها بعد العرض (نفس الأمر بقيمة فارغة):
+```bash
+cd /opt/trading
+sed -i 's/^API_DOCS_ENABLED=.*/API_DOCS_ENABLED=/' .env
+docker compose -p trading -f docker-compose.yml --env-file .env --env-file image.env up -d --no-deps --force-recreate backend
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
+```
+- الأمر يعيد إنشاء حاوية `backend` الخاصة بمشروعنا فقط (`--no-deps`)، ولا يمس nginx ولا أي مشروع آخر.
+- **تحذير**: أطفئها بعد العرض مباشرة. النشر لا يغيّر قيمة موجودة في `.env` (يضيف المفاتيح الجديدة فقط)، فتبقى
+  `/docs` مفتوحة للعموم إلى أن تُعاد القيمة فارغة.
+
 ## للبرومبتات القادمة
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.
-- أي خدمة جديدة تُضاف إلى `docker-compose.yml` (للتطوير) **وإلى** `infra/deploy/docker-compose.prod.yml` (للإنتاج) مع `mem_limit` و`cpus` و`restart: unless-stopped`، ومن دون أي منفذ عام.
+- أي خدمة جديدة تُضاف إلى `docker-compose.yml` (للتطوير) **وإلى** `infra/deploy/docker-compose.prod.yml` (للإنتاج) مع `mem_limit` و`cpus` و`cpu_shares: 512` و`restart: unless-stopped`، ومن دون أي منفذ عام.
 - الـ migrations تُطبَّق تلقائياً عند النشر، لذلك يجب أن تكون آمنة على بيانات موجودة.

@@ -35,6 +35,19 @@ class NotificationType(StrEnum):
     backtest_failed = "backtest_failed"
     security = "security"
     system = "system"
+    # Y18 (migration 0011 adds them to the existing enum type)
+    new_post = "new_post"
+    comment_reply = "comment_reply"
+    post_liked = "post_liked"  # in-app only, batched per post and day
+    content_hidden = "content_hidden"
+    price_alert = "price_alert"
+    # Y19 (migration 0012)
+    chat_message = "chat_message"
+    subscription_started = "subscription_started"
+    subscription_renewed = "subscription_renewed"
+    subscription_payment_failed = "subscription_payment_failed"
+    subscription_canceled = "subscription_canceled"
+    new_subscriber = "new_subscriber"
 
 
 class Severity(StrEnum):
@@ -172,6 +185,9 @@ class NotificationPreference(Base):
 
 
 class TelegramLink(Base):
+    """The Telegram chat a user linked for notifications (one chat per user and one user per
+    chat)."""
+
     __tablename__ = "telegram_links"
 
     user_id: Mapped[uuid.UUID] = mapped_column(

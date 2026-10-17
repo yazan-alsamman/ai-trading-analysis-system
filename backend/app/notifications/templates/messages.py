@@ -59,6 +59,72 @@ TEXTS: dict[str, dict[str, str]] = {
         "digest.intro": "While notifications were paused or capped:",
         "digest.more": "…and {count} more",
         "email.footer": "You receive this because of your notification settings.",
+        # posts and comments (Y18)
+        "new_post.title": "{author} posted: {title}",
+        "new_post.instrument": "{symbol} · {direction}",
+        "direction.bullish": "bullish",
+        "direction.bearish": "bearish",
+        "direction.neutral": "neutral",
+        "comment_reply.post.title": "{author} commented on your post",
+        "comment_reply.comment.title": "{author} replied to your comment",
+        "comment_reply.body": 'On "{post}": {excerpt}',
+        "post_liked.title.one": "1 person liked your post",
+        "post_liked.title.many": "{count} people liked your post",
+        "post_liked.body": '"{post}"',
+        "content_hidden.post.title": "Your post was hidden by moderation",
+        "content_hidden.comment.title": "Your comment was hidden by moderation",
+        "content_hidden.body": '"{excerpt}" is no longer visible to others.',
+        "content_hidden.reason": "Reason: {reason}",
+        # price alerts (Y18)
+        "price_alert.title": "Price alert: {symbol} {condition}",
+        "cond.above": "at or above {value}",
+        "cond.below": "at or below {value}",
+        "cond.crosses_above": "crossed above {value}",
+        "cond.crosses_below": "crossed below {value}",
+        "cond.change_pct": "moved {change}% in {window} min",
+        "price_alert.price": "Price: {price} (1m bar {bar} UTC)",
+        "rule.above": "Rule: high ≥ {value}",
+        "rule.below": "Rule: low ≤ {value}",
+        "rule.crosses_above": "Rule: close crossed above {value} (previous close {previous})",
+        "rule.crosses_below": "Rule: close crossed below {value} (previous close {previous})",
+        "rule.change_pct": "Rule: move ≥ {value}% in {window} min (from {reference})",
+        "price_alert.note": "Note: {note}",
+        "price_alert.once": "This alert is now off (it fires once).",
+        # experts, subscriptions, chat (Y19)
+        "content_hidden.message.title": "Your chat message was hidden by moderation",
+        "interval.month": "month",
+        "interval.year": "year",
+        "chat_message.title.one": "New message from {sender}",
+        "chat_message.title.many": "{count} new messages from {sender}",
+        "subscription_started.title": "Subscription started: {expert}",
+        "subscription_started.trial": (
+            "{plan}: free trial until {date}, then {price} {currency} / {interval}."
+        ),
+        "subscription_started.paid": (
+            "{plan}: {price} {currency} / {interval}. Next renewal on {date}."
+        ),
+        "subscription_renewed.title": "Subscription renewed: {expert}",
+        "subscription_renewed.body": (
+            "Paid {amount} {currency} (invoice {invoice}). Next renewal on {date}."
+        ),
+        "subscription_payment_failed.title": "Payment failed: {expert}",
+        "subscription_payment_failed.body": (
+            "Invoice {invoice} ({amount} {currency}) could not be charged: {reason}. "
+            "Your access continues until {grace}, then the subscription ends."
+        ),
+        "subscription_canceled.title": "Subscription ended: {expert}",
+        "subscription_canceled.period_end": "You canceled the subscription; it ended on {date}.",
+        "subscription_canceled.payment_failed": (
+            "The renewal payment failed and the grace period is over."
+        ),
+        "subscription_canceled.refund": (
+            "Invoice {invoice} was refunded and the subscription ended."
+        ),
+        "new_subscriber.title": "New subscriber: {subscriber}",
+        "new_subscriber.paid": "{plan}: {price} {currency} / {interval}.",
+        "new_subscriber.trial": (
+            "{plan}: {days}-day free trial, then {price} {currency} / {interval}."
+        ),
         # Telegram bot replies
         "bot.linked": "✅ Linked. You will receive your notifications here.",
         "bot.bad_code": "This link code is invalid or expired. Create a new one in the app.",
@@ -120,6 +186,65 @@ TEXTS: dict[str, dict[str, str]] = {
         "digest.intro": "أثناء إيقاف الإشعارات أو تجاوز الحد:",
         "digest.more": "…و{count} أخرى",
         "email.footer": "تصلك هذه الرسالة بحسب إعدادات الإشعارات في حسابك.",
+        "new_post.title": "{author} نشر تحليلاً: {title}",
+        "new_post.instrument": "{symbol} · {direction}",
+        "direction.bullish": "صاعد",
+        "direction.bearish": "هابط",
+        "direction.neutral": "محايد",
+        "comment_reply.post.title": "{author} علّق على منشورك",
+        "comment_reply.comment.title": "{author} ردّ على تعليقك",
+        "comment_reply.body": "على «{post}»: {excerpt}",
+        "post_liked.title.one": "أعجب مستخدم واحد بمنشورك",
+        "post_liked.title.many": "أعجب {count} من المستخدمين بمنشورك",
+        "post_liked.body": "«{post}»",
+        "content_hidden.post.title": "تم إخفاء منشورك من قبل الإشراف",
+        "content_hidden.comment.title": "تم إخفاء تعليقك من قبل الإشراف",
+        "content_hidden.body": "«{excerpt}» لم يعد ظاهراً للآخرين.",
+        "content_hidden.reason": "السبب: {reason}",
+        "price_alert.title": "تنبيه سعر: {symbol} {condition}",
+        "cond.above": "عند أو فوق {value}",
+        "cond.below": "عند أو تحت {value}",
+        "cond.crosses_above": "اخترق صعوداً {value}",
+        "cond.crosses_below": "اخترق هبوطاً {value}",
+        "cond.change_pct": "تحرّك {change}% خلال {window} دقيقة",
+        "price_alert.price": "السعر: {price} (شمعة الدقيقة {bar} UTC)",
+        "rule.above": "الشرط: أعلى سعر ≥ {value}",
+        "rule.below": "الشرط: أدنى سعر ≤ {value}",
+        "rule.crosses_above": "الشرط: الإغلاق اخترق صعوداً {value} (الإغلاق السابق {previous})",
+        "rule.crosses_below": "الشرط: الإغلاق اخترق هبوطاً {value} (الإغلاق السابق {previous})",
+        "rule.change_pct": "الشرط: حركة ≥ {value}% خلال {window} دقيقة (من {reference})",
+        "price_alert.note": "ملاحظة: {note}",
+        "price_alert.once": "تم إيقاف هذا التنبيه (يعمل مرة واحدة).",
+        "content_hidden.message.title": "تم إخفاء رسالتك في المحادثة من قبل الإشراف",
+        "interval.month": "شهر",
+        "interval.year": "سنة",
+        "chat_message.title.one": "رسالة جديدة من {sender}",
+        "chat_message.title.many": "رسائل جديدة من {sender}: {count}",
+        "subscription_started.title": "بدأ اشتراكك: {expert}",
+        "subscription_started.trial": (
+            "{plan}: تجربة مجانية حتى {date}، ثم {price} {currency} / {interval}."
+        ),
+        "subscription_started.paid": (
+            "{plan}: {price} {currency} / {interval}. التجديد القادم في {date}."
+        ),
+        "subscription_renewed.title": "تم تجديد اشتراكك: {expert}",
+        "subscription_renewed.body": (
+            "تم دفع {amount} {currency} (الفاتورة {invoice}). التجديد القادم في {date}."
+        ),
+        "subscription_payment_failed.title": "فشل الدفع: {expert}",
+        "subscription_payment_failed.body": (
+            "تعذّر تحصيل الفاتورة {invoice} ({amount} {currency}): {reason}. "
+            "يبقى وصولك حتى {grace}، ثم ينتهي الاشتراك."
+        ),
+        "subscription_canceled.title": "انتهى اشتراكك: {expert}",
+        "subscription_canceled.period_end": "ألغيت الاشتراك، وانتهى في {date}.",
+        "subscription_canceled.payment_failed": "فشل دفع التجديد وانتهت مهلة السماح.",
+        "subscription_canceled.refund": "تم استرداد الفاتورة {invoice} وانتهى الاشتراك.",
+        "new_subscriber.title": "مشترك جديد: {subscriber}",
+        "new_subscriber.paid": "{plan}: {price} {currency} / {interval}.",
+        "new_subscriber.trial": (
+            "{plan}: تجربة مجانية {days} يوماً، ثم {price} {currency} / {interval}."
+        ),
         "bot.linked": "✅ تم الربط. ستصلك إشعاراتك هنا.",
         "bot.bad_code": "رمز الربط غير صالح أو منتهي. أنشئ رمزاً جديداً من التطبيق.",
         "bot.help": (

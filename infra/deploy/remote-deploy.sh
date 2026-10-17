@@ -4,7 +4,7 @@
 # Touches only /opt/trading, the compose project "trading", its own images and its own crontab.
 set -euo pipefail
 TAG="${1:?usage: remote-deploy.sh <image-tag>}"
-APP=/opt/trading
+APP="${TRADING_DIR:-/opt/trading}"  # TRADING_DIR: only for the local test of this script
 cd "$APP"
 dc() { docker compose -f docker-compose.yml --env-file .env --env-file image.env "$@"; }
 rand() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$1" || true; }
@@ -36,7 +36,51 @@ prev=""
 echo "IMAGE_TAG=${TAG}" > image.env
 echo "Deploying ${TAG} (previous: ${prev:-none})"
 dc pull --quiet
+
+# One-time network migration (Y20 part 2): dynamic addresses now come from an ip_range that
+# excludes NGINX_IP, so no container can take Nginx's address. Docker cannot change the IPAM of
+# an existing network, so when OUR network (found by the compose labels of project "trading",
+# named trading_default) lacks the configured range: stop our stack (no -v: volumes and data
+# stay), remove our network, and let the `up` below create it again. Later deploys find the
+# range and skip this. Never a prune, nothing outside our project.
+net="$(docker network ls -q --filter label=com.docker.compose.project=trading \
+  --filter label=com.docker.compose.network=default)"
+want="$(dc config | sed -n 's/^ *ip_range: *//p' | tr -d '\r' | head -n 1)"
+if [ -n "$net" ] && [ -n "$want" ]; then
+  # JSON, because a network without a range has no IPRange field (a template error on some
+  # Docker versions, "invalid Prefix" on others)
+  ipam="$(docker network inspect -f '{{json .IPAM.Config}}' "$net" || true)"
+  if ! grep -qF "\"IPRange\":\"${want}\"" <<<"$ipam"; then
+    echo "=== ONE-TIME NETWORK MIGRATION: trading_default ${ipam} -> ip_range ${want}"
+    echo "=== stopping the trading stack (volumes kept); it is down until the up below is healthy"
+    dc down --remove-orphans || echo "!!! down reported an error, continuing"
+    if docker network inspect "$net" >/dev/null 2>&1; then
+      docker network rm "$net" || echo "!!! could not remove our network ${net}"
+    fi
+    echo "=== network migration done, starting the stack"
+  fi
+fi
+
 dc up -d --remove-orphans --wait --wait-timeout 180 || deploy_failed=1
+
+# Our nginx keeps its config until reloaded, and `up` does not recreate it when only the
+# bind-mounted nginx/default.conf changed. Reload OUR nginx container (never the host's) when the
+# file differs from the last one applied; recreate it if the container sees a stale copy.
+if [ -z "${deploy_failed:-}" ]; then
+  conf_sum="$(sha256sum nginx/default.conf | cut -d' ' -f1)"
+  if [ "$(cat .nginx.sha256 2>/dev/null || true)" != "$conf_sum" ]; then
+    seen="$(dc exec -T nginx sha256sum /etc/nginx/conf.d/default.conf 2>/dev/null | cut -d' ' -f1 || true)"
+    if [ "$seen" != "$conf_sum" ]; then
+      echo "Nginx sees an old copy of its config: recreating our nginx service"
+      dc up -d --no-deps --force-recreate nginx && echo "$conf_sum" > .nginx.sha256
+    elif dc exec -T nginx nginx -t && dc exec -T nginx nginx -s reload; then
+      echo "Nginx config changed: reloaded our nginx"
+      echo "$conf_sum" > .nginx.sha256
+    else
+      echo "!!! New nginx config is invalid: kept the running one"
+    fi
+  fi
+fi
 
 health() {
   for _ in $(seq 1 30); do

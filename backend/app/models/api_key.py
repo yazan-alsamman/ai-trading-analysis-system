@@ -29,9 +29,23 @@ class Scope(StrEnum):
     signals_read = "signals:read"  # GET /signals
     stream = "stream"  # WebSocket /ws/market
     backtests_read = "backtests:read"  # GET /backtests*
+    news_read = "news:read"  # GET /news*, WebSocket news topics
+    news_write = "news:write"  # POST /ingest/news* (the AI side); admin keys only
 
 
 ALL_SCOPES: frozenset[str] = frozenset(s.value for s in Scope)
+# Scopes only an admin may put on a key (checked on create and update).
+ADMIN_ONLY_SCOPES: frozenset[str] = frozenset({Scope.news_write.value})
+SCOPE_DESCRIPTIONS: dict[str, str] = {
+    Scope.market_read: "Instruments and candles",
+    Scope.indicators_read: "Indicator catalog and computation",
+    Scope.strategies_read: "Strategy catalog and preview",
+    Scope.signals_read: "Signals",
+    Scope.stream: "WebSocket /ws/market",
+    Scope.backtests_read: "Your backtests (read only)",
+    Scope.news_read: "News, sentiment and the news WebSocket topics",
+    Scope.news_write: "Push news and sentiment (POST /ingest/news*). Admins only",
+}
 
 # Usable (not revoked, not expired) keys a user may hold at the same time.
 MAX_KEYS_PER_ROLE: dict[UserRole, int] = {

@@ -28,6 +28,8 @@ os.environ["FIRST_ADMIN_PASSWORD"] = ""
 # get their own prefix so tests never touch a running stack's buckets.
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["RATE_LIMIT_KEY_PREFIX"] = "test-rl"
+# The seeded public RSS feeds are never fetched in tests (fixture feeds are used instead).
+os.environ["NEWS_RSS_ENABLED"] = "false"
 
 import asyncpg  # noqa: E402
 import pytest  # noqa: E402
@@ -76,6 +78,7 @@ def migrated_db() -> str:
     asyncio.run(_create_database_if_missing(TEST_DATABASE_URL))
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    cfg.attributes["keep_logging"] = True  # alembic.ini's logging would drop pytest's handlers
     command.upgrade(cfg, "head")
     return TEST_DATABASE_URL
 
@@ -254,6 +257,9 @@ def notification_queue(monkeypatch: pytest.MonkeyPatch) -> list[tuple[list, floa
         notification_service, "enqueue", lambda ids, countdown=None: sent.append((ids, countdown))
     )
     monkeypatch.setattr(notification_service, "enqueue_broadcast", lambda *a: None)
+    from app.social import notify as social_notify
+
+    monkeypatch.setattr(social_notify, "enqueue_new_post", lambda post_id: None)
     # every test session shares one connection (savepoints): send one delivery at a time
     monkeypatch.setattr(notification_service, "SEND_CONCURRENCY", 1)
     return sent
@@ -262,6 +268,8 @@ def notification_queue(monkeypatch: pytest.MonkeyPatch) -> list[tuple[list, floa
 @pytest.fixture(autouse=True)
 async def _clean_notification_keys(redis_client: Redis) -> AsyncIterator[None]:
     """Hourly caps, circuit breakers, cached FCM token and link codes start empty."""
-    await _delete_keys(redis_client, "notif:*")
+    for pattern in ("notif:*", "chat:*", "lock:alerts:*", "alerts:bar:*"):
+        await _delete_keys(redis_client, pattern)
     yield
-    await _delete_keys(redis_client, "notif:*")
+    for pattern in ("notif:*", "chat:*", "lock:alerts:*", "alerts:bar:*"):
+        await _delete_keys(redis_client, pattern)

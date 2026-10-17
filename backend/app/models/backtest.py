@@ -98,6 +98,8 @@ class Backtest(Base):
 
 
 class BacktestTrade(Base):
+    """One closed trade of a backtest: entry, exit, fills, P&L and R multiple."""
+
     __tablename__ = "backtest_trades"
     __table_args__ = (Index("uq_backtest_trades_number", "backtest_id", "number", unique=True),)
 

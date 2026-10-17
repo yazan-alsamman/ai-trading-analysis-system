@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.logging import user_id_var
 from app.core.redis import get_redis
 from app.core.security import credentials_exception, decode_token
 from app.db.session import SessionLocal, get_session
@@ -76,13 +77,16 @@ async def resolve_credentials(
     """A bearer token wins over an API key when both are sent."""
     try:
         if token is not None:
-            return Principal(await user_from_access_token(session, token))
-        if api_key is not None:
+            principal = Principal(await user_from_access_token(session, token))
+        elif api_key is not None:
             user, row = await api_key_service.authenticate(session, get_redis(), api_key)
-            return Principal(user, row)
+            principal = Principal(user, row)
+        else:
+            return None
     except HTTPException as exc:
         return exc
-    return None
+    user_id_var.set(str(principal.user.id))  # for the request log line
+    return principal
 
 
 CredentialsDep = Annotated[Credentials, Depends(resolve_credentials)]
@@ -129,6 +133,20 @@ IndicatorsReader = Annotated[Principal, Depends(require_scope(Scope.indicators_r
 StrategiesReader = Annotated[Principal, Depends(require_scope(Scope.strategies_read))]
 SignalsReader = Annotated[Principal, Depends(require_scope(Scope.signals_read))]
 BacktestsReader = Annotated[Principal, Depends(require_scope(Scope.backtests_read))]
+NewsReader = Annotated[Principal, Depends(require_scope(Scope.news_read))]
+
+
+async def get_news_writer(
+    principal: Annotated[Principal, Depends(require_scope(Scope.news_write))],
+) -> Principal:
+    """The ingestion API (the AI side): an API key with ``news:write`` (only admins can put it
+    on a key) or an admin's own login. The owner must still be an admin when the key is used."""
+    if principal.user.role != UserRole.admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "news:write needs an admin account")
+    return principal
+
+
+NewsWriter = Annotated[Principal, Depends(get_news_writer)]
 
 
 async def deny_api_keys(request: Request) -> None:

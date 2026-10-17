@@ -1,0 +1,126 @@
+erDiagram
+    expert_profiles {
+        uuid user_id PK, FK
+        varchar headline
+        text bio
+        array markets
+        array languages
+        bool chat_enabled
+        varchar response_time_hint
+        bool is_listed
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    subscription_plans {
+        uuid id PK
+        uuid expert_id FK
+        varchar name
+        varchar description
+        numeric price
+        varchar currency
+        enum_plan_interval interval
+        int trial_days
+        jsonb perks
+        bool is_active
+        timestamptz created_at
+    }
+    subscriptions {
+        uuid id PK
+        uuid user_id FK
+        uuid expert_id FK
+        uuid plan_id FK
+        enum_subscription_status status
+        numeric price
+        varchar currency
+        enum_plan_interval interval
+        jsonb perks
+        jsonb payment_method
+        timestamptz current_period_start
+        timestamptz current_period_end
+        bool cancel_at_period_end
+        timestamptz canceled_at
+        timestamptz past_due_since
+        timestamptz ended_at
+        timestamptz created_at
+    }
+    invoices {
+        uuid id PK
+        varchar number UK
+        uuid subscription_id FK
+        uuid user_id FK
+        uuid expert_id FK
+        varchar kind
+        numeric amount
+        varchar currency
+        enum_invoice_status status
+        timestamptz period_start
+        timestamptz period_end
+        numeric platform_fee
+        numeric expert_amount
+        varchar provider
+        varchar provider_ref
+        varchar failure_reason
+        timestamptz paid_at
+        timestamptz refunded_at
+        timestamptz created_at
+    }
+    checkout_sessions {
+        uuid id PK
+        uuid user_id FK
+        uuid plan_id FK
+        enum_checkout_status status
+        varchar provider
+        varchar provider_ref
+        varchar return_url
+        varchar failure_reason
+        uuid subscription_id FK
+        timestamptz expires_at
+        timestamptz created_at
+    }
+    payment_events {
+        uuid id PK
+        varchar provider
+        varchar event_id UK
+        varchar type
+        jsonb payload
+        timestamptz processed_at
+    }
+    conversations {
+        uuid id PK
+        uuid expert_id FK
+        uuid user_id FK
+        enum_conversation_status status
+        uuid blocked_by FK
+        timestamptz last_message_at
+        timestamptz expert_last_read_at
+        timestamptz user_last_read_at
+        timestamptz created_at
+    }
+    messages {
+        uuid id PK
+        uuid conversation_id FK
+        uuid sender_id FK
+        text body
+        jsonb attachments
+        uuid client_id
+        timestamptz edited_at
+        timestamptz deleted_at
+        timestamptz created_at
+    }
+    users
+    checkout_sessions }o--o| subscriptions : "subscription_id"
+    checkout_sessions }o--|| subscription_plans : "plan_id"
+    checkout_sessions }o--|| users : "user_id"
+    conversations }o--o| users : "blocked_by"
+    conversations }o--|| users : "expert_id"
+    conversations }o--|| users : "user_id"
+    expert_profiles |o--|| users : "user_id"
+    invoices }o--|| subscriptions : "subscription_id"
+    invoices }o--|| users : "expert_id"
+    invoices }o--|| users : "user_id"
+    messages }o--|| conversations : "conversation_id"
+    messages }o--|| users : "sender_id"
+    subscription_plans }o--|| users : "expert_id"
+    subscriptions }o--|| subscription_plans : "plan_id"
+    subscriptions }o--|| users : "expert_id"
+    subscriptions }o--|| users : "user_id"

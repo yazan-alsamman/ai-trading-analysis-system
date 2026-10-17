@@ -5,12 +5,15 @@ from fastapi import APIRouter, status
 from app.api.deps import CurrentUser, SessionDep
 from app.core import rate_limit
 from app.core.redis import get_redis
+from app.models.api_key import ADMIN_ONLY_SCOPES, SCOPE_DESCRIPTIONS, Scope
+from app.models.user import UserRole
 from app.schemas.api_keys import (
     ApiKeyCreate,
     ApiKeyCreated,
     ApiKeyRead,
     ApiKeyUpdate,
     ApiKeyUsageDay,
+    ScopeInfo,
 )
 from app.services import api_key_service
 
@@ -23,6 +26,21 @@ async def create_api_key(data: ApiKeyCreate, user: CurrentUser, session: Session
     """Create a key. The full key is in this response only; it cannot be shown again."""
     row, key = await api_key_service.create(session, user, data)
     return ApiKeyCreated(**ApiKeyRead.model_validate(row).model_dump(), key=key)
+
+
+@router.get("/scopes", response_model=list[ScopeInfo])
+async def list_scopes(user: CurrentUser):
+    """Every scope with its description; ``grantable``: you may put it on a key (``news:write``
+    is for admins only). For the key forms of the web app."""
+    return [
+        ScopeInfo(
+            scope=s.value,
+            description=SCOPE_DESCRIPTIONS[s],
+            admin_only=s.value in ADMIN_ONLY_SCOPES,
+            grantable=s.value not in ADMIN_ONLY_SCOPES or user.role == UserRole.admin,
+        )
+        for s in Scope
+    ]
 
 
 @router.get("", response_model=list[ApiKeyRead])

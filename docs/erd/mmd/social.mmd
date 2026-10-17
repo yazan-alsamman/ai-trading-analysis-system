@@ -1,0 +1,102 @@
+erDiagram
+    news_sources {
+        uuid id PK
+        varchar key UK
+        varchar name
+        enum_news_source_kind kind
+        varchar url
+        varchar language
+        bool is_active
+        int fetch_interval_minutes
+        timestamptz last_fetched_at
+        varchar last_error
+        varchar etag
+        varchar last_modified
+        timestamptz created_at
+    }
+    news_articles {
+        uuid id PK
+        uuid source_id FK
+        varchar external_id
+        varchar url
+        varchar title
+        text summary
+        varchar image_url
+        varchar author
+        varchar language
+        timestamptz published_at
+        timestamptz fetched_at
+        enum_sentiment_label sentiment_label
+        double sentiment_score
+        varchar sentiment_model
+        timestamptz sentiment_at
+    }
+    news_article_instruments {
+        uuid article_id PK, FK
+        uuid instrument_id PK, FK
+        double relevance
+    }
+    posts {
+        uuid id PK
+        uuid author_id FK
+        varchar title
+        text body
+        uuid instrument_id FK
+        string timeframe
+        enum_post_direction direction
+        jsonb attachments
+        enum_post_visibility visibility
+        enum_content_status status
+        int comments_count
+        int likes_count
+        timestamptz edited_at
+        timestamptz created_at
+    }
+    comments {
+        uuid id PK
+        uuid post_id FK
+        uuid author_id FK
+        uuid parent_id FK
+        text body
+        enum_content_status status
+        timestamptz created_at
+        timestamptz edited_at
+    }
+    post_likes {
+        uuid post_id PK, FK
+        uuid user_id PK, FK
+        timestamptz created_at
+    }
+    follows {
+        uuid follower_id PK, FK
+        uuid followee_id PK, FK
+        timestamptz created_at
+    }
+    content_reports {
+        uuid id PK
+        uuid reporter_id FK
+        enum_report_target target_type
+        uuid target_id
+        varchar reason
+        enum_report_status status
+        varchar resolution
+        uuid resolved_by FK
+        timestamptz resolved_at
+        timestamptz created_at
+    }
+    instruments
+    users
+    comments }o--o| comments : "parent_id"
+    comments }o--|| posts : "post_id"
+    comments }o--|| users : "author_id"
+    content_reports }o--o| users : "resolved_by"
+    content_reports }o--|| users : "reporter_id"
+    follows }o--|| users : "followee_id"
+    follows }o--|| users : "follower_id"
+    news_article_instruments }o--|| instruments : "instrument_id"
+    news_article_instruments }o--|| news_articles : "article_id"
+    news_articles }o--|| news_sources : "source_id"
+    post_likes }o--|| posts : "post_id"
+    post_likes }o--|| users : "user_id"
+    posts }o--o| instruments : "instrument_id"
+    posts }o--|| users : "author_id"

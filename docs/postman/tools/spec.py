@@ -144,7 +144,12 @@ WORKSPACE_STATE = {
             "timeframe": "1h",
             "chart_type": "candles",
             "indicators": [
-                {"id": "i1", "name": "ema", "params": {"length": 21}, "color": "#FF9800"},
+                {
+                    "id": "i1",
+                    "name": "ema",
+                    "params": {"length": 21},
+                    "color": "#FF9800",
+                },
                 {"id": "i2", "name": "rsi", "params": {"length": 14}},
             ],
             "strategies": [{"id": "s1", "strategy_key": "ma_crossover", "params": {}}],
@@ -170,7 +175,12 @@ RISK_CONFIG = {
         "type": "r_multiple",
         "levels": [{"r": 1, "close_pct": 50}, {"r": 2, "close_pct": 50}],
     },
-    "sizing": {"mode": "risk", "risk_pct": 1.0, "max_position_pct": 100, "min_notional": 10},
+    "sizing": {
+        "mode": "risk",
+        "risk_pct": 1.0,
+        "max_position_pct": 100,
+        "min_notional": 10,
+    },
     "guards": {"max_daily_loss_pct": 3, "max_drawdown_pct": 10, "cooldown_bars": 5},
     "fee_bps": 10,
 }
@@ -281,6 +291,96 @@ if (pm.response.code === 403) pm.execution.setNextRequest("Stop sharing");"""
 ETAG_TESTS = """const etag = pm.response.headers.get("ETag");
 pm.test("ETag carries the version", () => pm.expect(etag).to.eql(`"${json.version}"`));"""
 
+FEED_TESTS = """// Another user's readable post (to report) and an analyst or expert (to follow); unset when none.
+if (json && pm.response.code === 200) {
+    const me = pm.variables.get("user_id");
+    const other = json.items.find((p) => p.author.id !== me && !p.locked);
+    const followable = json.items.find((p) => p.author.id !== me && ["analyst", "expert"].includes(p.author.role));
+    other ? store.set("other_post_id", other.id) : store.unset("other_post_id");
+    followable ? store.set("author_user_id", followable.author.id) : store.unset("author_user_id");
+}"""
+
+CREATE_POST_TESTS = """// Traders cannot publish: skip the requests that work on the new post.
+if (pm.response.code === 403) {
+    store.unset("post_id");
+    pm.execution.setNextRequest("Follow user");
+}"""
+
+SKIP_NO_AUTHOR = """// No analyst or expert in the feed yet: nothing to follow.
+if (!pm.variables.get("author_user_id")) pm.execution.skipRequest();"""
+
+SKIP_NO_OTHER_POST = """// No post of another user in the feed yet: nothing to report.
+if (!pm.variables.get("other_post_id")) pm.execution.skipRequest();"""
+
+SKIP_NO_REPORT = """// Only when Community → Report post created a report in this run.
+if (!pm.variables.get("report_id")) pm.execution.skipRequest();"""
+
+ARTICLE = {
+    "source_key": "postman",
+    "external_id": "postman-demo-1",
+    "url": "https://example.com/news/bitcoin-etf-inflows",
+    "title": "Bitcoin climbs as spot ETF inflows hit a weekly record",
+    "summary": "<p>Spot bitcoin ETFs took in <b>$1.2bn</b> this week, the most since launch.</p>",
+    "published_at": "2026-10-16T12:30:00Z",
+    "language": "en",
+    "image_url": "https://example.com/img/btc-etf.jpg",
+    "author": "Postman demo",
+    "instruments": [
+        {"symbol": "BTC/USDT", "relevance": 1.0},
+        {"symbol": "ETH", "relevance": 0.4},
+    ],
+    "sentiment": {"label": "positive", "score": 0.71, "model": "finbert-ft-v1"},
+}
+
+EXPERTS_TESTS = """// Another expert (to subscribe to and chat with); unset when there is none.
+if (json && pm.response.code === 200) {
+    const me = pm.variables.get("user_id");
+    const expert = json.items.find((e) => e.id !== me);
+    expert ? store.set("expert_id", expert.id) : store.unset("expert_id");
+}"""
+
+EXPERT_TESTS = """if (json && pm.response.code === 200 && !_.get(json, "plans.0.id")) store.unset("plan_id");"""
+
+SKIP_NO_EXPERT = """// No other expert listed yet: nothing to subscribe to.
+if (!pm.variables.get("expert_id")) pm.execution.skipRequest();"""
+
+SKIP_NO_PLAN = """// The expert has no active plan: nothing to buy.
+if (!pm.variables.get("plan_id")) pm.execution.skipRequest();"""
+
+CHECKOUT_TESTS = """// Already subscribed to this expert (one live subscription per expert): skip the payment.
+if (pm.response.code === 409) pm.execution.setNextRequest("My subscriptions");"""
+
+MY_SUBS_TESTS = """// The subscription to {{expert_id}} (a live one first) and its first invoice.
+if (json && pm.response.code === 200) {
+    const mine = json.filter((s) => s.expert.id === pm.variables.get("expert_id"));
+    const sub = mine.find((s) => ["trialing", "active", "past_due"].includes(s.status)) || mine[0];
+    if (sub) {
+        store.set("subscription_id", sub.id);
+        if (sub.invoices.length) store.set("invoice_id", sub.invoices[0].id);
+    } else {
+        store.unset("subscription_id");
+    }
+}"""
+
+SKIP_NO_SUBSCRIPTION = """// No subscription to work on.
+if (!pm.variables.get("subscription_id")) pm.execution.skipRequest();"""
+
+OPEN_CONVERSATION_TESTS = """// No chat perk (403): skip the chat requests.
+if (pm.response.code >= 300) store.unset("conversation_id");"""
+
+SKIP_NO_CONVERSATION = """// No conversation (no subscription with the chat perk).
+if (!pm.variables.get("conversation_id")) pm.execution.skipRequest();"""
+
+CHAT_CLIENT_ID_PRE = """// One client_id per message, made by the app; a retry with the same one never duplicates.
+pm.variables.set("chat_client_id", pm.variables.replaceIn("{{$guid}}"));
+if (!pm.variables.get("conversation_id")) pm.execution.skipRequest();"""
+
+EXPERT_PROFILE_TESTS = """// Only experts have a profile: skip the expert-side requests for other roles.
+if (pm.response.code === 403) pm.execution.setNextRequest("Get notification preferences");"""
+
+SKIP_NO_INVOICE = """// Only when Experts → My subscriptions found an invoice in this run.
+if (!pm.variables.get("invoice_id")) pm.execution.skipRequest();"""
+
 # --- the collection ---------------------------------------------------------------------------
 
 FOLDERS: list[Folder] = [
@@ -296,6 +396,16 @@ FOLDERS: list[Folder] = [
                 "/health",
                 'Returns `200 {"status": "ok"}` while the API process is up. Does not touch '
                 "the database or Redis.",
+                auth="none",
+            ),
+            Req(
+                "health_live",
+                "Liveness probe",
+                "GET",
+                "/health/live",
+                'Returns `200 {"status": "ok"}` as long as the process answers; no dependency is '
+                "checked. Meant for container liveness probes (a slow database must not get the "
+                "API restarted). Successful health calls are not written to the request log.",
                 auth="none",
             ),
             Req(
@@ -346,7 +456,11 @@ FOLDERS: list[Folder] = [
                     Variant(
                         "409 Email already registered",
                         409,
-                        body={"email": "{{user_email}}", "password": "Secret123", "full_name": "x"},
+                        body={
+                            "email": "{{user_email}}",
+                            "password": "Secret123",
+                            "full_name": "x",
+                        },
                     ),
                     Variant(
                         "422 Weak password",
@@ -379,7 +493,8 @@ FOLDERS: list[Folder] = [
                 "POST",
                 "/auth/token",
                 "The same login as an OAuth2 password form (`username` = e-mail). It exists for "
-                "the **Authorize** button of Swagger UI (`/docs`); apps use `/auth/login`.",
+                "the **Authorize** button of Swagger UI (`/docs`, served outside production only, or when "
+                "`API_DOCS_ENABLED=true`); apps use `/auth/login`.",
                 auth="none",
                 form=[
                     ("username", "{{user_email}}", "The account e-mail"),
@@ -397,7 +512,11 @@ FOLDERS: list[Folder] = [
                 body={"refresh_token": "{{refresh_token}}"},
                 tests=LOGIN_TESTS,
                 variants=[
-                    Variant("401 Invalid refresh token", 401, body={"refresh_token": "not-a-jwt"})
+                    Variant(
+                        "401 Invalid refresh token",
+                        401,
+                        body={"refresh_token": "not-a-jwt"},
+                    )
                 ],
             ),
             Req(
@@ -452,7 +571,10 @@ FOLDERS: list[Folder] = [
                     Variant(
                         "400 Current password is incorrect",
                         400,
-                        body={"current_password": "Nope12345", "new_password": "Another123"},
+                        body={
+                            "current_password": "Nope12345",
+                            "new_password": "Another123",
+                        },
                     )
                 ],
             ),
@@ -936,7 +1058,10 @@ FOLDERS: list[Folder] = [
                 "another client in between answers **409** with `current_version`. Active setups "
                 "follow the new definition from the next bar.",
                 path_vars={"strategy_id": ("{{custom_strategy_id}}", "Custom strategy UUID")},
-                body={"version": "{{custom_strategy_version}}", "definition": EMA_CROSS},
+                body={
+                    "version": "{{custom_strategy_version}}",
+                    "definition": EMA_CROSS,
+                },
                 captures={"custom_strategy_version": "version"},
                 variants=[
                     Variant(
@@ -1045,12 +1170,18 @@ FOLDERS: list[Folder] = [
                         "stop": {"type": "atr", "length": 14, "multiplier": 2},
                         "take_profit": {
                             "type": "r_multiple",
-                            "levels": [{"r": 1, "close_pct": 50}, {"r": 2, "close_pct": 50}],
+                            "levels": [
+                                {"r": 1, "close_pct": 50},
+                                {"r": 2, "close_pct": 50},
+                            ],
                         },
                         "trailing": {"type": "atr", "length": 14, "multiplier": 3},
                         "guards": {"max_drawdown_pct": 15},
                         "check_entry_bar": True,
-                        "exits": {"max_bars_held": None, "exit_on_opposite_signal": True},
+                        "exits": {
+                            "max_bars_held": None,
+                            "exit_on_opposite_signal": True,
+                        },
                     },
                 },
                 expect=[202],
@@ -1132,7 +1263,11 @@ FOLDERS: list[Folder] = [
                 "Newest first, with headline metrics once completed.",
                 query=[("limit", "20", "1–100"), ("offset", "0", "")],
                 optional_query=[
-                    ("status", "completed", "queued | running | completed | failed | cancelled"),
+                    (
+                        "status",
+                        "completed",
+                        "queued | running | completed | failed | cancelled",
+                    ),
                     ("strategy_key", "{{strategy_key}}", ""),
                     ("instrument_id", "{{instrument_id}}", ""),
                 ],
@@ -1192,7 +1327,10 @@ FOLDERS: list[Folder] = [
                     Variant(
                         "201 From a full state",
                         201,
-                        body={"name": "BTC split {{$timestamp}}", "state": WORKSPACE_STATE},
+                        body={
+                            "name": "BTC split {{$timestamp}}",
+                            "state": WORKSPACE_STATE,
+                        },
                     ),
                     Variant(
                         "422 Invalid state (paths in loc)",
@@ -1346,10 +1484,22 @@ FOLDERS: list[Folder] = [
         "| `strategies:read` | strategy catalog + preview, custom-strategy schema + public list |\n"
         "| `signals:read` | `GET /signals` |\n"
         "| `stream` | WebSocket `/ws/market` |\n"
-        "| `backtests:read` | reading your backtests |\n\n"
+        "| `backtests:read` | reading your backtests |\n"
+        "| `news:read` | news list, article, sentiment; WebSocket `news` topics |\n"
+        "| `news:write` | the news ingestion API (**admins only**; the key stops working if its "
+        "owner is no longer an admin) |\n\n"
         "Active keys per account: trader 2, analyst/expert 5, admin 10. Each key has its own "
         "rate-limit bucket.",
         [
+            Req(
+                "keys_scopes",
+                "List API key scopes",
+                "GET",
+                "/me/api-keys/scopes",
+                "Every scope with its description, `admin_only`, and `grantable` (whether you may "
+                "put it on a key: `news:write` is for admins only). For the key forms of the "
+                "apps.",
+            ),
             Req(
                 "keys_create",
                 "Create API key",
@@ -1360,7 +1510,13 @@ FOLDERS: list[Folder] = [
                 "**Using an API key**.",
                 body={
                     "name": "Postman bot {{$timestamp}}",
-                    "scopes": ["market:read", "indicators:read", "signals:read", "stream"],
+                    "scopes": [
+                        "market:read",
+                        "indicators:read",
+                        "signals:read",
+                        "news:read",
+                        "stream",
+                    ],
                     "expires_in_days": 30,
                     "rate_limit_per_minute": 30,
                 },
@@ -1384,7 +1540,7 @@ FOLDERS: list[Folder] = [
                 path_vars={"key_id": ("{{api_key_id}}", "API key UUID")},
                 body={
                     "name": "Postman bot (market only)",
-                    "scopes": ["market:read", "signals:read", "stream"],
+                    "scopes": ["market:read", "signals:read", "news:read", "stream"],
                     "rate_limit_per_minute": None,
                 },
             ),
@@ -1424,6 +1580,15 @@ FOLDERS: list[Folder] = [
                         query=[("limit", "5", "")],
                     ),
                     Req(
+                        "apikey_news",
+                        "List news (API key)",
+                        "GET",
+                        "/news",
+                        "Needs `news:read`.",
+                        auth="apikey",
+                        query=[("limit", "3", "")],
+                    ),
+                    Req(
                         "apikey_forbidden",
                         "Account endpoint with a key (403)",
                         "GET",
@@ -1457,6 +1622,948 @@ FOLDERS: list[Folder] = [
         ],
     ),
     Folder(
+        "News",
+        "Market news from the built-in RSS fetcher and from the AI side's ingestion API, with "
+        "FinBERT sentiment (`docs/news-posts.md`, `docs/news-ingestion.md`). Reading works with a "
+        "login or an API key with `news:read`; new articles are also pushed on the WebSocket "
+        "`news` topics.\n\n"
+        "The first two requests are the **ingestion API of the AI side**: they need `news:write` "
+        "(an admin key, or an admin's own login, used here). The demo article has a fixed "
+        "`external_id`, so sending it again is `skipped`, not duplicated.\n\n"
+        "> ⚠️ On the production environment the ingestion requests store a real (demo) article "
+        "under the source `postman`.",
+        [
+            Req(
+                "news_ingest",
+                "Ingest articles (AI side)",
+                "POST",
+                "/ingest/news",
+                "Upsert up to 200 articles, idempotent on `source_key` + `external_id`. An "
+                "unknown `source_key` creates an `api` source. Each item is validated on its "
+                "own: invalid ones are listed in `errors` by index and the rest is stored; "
+                "unknown symbols are reported in `warnings`. HTML is stripped from titles and "
+                "summaries. `instruments` (when given) replace the article's tags: `BTC/USDT` "
+                "is that pair, `ETH` every pair with that base.\n\n"
+                "Answer: `inserted`, `updated` (a field changed), `skipped` (identical).",
+                auth="admin",
+                body={"articles": [ARTICLE]},
+                variants=[
+                    Variant(
+                        "200 Per-item errors and warnings",
+                        200,
+                        body={
+                            "articles": [
+                                {
+                                    **ARTICLE,
+                                    "external_id": "postman-demo-2",
+                                    "instruments": [{"symbol": "DOGE/XYZ"}],
+                                },
+                                {
+                                    **ARTICLE,
+                                    "external_id": "postman-bad",
+                                    "url": "ftp://x",
+                                },
+                            ]
+                        },
+                    ),
+                    Variant(
+                        "403 Missing news:write",
+                        403,
+                        auth="user",
+                    ),
+                ],
+            ),
+            Req(
+                "news_ingest_sentiment",
+                "Push sentiment (AI side)",
+                "POST",
+                "/ingest/news/sentiment",
+                "Set the FinBERT sentiment of up to 500 existing articles, by `article_id` or by "
+                "`source_key` + `external_id`; the last write wins. `score`: −1 (very negative) "
+                "… +1 (very positive). Unknown articles are listed in `errors`.",
+                auth="admin",
+                body={
+                    "items": [
+                        {
+                            "source_key": "postman",
+                            "external_id": "postman-demo-1",
+                            "label": "positive",
+                            "score": 0.82,
+                            "model": "finbert-ft-v1",
+                        },
+                        {
+                            "article_id": "00000000-0000-0000-0000-000000000000",
+                            "label": "neutral",
+                            "score": 0.0,
+                            "model": "finbert-ft-v1",
+                        },
+                    ]
+                },
+            ),
+            Req(
+                "news_list",
+                "List news",
+                "GET",
+                "/news",
+                "Newest first. `q` is a full-text search in title + summary (whole words, no "
+                'stemming; `"exact phrase"`, `or` and `-word` work as in web searches). '
+                "`summary` is plain text; `sentiment` is `null` until the AI side scores the "
+                "article; `instruments` are the tags, most relevant first. The first article is "
+                "stored as `article_id`.",
+                query=[("limit", "10", "1–100 (default 30)"), ("offset", "0", "")],
+                optional_query=[
+                    (
+                        "instrument_id",
+                        "{{instrument_id}}",
+                        "Only articles tagged with it",
+                    ),
+                    ("sentiment", "positive", "positive | neutral | negative"),
+                    ("source", "coindesk_rss", "Source key"),
+                    ("language", "en", ""),
+                    ("since", "2026-10-01T00:00:00Z", "Published at or after"),
+                    ("q", "bitcoin etf", "Full-text search"),
+                ],
+                captures={"article_id": "items.0.id"},
+            ),
+            Req(
+                "news_get",
+                "Get article",
+                "GET",
+                "/news/:article_id",
+                "One article, same shape as in the list.",
+                path_vars={"article_id": ("{{article_id}}", "Article UUID")},
+                variants=[
+                    Variant(
+                        "404 Article not found",
+                        404,
+                        path_vars={"article_id": "00000000-0000-0000-0000-000000000000"},
+                    )
+                ],
+            ),
+            Req(
+                "news_sentiment",
+                "News sentiment",
+                "GET",
+                "/news/sentiment",
+                "Aggregate for the dashboard over `1h`, `24h` (default) or `7d`: per instrument "
+                "the articles published in the window, counts per label and the mean score of "
+                "the scored ones (`weighted_score`: weighted by tag relevance); `overall` covers "
+                "every article of the window.",
+                query=[("window", "7d", "1h | 24h | 7d")],
+                optional_query=[("instrument_id", "{{instrument_id}}", "One instrument only")],
+                variants=[Variant("422 Unknown window", 422, query={"window": "30d"})],
+            ),
+            Req(
+                "news_sources",
+                "List news sources",
+                "GET",
+                "/news/sources",
+                "RSS feeds and API sources with their state (`is_active`, "
+                "`fetch_interval_minutes`, `last_fetched_at`, `last_error`) and stored article "
+                "count. Admins change them in **Admin → News & Moderation**. The first source is "
+                "stored as `news_source_id`. JWT only.",
+                captures={"news_source_id": "0.id"},
+            ),
+        ],
+    ),
+    Folder(
+        "Community",
+        "Posts, comments, likes, follows, public profiles and reports (`docs/news-posts.md`). JWT "
+        "only.\n\n"
+        "- Analysts, experts and admins publish posts (traders get 403, and the runner skips "
+        "to **Follow user**); everyone can read, comment and like.\n"
+        "- `visibility`: `public`, `followers`, or `subscribers` (experts only): readers without "
+        "the expert's `premium_posts` perk get a teaser (`locked: true`, the first 200 "
+        "characters, no attachments, comments hidden and closed).\n"
+        "- Bodies are **Markdown stored as written**: render them with raw HTML disabled. Raw "
+        "HTML and `javascript:` links are refused (422).\n"
+        "- Comments have two levels: a reply to a reply is stored under the top-level "
+        "comment.\n"
+        "- Followers get `new_post`, authors `comment_reply` and a batched `post_liked` "
+        "notification; nobody is notified about their own actions.\n\n"
+        "Daily limits: 10 posts per 24 h, 60 comments per hour, 20 reports per day (429 with "
+        "`Retry-After`).",
+        [
+            Req(
+                "posts_feed",
+                "Feed",
+                "GET",
+                "/posts",
+                "Newest first. `scope=following`: only authors you follow. Followers-only posts "
+                "appear for the author's followers; your own hidden posts appear with "
+                '`status: "hidden"`. `attachments` are resolved (`available: false` once the '
+                "target is gone or private). No e-mail addresses are ever returned.\n\n"
+                "Stores another user's post as `other_post_id` and an analyst or expert as "
+                "`author_user_id` for the requests below.",
+                query=[
+                    ("scope", "all", "all | following"),
+                    ("limit", "20", "1–50"),
+                    ("offset", "0", ""),
+                ],
+                optional_query=[
+                    ("instrument_id", "{{instrument_id}}", ""),
+                    ("author_id", "{{author_user_id}}", ""),
+                    ("direction", "bullish", "bullish | bearish | neutral"),
+                ],
+                tests=FEED_TESTS,
+            ),
+            Req(
+                "posts_create",
+                "Create post",
+                "POST",
+                "/posts",
+                "Analysts, experts and admins. `title` one line (≤ 140), `body` Markdown "
+                "(≤ 20,000), optional `instrument_id` / `timeframe` / `direction`, up to 5 "
+                "`attachments` (`backtest` and `custom_strategy` of your own or a public "
+                "strategy, a shared workspace, any `signal`), `visibility` `public` or "
+                "`followers`. Your followers get a `new_post` notification.",
+                body={
+                    "title": "BTC: range break or fake-out?",
+                    "body": "## Plan\n\nWatching **64k** as resistance. A 1h close above it "
+                    "targets 66k; below 61.5k the idea is invalid.\n\n- Entry: retest of 64k\n"
+                    "- Stop: 62.8k",
+                    "instrument_id": "{{instrument_id}}",
+                    "timeframe": "1h",
+                    "direction": "bullish",
+                    "attachments": [],
+                    "visibility": "public",
+                },
+                expect=[201, 403],
+                captures={"post_id": "id"},
+                tests=CREATE_POST_TESTS,
+                cost=2,
+                variants=[
+                    Variant(
+                        "422 Raw HTML and bad attachment",
+                        422,
+                        body={
+                            "title": "Hello",
+                            "body": "<script>alert(1)</script> [click](javascript:alert(1))",
+                            "attachments": [
+                                {
+                                    "type": "backtest",
+                                    "id": "00000000-0000-0000-0000-000000000000",
+                                }
+                            ],
+                        },
+                    )
+                ],
+            ),
+            Req(
+                "posts_get",
+                "Get post",
+                "GET",
+                "/posts/:post_id",
+                "404 when you may not see it (deleted, hidden, followers-only). `can_edit` tells "
+                "the UI whether **Update post** is allowed.",
+                path_vars={"post_id": ("{{post_id}}", "Post UUID")},
+            ),
+            Req(
+                "posts_update",
+                "Update post",
+                "PATCH",
+                "/posts/:post_id",
+                "Any subset of the create fields. The author within **24 hours** of publishing, "
+                "admins at any time (403 otherwise); `edited_at` is set.",
+                path_vars={"post_id": ("{{post_id}}", "Post UUID")},
+                body={"direction": "neutral", "visibility": "followers"},
+            ),
+            Req(
+                "posts_like",
+                "Like post",
+                "POST",
+                "/posts/:post_id/like",
+                "Idempotent. The author gets one batched `post_liked` notification per post and "
+                'day ("N people liked your post"). 409 on a post that is not published.',
+                path_vars={"post_id": ("{{post_id}}", "Post UUID")},
+            ),
+            Req(
+                "comments_create",
+                "Add comment",
+                "POST",
+                "/posts/:post_id/comments",
+                "1–2,000 characters, same Markdown rules as posts. The post's author is notified "
+                "(`comment_reply`). 409 on a post that is not published.",
+                path_vars={"post_id": ("{{post_id}}", "Post UUID")},
+                body={"body": "What about ETH? Same structure on the 4h."},
+                expect=[201],
+                captures={"comment_id": "id"},
+                cost=2,
+            ),
+            Req(
+                "comments_reply",
+                "Reply to comment",
+                "POST",
+                "/posts/:post_id/comments",
+                "With `parent_id`: a reply. A reply to a reply is stored under the top-level "
+                "comment, and the author of the comment you answered is notified.",
+                path_vars={"post_id": ("{{post_id}}", "Post UUID")},
+                body={
+                    "body": "Similar, but weaker: waiting for 2.6k.",
+                    "parent_id": "{{comment_id}}",
+                },
+                expect=[201],
+                captures={"reply_id": "id"},
+                cost=2,
+            ),
+            Req(
+                "comments_list",
+                "List comments",
+                "GET",
+                "/posts/:post_id/comments",
+                "Top-level comments **oldest first**, each with its first 20 replies inline "
+                "(`replies_count`, `more_replies`). With `parent_id`: all replies of one "
+                "top-level comment, paginated. Deleted comments keep a placeholder (`author` and "
+                "`body` null); hidden ones show `body: null` to everyone but their author.",
+                path_vars={"post_id": ("{{post_id}}", "Post UUID")},
+                query=PAGE_QUERY,
+                optional_query=[("parent_id", "{{comment_id}}", "Replies of this comment")],
+            ),
+            Req(
+                "comments_update",
+                "Update comment",
+                "PATCH",
+                "/comments/:comment_id",
+                "The author, at any time while it is published; `edited_at` is set.",
+                path_vars={"comment_id": ("{{reply_id}}", "Comment UUID")},
+                body={"body": "Similar, but weaker: waiting for a close above 2.6k."},
+            ),
+            Req(
+                "comments_delete",
+                "Delete comment",
+                "DELETE",
+                "/comments/:comment_id",
+                "The author or an admin. Soft delete: the thread keeps a placeholder.",
+                path_vars={"comment_id": ("{{reply_id}}", "Comment UUID")},
+                expect=[204],
+            ),
+            Req(
+                "posts_unlike",
+                "Unlike post",
+                "DELETE",
+                "/posts/:post_id/like",
+                "Idempotent.",
+                path_vars={"post_id": ("{{post_id}}", "Post UUID")},
+            ),
+            Req(
+                "posts_delete",
+                "Delete post",
+                "DELETE",
+                "/posts/:post_id",
+                "The author or an admin. Soft delete: 404 for everyone afterwards (admins still "
+                'get it by id with `status: "deleted"`). Does not refill the daily limit.',
+                path_vars={"post_id": ("{{post_id}}", "Post UUID")},
+                expect=[204],
+            ),
+            Req(
+                "users_follow",
+                "Follow user",
+                "POST",
+                "/users/:user_id/follow",
+                "Idempotent. Only analysts and experts can be followed: 400 for yourself or "
+                "another role, 404 for an unknown user. Their new posts then appear with "
+                "`scope=following` and notify you (`new_post`).",
+                path_vars={"user_id": ("{{author_user_id}}", "User UUID (analyst or expert)")},
+                pre=SKIP_NO_AUTHOR,
+            ),
+            Req(
+                "users_profile",
+                "Public profile",
+                "GET",
+                "/users/:user_id/profile",
+                "Display name, role, counters, `followable` / `is_following`, up to 5 recent "
+                "posts you may see and the user's public strategies. No e-mail. 404 for unknown "
+                "or deactivated users.",
+                path_vars={"user_id": ("{{author_user_id}}", "User UUID")},
+                pre=SKIP_NO_AUTHOR,
+            ),
+            Req(
+                "me_following",
+                "Who I follow",
+                "GET",
+                "/me/following",
+                "Newest first: `{user: {id, display_name, role}, since}`.",
+                query=PAGE_QUERY,
+            ),
+            Req(
+                "me_followers",
+                "My followers",
+                "GET",
+                "/me/followers",
+                "The people following you, newest first.",
+                query=PAGE_QUERY,
+            ),
+            Req(
+                "users_unfollow",
+                "Unfollow user",
+                "DELETE",
+                "/users/:user_id/follow",
+                "Idempotent.",
+                path_vars={"user_id": ("{{author_user_id}}", "User UUID")},
+                pre=SKIP_NO_AUTHOR,
+            ),
+            Req(
+                "reports_create",
+                "Report post",
+                "POST",
+                "/reports",
+                "Report a post, comment or chat message (`target_type` `post` | `comment` | "
+                "`message`) to the moderators. "
+                "201 for a new report, 200 with the existing one if you already reported it. "
+                "400 for your own content, 404 for content you cannot see. Stored as "
+                "`report_id` for **Admin → News & Moderation**.",
+                body={
+                    "target_type": "post",
+                    "target_id": "{{other_post_id}}",
+                    "reason": "Promises guaranteed profits (pump and dump).",
+                },
+                expect=[201, 200],
+                captures={"report_id": "id"},
+                pre=SKIP_NO_OTHER_POST,
+                cost=2,
+            ),
+        ],
+    ),
+    Folder(
+        "Price Alerts",
+        "Alerts on a price, checked on every **closed 1m candle** about 10 s after the minute "
+        "(`docs/price-alerts.md`). A fired alert is a `price_alert` notification (in-app, push, "
+        "Telegram by default) and a `price_alert` WebSocket message. JWT only.\n\n"
+        "| `condition` | `value` | fires when |\n|---|---|---|\n"
+        "| `above` | price | the bar's high ≥ value |\n"
+        "| `below` | price | the bar's low ≤ value |\n"
+        "| `crosses_above` | price | previous close < value ≤ close |\n"
+        "| `crosses_below` | price | previous close > value ≥ close |\n"
+        "| `change_pct` | percent (0–100] + `window_minutes` | \\|close / close `window_minutes` ago − 1\\| ≥ value % |\n\n"
+        "`repeat`: `once` (then switched off) or `every` (after `cooldown_minutes`, default 60). "
+        "Active alerts: trader 20, analyst / expert / admin 100.",
+        [
+            Req(
+                "alerts_create",
+                "Create price alert",
+                "POST",
+                "/me/price-alerts",
+                "201 with `current_price` (close of the latest 1m candle) and "
+                "`would_trigger_now` (an above/below alert the latest price already meets: it "
+                "is created anyway and fires on the next closed minute). 400 over your limit, "
+                "404 for an unknown instrument. `expires_at` (optional, future) switches it "
+                "off.",
+                body={
+                    "instrument_id": "{{instrument_id}}",
+                    "condition": "crosses_above",
+                    "value": 70000,
+                    "repeat": "every",
+                    "cooldown_minutes": 120,
+                    "note": "breakout above 70k",
+                    "expires_at": "2027-12-31T00:00:00Z",
+                },
+                expect=[201],
+                captures={"price_alert_id": "id"},
+                variants=[
+                    Variant(
+                        "422 Invalid combination",
+                        422,
+                        body={
+                            "instrument_id": "{{instrument_id}}",
+                            "condition": "change_pct",
+                            "value": 2.5,
+                            "repeat": "once",
+                            "cooldown_minutes": 30,
+                        },
+                    )
+                ],
+            ),
+            Req(
+                "alerts_list",
+                "List price alerts",
+                "GET",
+                "/me/price-alerts",
+                "Newest first, with `trigger_count` and `last_triggered_at`.",
+                query=[("limit", "50", "1–100"), ("offset", "0", "")],
+                optional_query=[
+                    ("instrument_id", "{{instrument_id}}", ""),
+                    ("is_active", "true", ""),
+                ],
+            ),
+            Req(
+                "alerts_update",
+                "Update price alert",
+                "PATCH",
+                "/me/price-alerts/:alert_id",
+                'Any field; the combination is checked again as a whole. `{"is_active": '
+                "false}` pauses an alert (it no longer counts against the limit); switching to "
+                "`change_pct` needs `window_minutes`.",
+                path_vars={"alert_id": ("{{price_alert_id}}", "Price alert UUID")},
+                body={
+                    "condition": "change_pct",
+                    "value": 2.5,
+                    "window_minutes": 15,
+                    "note": "volatility",
+                },
+                variants=[
+                    Variant(
+                        "404 Price alert not found",
+                        404,
+                        path_vars={"alert_id": "00000000-0000-0000-0000-000000000000"},
+                    )
+                ],
+            ),
+            Req(
+                "alerts_history",
+                "Price alert history",
+                "GET",
+                "/me/price-alerts/history",
+                "The last triggers with the price that met the condition and the bar, newest "
+                "first (from your notifications: kept 90 days after reading, 180 unread).",
+                query=[("limit", "50", "1–100"), ("offset", "0", "")],
+                optional_query=[("alert_id", "{{price_alert_id}}", "One alert only")],
+            ),
+            Req(
+                "alerts_delete",
+                "Delete price alert",
+                "DELETE",
+                "/me/price-alerts/:alert_id",
+                "404 if it is not yours.",
+                path_vars={"alert_id": ("{{price_alert_id}}", "Price alert UUID")},
+                expect=[204],
+            ),
+        ],
+    ),
+    Folder(
+        "Experts & Subscriptions",
+        "The experts directory and buying a subscription (`docs/subscriptions.md`). **Payments "
+        "are demo only: no real money.** The flow still works like a real provider: a hosted "
+        "checkout page, a signed webhook, renewals, failed payments, cancellation, refunds and "
+        "invoices.\n\n"
+        "A subscription unlocks the perks of its plan: `premium_posts` (posts with visibility "
+        "`subscribers`; others get a teaser with `locked: true`), `chat` (the **Chat** folder) and "
+        "`signals_feed`. Statuses: `trialing` and `active` (access), `past_due` (access during a "
+        "3-day grace period), `canceled` and `expired` (no access).\n\n"
+        "| Test card | Result |\n|---|---|\n"
+        "| `4242 4242 4242 4242` | succeeds, renewals succeed |\n"
+        "| `4000 0000 0000 0002` | declined at checkout |\n"
+        "| `4000 0000 0000 9995` | succeeds now, renewals fail |\n\n"
+        "Any future expiry (MM/YY) and any 3-digit CVC. In the runner the payment requests are "
+        "skipped when you already have a live subscription with the expert (409).",
+        [
+            Req(
+                "experts_list",
+                "Experts directory",
+                "GET",
+                "/experts",
+                "Listed experts, most subscribers first, with their cheapest plan and "
+                "`is_subscribed`. `rating` is a placeholder (null). No e-mails. Stores the first "
+                "other expert as `expert_id`.",
+                query=[("limit", "20", "1–50"), ("offset", "0", "")],
+                optional_query=[
+                    (
+                        "market",
+                        "crypto",
+                        "crypto | forex | gold | commodities | stocks | indices",
+                    ),
+                    ("language", "ar", "ar | en | fr | de | es | tr"),
+                    ("q", "gold", "Name or headline"),
+                ],
+                tests=EXPERTS_TESTS,
+            ),
+            Req(
+                "experts_get",
+                "Expert profile",
+                "GET",
+                "/experts/:expert_id",
+                "The card plus `bio`, the active `plans`, **your `entitlements`** "
+                "(`premium_posts`, `chat`, `signals_feed`) and 5 recent posts (subscriber posts "
+                "as teasers unless you are entitled). Unlisted experts are still reachable by "
+                "id. Stores the first plan as `plan_id`.",
+                path_vars={"expert_id": ("{{expert_id}}", "Expert (user) UUID")},
+                captures={"plan_id": "plans.0.id"},
+                tests=EXPERT_TESTS,
+                pre=SKIP_NO_EXPERT,
+            ),
+            Req(
+                "subs_checkout",
+                "Start checkout",
+                "POST",
+                "/subscriptions/checkout",
+                "Opens a checkout (valid 30 minutes): send the user to `checkout_url` (browser "
+                "or WebView). `checkout_url` is absolute when the server sets "
+                "`PUBLIC_BASE_URL`, otherwise prefix the path with the API origin. "
+                "`return_url` (optional) must be on an allowed origin (`CORS_ORIGINS`), else "
+                "422. The result comes back through the payment webhook: follow it with **My "
+                "subscriptions** (and the `subscription_started` notification).\n\n"
+                "404 unknown or inactive plan, 400 your own plan, 409 you already have a live "
+                "subscription with this expert.",
+                body={"plan_id": "{{plan_id}}"},
+                expect=[201, 409],
+                captures={"checkout_id": "checkout_id"},
+                tests=CHECKOUT_TESTS,
+                pre=SKIP_NO_PLAN,
+                variants=[
+                    Variant(
+                        "422 Return URL not allowed",
+                        422,
+                        body={
+                            "plan_id": "{{plan_id}}",
+                            "return_url": "https://evil.example/x",
+                        },
+                    )
+                ],
+            ),
+            Req(
+                "pay_page",
+                "Demo payment page",
+                "GET",
+                "/pay/demo/:checkout_id",
+                "The demo provider's hosted payment page (HTML, no login), titled **\"Demo "
+                'payment — no real money"**: the plan, the amount due today (0.00 during a '
+                "trial), a card form and the test cards. 409 page for a completed, declined or "
+                "expired checkout. Open it in a browser to see it as users do.",
+                auth="none",
+                path_vars={"checkout_id": ("{{checkout_id}}", "Checkout UUID")},
+            ),
+            Req(
+                "pay_confirm",
+                "Pay with a test card",
+                "POST",
+                "/pay/demo/:checkout_id/confirm",
+                "The form of the payment page (no login). The demo provider charges the test "
+                "card, sends the signed `checkout.completed` / `checkout.failed` event to the "
+                "payment webhook handler, then redirects (**303**) to `return_url` (or the "
+                "result page) with `?checkout_id=…&status=succeeded|failed`. Postman follows the "
+                "redirect, so it shows the result page (200). Unknown cards or bad fields "
+                "re-show the form (422). Only the brand and last 4 digits are kept.",
+                auth="none",
+                path_vars={"checkout_id": ("{{checkout_id}}", "Checkout UUID")},
+                form=[
+                    (
+                        "card_number",
+                        "4242 4242 4242 4242",
+                        "A test card (see the folder)",
+                    ),
+                    ("expiry", "12/30", "MM/YY in the future"),
+                    ("cvc", "123", "3 or 4 digits"),
+                    ("name", "Sara Trader", "Name on the card"),
+                ],
+                expect=[303, 200],
+            ),
+            Req(
+                "pay_done",
+                "Payment result page",
+                "GET",
+                "/pay/demo/:checkout_id/done",
+                "The default return page (HTML, no login) when the checkout had no "
+                '`return_url`: "Payment successful" with the period end, or the failure '
+                "reason.",
+                auth="none",
+                path_vars={"checkout_id": ("{{checkout_id}}", "Checkout UUID")},
+            ),
+            Req(
+                "subs_mine",
+                "My subscriptions",
+                "GET",
+                "/me/subscriptions",
+                "Newest first: `status`, the price bought at, the period, `next_charge_at`, "
+                "`grace_ends_at`, `payment_method` (brand, last 4, test behavior), the copied "
+                "`perks` and the `invoices` (`INV-2026-000123`, kind `trial` | `initial` | "
+                "`renewal`, status `open` | `paid` | `failed` | `refunded` | `void`). Stores the "
+                "subscription to `expert_id` as `subscription_id` and its first invoice as "
+                "`invoice_id`.",
+                tests=MY_SUBS_TESTS,
+            ),
+            Req(
+                "experts_signals",
+                "Expert signals feed",
+                "GET",
+                "/experts/:expert_id/signals",
+                "Signals of the expert's public custom strategies that the expert runs, newest "
+                "first, with the expert's trade plan. Subscribers with the `signals_feed` perk "
+                "(403 otherwise).",
+                path_vars={"expert_id": ("{{expert_id}}", "Expert (user) UUID")},
+                query=[("limit", "50", "1–100"), ("offset", "0", "")],
+                expect=[200, 403],
+                pre=SKIP_NO_EXPERT,
+            ),
+            Req(
+                "subs_cancel",
+                "Cancel subscription",
+                "POST",
+                "/me/subscriptions/:subscription_id/cancel",
+                "At period end: access continues until `current_period_end` "
+                "(`cancel_at_period_end: true`), then the status becomes `canceled`. 409 if it "
+                "already ended.",
+                path_vars={"subscription_id": ("{{subscription_id}}", "Subscription UUID")},
+                pre=SKIP_NO_SUBSCRIPTION,
+            ),
+            Req(
+                "subs_resume",
+                "Resume subscription",
+                "POST",
+                "/me/subscriptions/:subscription_id/resume",
+                "Undo the cancel before the period ends: it renews again.",
+                path_vars={"subscription_id": ("{{subscription_id}}", "Subscription UUID")},
+                pre=SKIP_NO_SUBSCRIPTION,
+            ),
+            Req(
+                "pay_webhook",
+                "Payment webhook (provider)",
+                "POST",
+                "/payments/webhook/:provider",
+                "Called by the payment provider, not by the apps (no login). Events: "
+                "`checkout.completed`, `checkout.failed`, `invoice.paid`, "
+                "`invoice.payment_failed`. Every event is signed with HMAC-SHA256: "
+                '`Demo-Signature: t=<unix>,v1=<hex(hmac(secret, "<t>." + body))>`, 5-minute '
+                'tolerance; a repeated event id answers `{"status": "duplicate"}`. Sent here '
+                "with a wrong signature, so it shows the 401.",
+                auth="none",
+                path_vars={"provider": ("demo", "Payment provider (demo)")},
+                headers=[("Demo-Signature", "t=1792170000,v1=0000", "HMAC signature")],
+                body={
+                    "id": "evt_demo_1",
+                    "type": "invoice.paid",
+                    "data": {"invoice_id": "00000000-0000-0000-0000-000000000000"},
+                },
+                expect=[401],
+            ),
+        ],
+    ),
+    Folder(
+        "Chat",
+        "One conversation per expert and subscriber (`docs/chat.md`). REST for sending and "
+        "history; live delivery on the WebSocket topic `chat:<conversation id>` "
+        "(`chat_message`, `chat_message_updated`, `chat_read`, `chat_typing`; see the "
+        "**Realtime** folder).\n\n"
+        "- A subscriber with the `chat` perk opens the conversation and writes; the expert can "
+        "always reply. When the subscription ends the conversation is read-only for the "
+        "subscriber.\n"
+        "- Either side can block; only the side that blocked unblocks. Admins read every "
+        "conversation but do not write.\n"
+        "- The recipient gets a `chat_message` notification only while none of their "
+        "connections is subscribed to the conversation (at most one external notification per "
+        "conversation per 5 minutes).\n\n"
+        "Limits: 30 messages per minute, 2,000 per day (429).",
+        [
+            Req(
+                "chat_open",
+                "Open conversation",
+                "POST",
+                "/conversations",
+                "Opens (201) or returns (200) your conversation with an expert. 403 without a "
+                "subscription with the `chat` perk or when the expert disabled chat; 404 unknown "
+                "expert.",
+                body={"expert_id": "{{expert_id}}"},
+                expect=[201, 200],
+                captures={"conversation_id": "id"},
+                tests=OPEN_CONVERSATION_TESTS,
+                pre=SKIP_NO_EXPERT,
+            ),
+            Req(
+                "chat_send",
+                "Send message",
+                "POST",
+                "/conversations/:conversation_id/messages",
+                "1–4,000 characters (plain text or light Markdown, raw HTML refused) and up to 5 "
+                "`attachments` (`signal`, `backtest`, `post`, `custom_strategy`). **Idempotent "
+                "on `client_id`**: the app makes one UUID per message and keeps it until the "
+                "server confirms; a retry answers 200 with the first message. Render the "
+                "message at once (optimistic, keyed by `client_id`); the `chat_message` event "
+                "confirms it on every device.\n\n"
+                "403 read-only, blocked or admin; 429 over the limits.",
+                path_vars={"conversation_id": ("{{conversation_id}}", "Conversation UUID")},
+                body={
+                    "body": "Hi! What is your stop for the BTC long you posted?",
+                    "client_id": "{{chat_client_id}}",
+                    "attachments": [],
+                },
+                expect=[201, 200],
+                captures={"message_id": "id"},
+                pre=CHAT_CLIENT_ID_PRE,
+                variants=[Variant("200 Retry with the same client_id", 200)],
+            ),
+            Req(
+                "chat_history",
+                "Message history",
+                "GET",
+                "/conversations/:conversation_id/messages",
+                "Newest first. Pass `next_before` as `before` for older messages (`null` at the "
+                "start). Deleted messages stay as tombstones (`deleted: true`, `body: null`); "
+                "`client_id` is only returned to its sender.",
+                path_vars={"conversation_id": ("{{conversation_id}}", "Conversation UUID")},
+                query=[("limit", "50", "1–100")],
+                optional_query=[("before", "{{message_id}}", "A message id (exclusive)")],
+                pre=SKIP_NO_CONVERSATION,
+            ),
+            Req(
+                "chat_edit",
+                "Edit message",
+                "PATCH",
+                "/messages/:message_id",
+                "The sender, within **15 minutes** (403 after); `edited_at` is set and the "
+                "other side gets `chat_message_updated`.",
+                path_vars={"message_id": ("{{message_id}}", "Message UUID")},
+                body={"body": "Hi! What is your stop for the BTC long from this morning?"},
+                pre=SKIP_NO_CONVERSATION,
+            ),
+            Req(
+                "chat_read",
+                "Mark as read",
+                "POST",
+                "/conversations/:conversation_id/read",
+                "Moves your read marker to a message (or to now without a body); markers only "
+                'move forward. The other side gets `chat_read` ("seen" ticks).',
+                path_vars={"conversation_id": ("{{conversation_id}}", "Conversation UUID")},
+                body={"message_id": "{{message_id}}"},
+                pre=SKIP_NO_CONVERSATION,
+            ),
+            Req(
+                "chat_get",
+                "Get conversation",
+                "GET",
+                "/conversations/:conversation_id",
+                "`other` (the other participant), `my_role`, `can_send` and "
+                "`read_only_reason`, `unread`, `last_message`, `other_last_read_at`. 404 if you "
+                "are not a participant.",
+                path_vars={"conversation_id": ("{{conversation_id}}", "Conversation UUID")},
+                pre=SKIP_NO_CONVERSATION,
+            ),
+            Req(
+                "chat_list",
+                "List conversations",
+                "GET",
+                "/conversations",
+                "Yours, as subscriber or expert, most recent first.",
+            ),
+            Req(
+                "chat_block",
+                "Block conversation",
+                "POST",
+                "/conversations/:conversation_id/block",
+                "Either side: no new messages from anyone until the side that blocked unblocks.",
+                path_vars={"conversation_id": ("{{conversation_id}}", "Conversation UUID")},
+                pre=SKIP_NO_CONVERSATION,
+            ),
+            Req(
+                "chat_unblock",
+                "Unblock conversation",
+                "POST",
+                "/conversations/:conversation_id/unblock",
+                "Only the side that blocked (or an admin).",
+                path_vars={"conversation_id": ("{{conversation_id}}", "Conversation UUID")},
+                pre=SKIP_NO_CONVERSATION,
+            ),
+            Req(
+                "chat_delete",
+                "Delete message",
+                "DELETE",
+                "/messages/:message_id",
+                "The sender. A tombstone stays in the history and the other side gets "
+                "`chat_message_updated`. Messages can also be reported (`POST /reports` with "
+                '`target_type: "message"`).',
+                path_vars={"message_id": ("{{message_id}}", "Message UUID")},
+                expect=[204],
+                pre=SKIP_NO_CONVERSATION,
+            ),
+        ],
+    ),
+    Folder(
+        "Expert Studio",
+        "The expert side (role `expert`; other roles get 403 and the runner skips this "
+        "folder): the public profile, up to 3 active plans and the earnings.\n\n"
+        "A new price never changes a running period: a subscription keeps the price it was "
+        "bought at and moves to the plan's current price and perks at its next renewal. Plans "
+        "are never deleted, only deactivated.",
+        [
+            Req(
+                "expert_profile_put",
+                "Update my expert profile",
+                "PUT",
+                "/me/expert-profile",
+                "Created on the first PUT. `bio` is Markdown (≤ 5,000, same input rules as "
+                "posts); `markets`: crypto, forex, gold, commodities, stocks, indices; "
+                "`languages`: ar, en, fr, de, es, tr. `is_listed: false` hides you from the "
+                "directory (still reachable by id).",
+                body={
+                    "headline": "Swing trader · BTC & gold · 8 years",
+                    "bio": "I trade **4h–1d** structure with strict risk: 1% per trade.\n\n"
+                    "- Weekly outlook every Sunday\n- Live trade plans in the chat",
+                    "markets": ["crypto", "gold"],
+                    "languages": ["ar", "en"],
+                    "chat_enabled": True,
+                    "response_time_hint": "usually within a few hours",
+                    "is_listed": True,
+                },
+                expect=[200, 403],
+                tests=EXPERT_PROFILE_TESTS,
+            ),
+            Req(
+                "expert_profile_get",
+                "Get my expert profile",
+                "GET",
+                "/me/expert-profile",
+                "404 until created.",
+            ),
+            Req(
+                "plans_create",
+                "Create plan",
+                "POST",
+                "/me/plans",
+                "`price` as a decimal string (≤ 100,000), `currency` USD | EUR, `interval` month "
+                "| year, `trial_days` 0–30, `perks` (`premium_posts`, `chat`, `signals_feed`). "
+                "**At most 3 active plans** (409).",
+                body={
+                    "name": "Pro monthly",
+                    "description": "Premium analyses, chat and my live signals.",
+                    "price": "29.00",
+                    "currency": "USD",
+                    "interval": "month",
+                    "trial_days": 7,
+                    "perks": {
+                        "premium_posts": True,
+                        "chat": True,
+                        "signals_feed": True,
+                    },
+                },
+                expect=[201],
+                captures={"my_plan_id": "id"},
+            ),
+            Req(
+                "plans_list",
+                "List my plans",
+                "GET",
+                "/me/plans",
+                "Active and inactive.",
+            ),
+            Req(
+                "plans_update",
+                "Update plan",
+                "PATCH",
+                "/me/plans/:plan_id",
+                "Any field except `currency` and `interval`. A new price applies to new "
+                "subscriptions and to each subscription's next renewal.",
+                path_vars={"plan_id": ("{{my_plan_id}}", "Plan UUID")},
+                body={"price": "24.00", "trial_days": 3},
+            ),
+            Req(
+                "experts_earnings",
+                "My earnings",
+                "GET",
+                "/me/earnings",
+                "Active subscribers by status, **MRR** (paying subscriptions; yearly prices / 12; "
+                "trials excluded), 30-day churn, the last 12 months (gross, platform fee 20 %, "
+                "net, refunded) and recent invoices. Subscribers appear by display name only.",
+            ),
+            Req(
+                "plans_deactivate",
+                "Deactivate plan",
+                "DELETE",
+                "/me/plans/:plan_id",
+                "Deactivates the plan (it is never deleted). Existing subscriptions keep "
+                "renewing at their price.",
+                path_vars={"plan_id": ("{{my_plan_id}}", "Plan UUID")},
+                expect=[204],
+            ),
+        ],
+    ),
+    Folder(
         "Notifications",
         "The notification inbox, per-event / per-channel preferences, the Telegram link and push "
         "devices (`docs/notifications.md`). JWT only: API keys get 403.\n\n"
@@ -1464,7 +2571,14 @@ FOLDERS: list[Folder] = [
         "| `signal` | live signal engine, for your activations with `notify: true` (carries your trade plan) |\n"
         "| `backtest_completed` / `backtest_failed` | backtest worker |\n"
         "| `security` | sign-in from a new IP / device, password changed, API key created or revoked, account locked |\n"
-        "| `system` | admin broadcast, test messages |\n\n"
+        "| `system` | admin broadcast, test messages |\n"
+        "| `new_post` / `comment_reply` | someone you follow published / a comment on your post or a reply to yours |\n"
+        '| `post_liked` | "N people liked your post": one row per post and day, **in-app only** |\n'
+        "| `content_hidden` | moderation hid your post or comment |\n"
+        "| `price_alert` | one of your price alerts fired |\n"
+        "| `chat_message` | a chat message while you are not looking at the conversation (one external notification per conversation per 5 min) |\n"
+        "| `subscription_started` / `_renewed` / `_payment_failed` / `_canceled` | your subscription to an expert |\n"
+        "| `new_subscriber` | someone subscribed to your plan (experts) |\n\n"
         "Every event is stored in the inbox and pushed on the WebSocket as `notification`. "
         "Telegram, email and push follow your preferences: event on for the channel → signal "
         "filters → quiet hours → hourly cap (held deliveries go out later as one digest). A "
@@ -1504,7 +2618,11 @@ FOLDERS: list[Folder] = [
                     },
                     "min_signal_strength": 0.6,
                     "only_valid_plans": True,
-                    "quiet_hours": {"start": "23:00", "end": "07:00", "tz": "Asia/Damascus"},
+                    "quiet_hours": {
+                        "start": "23:00",
+                        "end": "07:00",
+                        "tz": "Asia/Damascus",
+                    },
                     "language": "en",
                     "max_per_hour": {"telegram": 20},
                 },
@@ -1513,7 +2631,11 @@ FOLDERS: list[Folder] = [
                         "422 Invalid quiet hours",
                         422,
                         body={
-                            "quiet_hours": {"start": "25:00", "end": "07:00", "tz": "Mars/Olympus"},
+                            "quiet_hours": {
+                                "start": "25:00",
+                                "end": "07:00",
+                                "tz": "Mars/Olympus",
+                            },
                             "max_per_hour": {"push": 0},
                         },
                     )
@@ -1779,7 +2901,11 @@ FOLDERS: list[Folder] = [
                             Variant(
                                 "422 Assets required",
                                 422,
-                                body={"symbol": "AAPL", "source": "nasdaq", "market": "stock"},
+                                body={
+                                    "symbol": "AAPL",
+                                    "source": "nasdaq",
+                                    "market": "stock",
+                                },
                             )
                         ],
                     ),
@@ -1791,7 +2917,12 @@ FOLDERS: list[Folder] = [
                         "Precisions, assets and `is_active`. Here: deactivates the instrument "
                         "created above (it disappears from charts and live feeds).",
                         auth="admin",
-                        path_vars={"instrument_id": ("{{admin_instrument_id}}", "Instrument UUID")},
+                        path_vars={
+                            "instrument_id": (
+                                "{{admin_instrument_id}}",
+                                "Instrument UUID",
+                            )
+                        },
                         body={"price_precision": 4, "is_active": False},
                     ),
                     Req(
@@ -1804,7 +2935,12 @@ FOLDERS: list[Folder] = [
                         "also refresh the higher-timeframe aggregates; recent candles are pushed "
                         "to WebSocket subscribers.",
                         auth="admin",
-                        path_vars={"instrument_id": ("{{admin_instrument_id}}", "Instrument UUID")},
+                        path_vars={
+                            "instrument_id": (
+                                "{{admin_instrument_id}}",
+                                "Instrument UUID",
+                            )
+                        },
                         body={
                             "candles": [
                                 {
@@ -1860,7 +2996,7 @@ FOLDERS: list[Folder] = [
             ),
             Folder(
                 "API Keys & Rate Limits",
-                "Every user's keys, and rate-limit monitoring.",
+                "Every user's keys, rate-limit monitoring and the system status.",
                 [
                     Req(
                         "admin_keys",
@@ -1913,6 +3049,173 @@ FOLDERS: list[Folder] = [
                         "Connections, subscriptions and message counters of the WebSocket hub of "
                         "the API process that serves the request.",
                         auth="admin",
+                    ),
+                    Req(
+                        "admin_system_status",
+                        "System status",
+                        "GET",
+                        "/admin/system/status",
+                        "The operations view in one call: version and uptime, database (size, "
+                        "connections, migration, slowest queries when `pg_stat_statements` is "
+                        "installed), Redis, Celery (queue lengths, live workers, last run of each "
+                        "scheduled task), market data freshness per active instrument, WebSocket "
+                        "clients summed over every API process (each reports every 30 s), "
+                        "notification channels, unhandled errors in "
+                        "the last hour and the last daily summary.",
+                        auth="admin",
+                    ),
+                ],
+            ),
+            Folder(
+                "News & Moderation",
+                "News sources and the report queue of the community.",
+                [
+                    Req(
+                        "admin_news_source",
+                        "Update news source",
+                        "PATCH",
+                        "/admin/news/sources/:source_id",
+                        "Enable or disable a source and change how often an RSS feed is fetched "
+                        "(5–1440 minutes). A disabled RSS source is not fetched; a disabled `api` "
+                        "source refuses ingested items. Existing articles stay listed. Here: the "
+                        "first source of **News → List news sources**, kept active at the default "
+                        "15 minutes.",
+                        auth="admin",
+                        path_vars={"source_id": ("{{news_source_id}}", "News source UUID")},
+                        body={"is_active": True, "fetch_interval_minutes": 15},
+                        variants=[
+                            Variant(
+                                "422 Interval out of range",
+                                422,
+                                body={"fetch_interval_minutes": 2},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_reports",
+                        "List reports",
+                        "GET",
+                        "/admin/reports",
+                        "Newest first, with the reporter, an excerpt of the reported content and "
+                        "the number of open reports on it.",
+                        auth="admin",
+                        query=[
+                            ("status", "open", "open | resolved | all"),
+                            ("limit", "50", "1–100"),
+                            ("offset", "0", ""),
+                        ],
+                    ),
+                    Req(
+                        "admin_report_resolve",
+                        "Resolve report",
+                        "POST",
+                        "/admin/reports/:report_id/resolve",
+                        "`hide`: the post or comment disappears for everyone but its author, who "
+                        "gets a `content_hidden` notification (with `note` as the reason); "
+                        "`dismiss`: no change. Every open report on the same content is resolved. "
+                        "409 if already resolved. Points at the report made in **Community → "
+                        "Report post**, and dismisses it (409 on a repeated run: reporting the "
+                        "same post again returns the first, resolved report).",
+                        auth="admin",
+                        path_vars={"report_id": ("{{report_id}}", "Report UUID")},
+                        body={
+                            "action": "dismiss",
+                            "note": "Opinion, not a scam: no action.",
+                        },
+                        expect=[200, 409],
+                        pre=SKIP_NO_REPORT,
+                        variants=[
+                            Variant(
+                                "409 Already resolved",
+                                409,
+                            )
+                        ],
+                    ),
+                ],
+            ),
+            Folder(
+                "Subscriptions & Chat",
+                "Subscriptions, demo payments and conversations.",
+                [
+                    Req(
+                        "admin_subscriptions",
+                        "List subscriptions",
+                        "GET",
+                        "/admin/subscriptions",
+                        "Every subscription with subscriber, expert, status and period.",
+                        auth="admin",
+                        query=[("limit", "50", "1–100"), ("offset", "0", "")],
+                        optional_query=[
+                            (
+                                "status",
+                                "active",
+                                "trialing | active | past_due | canceled | expired",
+                            ),
+                            ("expert_id", "{{expert_id}}", ""),
+                            ("user_id", "{{user_id}}", ""),
+                        ],
+                    ),
+                    Req(
+                        "admin_payment_stats",
+                        "Payment stats",
+                        "GET",
+                        "/admin/payments/stats",
+                        "Invoices per status (count, amount), platform fees, subscriptions per "
+                        "status and MRR across experts.",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_fast_forward",
+                        "Fast-forward subscription (demo)",
+                        "POST",
+                        "/admin/subscriptions/:subscription_id/fast-forward",
+                        "**Demo only**, to show renewals without waiting a month: `period_end` "
+                        "ends the current period now and processes it like the hourly task "
+                        "(renewal, failed payment or cancel); `grace_end` ends the grace period "
+                        "of a `past_due` one. 403 in production unless `PAYMENT_DEMO_TOOLS=true`. "
+                        "Points at the subscription of **Experts & Subscriptions**.",
+                        auth="admin",
+                        path_vars={
+                            "subscription_id": (
+                                "{{subscription_id}}",
+                                "Subscription UUID",
+                            )
+                        },
+                        body={"to": "period_end"},
+                        expect=[200, 403],
+                        pre=SKIP_NO_SUBSCRIPTION,
+                    ),
+                    Req(
+                        "admin_refund",
+                        "Refund invoice",
+                        "POST",
+                        "/admin/invoices/:invoice_id/refund",
+                        "A paid invoice becomes `refunded` and its subscription ends **now** "
+                        "(`canceled`, the subscriber is notified). 409 if the invoice is not "
+                        "paid. Points at the invoice of **Experts & Subscriptions → My "
+                        "subscriptions**, so a later run can subscribe again.",
+                        auth="admin",
+                        path_vars={"invoice_id": ("{{invoice_id}}", "Invoice UUID")},
+                        expect=[200, 409],
+                        pre=SKIP_NO_INVOICE,
+                        variants=[
+                            Variant(
+                                "404 Invoice not found",
+                                404,
+                                path_vars={"invoice_id": "00000000-0000-0000-0000-000000000000"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_conversations",
+                        "List conversations",
+                        "GET",
+                        "/admin/conversations",
+                        "E.g. `status=blocked`. Admins read any conversation through the normal "
+                        "chat endpoints (read-only).",
+                        auth="admin",
+                        query=[("limit", "50", "1–100"), ("offset", "0", "")],
+                        optional_query=[("status", "blocked", "open | closed | blocked")],
                     ),
                 ],
             ),
@@ -1986,6 +3289,10 @@ and reconnect.
 {"op": "subscribe",   "topic": "candles", "instrument_id": "{{instrument_id}}", "timeframe": "1m"}
 {"op": "unsubscribe", "topic": "candles", "instrument_id": "{{instrument_id}}", "timeframe": "1m"}
 {"op": "subscribe",   "topic": "signals", "instrument_id": "{{instrument_id}}"}
+{"op": "subscribe",   "topic": "news"}                                    # every new article
+{"op": "subscribe",   "topic": "news", "instrument_id": "{{instrument_id}}"}  # articles tagged with it
+{"op": "subscribe",   "topic": "chat", "conversation_id": "{{conversation_id}}"}  # participants and admins
+{"op": "typing",      "conversation_id": "{{conversation_id}}"}               # while the user types, ≤ 1 per 3 s
 {"op": "ping"}
 ```
 
@@ -1996,6 +3303,11 @@ and reconnect.
 {"type": "snapshot",   "topic": "candles:<uuid>:1m", "candle": {"time": 1760000000, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}}
 {"type": "candle",     "topic": "candles:<uuid>:1m", "instrument_id": "<uuid>", "timeframe": "1m", "candle": {"time": 1760000040, "open": 1.0, "high": 1.2, "low": 0.9, "close": 1.1, "volume": 3.5}, "sent_at": 1760000041234}
 {"type": "signal",     "topic": "signals:<uuid>", "signal": {"strategy_key": "rsi_reversal", "side": "buy", "time": 1760000000, "price": 61234.5, "...": "..."}}
+{"type": "news",       "topic": "news", "article": {"id": "<uuid>", "source": {"key": "coindesk_rss", "name": "CoinDesk"}, "title": "…", "url": "…", "sentiment": {"label": "positive", "score": 0.82}, "instruments": [{"instrument_id": "<uuid>", "symbol": "BTC/USDT", "relevance": 1.0}], "...": "..."}}
+{"type": "chat_message",         "topic": "chat:<uuid>", "conversation_id": "<uuid>", "message": {"id": "<uuid>", "sender_id": "<uuid>", "body": "…", "attachments": [], "client_id": "<uuid>", "edited_at": null, "deleted": false, "created_at": "…"}}
+{"type": "chat_message_updated", "topic": "chat:<uuid>", "conversation_id": "<uuid>", "message": {"...": "edited, or a tombstone with deleted: true"}}
+{"type": "chat_read",            "topic": "chat:<uuid>", "conversation_id": "<uuid>", "user_id": "<uuid>", "read_at": "…"}
+{"type": "chat_typing",          "topic": "chat:<uuid>", "conversation_id": "<uuid>", "user_id": "<uuid>"}
 {"type": "pong"}
 {"type": "heartbeat"}
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
@@ -2003,18 +3315,23 @@ and reconnect.
 
 Pushed to the user's own topic without subscribing: `notification` (every inbox item, see \
 the **Notifications** folder), `signal` (with `user_strategy_ids`, the user's trade `plan` and \
-`plans` per activation) for activations with `notify: true`, `workspace_updated`, \
-`backtest_progress`, `backtest_completed`, `backtest_failed`.
+`plans` per activation) for activations with `notify: true`, `price_alert` (a fired alert: \
+`alert_id`, `instrument`, `condition`, `value`, `price`, `bar_time`, `note`), \
+`workspace_updated`, `backtest_progress`, `backtest_completed`, `backtest_failed`.
 
 ```json
 {"type": "notification", "topic": "user:<uuid>", "sent_at": 1792156510640, "notification": {"id": "<uuid>", "type": "signal", "title": "SELL signal: BTC/USDT 1m", "body": "…", "data": {"...": "..."}, "severity": "info", "created_at": "…", "read_at": null}}
 ```
 
+A participant subscribed to a `chat` topic counts as **present**: no `chat_message` \
+notifications for that conversation. Ignore `chat_typing` with your own `user_id` and hide the \
+indicator after ~5 s without a new one.
+
 ### Limits and close codes
 
 | | |
 |---|---|
-| Subscriptions per connection | 50 |
+| Subscriptions per connection | 50 (candles, signals, news and chat topics) |
 | Server heartbeat | every 25 s; send `{"op":"ping"}` every ~30 s |
 | Idle timeout | 75 s without a client frame → **1001** |
 | Slow consumer | > 256 undelivered messages → **1013** |

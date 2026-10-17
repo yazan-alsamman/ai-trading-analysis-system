@@ -46,7 +46,24 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
-      - run: pytest -q
+      - name: ERD docs are up to date (T05)
+        run: python scripts/erd.py --check
+      - name: API contract is up to date (T07)
+        run: |
+          python scripts/openapi.py --check
+          python scripts/asyncapi.py --check
+      - name: Tests (every log record kept, to look for secrets)
+        run: pytest -q --log-file=/tmp/pytest.log --log-file-level=DEBUG
+      - name: No secrets in the logs of the test run
+        run: python scripts/check_log_secrets.py /tmp/pytest.log
+      - name: Dependency audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit --skip-editable --progress-spinner off
+      - name: Static security analysis (bandit; fails on high severity)
+        run: |
+          pip install bandit
+          bandit -r app -q --severity-level high
 
   indicators:
     runs-on: ubuntu-latest
@@ -144,6 +161,59 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+
+  api-contract:
+    # the committed contract (docs/api) is valid and both client generators accept it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Validate the AsyncAPI document
+        run: npx -y @asyncapi/cli@2.16.0 validate docs/api/asyncapi.yaml
+      - name: TypeScript client (openapi-typescript)
+        run: |
+          npx -y openapi-typescript@7.4.4 docs/api/openapi.json -o /tmp/ts/schema.d.ts
+          wc -l /tmp/ts/schema.d.ts
+      - name: Dart client (openapi-generator dart-dio)
+        run: |
+          npx -y @openapitools/openapi-generator-cli@2.15.3 version-manager set 7.10.0
+          npx -y @openapitools/openapi-generator-cli@2.15.3 generate -i docs/api/openapi.json             -g dart-dio -o /tmp/dart --additional-properties=pubName=trading_api
+          echo "dart files: $(find /tmp/dart/lib -name '*.dart' | wc -l)"
+
+  e2e:
+    # the compose stack (db, redis, backend, workers, beat, nginx) and the end-to-end suite
+    # through Nginx; the suite removes its own accounts and market (purge-demo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      E2E_BASE_URL: http://localhost
+      E2E_ADMIN_EMAIL: ci-admin@example.com
+      E2E_ADMIN_PASSWORD: Ci-Admin-Passw0rd-1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stack configuration (.env.example + a first admin)
+        run: |
+          cp .env.example .env
+          sed -i "s|^FIRST_ADMIN_EMAIL=.*|FIRST_ADMIN_EMAIL=$E2E_ADMIN_EMAIL|" .env
+          sed -i "s|^FIRST_ADMIN_PASSWORD=.*|FIRST_ADMIN_PASSWORD=$E2E_ADMIN_PASSWORD|" .env
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait db redis backend worker worker-backtest beat nginx
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest httpx websockets
+      - name: End-to-end suite
+        working-directory: backend
+        run: python -m pytest tests_e2e -v -p no:cacheprovider
+      - name: Stack logs
+        if: failure()
+        run: docker compose logs --tail 150 backend worker worker-backtest beat
 
   compose:
     runs-on: ubuntu-latest

@@ -23,6 +23,14 @@ the Celery queue `notifications`. Nothing calls a channel directly.
 | `backtest_failed` | backtest task | `warning` | the same plus `error` |
 | `security` | sign-in from a new IP/device, password changed, API key created / revoked, account locked by the login lockout | `warning` / `info` / **`critical`** (locked) | `event` (`new_login`, `password_changed`, `api_key_created`, `api_key_revoked`, `account_locked`) plus `ip`, `user_agent`, `key_name`, `key_prefix` or `minutes` |
 | `system` | admin broadcast, test messages | any | `title`, `body` (`broadcast_id`), or `test`, `channel` |
+| `new_post` (Y18) | an author you follow published a post (fan-out task, batches of 500) | `info` | `post_id`, `title`, `excerpt`, `author_id`, `author_name`, `instrument_symbol`, `direction` |
+| `comment_reply` (Y18) | a comment on your post, or a reply to your comment (never your own) | `info` | `post_id`, `comment_id`, `post_title`, `excerpt`, `author_name`, `kind` (`post` \| `comment`) |
+| `post_liked` (Y18) | likes on your post: **in-app only, one row per post and UTC day**, updated (and marked unread) by every like | `info` | `post_id`, `post_title`, `count` |
+| `content_hidden` (Y18) | moderation hid your post or comment | `warning` | `target_type`, `target_id`, `post_id`, `comment_id`, `excerpt`, `reason` |
+| `chat_message` (Y19) | a chat message while none of your connections looks at the conversation; one external notification per conversation per 5 min, the inbox row is updated meanwhile ([chat.md](chat.md)) | `info` | `conversation_id`, `message_id`, `sender_id`, `sender_name`, `excerpt`, `count` |
+| `subscription_started`, `subscription_renewed`, `subscription_payment_failed` (warning), `subscription_canceled` (Y19) | your subscription to an expert ([subscriptions.md](subscriptions.md)) | `info` / `warning` | `subscription_id`, `expert_id`, `expert_name`, `plan_name`, `price`, `currency`, `interval`, `status`, `period_end`, plus `invoice_number`, `amount`, `reason`, `grace_end`, `trial` |
+| `new_subscriber` (Y19) | to the expert | `info` | the same, with `subscriber_name`, `trial_days` |
+| `price_alert` (Y18) | one of your price alerts fired ([price-alerts.md](price-alerts.md)) | `warning` | `alert_id`, `instrument`, `condition`, `value`, `price`, `bar_time`, `note`, ... |
 
 - There is **one notification per (event, user)**: `dedup_key` (unique per user) makes
   producing idempotent. Examples: `signal:<signal_id>` (several activations of the same user on
@@ -103,7 +111,17 @@ GET /me/notification-preferences   (created with the defaults on first read)
     "backtest_completed": {"telegram": false, "email": false, "push": true},
     "backtest_failed":    {"telegram": false, "email": false, "push": true},
     "security":           {"telegram": false, "email": true,  "push": false},
-    "system":             {"telegram": true,  "email": false, "push": true}
+    "system":             {"telegram": true,  "email": false, "push": true},
+    "new_post":           {"telegram": false, "email": false, "push": true},
+    "comment_reply":      {"telegram": false, "email": false, "push": true},
+    "content_hidden":     {"telegram": false, "email": true,  "push": true},
+    "price_alert":        {"telegram": true,  "email": false, "push": true},
+    "chat_message":       {"telegram": true,  "email": false, "push": true},
+    "subscription_started":        {"telegram": false, "email": true, "push": true},
+    "subscription_renewed":        {"telegram": false, "email": true, "push": false},
+    "subscription_payment_failed": {"telegram": true,  "email": true, "push": true},
+    "subscription_canceled":       {"telegram": false, "email": true, "push": true},
+    "new_subscriber":              {"telegram": false, "email": true, "push": true}
   },
   "min_signal_strength": 0.0,
   "only_valid_plans": false,
@@ -113,6 +131,8 @@ GET /me/notification-preferences   (created with the defaults on first read)
   "updated_at": "…"
 }
 ```
+
+`post_liked` has no matrix entry: it never leaves the app (a `PUT` that sets it is a 422).
 
 `PUT` takes the same fields. A missing field gets its default, and a missing matrix entry
 keeps the default for that event and channel. Example:
@@ -218,6 +238,11 @@ Authorization: Bearer <access token>
   | `backtest` | `backtest_id` |
   | `security` | — |
   | `notifications` | — (system messages, and digests with `type: "digest"` and `count`) |
+  | `post` | `post_id`, and `comment_id` for comments (`new_post`, `comment_reply`, `post_liked`, `content_hidden`) |
+  | `price_alert` | `alert_id`, `instrument_id` |
+  | `chat` | `conversation_id` (`chat_message`) |
+  | `subscription` | `subscription_id` (`subscription_*`) |
+  | `earnings` | `subscription_id` (`new_subscriber`) |
 
   With `notification_id` the app can mark it read (`POST /me/notifications/{id}/read`).
 - The body is the first whole lines of the inbox text, at most 240 characters.

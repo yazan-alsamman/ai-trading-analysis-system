@@ -1,0 +1,52 @@
+# Load-test override for the LOCAL dev stack: the production mem_limit / cpus / cpu_shares of
+# every service and the production backend worker count (infra/deploy/docker-compose.prod.yml), so
+# latencies and memory peaks mean something for the server. The worker also gets the production command (the dev one runs Celery's default
+# concurrency, one process per CPU, which does not fit 384m). Plus one test-only change: all 200
+# WebSocket clients connect from the k6 container's single IP, so the per-IP new-connection limit
+# (20/min) is raised for the run.
+#
+#   docker compose -f docker-compose.yml -f infra/loadtest/compose.limits.yml up -d --wait
+#
+# run.sh applies it and puts the normal dev stack back afterwards.
+
+services:
+  db:
+    mem_limit: 768m
+    cpus: 1.5
+    cpu_shares: 512
+  redis:
+    mem_limit: 192m
+    cpus: 0.5
+    cpu_shares: 512
+  backend:
+    mem_limit: 544m
+    cpus: 1.5
+    cpu_shares: 512
+    environment:
+      API_WORKERS: "2"
+      WS_NEW_CONNECTIONS_IP_PER_MINUTE: "1000"
+  worker:
+    command: celery -A app.tasks worker -Q celery,notifications --loglevel=info --concurrency 2
+    mem_limit: 384m
+    cpus: 0.75
+    cpu_shares: 512
+  worker-backtest:
+    mem_limit: 512m
+    cpus: 1.0
+    cpu_shares: 512
+  beat:
+    mem_limit: 192m
+    cpus: 0.25
+    cpu_shares: 512
+  telegram-bot:
+    mem_limit: 128m
+    cpus: 0.25
+    cpu_shares: 512
+  ai-service:
+    mem_limit: 256m
+    cpus: 0.5
+    cpu_shares: 512
+  nginx:
+    mem_limit: 64m
+    cpus: 0.25
+    cpu_shares: 512

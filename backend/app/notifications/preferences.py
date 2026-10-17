@@ -24,7 +24,22 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     NotificationType.backtest_failed: {"telegram": False, "email": False, "push": True},
     NotificationType.security: {"telegram": False, "email": True, "push": False},
     NotificationType.system: {"telegram": True, "email": False, "push": True},
+    # Y18
+    NotificationType.new_post: {"telegram": False, "email": False, "push": True},
+    NotificationType.comment_reply: {"telegram": False, "email": False, "push": True},
+    NotificationType.content_hidden: {"telegram": False, "email": True, "push": True},
+    NotificationType.price_alert: {"telegram": True, "email": False, "push": True},
+    # Y19
+    NotificationType.chat_message: {"telegram": True, "email": False, "push": True},
+    NotificationType.subscription_started: {"telegram": False, "email": True, "push": True},
+    NotificationType.subscription_renewed: {"telegram": False, "email": True, "push": False},
+    NotificationType.subscription_payment_failed: {"telegram": True, "email": True, "push": True},
+    NotificationType.subscription_canceled: {"telegram": False, "email": True, "push": True},
+    NotificationType.new_subscriber: {"telegram": False, "email": True, "push": True},
 }
+# Events that never leave the app (no matrix entry, cannot be switched on): likes are batched
+# into one inbox row per post and day ("N people liked your post").
+IN_APP_ONLY = frozenset({NotificationType.post_liked})
 DEFAULT_MAX_PER_HOUR = {"telegram": 30, "email": 30, "push": 30}
 DEFAULT_LANGUAGE = "ar"
 HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -81,6 +96,14 @@ class PreferencesIn(_Strict):
     quiet_hours: QuietHours | None = None
     language: Literal["ar", "en"] = DEFAULT_LANGUAGE
     max_per_hour: dict[Literal["telegram", "email", "push"], int] = Field(default_factory=dict)
+
+    @field_validator("matrix")
+    @classmethod
+    def _external_only(cls, v: dict[NotificationType, ChannelSwitches]):
+        for event in v:
+            if event in IN_APP_ONLY:
+                raise ValueError(f"{event} is in-app only and has no channel switches")
+        return v
 
     @field_validator("max_per_hour")
     @classmethod

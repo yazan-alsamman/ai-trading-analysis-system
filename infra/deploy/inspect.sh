@@ -54,3 +54,14 @@ docker compose ls --filter name=trading 2>&1
 docker ps --filter label=com.docker.compose.project=trading --format '{{.Names}} | {{.Status}}'
 ls -1 /opt/trading/backups 2>/dev/null
 crontab -l 2>/dev/null | grep trading-backup || echo "no backup cron"
+
+section "trading daily summary and recent errors (read-only, our containers only)"
+for svc in worker-backtest backend; do
+  cid="$(docker ps -q --filter label=com.docker.compose.project=trading --filter label=com.docker.compose.service=$svc | head -1)"
+  [ -n "$cid" ] || continue
+  if [ "$svc" = worker-backtest ]; then
+    docker logs --since 72h "$cid" 2>&1 | grep -E 'daily_summary' | tail -3
+  else
+    echo "backend 5xx in the last hour: $(docker logs --since 1h "$cid" 2>&1 | grep -cE '"status": 5[0-9][0-9]| 5[0-9][0-9] ')"
+  fi
+done

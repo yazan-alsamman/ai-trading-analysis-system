@@ -16,22 +16,28 @@ class _ClientMessage(BaseModel):
 
 
 class _TopicRef(_ClientMessage):
-    topic: Literal["candles", "signals", "user"]
+    topic: Literal["candles", "signals", "user", "news", "chat"]
     instrument_id: uuid.UUID | None = None
     timeframe: Timeframe | None = None
     user_id: uuid.UUID | None = None
+    conversation_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _check_fields(self) -> Self:
         given = {
             name
-            for name in ("instrument_id", "timeframe", "user_id")
+            for name in ("instrument_id", "timeframe", "user_id", "conversation_id")
             if getattr(self, name) is not None
         }
+        if self.topic == "news":  # all news, or the news of one instrument
+            if not given <= {"instrument_id"}:
+                raise ValueError("news topic takes only an optional instrument_id")
+            return self
         required = {
             "candles": {"instrument_id", "timeframe"},
             "signals": {"instrument_id"},
             "user": {"user_id"},
+            "chat": {"conversation_id"},
         }[self.topic]
         if given != required:
             raise ValueError(f"{self.topic} topic needs exactly: {', '.join(sorted(required))}")
@@ -50,8 +56,16 @@ class PingMessage(_ClientMessage):
     op: Literal["ping"]
 
 
+class TypingMessage(_ClientMessage):
+    """Ephemeral "is typing" in a chat the client is subscribed to (not stored)."""
+
+    op: Literal["typing"]
+    conversation_id: uuid.UUID
+
+
 ClientMessage = Annotated[
-    SubscribeMessage | UnsubscribeMessage | PingMessage, Field(discriminator="op")
+    SubscribeMessage | UnsubscribeMessage | PingMessage | TypingMessage,
+    Field(discriminator="op"),
 ]
 client_message_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
 

@@ -8,7 +8,9 @@ from app.core.config import get_settings
 from app.models import Base
 
 config = context.config
-if config.config_file_name is not None:
+# The test suite migrates in-process and keeps its own logging (pytest's capture and log file);
+# the CLI and the backend container use the logging of alembic.ini.
+if config.config_file_name is not None and not config.attributes.get("keep_logging"):
     # keep loggers of already-imported app modules enabled (migrations also run in-process)
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 

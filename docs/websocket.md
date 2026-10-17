@@ -31,12 +31,33 @@ JSON text frames, at most 4 KB each.
 {"op": "unsubscribe", "topic": "candles", "instrument_id": "<uuid>", "timeframe": "1m"}
 {"op": "subscribe",   "topic": "signals", "instrument_id": "<uuid>"}
 {"op": "unsubscribe", "topic": "signals", "instrument_id": "<uuid>"}
+{"op": "subscribe",   "topic": "news"}
+{"op": "subscribe",   "topic": "news", "instrument_id": "<uuid>"}
+{"op": "subscribe",   "topic": "chat", "conversation_id": "<uuid>"}
+{"op": "typing",      "conversation_id": "<uuid>"}
 {"op": "ping"}
 ```
 
 A `signals` topic carries the live strategy signals of one instrument, for every timeframe and
 strategy setup that users run on it. It has no `timeframe` field and sends no snapshot; use
 `GET /api/v1/signals` for past signals.
+
+A `news` topic (Y18) carries new articles as they are stored: `news` all of them,
+`news` with an `instrument_id` (topic `news:<uuid>`) those tagged with that instrument. No
+snapshot; `GET /api/v1/news` lists past ones. API keys need the `news:read` scope for it
+(error `forbidden` otherwise). Message:
+`{"type": "news", "topic": "news", "article": {"id", "source": {"key", "name"}, "url", "title",
+"summary", "image_url", "language", "published_at", "sentiment": {"label", "score"} | null,
+"instruments": [{"instrument_id", "symbol", "relevance"}]}}`. Only articles published in the
+last 24 hours are pushed (a backfill or a first RSS fetch does not flood the sockets), at most
+50 per batch. See [news-posts.md](news-posts.md).
+
+A `chat` topic (Y19, `chat:<conversation id>`) carries one expert conversation:
+`chat_message`, `chat_message_updated` (edits, tombstones), `chat_read` (read markers) and
+`chat_typing`. Only the two participants (and admins) may subscribe (error `forbidden`
+otherwise); a participant's subscription counts as presence, which stops chat notifications for
+that conversation. `{"op": "typing", "conversation_id"}` needs that subscription and is
+forwarded at most once per 3 s per user. See [chat.md](chat.md).
 
 `timeframe` is one of `1m, 5m, 15m, 1h, 4h, 1d`. Instrument ids come from
 `GET /api/v1/market/instruments`.
@@ -97,10 +118,15 @@ strategy setup that users run on it. It has no `timeframe` field and sends no sn
   `composite_buy`/`composite_sell`, and `details` explaining the rules or the members' votes
   ([custom-strategies.md](custom-strategies.md)).
 - Every notification stored for the user (signals, backtests, security events, admin
-  messages; [notifications.md](notifications.md)) also arrives as
+  messages, posts and comments, price alerts; [notifications.md](notifications.md)) also
+  arrives as
   `{"type": "notification", "notification": {"id", "type", "title", "body", "data", "severity",
   "created_at", "read_at"}}`. The `signal` and `backtest_*` messages above are unchanged; an
-  inbox UI can rely on `notification` alone.
+  inbox UI can rely on `notification` alone. A batched like notification ("N people liked
+  your post") arrives again with the same `id` each time its count changes.
+- A fired price alert also sends `{"type": "price_alert", "notification_id", "alert_id",
+  "instrument": {"id", "symbol", "price_precision"}, "condition", "value", "price",
+  "bar_time", "note", ...}` ([price-alerts.md](price-alerts.md)).
 - When one of the user's workspaces changes (on any device), every connection of that user gets
   `{"type": "workspace_updated", "workspace_id": "<uuid>" | null, "version": 8 | null,
   "action": "created" | "state_updated" | "renamed" | "default_changed" | "deleted" |
@@ -116,7 +142,7 @@ strategy setup that users run on it. It has no `timeframe` field and sends no sn
 
 | | |
 |---|---|
-| Subscriptions per connection | 50 candles/signals topics (re-subscribing does not count) |
+| Subscriptions per connection | 50 candles/signals/news/chat topics (re-subscribing does not count) |
 | Max client frame | 4 KB |
 | Server heartbeat | every 25 s |
 | Idle timeout | 75 s without any client frame → close **1001** |

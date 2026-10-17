@@ -1,0 +1,41 @@
+erDiagram
+    users {
+        uuid id PK
+        varchar email UK
+        varchar hashed_password
+        varchar full_name
+        enum_user_role role
+        bool is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    refresh_tokens {
+        uuid id PK
+        uuid user_id FK
+        timestamptz expires_at
+        timestamptz created_at
+        timestamptz revoked_at
+        uuid replaced_by
+    }
+    api_keys {
+        uuid id PK
+        uuid user_id FK
+        varchar name
+        varchar prefix UK
+        varchar key_hash
+        array scopes
+        int rate_limit_per_minute
+        timestamptz expires_at
+        timestamptz last_used_at
+        timestamptz revoked_at
+        timestamptz created_at
+    }
+    login_fingerprints {
+        uuid user_id PK, FK
+        varchar fingerprint PK
+        timestamptz first_seen
+        timestamptz last_seen
+    }
+    api_keys }o--|| users : "user_id"
+    login_fingerprints }o--|| users : "user_id"
+    refresh_tokens }o--|| users : "user_id"

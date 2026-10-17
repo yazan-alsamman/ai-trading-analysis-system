@@ -14,6 +14,7 @@ import uuid
 from app.models.notification import Severity
 from app.models.user import UserRole
 from app.notifications import service
+from app.social import notify as social_notify
 from app.tasks import celery_app
 from app.tasks.signals import run_async
 
@@ -52,6 +53,16 @@ def cleanup() -> int:
     deleted = run_async(lambda factory, _redis: service.cleanup(factory))
     logger.info("notifications.cleanup deleted=%d", deleted)
     return deleted
+
+
+@celery_app.task(name="notifications.new_post")
+def new_post(post_id: str) -> int:
+    """``new_post`` notifications for every follower of the author, in batches."""
+    count = run_async(
+        lambda factory, redis: social_notify.fanout_new_post(factory, redis, uuid.UUID(post_id))
+    )
+    logger.info("notifications.new_post %s followers=%d", post_id, count)
+    return count
 
 
 @celery_app.task(name="notifications.broadcast")
