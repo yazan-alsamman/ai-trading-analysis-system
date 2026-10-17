@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 PROD_MEM_MIB = {
-    "backend": 384,
+    "backend": 544,
     "worker": 384,
     "worker-backtest": 512,
     "beat": 192,
@@ -27,13 +27,13 @@ PROD_MEM_MIB = {
     "ai-service": 256,
 }
 PROD_CPUS = {
-    "backend": 1.0,
+    "backend": 1.5,
     "worker": 0.75,
     "worker-backtest": 1.0,
     "beat": 0.25,
     "telegram-bot": 0.25,
     "redis": 0.5,
-    "db": 1.0,
+    "db": 1.5,
     "nginx": 0.25,
     "ai-service": 0.5,
 }
