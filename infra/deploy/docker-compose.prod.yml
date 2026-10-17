@@ -2,6 +2,9 @@
 # Copied to /opt/trading/docker-compose.yml by the Deploy workflow; images come from GHCR.
 # The VPS runs other live projects: everything here is scoped to the compose project "trading",
 # its own network, its own volumes, and capped memory/CPU. Only nginx is published (port 8080).
+# `cpus:` is a cap, not a reservation (ours add up to more than the 2 vCPUs), so every service also
+# has cpu_shares 512 (Docker's default is 1024): when the host is busy the other projects get
+# twice our weight; when it is idle we can still use our caps.
 name: trading
 
 x-logging: &logging
@@ -15,12 +18,14 @@ x-backend: &backend
   env_file: .env
   restart: unless-stopped
   logging: *logging
+  cpu_shares: 512
 
 services:
   db:
     image: timescale/timescaledb:2.17.2-pg16
     restart: unless-stopped
     logging: *logging
+    cpu_shares: 512
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
@@ -30,7 +35,7 @@ services:
     ports:
       - "127.0.0.1:5435:5432"  # loopback only, reachable through an SSH tunnel
     mem_limit: 768m
-    cpus: 1.0
+    cpus: 1.5
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
@@ -40,6 +45,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     logging: *logging
+    cpu_shares: 512
     mem_limit: 192m
     cpus: 0.5
     healthcheck:
@@ -51,13 +57,14 @@ services:
     <<: *backend
     environment:
       FORWARDED_ALLOW_IPS: ${NGINX_IP:-172.30.57.10}
+      API_WORKERS: ${API_WORKERS:-2}  # uvicorn worker processes (empty in .env = 2)
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    mem_limit: 384m
-    cpus: 1.0
+    mem_limit: 544m  # two workers: 400 MiB peak in the load test (infra/loadtest)
+    cpus: 1.5
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
       interval: 10s
@@ -110,6 +117,7 @@ services:
     image: ${AI_IMAGE:-ghcr.io/yazan-alsamman/ai-trading-ai-service}:${IMAGE_TAG:?}
     restart: unless-stopped
     logging: *logging
+    cpu_shares: 512
     mem_limit: 256m
     cpus: 0.5
 
@@ -117,6 +125,7 @@ services:
     image: nginx:1.27-alpine
     restart: unless-stopped
     logging: *logging
+    cpu_shares: 512
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
@@ -129,11 +138,14 @@ services:
     mem_limit: 64m
     cpus: 0.25
 
+# Dynamic addresses come from DOCKER_IP_RANGE only, so no container can take NGINX_IP (outside it).
+# remote-deploy.sh recreates the network once when the existing one has no such range.
 networks:
   default:
     ipam:
       config:
         - subnet: ${DOCKER_SUBNET:-172.30.57.0/24}
+          ip_range: ${DOCKER_IP_RANGE:-172.30.57.128/25}
 
 volumes:
   db_data:

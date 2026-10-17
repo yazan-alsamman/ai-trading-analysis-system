@@ -1,9 +1,12 @@
 """First-admin bootstrap: the CLI command, the startup hook and the production secret check."""
 
+import asyncio
+
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 import app.main as main_module
 from app.cli import create_admin
@@ -87,3 +90,21 @@ def test_production_rejects_weak_jwt_secret(secret: str) -> None:
 def test_production_accepts_strong_jwt_secret() -> None:
     Settings(_env_file=None, environment="production", jwt_secret="x" * 32)
     Settings(_env_file=None, environment="development", jwt_secret="change-me")
+
+
+async def test_concurrent_startups_create_one_admin(monkeypatch, migrated_db) -> None:
+    """uvicorn --workers 2: every process runs the bootstrap at once on its own connection."""
+    engine = create_async_engine(migrated_db, poolclass=NullPool)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr(main_module, "SessionLocal", factory)
+    monkeypatch.setattr(main_module.settings, "first_admin_email", "race@example.com")
+    monkeypatch.setattr(main_module.settings, "first_admin_password", "First12345")
+    try:
+        await asyncio.gather(*(main_module.bootstrap_first_admin() for _ in range(4)))
+        async with factory() as s:
+            assert len(await _users(s, "race@example.com")) == 1
+    finally:
+        async with factory() as s:
+            await s.execute(delete(User).where(User.email == "race@example.com"))
+            await s.commit()
+        await engine.dispose()

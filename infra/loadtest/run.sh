@@ -34,6 +34,15 @@ rm -f "$OUT/stats.csv" "$OUT/summary.json"
 stack() {
   docker compose "$@" up -d --no-deps nginx
   docker compose "$@" up -d --wait db redis backend worker worker-backtest beat nginx
+  # the dev backend has no healthcheck, so --wait does not cover uvicorn's start-up (migrations,
+  # spawning the workers, warm-up): wait for readiness through Nginx before anything is measured
+  for _ in $(seq 1 90); do
+    docker compose exec -T nginx wget -qO- -T 3 http://127.0.0.1/api/v1/health/ready 2> /dev/null \
+      | grep -q '"status":"ok"' && return 0
+    sleep 1
+  done
+  echo "backend not ready after 90 s" >&2
+  return 1
 }
 
 echo "== stack with production limits"

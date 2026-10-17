@@ -26,4 +26,6 @@ ENV APP_VERSION=${APP_VERSION}
 EXPOSE 8000
 # X-Forwarded-For is trusted only from FORWARDED_ALLOW_IPS (the Nginx container, see compose).
 # Access lines come from app.api.middleware (request id, route, status, duration, user).
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]
+# API_WORKERS: uvicorn worker processes (production compose: 2; empty or unset: 1). Not uvicorn's
+# own WEB_CONCURRENCY: uvicorn reads that whenever --workers is absent and crashes on an empty value.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers \"${API_WORKERS:-1}\" --no-access-log --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]

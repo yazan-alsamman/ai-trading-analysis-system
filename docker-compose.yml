@@ -121,11 +121,13 @@ services:
     depends_on:
       - backend
 
+# dynamic addresses only from DOCKER_IP_RANGE, so no container can take NGINX_IP (outside it)
 networks:
   default:
     ipam:
       config:
         - subnet: ${DOCKER_SUBNET:-172.30.57.0/24}
+          ip_range: ${DOCKER_IP_RANGE:-172.30.57.128/25}
 
 volumes:
   db_data:

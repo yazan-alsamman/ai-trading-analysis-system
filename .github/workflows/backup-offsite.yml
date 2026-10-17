@@ -1,0 +1,156 @@
+name: Off-site backup
+
+# The daily dump (backup.sh, cron 03:17 server time) exists only on the server. Once a day this
+# copies the newest one down, encrypts it with BACKUP_PASSPHRASE, restores the decrypted copy into
+# a fresh TimescaleDB container, and keeps the ENCRYPTED file as an artifact for 14 days
+# (docs/deployment.md). On the server it is read-only: one `find` in /opt/trading/backups and one
+# scp of that file, nothing else.
+on:
+  schedule:
+    - cron: "40 6 * * *"  # 06:40 UTC, a few hours after the 03:17 dump
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-offsite
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      MAX_AGE_HOURS: 26
+    steps:
+      - name: Require BACKUP_PASSPHRASE
+        run: |
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::The repository secret BACKUP_PASSPHRASE is not set (Settings > Secrets and variables > Actions). Nothing was copied: a dump is never uploaded unencrypted."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CFG
+          Host vps
+            HostName ${{ secrets.VPS_HOST }}
+            Port ${{ secrets.VPS_PORT }}
+            User ${{ secrets.VPS_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          CFG
+
+      - name: Find the newest dump on the server (read-only)
+        id: find
+        run: |
+          # the only command run on the server: list the dumps (mtime, size, name), newest last
+          line="$(ssh vps 'find /opt/trading/backups -maxdepth 1 -type f -name "trading-*.dump" -printf "%T@ %s %f\n" | sort -n | tail -n 1')"
+          if [ -z "$line" ]; then
+            echo "::error::No trading-*.dump in /opt/trading/backups on the server"
+            exit 1
+          fi
+          read -r mtime size name <<<"$line"
+          if ! [[ "$name" =~ ^trading-[0-9]{4}-[0-9]{2}-[0-9]{2}\.dump$ ]] || ! [[ "$size" =~ ^[0-9]+$ ]]; then
+            echo "::error::Unexpected file on the server: $line"
+            exit 1
+          fi
+          age_s=$(( $(date +%s) - ${mtime%.*} ))
+          age_h="$(awk -v s="$age_s" 'BEGIN { printf "%.1f", s / 3600 }')"
+          echo "newest dump: $name, $size bytes, $age_h h old"
+          if [ "$age_s" -gt $(( MAX_AGE_HOURS * 3600 )) ]; then
+            echo "::error::The newest dump $name is $age_h hours old (more than $MAX_AGE_HOURS): the daily backup on the server did not run"
+            exit 1
+          fi
+          {
+            echo "name=$name"
+            echo "size=$size"
+            echo "age_h=$age_h"
+            echo "date=$(echo "$name" | sed -E 's/^trading-(.*)\.dump$/\1/')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Copy it down (scp, read-only)
+        env:
+          NAME: ${{ steps.find.outputs.name }}
+          SIZE: ${{ steps.find.outputs.size }}
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/plain" "$RUNNER_TEMP/encrypted"
+          scp -q "vps:/opt/trading/backups/$NAME" "$RUNNER_TEMP/plain/$NAME"
+          got="$(stat -c %s "$RUNNER_TEMP/plain/$NAME")"
+          if [ "$got" != "$SIZE" ]; then
+            echo "::error::Copied $got bytes, the server listed $SIZE"
+            exit 1
+          fi
+
+      - name: Encrypt (gpg, AES256)
+        env:
+          NAME: ${{ steps.find.outputs.name }}
+        run: |
+          # the passphrase goes through stdin, never the command line
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 --s2k-digest-algo SHA512 --s2k-count 65011712 \
+            --compress-algo none \
+            --output "$RUNNER_TEMP/encrypted/$NAME.gpg" "$RUNNER_TEMP/plain/$NAME" <<<"$BACKUP_PASSPHRASE"
+
+      - name: Decrypt again and restore-test into a fresh TimescaleDB
+        env:
+          NAME: ${{ steps.find.outputs.name }}
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/check"
+          gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
+            --decrypt --output "$RUNNER_TEMP/check/$NAME" "$RUNNER_TEMP/encrypted/$NAME.gpg" <<<"$BACKUP_PASSPHRASE"
+          cmp "$RUNNER_TEMP/plain/$NAME" "$RUNNER_TEMP/check/$NAME"
+          echo "decrypted copy is identical to the dump"
+          set -o pipefail
+          bash infra/deploy/restore-test.sh "$RUNNER_TEMP/check/$NAME" | tee "$RUNNER_TEMP/restore.txt"
+
+      - name: Upload the encrypted dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: trading-db-${{ steps.find.outputs.date }}
+          path: ${{ runner.temp }}/encrypted/${{ steps.find.outputs.name }}.gpg
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Summary
+        if: always()
+        env:
+          NAME: ${{ steps.find.outputs.name }}
+          SIZE: ${{ steps.find.outputs.size }}
+          AGE_H: ${{ steps.find.outputs.age_h }}
+        run: |
+          {
+            echo "## Off-site backup"
+            if [ -z "$NAME" ]; then echo "No dump copied (see the failed step)."; exit 0; fi
+            echo "| | |"
+            echo "|---|---|"
+            echo "| dump | \`$NAME\` |"
+            echo "| size | $(numfmt --to=iec --suffix=B "$SIZE") ($SIZE bytes) |"
+            echo "| age | $AGE_H h |"
+            [ -f "$RUNNER_TEMP/plain/$NAME" ] && echo "| sha256 (dump) | \`$(sha256sum "$RUNNER_TEMP/plain/$NAME" | cut -d' ' -f1)\` |"
+            [ -f "$RUNNER_TEMP/encrypted/$NAME.gpg" ] && echo "| sha256 (encrypted artifact) | \`$(sha256sum "$RUNNER_TEMP/encrypted/$NAME.gpg" | cut -d' ' -f1)\` |"
+            if [ -f "$RUNNER_TEMP/restore.txt" ]; then
+              echo "| restore test | $(grep -q '^restore test: ok' "$RUNNER_TEMP/restore.txt" && echo ok || echo FAILED) |"
+              echo
+              echo '```'
+              cat "$RUNNER_TEMP/restore.txt"
+              echo '```'
+            else
+              echo "| restore test | not run |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the plaintext copies
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/plain" "$RUNNER_TEMP/check" ~/.ssh/deploy_key

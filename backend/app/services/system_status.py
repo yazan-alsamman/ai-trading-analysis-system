@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
 
@@ -144,6 +145,36 @@ async def _notifications(redis: Redis) -> dict[str, Any]:
     }
 
 
+async def _websocket(redis: Redis, hub) -> dict[str, Any]:
+    """WebSocket clients of every API process (uvicorn workers report every 30 s through
+    Redis), plus the live numbers of the process serving this request."""
+    stats = hub.stats() if hub is not None else {}
+    out: dict[str, Any] = {
+        "process_clients": stats.get("clients"),
+        "process_subscriptions": stats.get("subscriptions"),
+    }
+    try:
+        processes = await ops.api_processes(redis)
+    except Exception:  # noqa: BLE001
+        logger.exception("system status: API processes failed")
+        processes = []
+    kinds: Counter[str] = Counter()
+    for p in processes:
+        kinds.update(p.get("topics_by_kind") or {})
+    out.update(
+        api_processes=len(processes),
+        clients=sum(p.get("clients", 0) for p in processes),
+        subscriptions=sum(p.get("subscriptions", 0) for p in processes),
+        topics_by_kind=dict(kinds),
+        processes=[
+            {k: p.get(k) for k in ("host", "pid", "clients", "subscriptions")} for p in processes
+        ],
+        note="clients/subscriptions: all API processes, reported every 30 s; process_*: "
+        "the process that served this request, live",
+    )
+    return out
+
+
 async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
     settings = get_settings()
     now = time.time()
@@ -168,13 +199,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
             logger.exception("system status: %s failed", name)
             out[name] = {"error": f"{type(exc).__name__}"}
             await session.rollback()
-    stats = hub.stats() if hub is not None else {}
-    out["websocket"] = {
-        "process_clients": stats.get("clients"),
-        "process_subscriptions": stats.get("subscriptions"),
-        "topics_by_kind": stats.get("topics_by_kind"),
-        "note": "this API process only",
-    }
+    out["websocket"] = await _websocket(redis, hub)
     try:
         raw = await redis.get(ops.DAILY_SUMMARY)
         out["daily_summary"] = json.loads(raw) if raw else None

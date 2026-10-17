@@ -1,6 +1,7 @@
 # Load test (C2)
 
-k6 against the **local** compose stack with the production `mem_limit` / `cpus`. Never run it
+k6 against the **local** compose stack with the production `mem_limit` / `cpus` / `cpu_shares` and
+the production backend worker count (`API_WORKERS=2`). Never run it
 against the production server: `run.sh` starts k6 in a container on this machine's compose
 network, where it can only reach the local Nginx, and it refuses a remote `DOCKER_HOST`.
 
@@ -12,17 +13,51 @@ NGINX_PORT=8080 PYTHON=backend/.venv/Scripts/python infra/loadtest/run.sh
 
 | file | what |
 |---|---|
-| `compose.limits.yml` | the production limits on the dev stack, the production worker command (`--concurrency 2`), and the per-IP WebSocket connection limit raised for the run (all clients share one IP) |
+| `compose.limits.yml` | the production limits on the dev stack, 2 uvicorn workers, the production worker command (`--concurrency 2`), and the per-IP WebSocket connection limit raised for the run (all clients share one IP) |
 | `make_users.py` | runs in the backend container: 200 analyst accounts `load-NNN@example.com` (300 requests/min each, so the rate limiter is not what is measured) with access tokens, plus the instruments that have candles |
 | `load.js` | scenario `api`: ramp to 200 users in 30 s, hold, ramp down in 15 s; each picks candles 35% (1m/5m/15m/1h/4h, 500 bars), indicators 20% (rsi, ema, macd, bollinger, atr on 500 bars), signals 15%, news 15%, posts feed 15%, with 0.5-2 s think time. Scenario `ws`: 200 clients connect over 20 s, subscribe to BTC/USDT 1m candles and their user topic and stay connected; fan-out delay = receive time - the publisher's `sent_at` |
 | `summarize.py` | p50/p95/p99, errors and 429s per endpoint, WebSocket numbers, `docker stats` peaks vs the production limits |
 
-During the run `simulate-live` rewrites the BTC/USDT 1m candle every second (live signal
+`run.sh` waits until `/api/v1/health/ready` answers through Nginx before measuring (the dev backend
+has no healthcheck, so `up --wait` alone returns while uvicorn is still starting). During the run `simulate-live` rewrites the BTC/USDT 1m candle every second (live signal
 engine, price alerts and WebSocket fan-out all work), and `docker stats` is sampled about every
 2 s for this stack's containers only. Afterwards the `load-` accounts are purged and the normal
 dev stack is restored (Nginx alone first: it has a fixed address).
 
-## Results (2026-10-16, 16-CPU Windows host, Docker Desktop, production limits)
+## Y20 part 2: 2 backend workers, backend and db at 1.5 CPUs (2026-10-17)
+
+Same host and mix (200 API users + 200 WebSocket clients, 150 s hold), with `API_WORKERS=2`, backend
+`cpus: 1.5` (`mem_limit` 640m for the run), db `cpus: 1.5`, `cpu_shares: 512` everywhere. Compared
+with C2 run 2 below (1 worker, 1 CPU each):
+
+| endpoint | requests | p50 ms (C2) | p95 ms (C2) | p99 ms (C2) | max ms | errors |
+|---|---:|---:|---:|---:|---:|---:|
+| candles | 2717 | 1930 (3197) | 8420 (10100) | 10149 (10408) | 11044 | 100 |
+| indicators | 1670 | 2288 (3176) | 8997 (10110) | 10164 (10386) | 10976 | 65 |
+| signals | 1206 | 1633 (3116) | 7820 (10078) | 10058 (10313) | 10789 | 43 |
+| news | 1128 | 1764 (3261) | 7889 (10085) | 10073 (10378) | 10563 | 28 |
+| posts | 1134 | 2431 (3166) | 8198 (10090) | 10137 (10335) | 10819 | 33 |
+
+- 7,855 requests (40.1/s, C2: 38.7/s), 3.42% failed (C2: 6.28%). Status codes, counted in the
+  backend's request log and Nginx's access log: **160 × 503** (pool timeout: candles 60, indicators
+  43, posts 22, signals 20, news 15) and 109 × 502 in the first 6 s only. The 502s are a harness
+  race fixed afterwards (k6 started before the two workers had finished starting; the readiness
+  wait above). Without that window: 160 of 7,746 requests failed (2.07%), all of them 503.
+- WebSocket: 122 of 200 connected. 75 handshakes hit the same 6 s start-up window (502) and 3 got
+  503; of the 125 that connected after start-up, 122 succeeded (C2: 182 of 200). 15,074 candle
+  messages, 0 error frames, fan-out delay p50 41 ms, p95 161 ms, p99 290 ms, max 350 ms.
+- Peaks: backend 400 MiB / 153% CPU (cap 1.5), db 399 MiB / 163% (cap 1.5), worker 228 MiB / 32%,
+  worker-backtest 236 MiB / 16%, beat 118 MiB / 25%, nginx 22 MiB, redis 4 MiB. No OOM kill, no
+  429. Production `mem_limit` for the backend is set to 544m (36% above the 400 MiB peak).
+- A repeat run (with the readiness wait) was stopped by the host running low on memory before it
+  measured anything, so these are the numbers of one run.
+
+**Verdict**: two workers help but do not double capacity: throughput rises a little (the backend and
+the database are both at their new 1.5 CPU caps, so the database is now the shared limit), while
+latency drops by a third to a half at p50, p95 drops by 1-2 s and failures fall from 6.3% to about
+2%. Kept: `API_WORKERS=2`, backend and db `cpus: 1.5`.
+
+## C2 results (2026-10-16, 16-CPU Windows host, Docker Desktop, production limits)
 
 Two runs at 200 API users + 200 WebSocket clients, 150 s hold. Run 1 is before the fix below,
 run 2 after it.
@@ -80,15 +115,10 @@ No container was OOM-killed and no 429 was returned.
 - The dev worker (Celery default concurrency = one process per CPU) does not fit 384m and was
   OOM-killed in a first smoke run; production runs `--concurrency 2`, which the override copies.
 
-## Recommendations
+## Recommendations (C2) and what was applied (Y20 part 2)
 
-Not tested (the run with these limits was stopped by the host running low on memory, so
-measure before changing production), and only if the server has the CPU to spare next to the
-other projects it hosts:
-
-- backend: `cpus: 2.0` with `uvicorn --workers 2`, `mem_limit: 640m` (two processes of about
-  250 MiB under load);
-- db: `cpus: 2.0`; memory is fine at 768m (peak 282 MiB);
-- everything else: keep the current limits.
-
-To try them locally: an override with those values as `EXTRA_COMPOSE=...` for `run.sh`.
+C2 proposed backend `cpus: 2.0` with `--workers 2` and db `cpus: 2.0`. Applied instead, because the
+VPS has 2 vCPUs shared with other live projects and `cpus` is a cap, not a reservation: 2 workers,
+backend and db `cpus: 1.5`, and `cpu_shares: 512` on every service so that the other projects get
+twice our weight when the host is busy (results above). To try other values locally: an override
+as `EXTRA_COMPOSE=...` for `run.sh`.

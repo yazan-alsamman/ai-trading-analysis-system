@@ -119,7 +119,11 @@ and schemas (no data, no secrets; every route keeps its normal authentication).
 - **Isolation on the shared VPS**: one compose project (`trading`) with its own network, volumes,
   memory and CPU limits; the database and Redis are not published (the database only on
   127.0.0.1 for SSH tunnels). Deploys only touch this stack (`infra/deploy/remote-deploy.sh`).
-- **Backups**: daily `pg_dump`, 7 days kept, restore procedure tested (docs/deployment.md).
+- **Backups**: daily `pg_dump` on the server, 7 days kept, restore procedure tested. Off-site copy
+  every day by the `Off-site backup` workflow: read-only on the server (one `find`, one `scp`),
+  encrypted with `gpg --symmetric --cipher-algo AES256` and the `BACKUP_PASSPHRASE` secret before it
+  is uploaded (Actions artifacts are readable by anyone who can read the repo), restore-tested after
+  decryption, kept 14 days (docs/deployment.md).
 
 ## 9. Checks in CI
 
