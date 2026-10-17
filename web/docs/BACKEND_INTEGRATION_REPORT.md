@@ -4,12 +4,16 @@ _18 October 2026 · branch `e/backend-integration` (from `main` `07b3d11`)._
 Companion documents: `BACKEND_INTEGRATION_SETUP.md` (how to run it) and
 `BACKEND_INTEGRATION_GAP_ANALYSIS.md` (what could not be connected, and why).
 
-**Deployment readiness: READY WITH DOCUMENTED LIMITATIONS**, for the verified capabilities:
+**Deployment readiness: READY WITH DOCUMENTED LIMITATIONS.** The existing backend in this repository was
+started locally and the web client was verified against it **live**:
 
-- **Verified:** every integration is checked against the backend's contract and its *recorded real
-  responses*, with unit, contract and browser tests on the real backend-mode bundle.
-- **Not run:** against a live backend server. None was safely available here (no Docker locally; production
-  was probed read-only). See §7.
+- FastAPI, plus PostgreSQL 16 + TimescaleDB 2.17.2, Redis 8, and the Celery worker and beat
+- 29/29 live API checks; **12/12 live browser tests** with no request mocking; a real engine-generated
+  strategy signal shown in the UI
+- the backend's own suite: **655/655** in a CI-equivalent environment
+
+The limitations are capabilities the backend does not implement (gap analysis §1), production being in
+demo mode, and HTTPS (§9). **No backend file was changed.**
 
 ---
 
@@ -141,7 +145,12 @@ not use yet is listed in the gap analysis §2.
 | Production build | ✅ (main chunk 119.6 KB gzip, was 113: API adapter, socket and mappers) |
 | Browser E2E: backend-mode bundle vs contract mock | ✅ **9 / 9** (`e2e/api-mode.spec.ts`): protected-route redirect and return; wrong password; Authorization header (never URLs); expired token → one refresh → retry; revoked → signed out and storage cleared; workspace REST + WebSocket streaming + "Backend feed"; alert creation body; inbox read-all; profile save; sign-out revocation; news, experts; public site makes no API calls; **the client called no endpoint outside the contract** |
 | Browser E2E: demo build (regression) | ✅ **89 / 89**: flows 40, axe WCAG 2.1 AA 39 (19 routes × 2 themes + keyboard), visual matrix 10 (19 routes × 5 widths × 2 themes, no overflow, no console errors) |
-| Live backend integration | ⛔ **Not run.** No Docker/PostgreSQL/Redis on this machine; production probed read-only only. Next action: `BACKEND_INTEGRATION_SETUP.md` §5 on a Docker machine or a staging server. |
+| **Live: existing backend started locally** | ✅ PostgreSQL 16.15 + **TimescaleDB 2.17.2** (CI's version), Redis 8.10.2, backend on Python 3.12.15. `alembic upgrade head`: all 12 migrations. `seed-instruments` (9). `/health/ready` → database ok, redis ok. **The live OpenAPI is identical to the committed contract (155 = 155 operations); all 29 operations the web client uses exist.** See setup §3.1. |
+| **Live API smoke** (real HTTP, no mocks) | ✅ **29 / 29**: register 201 · duplicate 409 · wrong password 401 · login · `/users/me` · no token 401 · instruments · candles 15m/1h/4h · signals · risk profile GET/PUT (config preserved) · server position size · alert create/pause/list · test notification → inbox → read · news · posts · experts · profile PATCH · wrong current password 400 · **refresh rotates · reused refresh token rejected · reuse revokes the whole token family** |
+| **Live browser E2E** (`e2e-live/live.spec.ts`; real bundle → real backend; nothing mocked except one test labelled *fault injection*) | ✅ **12 / 12**: register in the UI → account in the database; duplicate refused · protected route → sign-in → back; wrong password; all calls same-origin · workspace: real candles + **real WebSocket** `subscribed` → `snapshot` → `candle` (from the backend's `simulate-live`) · signals panel matches the server · price alert created in the UI → **stored on the server** → deleted · server notification → bell → **read state saved on the server** · name saved on the server; wrong current password → server message · trader post → server's "Your role cannot publish posts" · **token refresh against the real server** (old refresh token then rejected) · **sign-out revokes the refresh token** · invalid stored session → sign-in · fault injection: market failure shown as an error, never demo data |
+| **Live signal engine** | ✅ The backend's Celery worker + beat ran; a strategy activated through the API (`ma_crossover`, EUR/USD 1m) produced a **real signal** (`buy`, `ema_cross_up`) and a `signal` notification. The web client displayed it (Signals → Strategy-engine signals) and the notification bell showed it. Note: prices are the backend's synthetic demo candles, but the signal pipeline is the real one. |
+| **Backend's own test suite** (pytest, unchanged) | ✅ **655 / 655** in a CI-equivalent environment. A first run inside the live-test environment had 21 failures, all in tests asserting the *default* rate limits, docs flag and payment URLs, which that environment had overridden for the live suite. Re-run with CI's settings (clean environment, own Redis DB): all 151 tests of those files pass. |
+| Production server | Read-only probes only (health, 401 on protected data); nothing created there. |
 
 ## 8. Also fixed
 
@@ -157,8 +166,15 @@ not use yet is listed in the gap analysis §2.
 
 See the gap analysis. The critical ones:
 
-- **G1:** the AI model's output API
-- **G5:** platform membership and entitlements
-- **G4:** an assistant provider
-- **E1:** a live run against a running stack
-- **E3:** HTTPS
+- **AI inference:** `ai-service` is a placeholder (always `hold`, confidence 0) and nothing calls it.
+  No model output, no prediction history.
+- **Real market data:** no collector exists in the repository. Prices are synthetic demo candles unless
+  an external collector pushes them.
+- **Platform membership, password reset, an assistant provider:** not implemented in the backend.
+- **Deployment:** production still builds the web in demo mode; HTTPS is needed before real users sign in.
+
+## 10. Changes to the backend
+
+**None.** `git diff main -- backend ai-service libs infra docs/api` is empty. The backend was run unchanged
+from `07b3d11`. Every local setting (database URL, Redis URL, JWT secret, test-only rate limits) was
+passed as environment variables outside the repository.

@@ -21,7 +21,7 @@ The round-2 brief was received **truncated** (it ends inside §3B). The rest of 
 | Connected | Auth and session restore, profile and password, candles and streaming, strategy signals, risk profile sync and server cross-check, price alerts, notification inbox, news, posts, comments, experts, chat |
 | Not available (backend) | AI model output, prediction history, assistant provider, platform membership, password reset (gap analysis) |
 | Docs | `BACKEND_INTEGRATION_REPORT.md`, `BACKEND_INTEGRATION_SETUP.md`, `BACKEND_INTEGRATION_GAP_ANALYSIS.md` |
-| Tests | 198 unit/contract · 98 Playwright (89 demo + 9 backend-mode) |
+| Tests | 198 unit/contract · 98 Playwright (89 demo + 9 backend-mode vs contract mock) · **live**: 29 API checks + 12 browser tests against the running backend; backend suite 655/655 |
 
 ## Round 6 — About, public content, assistant, footer (17 October 2026)
 

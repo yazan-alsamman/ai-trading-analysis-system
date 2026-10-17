@@ -27,7 +27,7 @@ export default tseslint.config(
   },
   {
     // In tests a failed non-null assertion is a failing test — the desired outcome.
-    files: ['**/*.test.{ts,tsx}', 'e2e/**/*.ts'],
+    files: ['**/*.test.{ts,tsx}', 'e2e/**/*.ts', 'e2e-live/**/*.ts'],
     rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
   },
 );

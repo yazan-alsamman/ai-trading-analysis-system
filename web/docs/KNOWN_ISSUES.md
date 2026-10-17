@@ -89,7 +89,7 @@ These are genuine, current limitations. None of them is hidden in the UI.
 | # | Item | Notes |
 | --- | --- | --- |
 | 23 | ~~Access tokens are not refreshed~~ | **Resolved:** proactive and on-401 refresh, single-flight, cross-tab coordinated (`services/api/session.ts`). |
-| 48 | AI model output not exposed by the backend | Backend mode shows strategy-engine signals and "Not available yet" for the model panels (gap G1). |
-| 49 | Not verified against a running backend | Contract tests use recorded real responses, and the backend-mode bundle is browser-tested against a contract mock; no live stack was available (gap E1). |
-| 50 | Backend prices may be synthetic | The API does not say whether candles are real or seeded demo data; the UI says "Backend feed" (gap G10). |
+| 48 | No AI inference exists yet | `ai-service` is a placeholder (always `hold`, confidence 0) and the backend does not call it. Backend mode shows strategy-engine signals and "Not available yet" for the model panels. |
+| 49 | ~~Not verified against a running backend~~ | **Resolved 18 Oct 2026:** the existing backend was run locally (PostgreSQL + TimescaleDB, Redis, Celery) and verified live (29 API checks, 12 browser tests, backend suite 655/655). Production itself was only probed read-only. |
+| 50 | Backend prices are synthetic until a collector exists | No market-data collector exists in the repository; candles come from `seed-demo-candles`/`simulate-live` or an external push. The UI says "Backend feed". |
 | 51 | Tokens in `localStorage`; WS token in the URL | Backend's documented design; needs HTTPS in production (gap E3). HttpOnly refresh cookie recommended later. |

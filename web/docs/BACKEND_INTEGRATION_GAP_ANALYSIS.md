@@ -1,53 +1,67 @@
 # Backend integration — gap analysis
 
-_18 October 2026 · branch `e/backend-integration` · backend verified at `origin/main` `07b3d11`
-(contract: `docs/api/openapi.json`, 155 operations)._
+_18 October 2026 · branch `e/backend-integration` · backend at `main` `07b3d11`. The backend in this repository
+(`backend/`, FastAPI) is the source of truth; nothing was added to or replaced in it._
 
-Every web-client capability that could **not** be connected to the backend, with the evidence and
-the safest resolution. In backend mode (`VITE_DATA_SOURCE=api`) each of these shows a deliberate
-"Not available yet" state with the reason. None falls back to simulated data or a fake success.
+**Evidence:**
 
-**Evidence method:**
+- the backend source (`backend/app`)
+- its OpenAPI document (`docs/api/openapi.json`, 155 operations, identical to the live server's)
+- a **live run** of the backend on 18 October 2026 (`BACKEND_INTEGRATION_REPORT.md` §7)
 
-- the OpenAPI document (validated in CI)
-- the backend source under `backend/app`
-- the recorded responses in `docs/postman/tools/examples.json`
+## 1. Classification of every requested capability
 
-"Not in the contract" means no path exists for it in `openapi.json`.
+**Classes:**
 
-## 1. Blocked by missing backend capability
+- **Connected:** implemented in the backend, connected in the web client, verified live.
+- **In backend, not connected:** implemented in the backend; the web client does not use it yet (follow-up).
+- **Partial:** part of it exists.
+- **Not implemented:** the backend does not have it.
+- **Unverified:** cannot be verified here.
 
-| # | Frontend feature | Expected behaviour | Missing backend capability | Evidence | Recommended resolution | Backend action? |
-| --- | --- | --- | --- | --- | --- | --- |
-| G1 | **AI analysis panel** (workspace), Overview hero, **Personalised signals**, Signal detail | The trained model's output per instrument and timeframe: direction, probability (target before stop), confidence band, entry, stop and target zones, contributing factors, projection | No endpoint exposes Feature 12 model output. `GET /signals` serves the **rule-based strategy engine** (side, strength, price, reason), with no probability, zones or factors. | Not in the contract. `SignalRead` schema; `backend/app/services/signal_engine.py` | Expose the model's output, e.g. `GET /analysis/latest?instrument_id=&timeframe=`, matching `OpportunitySchema` (`web/src/services/schemas.ts`). Until then the web shows strategy signals as what they are (new panel) and the model panels say "not exposed by the backend yet". | **Yes** (AI and backend) |
-| G2 | **Model analytics** (Insights: hit rate, Brier score, calibration) | Resolved prediction history | No prediction history endpoint | Not in the contract | `GET /predictions/history` (shape: `PredictionRecordSchema`) | **Yes** |
-| G3 | **Alerts on AI opportunities** (Alerts → opportunity notifications) | Notify when the model finds a setup matching the user's filters | Depends on G1; no preferences endpoint for it | Not in the contract | After G1: server-side matching plus a preferences endpoint. Strategy-signal notifications already exist on the backend (`type: signal`) and are shown in the notification centre. | **Yes** |
-| G4 | **AI assistant with a language model** | Answers from a real AI provider, server-side | No assistant endpoint | Not in the contract | `POST /assistant/replies` (proposal in `docs/API_INTEGRATION.md` §7), provider key held on the server. Today the rule-based composer runs in the browser on the context shown, labelled **"Rule-based — no AI provider is connected"**. | **Yes** |
-| G5 | **Platform membership** (Essential / Professional / Elite), entitlements, plan checkout | Real plans, a subscription state, server-enforced feature access | No platform plans, subscription or entitlement endpoints. `/subscriptions/*` and `/me/plans` are **expert** subscriptions (demo payments). | `docs/subscriptions.md`; contract | `GET /plans`, `GET /me/subscription`, `GET /me/entitlements` (`docs/MEMBERSHIP_FRONTEND_SPEC.md` §6). The UI keeps "Pricing to be announced" and the labelled **demo** plan preview, which is not access control. | **Yes**, plus commercial decisions |
-| G6 | **Password reset** (forgotten password) | Email a reset link | No reset endpoints (only the signed-in password change) | Not in the contract | `POST /auth/password-reset` + confirm. The sign-in page states that recovery is unavailable. | **Yes** |
-| G7 | **Comments on news** | Discussion under a news item | Comments exist only on posts | Contract: `/posts/{id}/comments` only | Either add news comments, or link a news item to a post. Backend news shows no comment button. | Optional |
-| G8 | **News impact rating** | High / medium / low per item | Articles carry model **sentiment**, not impact | `ArticleRead` | None needed; the UI shows sentiment and hides the impact filter for backend news. | No |
-| G9 | **Instruments AUD/USD, USD/CAD, USD/CHF, NZD/USD** | Same features as the other majors | Not seeded on the backend (seed list: XAU/USD, EUR/USD, GBP/USD, USD/JPY + crypto) | `backend/app/services/seed_service.py` | Admin adds them (`POST /admin/instruments`) and connects a data collector. The web reports "not available on the backend yet" per instrument. | **Yes** (admin/data) |
-| G10 | **Real-time market data provenance** | Show whether prices are real | The API does not say whether an instrument's candles come from a real collector or the seeded random walk (`seed-demo-candles`) | `backend/app/cli.py` prints "DEMO DATA … not real prices"; no field in `InstrumentRead` | Add e.g. `data_status: real \| demo` to `InstrumentRead`. The web labels backend prices **"Backend feed"**, never "Live". | **Yes** (small) |
-
-## 2. Available on the backend, not yet connected in the web client
-
-These are not blockers; they are follow-up frontend work. The endpoints exist and are documented.
-
-| # | Feature | Endpoints | Why not in this pass | Effort |
-| --- | --- | --- | --- | --- |
-| A1 | Server notification **preferences**, Telegram linking, push devices | `/me/notification-preferences`, `/me/notifications/telegram/*`, `/me/devices` | Needs a new Settings UI; the old browser-only channels form is now replaced in backend mode by an explanation | M |
-| A2 | **Workspaces** sync (versioned, ETag, sharing) | `/me/workspaces*`, `/workspaces/shared/*` | Needs conflict handling (409 on version) and a migration of locally stored layouts | M–L |
-| A3 | Expert **subscription checkout** | `POST /subscriptions/checkout` → hosted demo-payment page; `/me/subscriptions` | Payments are demo-only on the backend; enabling a checkout UI is a product decision | M |
-| A4 | Post **likes**, follow, reports, editing; comment replies | `/posts/{id}/like`, `/users/{id}/follow`, `/reports`, `PATCH /posts/{id}` | Not part of the existing web UI | S–M |
-| A5 | Strategy activation, custom strategies, backtests, API keys | `/me/strategies`, `/me/custom-strategies`, `/backtests`, `/me/api-keys` | No web UI exists for them (mobile/analyst features) | L |
-| A6 | Live **signal** and **news** pushes on the WebSocket | topics `signals`, `news` | The panels refresh on demand; push is an enhancement | S |
-| A7 | Chat in real time (typing, read receipts) | WebSocket `chat` topic, `/conversations/{id}/read` | Chat works over REST; realtime is an enhancement | S |
-
-## 3. Blocked by environment (not by code)
-
-| # | Item | Status | Next action |
+| Capability | Class | Evidence | What is needed |
 | --- | --- | --- | --- |
-| E1 | **Run against a live backend** (local Docker stack or a staging server) | Not possible here: no Docker, PostgreSQL or Redis on this machine. Production (`http://187.127.76.76:8080`) was probed **read-only** (health checks only); no test accounts were created there. | Run `docker compose up` on a machine with Docker and use `docs/BACKEND_INTEGRATION_SETUP.md` §5 to verify; or provide a staging URL with test accounts. |
-| E2 | **Switch production to backend mode** | `deploy.yml` builds the web image with `VITE_DATA_SOURCE=demo` (team-owned deployment config, not changed) | When the team is ready: build with `VITE_DATA_SOURCE=api` and `VITE_API_BASE_URL=/api/v1`. Expect sign-in to be required for the app and G1–G6 panels to show "Not available yet". |
-| E3 | HTTPS | No domain yet (`docs/deployment.md`), so the site and its tokens travel over plain HTTP | A domain plus TLS before real users sign in |
+| Accounts: register, login, logout, profile, password change | **Connected** | `/auth/*`, `/users/me`, `/users/me/password`; live tests | — |
+| Token refresh with rotation and reuse detection | **Connected** | `auth_service.refresh`; reuse revokes the whole family (verified live) | — |
+| Market candles (all timeframes) | **Connected** | `/market/instruments/{id}/candles` from TimescaleDB continuous aggregates; live | — |
+| Live market updates (WebSocket) | **Connected** | `/ws/market`: `subscribed` → `snapshot` → `candle` received live | — |
+| **Real market prices** | **Not implemented in this repository** | No collector fetches prices: `seed_service.py` says demo candles are for use "until real collectors run"; there is no fetch code for Twelve Data or Binance. Prices come only from `seed-demo-candles` / `simulate-live` (synthetic) or from an external push (`POST /admin/instruments/{id}/candles`). | A data collector (AI/data team, "F03 adapters") pushing real candles. The UI labels backend prices "Backend feed", not "Live". |
+| Additional pairs (AUD/USD, USD/CAD, USD/CHF, NZD/USD) | **Partial** | Instruments are data: an admin can add them (`POST /admin/instruments`), but none are seeded and there is no collector (above) | Seed or add them, plus a collector |
+| Strategy-engine signals | **Connected** (display) | `/signals`; produced by the Celery task `signals.tick` for strategies users activate | — |
+| Strategies (activate, custom builder), backtesting | **In backend, not connected** | `/me/strategies`, `/me/custom-strategies`, `/backtests` | A web UI (analyst feature) |
+| **AI inference / AI-generated trading signals** | **Not implemented** | `ai-service/app/main.py`: `/v1/signal` is a **placeholder** that always returns `direction: "hold"`, `confidence: 0.0`, `model_version: "placeholder"`; `ai-service/notebooks/` is empty; the backend never calls the AI service (`ai_service_url` is defined but unused) | A trained model behind the AI service, plus a backend endpoint exposing its output (probability, zones, factors). The web shows "Not available yet: not exposed by the backend". |
+| Prediction history / model analytics | **Not implemented** | No endpoint or table | Depends on the above |
+| AI assistant (LLM) | **Not implemented** | No endpoint, no provider | A server-side provider. The web's assistant is labelled rule-based. |
+| Risk profile and server position sizing | **Connected** | `/me/risk-profile`, `/risk/position-size`; live | — |
+| Price alerts | **Connected** | `/me/price-alerts*`; created in the UI, verified stored, deleted, live | Firing needs the Celery worker (see report §7) |
+| Notification inbox | **Connected** | `/me/notifications*`; a server notification reached the UI and read state was saved, live | — |
+| Notification preferences | **In backend, not connected** | `GET/PUT /me/notification-preferences` | Settings UI (the old browser-only form is replaced by an explanation in backend mode) |
+| Telegram linking | **In backend, not connected** | `/me/notifications/telegram/link` → deep link (needs `TELEGRAM_BOT_*` on the server) | Settings UI |
+| Workspace synchronisation | **In backend, not connected** | `/me/workspaces*` (versioned, ETag, sharing) | Sync logic with 409 conflict handling |
+| News | **Connected** | `/news` (RSS fetcher + sentiment ingestion API) | — |
+| Posts and comments | **Connected** | `/posts`, `/posts/{id}/comments`. Publishing is limited by `POST_ROLES` (default analyst, expert, admin): a trader gets the server's "Your role cannot publish posts", shown in the UI (verified live). Everyone may comment. | — |
+| Likes and follows | **In backend, not connected** | `/posts/{id}/like`, `/users/{id}/follow` | Small UI additions |
+| Experts and expert chat | **Connected** | `/experts`, `/conversations*`; chat needs a subscription (403 with reason) | — |
+| **Expert subscription checkout** | **In backend, not connected** | `/subscriptions/checkout` with **demo payments only** (`docs/subscriptions.md`) | Product decision; then a checkout flow |
+| **Platform membership and entitlements** (Essential / Professional / Elite) | **Not implemented** | No plans, subscription or entitlement endpoints for the *platform*. Expert subscriptions are a different product. | Backend plans, subscription and entitlements; commercial decisions. The web shows "Pricing to be announced" and a labelled demo preview. |
+| Password reset (forgot password) | **Not implemented** | No reset endpoints or e-mail flow in `auth.py` / `users.py` | Reset request + confirm endpoints |
+| News comments, news impact rating | **Not implemented** (by design) | Comments exist only on posts; articles carry sentiment, not impact | None required |
+
+## 2. Unverified, and what would verify it
+
+| Item | Why unverified | Evidence needed |
+| --- | --- | --- |
+| A price alert **firing** end-to-end in the UI | Needs the worker evaluating live candles crossing the level (demo prices make this timing-dependent) | Run the worker with `simulate-live` and set a level just above the current price |
+| Behaviour against the **production** server | Only read-only probes were made there (health, 401 on protected data); no accounts created | A staging server with test accounts |
+| E-mail, Telegram and push delivery | Need SMTP, a Telegram bot and FCM credentials | Server credentials in a test environment |
+| Safari, Firefox, mobile browsers | Live tests ran in Chrome | Cross-browser run |
+
+## 3. Configuration and deployment work (not code)
+
+| Item | Status |
+| --- | --- |
+| Production builds the web in **demo** mode (`deploy.yml`: `VITE_DATA_SOURCE=demo`) | Not changed (team-owned). Switch: `VITE_DATA_SOURCE=api`, `VITE_API_BASE_URL=/api/v1`. |
+| **HTTPS** | Required before real users sign in: tokens are sent on every request, and the WebSocket token is in its URL (the backend's documented mechanism). No domain or TLS yet. |
+| CORS | Not needed in production (one Nginx serves both) or in development (Vite proxy). Needed only for a split-origin deployment: `CORS_ORIGINS` (exact origins; `*` is refused by the backend). |
+| WebSocket through Nginx | `infra/nginx/default.conf` already proxies `/ws/` with upgrade headers |
+| Rate limits for test environments | Production defaults (5 registrations / 10 logins per IP per minute) are correct; automated live suites need higher test-only values (setup §6) |
