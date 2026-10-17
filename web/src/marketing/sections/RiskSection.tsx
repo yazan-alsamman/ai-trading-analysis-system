@@ -21,7 +21,7 @@ const GAUGE_MAX = 3;
 const EXAMPLE_LIMIT = 1;
 
 /** Semicircle: share of capital at risk on this trade (0–3 %), with the example 1 % limit marked. */
-function ExposureGauge({ pct }: { pct: number }) {
+export function ExposureGauge({ pct }: { pct: number }) {
   const frac = Math.min(1, Math.max(0, pct / GAUGE_MAX));
   const over = pct > EXAMPLE_LIMIT;
   const lim = Math.PI * (EXAMPLE_LIMIT / GAUGE_MAX);
@@ -93,7 +93,7 @@ export function RiskSection() {
     <section id="risk" data-section aria-labelledby="risk-title" className="border-b border-line">
       <div className="mx-auto grid grid-cols-[minmax(0,1fr)] max-w-[1240px] gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)] lg:items-center">
         <div>
-          <p className="eyebrow mb-3">05 · Risk management</p>
+          <p className="eyebrow mb-3">06 · Risk management</p>
           <RevealText as="h2" id="risk-title" className="display text-d3 text-fg sm:text-d2" lines={['A plan is only real', <em key="e">once it is sized.</em>]} />
           <Reveal as="p" delay={150} className="mt-4 max-w-xl text-md text-fg-2">
             The Capital &amp; risk module turns the model’s plan into money against your own limits. It is the one module that works fully today, because it runs on your

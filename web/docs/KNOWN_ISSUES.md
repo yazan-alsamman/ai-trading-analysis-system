@@ -72,3 +72,14 @@ These are genuine, current limitations. None of them is hidden in the UI.
 | 39 | Autoplay can be refused | iOS Low Power Mode and some data savers block muted autoplay; the poster stays. Not checked on a physical device. |
 | 40 | 3D laptop and masks verified in Chrome only | `mask-composite`, `preserve-3d` and view transitions are not checked in Safari or Firefox. |
 | 41 | Text in the turning laptop can rasterise softly | Crisp at rest; a CSS-3D limitation. |
+
+## Added in round 6
+
+| # | Item | Notes |
+| --- | --- | --- |
+| 42 | No published mobile apps | Footer shows "coming soon"; set verified store URLs in `src/config/externalLinks.ts` |
+| 43 | No official social accounts or contact address | Footer states this; add verified destinations in the same file |
+| 44 | Terms of service and privacy policy not written | Need a legal entity and legal review. `/legal/risk-disclosure` and `/legal/data-storage` are informational and say so. |
+| 45 | Public assistant is the rule-based demo | Same composer as the app, fixed to the simulated showcase setup; no LLM, no network |
+| 46 | Market context uses sample items | The backend now ingests news (`GET /news`), but the web client is not connected to it yet |
+| 47 | Demo market follows real FX hours | On weekends the feed is "Market closed" and no signals are live. E2E tests that need an open market pin the clock to a weekday. |

@@ -14,6 +14,12 @@ import type { RiskProfile } from './risk';
 
 export type AssistantRole = 'user' | 'assistant';
 
+/**
+ * What kind of answer a reply is. Optional in the contract: a provider that
+ * does not classify its answers simply omits it and the UI shows plain text.
+ */
+export type ReplyKind = 'explain' | 'invalidate' | 'risk' | 'compare' | 'evidence' | 'missing' | 'glossary' | 'unknown';
+
 export interface AssistantMessage {
   id: string;
   role: AssistantRole;
@@ -24,6 +30,8 @@ export interface AssistantMessage {
   contextUsed?: string[];
   /** Assistant replies only: what produced the answer. */
   provider?: AssistantProviderKind;
+  /** Assistant replies only: what kind of answer it is, when the provider says. */
+  kind?: ReplyKind;
 }
 
 export type AssistantProviderKind = 'demo-rules' | 'remote';
@@ -59,6 +67,7 @@ export interface AssistantReply {
   createdAt: number;
   provider: AssistantProviderKind;
   contextUsed: string[];
+  kind?: ReplyKind;
 }
 
 export interface AssistantDescription {
@@ -90,3 +99,25 @@ export const SUGGESTED_PROMPTS = [
   'What information is missing before I can evaluate this?',
   'Explain reward-to-risk in simple terms',
 ] as const;
+
+export type SuggestedPrompt = (typeof SUGGESTED_PROMPTS)[number];
+
+/** Suggested prompts grouped by research task (empty state). */
+export const PROMPT_GROUPS: readonly { title: string; prompts: readonly SuggestedPrompt[] }[] = [
+  { title: 'Read the signal', prompts: ['Explain the current analysis', 'Summarise the evidence behind this signal'] },
+  { title: 'Entry, stop and invalidation', prompts: ['What would invalidate this projection?', 'Compare the analysis across timeframes'] },
+  { title: 'Risk', prompts: ['Calculate the risk for my capital and stop-loss', 'Explain reward-to-risk in simple terms'] },
+  { title: 'Before you decide', prompts: ['What information is missing before I can evaluate this?'] },
+];
+
+/** How each kind of answer is labelled, and the research step that usually follows it. */
+export const REPLY_KINDS: Record<ReplyKind, { label: string; next: readonly SuggestedPrompt[] }> = {
+  explain: { label: 'Analysis summary', next: ['Summarise the evidence behind this signal', 'What would invalidate this projection?'] },
+  evidence: { label: 'Evidence', next: ['What would invalidate this projection?', 'What information is missing before I can evaluate this?'] },
+  invalidate: { label: 'Invalidation conditions', next: ['Calculate the risk for my capital and stop-loss', 'What information is missing before I can evaluate this?'] },
+  risk: { label: 'Risk sizing', next: ['Explain reward-to-risk in simple terms', 'What would invalidate this projection?'] },
+  compare: { label: 'Timeframe comparison', next: ['Explain the current analysis'] },
+  missing: { label: 'Missing information', next: ['Explain the current analysis'] },
+  glossary: { label: 'Definition', next: ['Explain the current analysis'] },
+  unknown: { label: 'What I can answer', next: ['Explain the current analysis', 'What would invalidate this projection?'] },
+};

@@ -19,7 +19,7 @@ export function SignalsSection() {
     <section id="signals" data-section aria-labelledby="signals-title" className="border-b border-line">
       <div className="mx-auto grid max-w-[1240px] grid-cols-[minmax(0,1fr)] gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)] lg:items-center">
         <div>
-          <p className="eyebrow mb-3">06 · Personalised signals</p>
+          <p className="eyebrow mb-3">07 · Personalised signals</p>
           <RevealText as="h2" id="signals-title" className="display max-w-xl text-d3 text-fg sm:text-d2" lines={['Filtered by', <em key="e">your own rules.</em>]} />
           <Reveal as="p" delay={150} className="mt-4 max-w-xl text-md text-fg-2">
             Your saved profile — instruments, timeframes, minimum probability, reward : risk and your risk limits — is applied to what the model returned. Every check is

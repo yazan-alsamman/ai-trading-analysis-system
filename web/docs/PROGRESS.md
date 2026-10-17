@@ -12,6 +12,19 @@ _Last updated: 16 October 2026 (round 4: cinematic public website, motion system
 
 The round-2 brief was received **truncated** (it ends inside §3B). The rest of the brief (further sections and feature expansion) has not yet been received.
 
+## Round 6 — About, public content, assistant, footer (17 October 2026)
+
+| Area | Delivered |
+| --- | --- |
+| Integration | Merged `origin/main` (backend PRs #18–#25); one CI-workflow conflict resolved by keeping all jobs |
+| About | `/about`: eight sections from the real product (status-labelled capabilities, workflow, approach to AI, risk/uncertainty, audience) |
+| Landing | New "Anatomy of a setup" scene (signal, entry/stop/target zones in context, checks, labelled sample market context) |
+| Assistant | Public `/ai-assistant` page + floating launcher (rule-based showcase assistant); structured reply cards with next research steps, shared with the app |
+| Footer | Complete footer: CTAs, four link groups (all verified), app-download "coming soon", social state, legal links, credits; `src/config/externalLinks.ts` |
+| Legal | `/legal/risk-disclosure`, `/legal/data-storage` |
+| Docs | `docs/PUBLIC_SITE_CONTENT.md`; dependencies updated for the new backend news / expert-subscription services |
+| Tests | 152 unit · **89 / 89 Playwright** (run in chunks; weekend-dependent tests fixed) |
+
 ## Round 5 — cinematic motion (17 October 2026)
 
 | Area | Delivered |

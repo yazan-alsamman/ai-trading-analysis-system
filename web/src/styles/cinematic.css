@@ -245,6 +245,27 @@
   animation: c-packet 700ms var(--m-ease-in-out) both;
 }
 
+/* About workflow: one data point travels the whole track once, when it comes into view. */
+@keyframes c-travel {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+    opacity: 0;
+  }
+}
+.travel-track {
+  animation: c-travel 2400ms var(--m-ease-in-out) var(--at, 0ms) both;
+}
+[data-play='false'] .travel-track {
+  animation-play-state: paused;
+}
+
 /* ------------------------------------------------------ risk: gauge */
 
 .gauge-arc {
@@ -318,6 +339,10 @@
   .packet-track,
   .typing-dot {
     animation: none !important;
+  }
+  .travel-track {
+    animation: none !important;
+    opacity: 0 !important;
   }
   .reply-block {
     animation: none !important;

@@ -63,7 +63,7 @@ export function EvidenceSection() {
         <div className="absolute inset-0 bg-gradient-to-r from-canvas via-canvas/85 to-canvas/10" />
       </div>
       <div className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8">
-        <p className="eyebrow mb-3">08 · Performance &amp; methodology</p>
+        <p className="eyebrow mb-3">09 · Performance &amp; methodology</p>
         <RevealText as="h2" id="evidence-title" className="display max-w-3xl text-d3 text-fg sm:text-d2" lines={['Don’t trust a signal.', <em key="e">Inspect it.</em>]} />
         <Reveal as="p" delay={150} className="mt-4 max-w-2xl text-md text-fg-2">
           Every result can be opened from its one-line summary into the evidence behind it: where it came from, when, why, what it cannot see, what it means for your money,

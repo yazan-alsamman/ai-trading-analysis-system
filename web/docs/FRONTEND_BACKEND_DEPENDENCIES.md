@@ -1,6 +1,6 @@
 # Frontend ↔ backend dependencies
 
-_Round 4 · 16 October 2026. Verified against `origin/main` (merged into `e/web-client` on 16 Oct; backend PRs #1–#17)._
+_Round 6 · 17 October 2026. Verified against `origin/main` (merged into `e/web-client` on 17 Oct; backend PRs up to #25: Y18 news, posts and price alerts; Y19 expert chat and subscriptions; Y20 hardening)._
 
 **This round changed no backend code.** The tables below record which frontend features already have a real backend endpoint, which have one the client does not use yet, and which have none.
 
@@ -22,12 +22,16 @@ _Round 4 · 16 October 2026. Verified against `origin/main` (merged into `e/web-
 | Risk profile | `GET/PUT /me/risk-profile` (`{account_size, quote_currency, config}`), `POST /risk/position-size`, `GET /me/signal-plans` | 🟡 | Map the client `RiskProfile` ↔ backend config. The client calculations stay as an offline preview; the server result is authoritative when connected. |
 | Signal profile (personalised) | — | ⛔ | Proposed `/me/signal-profile` (API_INTEGRATION.md §7) |
 | Notifications / alerts | `/me/notifications*`, `/me/notification-preferences`, Telegram link, devices | 🟡 | Feed the notification centre and Settings → channels from these endpoints |
+| Price alerts | `GET/POST/PATCH /me/price-alerts`, `/me/price-alerts/history` (`docs/price-alerts.md`) | 🟡 | Replace the demo alerts store (`ata.demo.alerts.v1`) |
 | Workspaces | `/me/workspaces` (versioned state, ETag, sharing) | 🟡 | Replace localStorage workspaces; handle `409` version conflicts |
 | Prediction history / analytics | — | ⛔ | Proposed `/predictions/history` |
-| Community (news, posts, experts) | — | ⛔ | Proposed endpoints (API_INTEGRATION.md §3) |
+| News and market context | `GET /news`, `/news/{id}`, `/news/sentiment`, `/news/sources` — RSS ingestion running; FinBERT sentiment via the ingestion API (`docs/news-ingestion.md`, `docs/news-posts.md`) | 🟡 | Map `/news` to `NewsItem`; then the public site's "Market context" panel and Community → News can show real, sourced items instead of labelled samples |
+| Community posts and comments | `GET/POST /posts`, comments, follow (`docs/news-posts.md`) | 🟡 | Replace the demo posts |
+| Experts, expert chat and expert subscriptions | `/me/expert-profile`, `/me/plans`, checkout with **demo payments**, `/conversations` (`docs/subscriptions.md`, `docs/chat.md`) | 🟡 | Community → Experts. These are subscriptions **to individual experts**, not platform membership. |
 | AI assistant | — | ⛔ | Proposed `POST /assistant/replies`; the provider is called server-side |
-| **Membership / subscriptions** | — | ⛔ | `/plans`, `/me/subscription`, checkout, webhook, `/me/entitlements` (MEMBERSHIP_FRONTEND_SPEC.md §6) |
-| **Payments** | — | ⛔ | Payment-provider integration on the server. The frontend must only redirect. |
+| **Platform membership** (Essential / Professional / Elite) | — | ⛔ | `/plans`, `/me/subscription`, checkout, webhook, `/me/entitlements` (MEMBERSHIP_FRONTEND_SPEC.md §6). The new expert-subscription service could be a model, but it does not cover platform plans. |
+| **Payments** | Demo payment provider behind an interface (expert subscriptions only) | ⛔ for membership | No real provider. Platform membership has no checkout; the frontend must only redirect when one exists. |
+| Mobile apps (store links) | — | ⛔ | `mobile/` holds only a README; no published app. Footer shows "coming soon" (`src/config/externalLinks.ts`). |
 
 ## 2. Public website
 

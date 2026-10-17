@@ -3,14 +3,14 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Form';
-import { Markdown } from '@/components/ui/Markdown';
-import { describeContext, SUGGESTED_PROMPTS, type AssistantContext } from '@/domain/assistant';
+import { describeContext, PROMPT_GROUPS, SUGGESTED_PROMPTS, type AssistantContext } from '@/domain/assistant';
 import { getInstrument } from '@/domain/instruments';
 import { cn } from '@/lib/cn';
-import { formatClock } from '@/lib/format';
 import { userMessage } from '@/services/errors';
 import { PlanGate } from '@/features/membership/PlanGate';
 import { useFeatureAccess } from '@/features/membership/useFeatureAccess';
+import type { AssistantService } from '@/services/types';
+import { ReplyCard } from './ReplyCard';
 import { useAssistantThread } from './useAssistantThread';
 
 interface Props {
@@ -23,6 +23,13 @@ interface Props {
   initialQuestion?: string | null;
   onInitialQuestionSent?: () => void;
   timeZone: string;
+  /** Answer with this service instead of the app's (public showcase assistant). */
+  service?: AssistantService;
+  /** Keep this conversation separately in the browser. */
+  storageKey?: string;
+  /** Wording of the share-risk switch (the public page shares an example account, not yours). */
+  shareLabel?: string;
+  shareDescription?: string;
 }
 
 export function ContextChips({ context }: { context: AssistantContext }) {
@@ -45,8 +52,20 @@ export function AssistantPanel(props: Props) {
   return <AssistantPanelBody {...props} />;
 }
 
-function AssistantPanelBody({ context, shareRisk, onShareRisk, variant = 'page', initialQuestion, onInitialQuestionSent, timeZone }: Props) {
-  const thread = useAssistantThread(context);
+function AssistantPanelBody({
+  context,
+  shareRisk,
+  onShareRisk,
+  variant = 'page',
+  initialQuestion,
+  onInitialQuestionSent,
+  timeZone,
+  service,
+  storageKey,
+  shareLabel = 'Share my risk profile',
+  shareDescription = 'Lets it size trades with your capital and limits.',
+}: Props) {
+  const thread = useAssistantThread(context, { ...(service ? { service } : {}), ...(storageKey ? { storageKey } : {}) });
   const [draft, setDraft] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
   const inputId = useId();
@@ -72,6 +91,10 @@ function AssistantPanelBody({ context, shareRisk, onShareRisk, variant = 'page',
   };
 
   const isDemo = thread.description.provider === 'demo-rules';
+  const lastReply = [...thread.messages].reverse().find((m) => m.role === 'assistant');
+  const lastReplyId = lastReply?.id;
+  // The latest answer offers its own next steps; the generic chips are for answers without a kind.
+  const showChips = thread.messages.length > 0 && thread.status !== 'pending' && !lastReply?.kind;
   const where = context.symbol && context.timeframe ? `${getInstrument(context.symbol).display} ${context.timeframe}` : null;
 
   return (
@@ -90,7 +113,7 @@ function AssistantPanelBody({ context, shareRisk, onShareRisk, variant = 'page',
         <div className="flex flex-col gap-2">
           <p className="eyebrow">Context{where ? ` · ${where}` : ''}</p>
           <ContextChips context={context} />
-          <Switch checked={shareRisk} onChange={onShareRisk} label="Share my risk profile" description="Lets it size trades with your capital and limits." />
+          <Switch checked={shareRisk} onChange={onShareRisk} label={shareLabel} description={shareDescription} />
         </div>
       </div>
 
@@ -106,20 +129,27 @@ function AssistantPanelBody({ context, shareRisk, onShareRisk, variant = 'page',
                 Answers are built only from the context above. Ask what the model saw, what would prove it wrong, or what a trade means for your capital.
               </p>
             </div>
-            <ul className={cn('grid gap-2', variant === 'page' && 'sm:grid-cols-2')}>
-              {SUGGESTED_PROMPTS.map((p) => (
-                <li key={p}>
-                  <button
-                    type="button"
-                    onClick={() => thread.send(p)}
-                    className="group flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-inset px-3 py-2.5 text-left text-sm text-fg-2 transition-colors hover:border-line-strong hover:bg-hover hover:text-fg"
-                  >
-                    {p}
-                    <ArrowUp aria-hidden className="size-3.5 shrink-0 rotate-45 text-fg-3 transition-transform group-hover:translate-x-0.5" />
-                  </button>
-                </li>
+            <div className={cn('grid gap-4', variant === 'page' && 'sm:grid-cols-2')}>
+              {PROMPT_GROUPS.map((g) => (
+                <section key={g.title} aria-label={g.title}>
+                  <p className="eyebrow mb-2">{g.title}</p>
+                  <ul className="flex flex-col gap-2">
+                    {g.prompts.map((p) => (
+                      <li key={p}>
+                        <button
+                          type="button"
+                          onClick={() => thread.send(p)}
+                          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-inset px-3 py-2.5 text-left text-sm text-fg-2 transition-colors hover:border-forecast/50 hover:bg-hover hover:text-fg"
+                        >
+                          {p}
+                          <ArrowUp aria-hidden className="size-3.5 shrink-0 rotate-45 text-fg-3 transition-transform group-hover:translate-x-0.5 group-hover:text-forecast" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
           </div>
         ) : (
           <ol className="flex flex-col gap-5">
@@ -139,14 +169,7 @@ function AssistantPanelBody({ context, shareRisk, onShareRisk, variant = 'page',
                   {m.role === 'user' ? (
                     <p className="rounded-2xl rounded-tr-sm bg-selected px-3.5 py-2 text-sm text-fg">{m.content}</p>
                   ) : (
-                    <>
-                      <Markdown source={m.content} />
-                      <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-3">
-                        <span className="num">{formatClock(m.createdAt, timeZone, false)}</span>
-                        {m.provider === 'demo-rules' && <span>· rule-based, not a language model</span>}
-                        {m.contextUsed && m.contextUsed.length > 0 && <span>· used: {m.contextUsed.join(', ')}</span>}
-                      </p>
-                    </>
+                    <ReplyCard message={m} timeZone={timeZone} onFollowUp={thread.send} followUpsEnabled={thread.status !== 'pending' && m.id === lastReplyId} />
                   )}
                 </div>
               </li>
@@ -184,7 +207,7 @@ function AssistantPanelBody({ context, shareRisk, onShareRisk, variant = 'page',
           submit();
         }}
       >
-        {thread.messages.length > 0 && thread.status !== 'pending' && (
+        {showChips && (
           <ul aria-label="Suggested questions" className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1">
             {SUGGESTED_PROMPTS.map((p) => (
               <li key={p} className="shrink-0">

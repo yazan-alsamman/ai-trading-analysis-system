@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { settle, useTheme } from './fixtures';
+import { atTime, settle, useTheme, WEEKDAY } from './fixtures';
 
 /** Seed a risk profile (on top of the default preferences) before the app loads. */
 async function seedRisk(page: Page, capital: number | null) {
@@ -74,6 +74,7 @@ test('risk: withholds results and names the missing input instead of guessing', 
 });
 
 test('personalised signals: profile filter, provenance sheet and sizing link', async ({ page }) => {
+  await atTime(page, WEEKDAY);
   await page.goto('/signals');
   await settle(page);
   await expect(page.getByRole('tab', { name: /for you/i })).toHaveAttribute('aria-selected', 'true');

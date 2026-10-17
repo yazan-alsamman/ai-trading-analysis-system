@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 
 /** Public, indexable routes. App routes are excluded (and disallowed in robots.txt). */
-const PUBLIC_ROUTES = ['/', '/membership'];
+const PUBLIC_ROUTES = ['/', '/about', '/ai-assistant', '/membership', '/legal/risk-disclosure', '/legal/data-storage'];
 
 /**
  * Emits sitemap.xml only when VITE_SITE_URL is set: a sitemap needs absolute

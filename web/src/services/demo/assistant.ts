@@ -1,4 +1,4 @@
-import type { AssistantContext, AssistantDescription, AssistantReply } from '@/domain/assistant';
+import type { AssistantContext, AssistantDescription, AssistantReply, ReplyKind } from '@/domain/assistant';
 import { describeContext } from '@/domain/assistant';
 import { getInstrument } from '@/domain/instruments';
 import { timeframeSeconds } from '@/domain/market';
@@ -24,7 +24,7 @@ export const DEMO_ASSISTANT: AssistantDescription = {
     'Not a language model. It assembles answers only from the data listed under “Context” using fixed rules, so it cannot reason beyond that data.',
 };
 
-export type Intent = 'explain' | 'invalidate' | 'risk' | 'compare' | 'evidence' | 'missing' | 'glossary' | 'unknown';
+export type Intent = ReplyKind;
 
 const GLOSSARY: { keys: RegExp; term: string; text: string }[] = [
   {
@@ -267,5 +267,5 @@ export function composeReply(question: string, ctx: AssistantContext, nowMs: num
                   ? glossary(question)
                   : unknown();
   const used = intent === 'glossary' || intent === 'unknown' ? [] : describeContext(ctx);
-  return { id: localId('reply'), content, createdAt: nowMs, provider: 'demo-rules', contextUsed: used };
+  return { id: localId('reply'), content, createdAt: nowMs, provider: 'demo-rules', contextUsed: used, kind: intent };
 }

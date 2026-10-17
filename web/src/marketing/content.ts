@@ -3,11 +3,67 @@
 export const PUBLIC_NAV = [
   { to: '/#platform', label: 'Platform' },
   { to: '/#how-it-works', label: 'How it works' },
-  { to: '/#risk', label: 'Risk management' },
   { to: '/#methodology', label: 'Methodology' },
+  { to: '/ai-assistant', label: 'Assistant' },
+  { to: '/about', label: 'About' },
   { to: '/membership', label: 'Membership' },
-  { to: '/#faq', label: 'FAQ' },
 ] as const;
+
+export interface FooterLink {
+  to: string;
+  label: string;
+  /** Shown only when the app runs on simulated data (the live demo needs no account). */
+  demoOnly?: boolean;
+}
+
+/**
+ * Footer navigation. Every `to` is an existing route or an anchor on one
+ * (checked by marketing/footer.test.tsx and e2e/round6.spec.ts). Terms of
+ * service, privacy policy and contact are deliberately absent: none exists yet
+ * (docs/PUBLIC_SITE_CONTENT.md §4).
+ */
+export const FOOTER_GROUPS: readonly { title: string; links: readonly FooterLink[]; note?: string }[] = [
+  {
+    title: 'Platform',
+    links: [
+      { to: '/#platform', label: 'The seven modules' },
+      { to: '/#how-it-works', label: 'How it works' },
+      { to: '/#anatomy', label: 'Anatomy of a setup' },
+      { to: '/#risk', label: 'Risk management' },
+      { to: '/ai-assistant', label: 'Research assistant' },
+      { to: '/#methodology', label: 'Methodology' },
+      { to: '/overview', label: 'Open the live demo', demoOnly: true },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { to: '/about', label: 'About' },
+      { to: '/about#approach-ai', label: 'Our approach to AI' },
+      { to: '/about#risk-transparency', label: 'Risk and transparency' },
+      { to: '/#faq', label: 'FAQ' },
+    ],
+    note: 'A graduation project. No public contact address has been published yet.',
+  },
+  {
+    title: 'Membership',
+    links: [
+      { to: '/membership#plans', label: 'Plans' },
+      { to: '/membership#compare', label: 'Compare features' },
+      { to: '/membership#membership-faq', label: 'Membership FAQ' },
+      { to: '/login', label: 'Sign in' },
+      { to: '/register', label: 'Create account' },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { to: '/legal/risk-disclosure', label: 'Risk disclosure' },
+      { to: '/legal/data-storage', label: 'Data stored in your browser' },
+    ],
+    note: 'Terms of service and privacy policy: in preparation, not yet published.',
+  },
+];
 
 export interface FaqItem {
   q: string;

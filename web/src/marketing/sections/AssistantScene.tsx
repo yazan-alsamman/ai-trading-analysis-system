@@ -1,4 +1,6 @@
-import { Bot } from 'lucide-react';
+import { ArrowRight, Bot } from 'lucide-react';
+import { Link } from 'react-router';
+import { buttonClasses } from '@/components/ui/buttonClasses';
 import { useRef, type CSSProperties } from 'react';
 import { Markdown } from '@/components/ui/Markdown';
 import { SourceTag } from '@/components/ui/SourceTag';
@@ -30,10 +32,15 @@ export function AssistantScene() {
     <section id="assistant" data-section aria-labelledby="assistant-title" className="violet-scene relative isolate overflow-hidden border-b border-line">
       <div className="mx-auto grid max-w-[1240px] grid-cols-[minmax(0,1fr)] gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:items-center">
         <div>
-          <p className="eyebrow mb-3">07 · AI assistant</p>
+          <p className="eyebrow mb-3">08 · AI assistant</p>
           <RevealText as="h2" id="assistant-title" className="display text-d3 text-fg sm:text-d2" lines={['Ask why.', <em key="e">Get the evidence.</em>]} />
           <Reveal as="p" delay={150} className="mt-4 max-w-md text-md text-fg-2">
             Ask what the model saw, what would prove it wrong, or what a trade means for your capital. It answers only from the data on your screen, and names what it used.
+          </Reveal>
+          <Reveal delay={220} className="mt-6">
+            <Link to="/ai-assistant" viewTransition className={buttonClasses({ variant: 'secondary', shape: 'pill', className: 'bg-transparent' })}>
+              Try the research assistant <ArrowRight aria-hidden className="size-4" />
+            </Link>
           </Reveal>
           <Reveal variant="scale" delay={200} className="relative mt-10 hidden aspect-[4/3] overflow-hidden rounded-2xl border border-forecast/30 md:block">
             <CinematicVideo {...FOOTAGE.assistant} />

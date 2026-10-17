@@ -16,6 +16,7 @@ import { EvidenceSection } from '../sections/EvidenceSection';
 import { Hero } from '../sections/Hero';
 import { ProblemSequence } from '../sections/ProblemSequence';
 import { RiskSection } from '../sections/RiskSection';
+import { AnatomySection } from '../sections/AnatomySection';
 import { AssistantScene } from '../sections/AssistantScene';
 import { SignalsSection } from '../sections/SignalsSection';
 import { WorkspaceScene } from '../sections/WorkspaceScene';
@@ -33,7 +34,7 @@ function MembershipPreview() {
       <div className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
-            <p className="eyebrow mb-3">09 · Membership</p>
+            <p className="eyebrow mb-3">10 · Membership</p>
             <RevealText as="h2" id="membership-title" className="display text-d3 text-fg sm:text-d2" lines={['Choose how much', <em key="e">of the desk you need.</em>]} />
             <Reveal as="p" delay={150} className="mt-4 max-w-2xl text-md text-fg-2">
               Every plan includes the risk tools and the model’s track record. Plans differ in breadth and personalisation. Pricing has not been announced.
@@ -66,12 +67,13 @@ export function LandingPage() {
       <WorkspaceScene />
       <EcosystemSequence />
       <ChartToPlanSequence />
+      <AnatomySection />
       <RiskSection />
       <SignalsSection />
       <AssistantScene />
       <EvidenceSection />
       <MembershipPreview />
-      <Faq items={GENERAL_FAQ} eyebrow="10 · FAQ" />
+      <Faq items={GENERAL_FAQ} eyebrow="11 · FAQ" />
       <FinalCta />
     </>
   );

@@ -12,6 +12,10 @@ import { RequireAuth } from './RequireAuth';
 // Every page is its own chunk: public visitors never download the chart engine.
 const MembershipPage = lazy(() => import('@/marketing/pages/MembershipPage').then((m) => ({ default: m.MembershipPage })));
 const WelcomePage = lazy(() => import('@/marketing/pages/WelcomePage').then((m) => ({ default: m.WelcomePage })));
+const AboutPage = lazy(() => import('@/marketing/pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const AssistantPublicPage = lazy(() => import('@/marketing/pages/AssistantPublicPage').then((m) => ({ default: m.AssistantPublicPage })));
+const RiskDisclosurePage = lazy(() => import('@/marketing/pages/LegalPages').then((m) => ({ default: m.RiskDisclosurePage })));
+const DataStoragePage = lazy(() => import('@/marketing/pages/LegalPages').then((m) => ({ default: m.DataStoragePage })));
 const WorkspacePage = lazy(() => import('@/features/workspace/WorkspacePage').then((m) => ({ default: m.WorkspacePage })));
 const SignalsPage = lazy(() => import('@/features/signals/SignalsPage').then((m) => ({ default: m.SignalsPage })));
 const AlertsPage = lazy(() => import('@/features/alerts/AlertsPage').then((m) => ({ default: m.AlertsPage })));
@@ -37,6 +41,10 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <LandingPage /> },
       { path: '/membership', element: page(<MembershipPage />) },
+      { path: '/about', element: page(<AboutPage />) },
+      { path: '/ai-assistant', element: page(<AssistantPublicPage />) },
+      { path: '/legal/risk-disclosure', element: page(<RiskDisclosurePage />) },
+      { path: '/legal/data-storage', element: page(<DataStoragePage />) },
     ],
   },
   {

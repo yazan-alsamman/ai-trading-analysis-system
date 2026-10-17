@@ -133,3 +133,12 @@ small clip).
 2. Optional AV1/WebM renditions (≈ 30–40 % smaller).
 3. Commissioned footage of the real product in use, when available.
 4. Real, labelled model output through the API once Feature 12 is exposed; the scenes are data-driven.
+
+---
+
+### Follow-up (round 6, 17 October 2026)
+
+The full Playwright suite has since passed (89 / 89, run in chunks). The three failures above were
+**not** caused by memory pressure. The demo market follows real FX hours, and the run happened on a
+Saturday, so three older tests that assumed an open market failed. They now pin the clock to a
+weekday. See `WEBSITE_REPORT_ROUND6_ABOUT_ASSISTANT_FOOTER.md` §4.

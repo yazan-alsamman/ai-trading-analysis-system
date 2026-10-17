@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { settle, useTheme } from './fixtures';
+import { atTime, settle, useTheme, WEEKDAY, WEEKEND } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
   await useTheme(page, 'dark');
 });
 
 test('workspace renders a labelled simulated chart and AI panel', async ({ page }) => {
+  await atTime(page, WEEKDAY);
   await page.setViewportSize({ width: 1440, height: 900 });
   // Since round 3, "/" opens the Overview; the workspace has its own route.
   await page.goto('/workspace');
@@ -58,6 +59,7 @@ test('quick search switches instrument from the keyboard', async ({ page }) => {
 });
 
 test('signals filters live in the URL and open the workspace', async ({ page }) => {
+  await atTime(page, WEEKDAY);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/signals');
   await settle(page);
@@ -100,6 +102,15 @@ test('login validates input and creates a labelled demo session', async ({ page 
   await expect(page).toHaveURL(/\/overview$/);
   await page.getByRole('button', { name: /account menu/i }).click();
   await expect(page.getByText('Demo session')).toBeVisible();
+});
+
+test('weekend: the demo feed follows FX hours and says the market is closed', async ({ page }) => {
+  await atTime(page, WEEKEND);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/workspace');
+  await settle(page);
+  await expect(page.getByText('Market closed (weekend)').first()).toBeVisible();
+  await expect(page.getByText('Simulated feed')).toHaveCount(0);
 });
 
 test('unknown routes show a helpful 404', async ({ page }) => {

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-export const ROUTES = ['/', '/membership', '/overview', '/workspace', '/signals', '/risk', '/assistant', '/alerts', '/insights', '/community/news', '/community/posts', '/community/experts', '/settings', '/login', '/register'] as const;
+export const ROUTES = ['/', '/about', '/ai-assistant', '/legal/risk-disclosure', '/legal/data-storage', '/membership', '/overview', '/workspace', '/signals', '/risk', '/assistant', '/alerts', '/insights', '/community/news', '/community/posts', '/community/experts', '/settings', '/login', '/register'] as const;
 export const WIDTHS = [1440, 1280, 1024, 768, 390] as const;
 export const HEIGHTS: Record<number, number> = { 1440: 900, 1280: 800, 1024: 768, 768: 1024, 390: 844 };
 export type Theme = 'dark' | 'light';
@@ -24,6 +24,20 @@ export async function useTheme(page: Page, theme: Theme): Promise<void> {
       /* storage unavailable */
     }
   }, theme);
+}
+
+/** Wednesday 14 Oct 2026 14:00 UTC: FX market open (London/New York overlap). */
+export const WEEKDAY = new Date('2026-10-14T14:00:00Z');
+/** Saturday 17 Oct 2026 16:00 UTC: FX market closed. */
+export const WEEKEND = new Date('2026-10-17T16:00:00Z');
+
+/**
+ * Pin the page's clock (Date only; timers keep running). The demo market
+ * follows real FX hours, so tests that need live signals or an open feed must
+ * not depend on the day they run — they failed every weekend before this.
+ */
+export async function atTime(page: Page, time: Date): Promise<void> {
+  await page.clock.setFixedTime(time);
 }
 
 /**
