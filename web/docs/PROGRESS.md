@@ -12,6 +12,16 @@ _Last updated: 16 October 2026 (round 4: cinematic public website, motion system
 
 The round-2 brief was received **truncated** (it ends inside §3B). The rest of the brief (further sections and feature expansion) has not yet been received.
 
+## Round 5 — cinematic motion (17 October 2026)
+
+| Area | Delivered |
+| --- | --- |
+| Footage | Six licensed loops (Coverr, Mixkit Free), 1.9 MB, self-hosted; `CinematicVideo` (on-screen only, posters for reduced motion, Save-Data and phones); `scripts/build-media.sh` |
+| Scenes | Hero with real footage and a self-drawing chart with ambient scan; A in depth; CSS-3D workspace laptop; B data packet; C ends in a structured research plan; D exposure gauge and cause → effect; E violet assistant scene; F reliability diagram; G tilt and spotlight; H cinematic close |
+| Transitions | Selected plan → sign-up summary shared element |
+| Docs | `docs/CINEMATIC_MOTION_IMPLEMENTATION.md`; report `../reports for website/WEBSITE_REPORT_ROUND5_CINEMATIC.md` |
+| Tests | 142 unit/component (all green). Playwright run stopped for low memory: 60 passed (incl. 9/9 new), 3 unconfirmed failures in untouched app routes, visual matrix incomplete. **Re-run needed.** |
+
 ## Round 4 — delivered (16 October 2026)
 
 | Area | Delivered |

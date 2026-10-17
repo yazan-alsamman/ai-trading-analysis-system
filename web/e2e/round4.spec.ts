@@ -1,19 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { settle, useTheme } from './fixtures';
-
-/** Scroll a pinned sequence to a given progress (0–1) of its scroll distance. */
-async function scrollSequence(page: Page, id: string, progress: number) {
-  await page.evaluate(
-    ([sid, p]) => {
-      const sec = document.getElementById(sid as string)!;
-      const tall = (sec.querySelector('.h-\\[340vh\\], .h-\\[360vh\\]') as HTMLElement | null) ?? sec;
-      const top = tall.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo(0, top + (p as number) * (tall.offsetHeight - window.innerHeight));
-    },
-    [id, progress],
-  );
-  await page.waitForTimeout(500);
-}
+import { expect, test } from '@playwright/test';
+import { scrollSequence, settle, useTheme } from './fixtures';
 
 test.beforeEach(async ({ page }) => {
   await useTheme(page, 'dark');
@@ -25,7 +11,7 @@ test('public landing explains the platform before any sign-in', async ({ page })
   await settle(page);
   await expect(page.getByRole('heading', { level: 1, name: /every gold idea/i })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Site' }).first()).toContainText('Membership');
-  for (const id of ['problem', 'platform', 'how-it-works', 'risk', 'signals', 'methodology', 'membership', 'faq']) {
+  for (const id of ['problem', 'workspace', 'platform', 'how-it-works', 'risk', 'signals', 'assistant', 'methodology', 'membership', 'faq']) {
     await expect(page.locator(`#${id}`)).toHaveCount(1);
   }
   // Honest results: simulated data is labelled and no live results are claimed.
@@ -44,11 +30,11 @@ test('scroll storytelling: the platform sequence follows scroll and its tabs sta
   // Clicking a tab scrolls to its step (scroll stays the single source of truth).
   await page.getByRole('tab', { name: /AI assistant/ }).click();
   await expect(page.getByRole('tab', { name: /AI assistant/ })).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
-  // Sequence C reveals the risk plan only at its step.
+  // Sequence C reveals the risk plan only at its step (seven steps since round 5).
   await scrollSequence(page, 'how-it-works', 0.1);
-  await expect(page.getByText('Step 1 of 6')).toBeVisible();
+  await expect(page.getByText('Step 1 of 7')).toBeVisible();
   await scrollSequence(page, 'how-it-works', 0.75);
-  await expect(page.getByText('Step 5 of 6')).toBeVisible();
+  await expect(page.getByText('Step 6 of 7')).toBeVisible();
 });
 
 test('reduced motion: no pinning, no running animations, hero readable immediately', async ({ browser }) => {

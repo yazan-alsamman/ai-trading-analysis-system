@@ -52,6 +52,9 @@ function PublicFooter() {
           and it never places, modifies or closes trades. Model outputs are probabilistic estimates that can be wrong. Past or simulated results do not guarantee future
           results.
         </p>
+        <p className="mx-auto max-w-[1240px] px-5 pb-6 text-xs leading-5 text-fg-3 sm:px-8">
+          Background footage: licensed stock video from Coverr and Mixkit, for atmosphere only. The charts visible in it are not this platform’s data.
+        </p>
       </div>
     </footer>
   );

@@ -1,5 +1,5 @@
 import { Check, Minus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { FEATURES, formatPrice, getPlan, PLANS, STATUS_LABELS, suggestPlan, type Access, type FeatureGroup, type FeatureStatus, type FitAnswers, type Plan, type PlanId } from '@/domain/membership';
 import { cn } from '@/lib/cn';
@@ -48,6 +48,14 @@ function AccessCell({ access }: { access: Access }) {
 
 /** One plan, selectable. Selection uses the spring curve and a gold hairline. */
 export function PlanCard({ plan, selected, onSelect, index = 0 }: { plan: Plan; selected: boolean; onSelect: (id: PlanId) => void; index?: number }) {
+  const spot = useRef<HTMLSpanElement>(null);
+  const follow = (e: React.PointerEvent) => {
+    const el = spot.current;
+    if (!el || e.pointerType !== 'mouse') return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', `${(e.clientX - r.left).toFixed(0)}px`);
+    el.style.setProperty('--my', `${(e.clientY - r.top).toFixed(0)}px`);
+  };
   return (
     <Reveal
       index={index}
@@ -57,7 +65,8 @@ export function PlanCard({ plan, selected, onSelect, index = 0 }: { plan: Plan; 
         selected ? 'border-accent shadow-glow-aurum' : 'border-line hover:border-line-strong',
       )}
     >
-      <div data-selected={selected} className="plan-card-inner flex h-full flex-col">
+      <span ref={spot} aria-hidden className="plan-spot pointer-events-none absolute inset-0 rounded-2xl" />
+      <div data-selected={selected} onPointerMove={follow} className="plan-card-inner relative flex h-full flex-col" style={{ viewTransitionName: selected ? 'selected-plan' : undefined }}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="eyebrow">{`0${index + 1}`}</p>

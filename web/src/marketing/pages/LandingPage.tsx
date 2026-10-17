@@ -16,9 +16,11 @@ import { EvidenceSection } from '../sections/EvidenceSection';
 import { Hero } from '../sections/Hero';
 import { ProblemSequence } from '../sections/ProblemSequence';
 import { RiskSection } from '../sections/RiskSection';
-import { SignalsAssistantSection } from '../sections/SignalsAssistantSection';
+import { AssistantScene } from '../sections/AssistantScene';
+import { SignalsSection } from '../sections/SignalsSection';
+import { WorkspaceScene } from '../sections/WorkspaceScene';
 
-/** Sequence E — the story concludes in the membership options. */
+/** Scene G — the story concludes in the membership options (cards tilt up into place). */
 function MembershipPreview() {
   const selected = useSelectedPlan();
   const [confirm, setConfirm] = useState<PlanId | null>(null);
@@ -31,7 +33,7 @@ function MembershipPreview() {
       <div className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
-            <p className="eyebrow mb-3">07 · Membership</p>
+            <p className="eyebrow mb-3">09 · Membership</p>
             <RevealText as="h2" id="membership-title" className="display text-d3 text-fg sm:text-d2" lines={['Choose how much', <em key="e">of the desk you need.</em>]} />
             <Reveal as="p" delay={150} className="mt-4 max-w-2xl text-md text-fg-2">
               Every plan includes the risk tools and the model’s track record. Plans differ in breadth and personalisation. Pricing has not been announced.
@@ -41,7 +43,7 @@ function MembershipPreview() {
             Compare every feature <ArrowRight aria-hidden className="size-4" />
           </Link>
         </div>
-        <div className="mt-12">
+        <div className="tilt-reveal mt-12">
           <PlanGrid selected={selected} onSelect={pick} />
         </div>
       </div>
@@ -61,13 +63,15 @@ export function LandingPage() {
     <>
       <Hero />
       <ProblemSequence />
+      <WorkspaceScene />
       <EcosystemSequence />
       <ChartToPlanSequence />
       <RiskSection />
-      <SignalsAssistantSection />
+      <SignalsSection />
+      <AssistantScene />
       <EvidenceSection />
       <MembershipPreview />
-      <Faq items={GENERAL_FAQ} />
+      <Faq items={GENERAL_FAQ} eyebrow="10 · FAQ" />
       <FinalCta />
     </>
   );

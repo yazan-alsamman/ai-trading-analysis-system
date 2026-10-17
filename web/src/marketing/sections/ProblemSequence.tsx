@@ -1,21 +1,34 @@
 import { Check, X } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
+import { CinematicVideo } from '@/motion/CinematicVideo';
 import { Reveal, RevealText } from '@/motion/Reveal';
 import { useCinematic, useScrollProgress } from '@/motion/runtime';
 import { easeInOut, lerp, segment } from '@/motion/tokens';
+import { FOOTAGE } from '../media';
 
 /** Each fragment of unstructured research resolves into one module of the workflow. */
 const FRAGMENTS = [
-  { messy: 'Three tabs that disagree', clean: 'Market intelligence', x: 0.52, y: 0.06, r: -6 },
-  { messy: 'A screenshot of a chart', clean: 'Chart analysis', x: 0.06, y: 0.2, r: 5 },
-  { messy: '“92% sure” — says who?', clean: 'AI research, with evidence', x: 0.6, y: 0.34, r: 4 },
-  { messy: 'Position size: a guess', clean: 'Risk sized to your capital', x: 0.14, y: 0.5, r: -7 },
-  { messy: 'A tip from a chat group', clean: 'Personalised signals', x: 0.5, y: 0.64, r: -3 },
-  { messy: 'Was it right last time?', clean: 'Performance insights', x: 0.02, y: 0.78, r: 6 },
-  { messy: 'No one to ask why', clean: 'Assistant on the evidence', x: 0.46, y: 0.88, r: -5 },
+  { messy: 'Three tabs that disagree', clean: 'Market intelligence', x: 0.52, y: 0.06, r: -6, z: -240 },
+  { messy: 'A screenshot of a chart', clean: 'Chart analysis', x: 0.06, y: 0.2, r: 5, z: 110 },
+  { messy: '“92% sure” — says who?', clean: 'AI research, with evidence', x: 0.6, y: 0.34, r: 4, z: -120 },
+  { messy: 'Position size: a guess', clean: 'Risk sized to your capital', x: 0.14, y: 0.5, r: -7, z: 170 },
+  { messy: 'A tip from a chat group', clean: 'Personalised signals', x: 0.5, y: 0.64, r: -3, z: -300 },
+  { messy: 'Was it right last time?', clean: 'Performance insights', x: 0.02, y: 0.78, r: 6, z: 60 },
+  { messy: 'No one to ask why', clean: 'Assistant on the evidence', x: 0.46, y: 0.88, r: -5, z: -170 },
 ];
 
 const ROW = 62;
+
+/** Out-of-focus quote board: the noise the section starts from. */
+function Footage({ footageRef }: { footageRef?: React.Ref<HTMLDivElement> }) {
+  return (
+    <div ref={footageRef} aria-hidden className="footage-band footage-dim pointer-events-none absolute inset-0 -z-10">
+      <CinematicVideo {...FOOTAGE.overload} />
+      <div className="footage-veil absolute inset-0" />
+      <div className="absolute inset-0 bg-gradient-to-r from-canvas via-canvas/80 to-transparent" />
+    </div>
+  );
+}
 
 function StaticVersion() {
   return (
@@ -63,6 +76,7 @@ export function ProblemSequence() {
   const after = useRef<HTMLDivElement>(null);
   const spine = useRef<HTMLSpanElement>(null);
   const bar = useRef<HTMLSpanElement>(null);
+  const footage = useRef<HTMLDivElement>(null);
   const size = useRef({ w: 0, h: 0 });
 
   useLayoutEffect(() => {
@@ -85,7 +99,8 @@ export function ProblemSequence() {
         const t = easeInOut(segment(p, 0.16 + i * 0.035, 0.58 + i * 0.035));
         const dx = lerp(f.x * w, 0, t);
         const dy = lerp(f.y * (h - 40), i * ROW, t);
-        el.style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) rotate(${lerp(f.r, 0, t).toFixed(2)}deg)`;
+        // Fragments arrive from different depths and settle on one plane.
+        el.style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, ${lerp(f.z, 0, t).toFixed(1)}px) rotate(${lerp(f.r, 0, t).toFixed(2)}deg)`;
         el.style.setProperty('--t', t.toFixed(3));
         el.dataset.ordered = String(t > 0.98);
       });
@@ -104,13 +119,16 @@ export function ProblemSequence() {
       }
       if (spine.current) spine.current.style.transform = `scaleY(${segment(p, 0.62, 0.9).toFixed(3)})`;
       if (bar.current) bar.current.style.transform = `scaleX(${p.toFixed(3)})`;
+      // The noise recedes as the structure appears.
+      footage.current?.style.setProperty('--k', (1 - 0.8 * segment(p, 0.18, 0.7)).toFixed(3));
     },
     cinematic,
   );
 
   if (!cinematic) {
     return (
-      <section id="problem" data-section aria-labelledby="problem-title" className="border-b border-line">
+      <section id="problem" data-section aria-labelledby="problem-title" className="relative isolate overflow-hidden border-b border-line">
+        <Footage />
         <h2 id="problem-title" className="sr-only">
           From information overload to structured research
         </h2>
@@ -124,7 +142,8 @@ export function ProblemSequence() {
       <h2 id="problem-title" className="sr-only">
         From information overload to structured research
       </h2>
-      <div className="sticky top-0 flex h-[100svh] items-center overflow-hidden">
+      <div className="sticky top-0 isolate flex h-[100svh] items-center overflow-hidden">
+        <Footage footageRef={footage} />
         <div className="mx-auto grid grid-cols-[minmax(0,1fr)] w-full max-w-[1240px] items-center gap-12 px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)]">
           <div className="relative min-h-[300px]">
             <p className="eyebrow mb-3">01 · The problem</p>
@@ -147,7 +166,7 @@ export function ProblemSequence() {
             </div>
           </div>
 
-          <div ref={stage} className="relative h-[460px]">
+          <div ref={stage} className="depth-stage relative h-[460px]">
             <span ref={spine} aria-hidden className="absolute top-4 bottom-10 left-[19px] w-px origin-top scale-y-0 bg-accent/60" />
             <ol aria-label="Fragments of unstructured research and the module that replaces each">
               {FRAGMENTS.map((f, i) => (

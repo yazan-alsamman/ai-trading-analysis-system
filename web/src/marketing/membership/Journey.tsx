@@ -36,11 +36,14 @@ export function JourneySteps({ current }: { current: 0 | 1 | 2 }) {
   );
 }
 
-/** Compact reminder of the selected plan, with a way back to compare. */
+/**
+ * Compact reminder of the selected plan, with a way back to compare. Shares the
+ * view-transition name of the selected plan card, so the card morphs into it.
+ */
 export function PlanSummary({ plan: id, className }: { plan: PlanId; className?: string }) {
   const plan = getPlan(id);
   return (
-    <div className={cn('m-in rounded-xl border border-accent/50 bg-accent-soft p-4', className)}>
+    <div className={cn('m-in rounded-xl border border-accent/50 bg-accent-soft p-4', className)} style={{ viewTransitionName: 'selected-plan' }}>
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-xs text-fg-2">Selected plan</p>
         <Link to="/membership#plans" viewTransition className="text-xs font-medium text-fg underline-offset-4 hover:underline">

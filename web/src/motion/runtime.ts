@@ -37,6 +37,27 @@ export function useFinePointer(): boolean {
   return useSyncExternalStore(finePointer.subscribe, finePointer.get, () => false);
 }
 
+const smallScreen = mediaStore('(max-width: 47.99rem)');
+const singleColumn = mediaStore('(max-width: 63.99rem)');
+
+/** Phones (below the `md` breakpoint). */
+export function useSmallScreen(): boolean {
+  return useSyncExternalStore(smallScreen.subscribe, smallScreen.get, () => false);
+}
+
+/** Phones and tablets: below the `lg` breakpoint, where layouts are single-column. */
+export function useSingleColumn(): boolean {
+  return useSyncExternalStore(singleColumn.subscribe, singleColumn.get, () => false);
+}
+
+/** The visitor asked for reduced data use (Save-Data / Data Saver). Read once; it rarely changes mid-visit. */
+export function prefersSaveData(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const c = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  if (c?.saveData) return true;
+  return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-reduced-data: reduce)').matches;
+}
+
 /* ----------------------------------------------------- scroll manager */
 
 /**

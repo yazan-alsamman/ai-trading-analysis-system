@@ -1,0 +1,338 @@
+/*
+ * Cinematic layer of the public website (docs/CINEMATIC_MOTION_IMPLEMENTATION.md).
+ * Footage masks, the CSS-3D laptop, depth fragments, the exposure gauge, data packets,
+ * the plan spotlight and the violet assistant scene. Builds on styles/motion.css:
+ * only transform, opacity and stroke-dashoffset animate; every loop pauses off-screen.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  /* How much of the canvas colour is laid over footage (keeps text and UI legible). */
+  --footage-veil: rgb(7 7 10 / 0.28);
+  /* Secondary scenes: how strongly background footage shows through. */
+  --footage-strength: 0.6;
+  /* Hero dissolve (share of the footage width). */
+  --fr-start: 4%;
+  --fr-end: 46%;
+  --footage-veil-strong: rgb(7 7 10 / 0.78);
+  --laptop-shell: #1b1b21;
+  --laptop-shell-edge: #2b2b33;
+  --laptop-cover-hi: #4a4a56;
+  --laptop-deck: #141418;
+  --laptop-key: #202027;
+  --violet-scene: radial-gradient(70% 60% at 70% 30%, rgb(185 160 255 / 0.14), transparent 70%), #08070d;
+}
+:root[data-theme='light'] {
+  --footage-veil: rgb(244 243 239 / 0.26);
+  --footage-strength: 0.32;
+  --fr-start: 16%;
+  --fr-end: 60%;
+  --footage-veil-strong: rgb(244 243 239 / 0.84);
+  --laptop-shell: #c9c7c2;
+  --laptop-shell-edge: #b4b2ad;
+  --laptop-cover-hi: #e6e4df;
+  --laptop-deck: #d6d4cf;
+  --laptop-key: #c2c0bb;
+  --violet-scene: radial-gradient(70% 60% at 70% 30%, rgb(101 52 200 / 0.1), transparent 70%), #efedf6;
+}
+
+/* ------------------------------------------------------------ footage */
+
+/*
+ * Hero: footage on the right, dissolving into the canvas to the left, at the
+ * bottom, and under the (transparent) header so the navigation stays legible.
+ * The light theme starts the dissolve later: dark footage must not sit under dark copy.
+ */
+.footage-right {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent var(--fr-start), #000 var(--fr-end)),
+    linear-gradient(to bottom, transparent 0, #000 110px, #000 72%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent var(--fr-start), #000 var(--fr-end)),
+    linear-gradient(to bottom, transparent 0, #000 110px, #000 72%, transparent 100%);
+  mask-composite: intersect;
+}
+/* A band behind a scene: fades in at the top and out at the bottom. */
+.footage-band {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 70%, transparent 100%);
+}
+/* Phones (hero band): clear under the header, soft bottom edge. */
+.footage-card {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 84px, #000 50%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 84px, #000 50%, transparent 100%);
+}
+.footage-veil {
+  background: var(--footage-veil);
+}
+/* Background footage in secondary scenes; scenes may scale it further with --k. */
+.footage-dim {
+  opacity: calc(var(--footage-strength) * var(--k, 1));
+}
+/* Centred copy over footage: a strong canvas-coloured pool behind the text. */
+.footage-pool {
+  background: radial-gradient(60% 70% at 50% 50%, var(--footage-veil-strong), transparent 100%);
+}
+
+/* --------------------------------------------- hero ambient: scan readout */
+
+.chart-scan {
+  transition: transform 900ms var(--m-ease-in-out);
+}
+.chart-scan-x {
+  transition: transform 900ms var(--m-ease-in-out);
+}
+
+/* NOW marker: one slow pulse ring (paused with the hero). */
+@keyframes c-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+.now-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: c-pulse 2.8s var(--m-ease-out) 3.2s infinite;
+}
+[data-paused='true'] .now-pulse {
+  animation-play-state: paused;
+}
+
+/* ------------------------------------------------------- CSS-3D laptop */
+
+.laptop-scene {
+  perspective: 2400px;
+  perspective-origin: 50% 30%;
+}
+.laptop {
+  --lid: 4deg;
+  --rx: -10deg;
+  --ry: -14deg;
+  --lift: 0px;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: translate3d(0, var(--lift), 0) rotateX(var(--rx)) rotateY(var(--ry));
+  will-change: transform;
+}
+.laptop-lid {
+  position: relative;
+  transform-style: preserve-3d;
+  transform-origin: 50% 100%;
+  transform: rotateX(var(--lid));
+  border-radius: 14px 14px 4px 4px;
+  background: var(--laptop-shell);
+  padding: 1.6% 1.6% 2.6%;
+  box-shadow: inset 0 0 0 1px var(--laptop-shell-edge);
+}
+.laptop-screen {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--bg-canvas);
+  aspect-ratio: 16 / 10;
+  backface-visibility: hidden;
+}
+/* The lid's outer cover, seen while it is closing. */
+.laptop-cover {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px 14px 4px 4px;
+  background: linear-gradient(160deg, var(--laptop-cover-hi), var(--laptop-shell) 55%, var(--laptop-shell-edge));
+  box-shadow: inset 0 0 0 1px var(--laptop-cover-hi);
+  transform: rotateY(180deg) translateZ(1px);
+  backface-visibility: hidden;
+}
+/* A small gold mark on the closed lid. */
+.laptop-cover::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 28px 4px var(--accent-soft);
+  transform: translate(-50%, -50%);
+}
+/* The keyboard deck lies flat, hinged to the bottom edge of the lid. */
+.laptop-deck {
+  position: absolute;
+  left: -3%;
+  right: -3%;
+  top: 100%;
+  height: 62%;
+  transform-origin: 50% 0;
+  transform: rotateX(90deg);
+  border-radius: 4px 4px 18px 18px;
+  background:
+    radial-gradient(40% 18% at 50% 88%, var(--laptop-key), transparent 70%),
+    repeating-linear-gradient(90deg, transparent 0 5.6%, rgb(0 0 0 / 0.07) 5.6% 6%),
+    repeating-linear-gradient(0deg, transparent 0 11%, rgb(0 0 0 / 0.07) 11% 12%),
+    var(--laptop-deck);
+  box-shadow: inset 0 0 0 1px var(--laptop-shell-edge);
+}
+/* The deck's front edge gives the base some thickness. */
+.laptop-deck::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 10px;
+  border-radius: 0 0 18px 18px;
+  background: var(--laptop-shell-edge);
+  transform-origin: 50% 100%;
+  transform: rotateX(-90deg);
+}
+/* Soft contact shadow under the machine. */
+.laptop-shadow {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: -26%;
+  height: 26%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.45), transparent);
+  transform: translateZ(-60px);
+  filter: blur(6px);
+}
+/* Authored at a fixed size, scaled to the screen (--s set by JS). */
+.screen-canvas {
+  width: 1000px;
+  height: 625px;
+  transform-origin: 0 0;
+  transform: scale(var(--s, 0.6));
+}
+/* Panels that float in front of the screen. */
+.depth-panel {
+  transform: translate3d(var(--dx, 0), var(--dy, 0), var(--z, 0px));
+  transition:
+    transform 700ms var(--m-ease-out),
+    opacity 500ms var(--m-ease-out);
+}
+
+/* ---------------------------------------------- problem: depth fragments */
+
+.depth-stage {
+  perspective: 900px;
+  perspective-origin: 30% 40%;
+}
+
+/* ------------------------------------------------- ecosystem: data packet */
+
+@keyframes c-packet {
+  from {
+    transform: translate3d(calc(var(--from) * 100%), 0, 0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(calc(var(--to) * 100%), 0, 0);
+    opacity: 0;
+  }
+}
+.packet-track {
+  animation: c-packet 700ms var(--m-ease-in-out) both;
+}
+
+/* ------------------------------------------------------ risk: gauge */
+
+.gauge-arc {
+  transition: stroke-dashoffset 500ms var(--m-ease-out), stroke 300ms var(--m-ease-out);
+}
+.gauge-needle {
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+  transition: transform 500ms var(--m-ease-spring);
+}
+
+/* ------------------------------------------- membership: tilt + spotlight */
+
+.tilt-reveal [data-reveal][data-shown='false'] {
+  transform: perspective(1400px) rotateX(16deg) translate3d(0, 36px, 0);
+  opacity: 0;
+}
+/* A soft light that follows the pointer across a plan card (fine pointers; --mx/--my set by JS). */
+.plan-spot {
+  background: radial-gradient(340px circle at var(--mx, 50%) var(--my, -20%), var(--accent-soft), transparent 70%);
+  opacity: 0;
+  transition: opacity var(--m-base) var(--m-ease-out);
+}
+.plan-card:hover .plan-spot {
+  opacity: 1;
+}
+
+/* --------------------------------------------- assistant: violet scene */
+
+.violet-scene {
+  background: var(--violet-scene);
+}
+/* Reply blocks arrive one by one (data-play on an ancestor gates them). */
+.reply-block {
+  animation: m-fade-rise-blur var(--m-slow) var(--m-ease-out) var(--at, 0ms) both;
+}
+[data-play='false'] .reply-block {
+  animation-play-state: paused;
+}
+/* Typing indicator before the reply (finite: three cycles). */
+@keyframes c-typing {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.typing-dot {
+  animation: c-typing 900ms ease-in-out calc(var(--i) * 150ms) 3;
+}
+@keyframes c-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+.typing {
+  animation: c-out var(--m-fast) var(--m-ease-out) var(--at, 0ms) both;
+}
+[data-play='false'] .typing,
+[data-play='false'] .typing-dot {
+  animation-play-state: paused;
+}
+
+/* ------------------------------------------------ reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .now-pulse,
+  .packet-track,
+  .typing-dot {
+    animation: none !important;
+  }
+  .reply-block {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .tilt-reveal [data-reveal][data-shown='false'] {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  .laptop {
+    transform: rotateX(-8deg) rotateY(-10deg) !important;
+  }
+  .laptop-lid {
+    transform: none !important;
+  }
+}

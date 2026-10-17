@@ -63,3 +63,12 @@ These are genuine, current limitations. None of them is hidden in the UI.
 | 35 | Cross-browser motion not verified | Chrome only. View transitions degrade to instant navigation where unsupported. |
 | 36 | `sitemap.xml` needs `VITE_SITE_URL` | Not emitted without a real production origin |
 | 37 | Pinned sequences only at ≥ 1024 × 600 | Smaller and touch screens get static layouts by design |
+
+## Added in round 5
+
+| # | Item | Notes |
+| --- | --- | --- |
+| 38 | Background footage is licensed stock, not product footage | Coverr and Mixkit (Free licence) clips, self-hosted in `public/media/`. The charts visible in the footage are not the platform's data. See CINEMATIC_MOTION_IMPLEMENTATION.md §4. |
+| 39 | Autoplay can be refused | iOS Low Power Mode and some data savers block muted autoplay; the poster stays. Not checked on a physical device. |
+| 40 | 3D laptop and masks verified in Chrome only | `mask-composite`, `preserve-3d` and view transitions are not checked in Safari or Firefox. |
+| 41 | Text in the turning laptop can rasterise softly | Crisp at rest; a CSS-3D limitation. |

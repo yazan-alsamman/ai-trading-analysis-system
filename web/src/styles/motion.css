@@ -292,7 +292,8 @@
 .fragment-label {
   border-color: var(--line-strong);
   border-style: dashed;
-  background: transparent;
+  /* A backing so the label never sits directly on the background footage. */
+  background: color-mix(in srgb, var(--bg-canvas) 82%, transparent);
   transition:
     background-color var(--m-base) var(--m-ease-out),
     border-color var(--m-base) var(--m-ease-out);
@@ -409,6 +410,17 @@
 ::view-transition-group(auth-card) {
   animation-duration: 360ms;
   animation-timing-function: var(--m-ease-out);
+}
+/* The selected plan card morphs into the plan summary on sign-up (and back). */
+::view-transition-group(selected-plan) {
+  animation-duration: 460ms;
+  animation-timing-function: var(--m-ease-out);
+}
+::view-transition-old(selected-plan),
+::view-transition-new(selected-plan) {
+  height: 100%;
+  object-fit: cover;
+  overflow: clip;
 }
 
 /* ------------------------------------------------ reduced motion */

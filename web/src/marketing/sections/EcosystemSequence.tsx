@@ -20,6 +20,9 @@ export function EcosystemSequence() {
   const [picked, setPicked] = useState(0);
   const active = cinematic ? scrolled : picked;
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  // Where the data packet travels from/to (adjusted during render when the module changes).
+  const [trail, setTrail] = useState({ from: active, to: active });
+  if (trail.to !== active) setTrail({ from: trail.to, to: active });
 
   const select = (i: number) => {
     if (cinematic && outer.current) {
@@ -96,7 +99,7 @@ export function EcosystemSequence() {
 
       {/* Connector + preview */}
       <div className="flex min-w-0 flex-col gap-5">
-        <div aria-hidden className="relative hidden h-6 md:block">
+        <div aria-hidden className="relative hidden h-6 overflow-hidden md:block">
           <span className="absolute top-1/2 right-3 left-3 h-px bg-line" />
           <span className="absolute top-1/2 left-3 h-px origin-left bg-accent transition-transform duration-500 ease-[var(--m-ease-out)]" style={{ right: '0.75rem', transform: `scaleX(${active / (COUNT - 1)})` }} />
           {MODULES.map((m, i) => (
@@ -110,6 +113,16 @@ export function EcosystemSequence() {
             className="absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent/60 transition-[left] duration-500 ease-[var(--m-ease-out)]"
             style={{ left: `calc(0.75rem + (100% - 1.5rem) * ${active / (COUNT - 1)})` }}
           />
+          {/* A data packet carries the previous module's result to the next one. */}
+          {trail.from !== trail.to && (
+            <span
+              key={`${trail.from}-${trail.to}`}
+              className="packet-track absolute top-1/2 right-3 left-3 h-0"
+              style={{ '--from': trail.from / (COUNT - 1), '--to': trail.to / (COUNT - 1) } as CSSProperties}
+            >
+              <span className="absolute -top-[3px] left-0 h-1.5 w-6 -translate-x-1/2 rounded-full bg-accent shadow-[0_0_14px_var(--accent)]" />
+            </span>
+          )}
         </div>
         <div className="relative h-[440px] sm:h-[460px]">
           {MODULE_PREVIEWS.map((Preview, i) => (
@@ -140,7 +153,7 @@ export function EcosystemSequence() {
   return (
     <section id="platform" data-section aria-labelledby="platform-title" className="border-b border-line">
       <div className="mx-auto max-w-[1240px] px-5 pt-24 pb-10 sm:px-8">
-        <p className="eyebrow mb-3">02 · The platform</p>
+        <p className="eyebrow mb-3">03 · The platform</p>
         <RevealText as="h2" id="platform-title" className="display text-d3 text-fg sm:text-d2" lines={['Seven modules.', <em key="e">One research workflow.</em>]} />
         <Reveal as="p" delay={150} className="mt-4 max-w-2xl text-md text-fg-2">
           Each module answers one question on the way from market noise to a decision you can justify — and hands its result to the next.

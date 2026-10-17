@@ -1,11 +1,23 @@
 import { ArrowRight, Plus } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useRef, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { useServices } from '@/app/contexts';
 import { buttonClasses } from '@/components/ui/buttonClasses';
 import { cn } from '@/lib/cn';
+import { CinematicVideo } from '@/motion/CinematicVideo';
 import { Reveal, RevealText } from '@/motion/Reveal';
+import { useInView } from '@/motion/runtime';
 import type { FaqItem } from '../content';
+import { FOOTAGE } from '../media';
+import { buildShowcase } from '../showcase';
+
+/** The simulated close series as one full-width line (decorative). */
+function closingLine(): string {
+  const closes = buildShowcase().candles.map((c) => c.close);
+  const lo = Math.min(...closes);
+  const hi = Math.max(...closes);
+  return closes.map((v, i) => `${i ? 'L' : 'M'}${((i / (closes.length - 1)) * 1200).toFixed(1)} ${(150 - ((v - lo) / (hi - lo || 1)) * 130).toFixed(1)}`).join(' ');
+}
 
 /** Accessible accordion (buttons + aria-expanded), animated with grid rows. */
 export function Faq({ items, title = 'Questions, answered plainly.', eyebrow = '08 · FAQ', id = 'faq' }: { items: FaqItem[]; title?: string; eyebrow?: string; id?: string }) {
@@ -50,11 +62,38 @@ export function Faq({ items, title = 'Questions, answered plainly.', eyebrow = '
   );
 }
 
+/**
+ * Closing scene: a trader at the screen (licensed footage), the simulated price
+ * line drawing itself across the full width, and the call to action on a
+ * canvas-coloured pool so the copy stays legible over the video.
+ */
 export function FinalCta() {
   const { source } = useServices();
+  const lineRef = useRef<HTMLDivElement>(null);
+  const lineIn = useInView(lineRef, { threshold: 0.3 });
   return (
-    <section aria-labelledby="final-title" className="atmosphere relative overflow-hidden border-b border-line">
-      <div className="relative mx-auto flex max-w-[1240px] flex-col items-center px-5 py-28 text-center sm:px-8">
+    <section aria-labelledby="final-title" className="relative isolate overflow-hidden border-b border-line">
+      <div aria-hidden className="footage-band footage-dim pointer-events-none absolute inset-0 -z-10">
+        <CinematicVideo {...FOOTAGE.closing} />
+        <div className="footage-veil absolute inset-0" />
+      </div>
+      <div aria-hidden className="footage-pool pointer-events-none absolute inset-0 -z-10" />
+      <div ref={lineRef} aria-hidden data-play={lineIn} className="pointer-events-none absolute inset-x-0 bottom-6 -z-10">
+        <svg viewBox="0 0 1200 160" preserveAspectRatio="none" className="h-28 w-full sm:h-36">
+          <path
+            d={closingLine()}
+            fill="none"
+            pathLength={1}
+            vectorEffect="non-scaling-stroke"
+            className="m-draw stroke-accent"
+            strokeOpacity="0.7"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+            style={{ '--at': '200ms', '--dur': '2600ms', '--len': 1 } as CSSProperties}
+          />
+        </svg>
+      </div>
+      <div className="relative mx-auto flex max-w-[1240px] flex-col items-center px-5 pt-32 pb-44 text-center sm:px-8">
         <p className="eyebrow mb-4">Next step</p>
         <RevealText as="h2" id="final-title" className="display text-d2 text-fg sm:text-d1" lines={['Start with', <em key="e">the evidence.</em>]} />
         <Reveal as="p" delay={180} className="mt-5 max-w-xl text-md text-fg-2">

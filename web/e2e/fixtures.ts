@@ -26,6 +26,24 @@ export async function useTheme(page: Page, theme: Theme): Promise<void> {
   }, theme);
 }
 
+/**
+ * Scroll a pinned scene to a given progress (0–1) of its scroll distance. The
+ * pinned element is the section itself or the descendant with an `h-[Nvh]` height.
+ */
+export async function scrollSequence(page: Page, id: string, progress: number): Promise<void> {
+  await page.evaluate(
+    ([sid, p]) => {
+      const sec = document.getElementById(sid);
+      if (!sec) throw new Error(`No section #${sid}`);
+      const tall = [sec, ...Array.from(sec.querySelectorAll<HTMLElement>('div'))].find((e) => /h-\[\d+vh\]/.test(e.className)) ?? sec;
+      const top = tall.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(0, top + p * Math.max(0, tall.offsetHeight - window.innerHeight));
+    },
+    [id, progress] as const,
+  );
+  await page.waitForTimeout(500);
+}
+
 /** Wait until loading skeletons are gone. */
 export async function settle(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle');

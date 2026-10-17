@@ -5,8 +5,10 @@ import { SourceTag } from '@/components/ui/SourceTag';
 import { getInstrument } from '@/domain/instruments';
 import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent, formatRiskReward } from '@/lib/format';
+import { CinematicVideo } from '@/motion/CinematicVideo';
 import { Reveal, RevealText } from '@/motion/Reveal';
 import { useInView } from '@/motion/runtime';
+import { FOOTAGE } from '../media';
 import { buildShowcase, SHOWCASE_SYMBOL, SHOWCASE_TIMEFRAME } from '../showcase';
 import { buildDemoPredictionHistory } from '@/fixtures/predictions';
 
@@ -16,6 +18,14 @@ const DEFINITIONS = [
   ['Calibration', 'Predictions grouped by stated probability and compared with how often they came true.'],
   ['Realised R', 'Result per prediction in units of risk: + reward : risk at the target, −1 at the stop.'],
 ] as const;
+
+/** Reliability diagram geometry (viewBox units). */
+const RX0 = 40;
+const RX1 = 312;
+const RY0 = 12;
+const RY1 = 172;
+const rx = (v: number) => RX0 + v * (RX1 - RX0);
+const ry = (v: number) => RY1 - v * (RY1 - RY0);
 
 const NEVER = ['Win-rate or profit promises', 'Testimonials or member counts', 'Backtests presented as live results', 'Probabilities without definitions'];
 
@@ -45,9 +55,15 @@ export function EvidenceSection() {
   const bins = s.stats.calibration.filter((b) => b.count > 0);
 
   return (
-    <section id="methodology" data-section aria-labelledby="evidence-title" className="border-b border-line">
+    <section id="methodology" data-section aria-labelledby="evidence-title" className="relative isolate overflow-hidden border-b border-line">
+      {/* Footage: notes being written by hand — the method, not a result. */}
+      <div aria-hidden className="footage-band footage-dim pointer-events-none absolute inset-x-0 top-0 -z-10 h-[620px]">
+        <CinematicVideo {...FOOTAGE.method} />
+        <div className="footage-veil absolute inset-0" />
+        <div className="absolute inset-0 bg-gradient-to-r from-canvas via-canvas/85 to-canvas/10" />
+      </div>
       <div className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8">
-        <p className="eyebrow mb-3">06 · Performance &amp; methodology</p>
+        <p className="eyebrow mb-3">08 · Performance &amp; methodology</p>
         <RevealText as="h2" id="evidence-title" className="display max-w-3xl text-d3 text-fg sm:text-d2" lines={['Don’t trust a signal.', <em key="e">Inspect it.</em>]} />
         <Reveal as="p" delay={150} className="mt-4 max-w-2xl text-md text-fg-2">
           Every result can be opened from its one-line summary into the evidence behind it: where it came from, when, why, what it cannot see, what it means for your money,
@@ -157,22 +173,58 @@ export function EvidenceSection() {
           <div className="flex flex-col gap-6">
             <Reveal delay={100} className="rounded-2xl border border-line bg-surface p-6">
               <p className="text-md font-semibold text-fg">Calibration</p>
-              <p className="mt-1 text-xs text-fg-3">For each probability band: what the model said (violet) vs what happened (grey). Simulated history.</p>
-              <div ref={chartRef} data-play={chartIn} className="mt-5 flex h-44 items-end gap-2" aria-hidden>
-                {bins.map((b, i) => (
-                  <div key={b.from} className="relative flex h-full flex-1 flex-col justify-end">
-                    <div className="m-grow-y absolute inset-x-0 bottom-0 origin-bottom rounded-t-sm bg-forecast/30" style={{ height: `${b.meanPredicted * 100}%`, '--at': `${i * 60}ms`, transformOrigin: 'bottom' } as CSSProperties} />
-                    <div
-                      className="m-grow-y absolute inset-x-1.5 bottom-0 origin-bottom rounded-t-sm bg-fg-3"
-                      style={{ height: `${b.observedRate * 100}%`, '--at': `${200 + i * 60}ms`, transformOrigin: 'bottom' } as CSSProperties}
+              <p className="mt-1 text-xs text-fg-3">
+                Each point is a probability band: what the model said (across) against how often it came true (up). On the diagonal, the stated probabilities were
+                right. Simulated history.
+              </p>
+              <div ref={chartRef} data-play={chartIn} className="mt-4">
+                <svg viewBox="0 0 320 200" aria-hidden className="h-auto w-full">
+                  {/* Axes */}
+                  <path d={`M${RX0} ${RY0} L${RX0} ${RY1} L${RX1} ${RY1}`} fill="none" pathLength={1} className="m-draw stroke-line-strong" strokeWidth="1" style={{ '--at': '0ms', '--dur': '700ms', '--len': 1 } as CSSProperties} />
+                  {[0, 0.5, 1].map((v) => (
+                    <g key={v} className="m-fade" style={{ '--at': '300ms' } as CSSProperties}>
+                      <text x={rx(v)} y={RY1 + 14} fontSize="9" textAnchor="middle" className="num fill-fg-3">
+                        {v * 100} %
+                      </text>
+                      <text x={RX0 - 6} y={ry(v) + 3} fontSize="9" textAnchor="end" className="num fill-fg-3">
+                        {v * 100} %
+                      </text>
+                    </g>
+                  ))}
+                  <text x={(RX0 + RX1) / 2} y={RY1 + 26} fontSize="9" textAnchor="middle" className="fill-fg-3">
+                    stated probability
+                  </text>
+                  {/* Perfect calibration */}
+                  <path d={`M${rx(0)} ${ry(0)} L${rx(1)} ${ry(1)}`} fill="none" className="m-fade stroke-fg-3" strokeWidth="1" strokeDasharray="3 4" style={{ '--at': '500ms' } as CSSProperties} />
+                  {/* Observed */}
+                  <path
+                    d={bins.map((b, i) => `${i ? 'L' : 'M'}${rx(b.meanPredicted).toFixed(1)} ${ry(b.observedRate).toFixed(1)}`).join(' ')}
+                    fill="none"
+                    pathLength={1}
+                    className="m-draw stroke-forecast"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                    style={{ '--at': '800ms', '--dur': '1100ms', '--len': 1 } as CSSProperties}
+                  />
+                  {bins.map((b, i) => (
+                    <circle
+                      key={b.from}
+                      cx={rx(b.meanPredicted)}
+                      cy={ry(b.observedRate)}
+                      r={Math.min(7, 2.5 + Math.sqrt(b.count))}
+                      className="m-pop fill-forecast"
+                      fillOpacity="0.85"
+                      style={{ '--at': `${850 + i * 140}ms` } as CSSProperties}
                     />
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex justify-between text-xs text-fg-3">
-                <span className="num">{formatPercent(bins[0]?.from)}</span>
-                <span>stated probability</span>
-                <span className="num">{formatPercent(bins[bins.length - 1]?.to)}</span>
+                  ))}
+                </svg>
+                <ul className="sr-only">
+                  {bins.map((b) => (
+                    <li key={b.from}>
+                      Stated {formatPercent(b.from)}–{formatPercent(b.to)}: came true {formatPercent(b.observedRate)} of {b.count} predictions.
+                    </li>
+                  ))}
+                </ul>
               </div>
             </Reveal>
             <Reveal delay={180} className="rounded-2xl border border-line bg-surface p-6">

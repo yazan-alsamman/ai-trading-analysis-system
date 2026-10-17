@@ -7,9 +7,11 @@ import { DirectionBadge } from '@/components/ui/Market';
 import { SourceTag } from '@/components/ui/SourceTag';
 import { getInstrument } from '@/domain/instruments';
 import { formatMoney, formatPct, formatPercent, formatProbabilityBand, formatRiskReward, formatUnits } from '@/lib/format';
+import { CinematicVideo } from '@/motion/CinematicVideo';
 import { RevealText } from '@/motion/Reveal';
-import { useFinePointer, usePointerParallax, useReducedMotion } from '@/motion/runtime';
+import { useFinePointer, usePointerParallax, useReducedMotion, useSingleColumn } from '@/motion/runtime';
 import { ShowcaseChart } from '../components/ShowcaseChart';
+import { FOOTAGE } from '../media';
 import { buildShowcase, SHOWCASE_PROFILE, SHOWCASE_SYMBOL, SHOWCASE_TIMEFRAME } from '../showcase';
 
 const PRINCIPLES = ['Observed ≠ projected', 'Every number sourced', 'Risk sized to your limits', 'Never executes trades'];
@@ -27,9 +29,12 @@ function StageCard({ children, className, delay, depth }: { children: React.Reac
 }
 
 /**
- * Hero: editorial headline (line masks) → purpose → the market visual builds
- * itself (observed → NOW → model levels → projection) → product cards → CTAs.
- * Timed in CSS from first paint; pointer parallax on fine pointers only.
+ * Hero: real footage of a trading desk (licensed, muted loop) dissolves in
+ * behind the editorial headline; the platform's chart then builds itself over
+ * it (grid and axis → history line → swing points → NOW → levels →
+ * projection) and the product cards float in. Afterwards a crosshair steps
+ * through the simulated history. Video, crosshair and glow pause off-screen;
+ * reduced motion and Save-Data get the poster and the finished chart.
  */
 export function Hero() {
   const s = buildShowcase();
@@ -37,14 +42,15 @@ export function Hero() {
   const { source } = useServices();
   const reduced = useReducedMotion();
   const fine = useFinePointer();
+  const column = useSingleColumn();
   const stage = useRef<HTMLDivElement>(null);
   usePointerParallax(stage, fine && !reduced);
 
-  // Pause the one ambient loop once the hero has scrolled away.
-  const glow = useRef<HTMLDivElement>(null);
+  // Pause the ambient loops (glow, NOW pulse, crosshair) once the hero has scrolled away.
+  const section = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(true);
   useEffect(() => {
-    const el = glow.current;
+    const el = section.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
     const io = new IntersectionObserver(([e]) => setVisible(!!e?.isIntersecting));
     io.observe(el);
@@ -55,9 +61,23 @@ export function Hero() {
   const top = [...o.factors].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)).slice(0, 2);
 
   return (
-    <section aria-labelledby="hero-title" className="atmosphere relative overflow-hidden border-b border-line pt-28 pb-16 lg:min-h-[100svh] lg:pt-32">
+    <section
+      ref={section}
+      aria-labelledby="hero-title"
+      data-paused={!visible}
+      className="atmosphere relative isolate overflow-hidden border-b border-line pt-[46svh] pb-16 lg:min-h-[100svh] lg:pt-32"
+    >
+      {/* Footage: a right-hand dissolve beside the two-column layout; a band above the copy on phones and tablets. */}
       <div
-        ref={glow}
+        aria-hidden
+        data-testid="hero-footage"
+        className={`m-fade pointer-events-none absolute -z-10 ${column ? 'footage-card inset-x-0 top-0 h-[50svh]' : 'footage-right inset-y-0 right-0 w-[min(74%,1500px)]'}`}
+        style={{ '--at': '0ms', '--m-slow': '1600ms' } as CSSProperties}
+      >
+        <CinematicVideo {...FOOTAGE.hero} priority phone="video" />
+        <div className="footage-veil absolute inset-0" />
+      </div>
+      <div
         aria-hidden
         data-paused={!visible}
         className="atmos-drift pointer-events-none absolute -top-40 left-1/2 h-[720px] w-[1100px] -translate-x-1/2 rounded-full opacity-70"
@@ -107,7 +127,7 @@ export function Hero() {
         {/* Product stage */}
         <div ref={stage} className="relative">
           <div className="parallax" style={{ '--depth': 0.35 } as CSSProperties}>
-            <figure className="m-stage overflow-hidden rounded-2xl border border-line-strong bg-surface/90 shadow-float" style={at(650)}>
+            <figure className="m-stage overflow-hidden rounded-2xl border border-line-strong bg-surface/[0.93] shadow-float" style={at(650)}>
               <div className="flex items-center gap-2 border-b border-line px-4 py-3">
                 <span aria-hidden className="flex gap-1.5">
                   {[0, 1, 2].map((i) => (
@@ -134,6 +154,7 @@ export function Hero() {
                   precision={inst.pricePrecision}
                   variant="line"
                   mode="intro"
+                  scan={visible && !reduced}
                   label={`Simulated ${inst.display} ${SHOWCASE_TIMEFRAME} price history up to the NOW line, then the demo model's levels and its projected path, drawn dashed to the right of NOW.`}
                 />
               </div>
