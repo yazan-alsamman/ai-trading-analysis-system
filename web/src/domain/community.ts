@@ -13,8 +13,15 @@ export interface NewsItem {
   source: string;
   publishedAt: number;
   symbols: InstrumentSymbol[];
-  impact: NewsImpact;
+  /** Editorial impact rating. The backend news service does not provide one, so it may be absent. */
+  impact?: NewsImpact;
+  /** Sentiment from the backend's NLP model (FinBERT), when it has scored the article. */
+  sentiment?: { label: string; score: number | null };
+  /** Link to the original article (backend news only). */
+  url?: string;
   commentCount: number;
+  /** False when the source does not support comments (backend news has none). Default: true. */
+  commentsEnabled?: boolean;
   provenance: Provenance;
 }
 
@@ -50,8 +57,17 @@ export interface Expert {
   headline: string;
   specialties: string[];
   markets: InstrumentSymbol[];
+  /** Market categories the expert covers (backend: crypto, forex, gold…). */
+  marketCategories?: string[];
   languages: string[];
-  availability: ExpertAvailability;
+  /** Presence (demo only). The backend reports chat availability instead. */
+  availability?: ExpertAvailability;
+  /** Backend: whether the expert accepts chat, and how fast they usually answer. */
+  chatEnabled?: boolean;
+  responseTimeHint?: string | null;
+  /** Backend: the expert's cheapest subscription plan (set by the expert), and whether you subscribe. */
+  cheapestPlan?: { name: string; price: string; currency: string; interval: string; trialDays: number } | null;
+  isSubscribed?: boolean;
   provenance: Provenance;
 }
 

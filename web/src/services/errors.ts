@@ -21,13 +21,16 @@ export class ApiError extends Error {
   readonly status: number | undefined;
   /** Field-level messages (Laravel-style `errors: { field: [msg] }`). */
   readonly fieldErrors: Record<string, string[]>;
+  /** The backend's `x-request-id`, for support (shown, never the raw body). */
+  readonly requestId: string | undefined;
 
-  constructor(kind: ApiErrorKind, message: string, options: { status?: number; fieldErrors?: Record<string, string[]>; cause?: unknown } = {}) {
+  constructor(kind: ApiErrorKind, message: string, options: { status?: number; fieldErrors?: Record<string, string[]>; cause?: unknown; requestId?: string } = {}) {
     super(message, { cause: options.cause });
     this.name = 'ApiError';
     this.kind = kind;
     this.status = options.status;
     this.fieldErrors = options.fieldErrors ?? {};
+    this.requestId = options.requestId;
   }
 }
 
@@ -55,7 +58,8 @@ export function userMessage(error: unknown): string {
     case 'unauthorized':
       return 'Your session has expired. Please sign in again.';
     case 'forbidden':
-      return 'Your account does not have access to this.';
+      // The backend explains why (e.g. chat needs a subscription); its 4xx details are user-facing.
+      return error.message || 'Your account does not have access to this.';
     case 'not_found':
       return 'The requested item could not be found.';
     case 'validation':

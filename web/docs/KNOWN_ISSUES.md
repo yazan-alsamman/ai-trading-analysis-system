@@ -83,3 +83,13 @@ These are genuine, current limitations. None of them is hidden in the UI.
 | 45 | Public assistant is the rule-based demo | Same composer as the app, fixed to the simulated showcase setup; no LLM, no network |
 | 46 | Market context uses sample items | The backend now ingests news (`GET /news`), but the web client is not connected to it yet |
 | 47 | Demo market follows real FX hours | On weekends the feed is "Market closed" and no signals are live. E2E tests that need an open market pin the clock to a weekday. |
+
+## Added in the backend integration (18 October 2026)
+
+| # | Item | Notes |
+| --- | --- | --- |
+| 23 | ~~Access tokens are not refreshed~~ | **Resolved:** proactive and on-401 refresh, single-flight, cross-tab coordinated (`services/api/session.ts`). |
+| 48 | AI model output not exposed by the backend | Backend mode shows strategy-engine signals and "Not available yet" for the model panels (gap G1). |
+| 49 | Not verified against a running backend | Contract tests use recorded real responses, and the backend-mode bundle is browser-tested against a contract mock; no live stack was available (gap E1). |
+| 50 | Backend prices may be synthetic | The API does not say whether candles are real or seeded demo data; the UI says "Backend feed" (gap G10). |
+| 51 | Tokens in `localStorage`; WS token in the URL | Backend's documented design; needs HTTPS in production (gap E3). HttpOnly refresh cookie recommended later. |

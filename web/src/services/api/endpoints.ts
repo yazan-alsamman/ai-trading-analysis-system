@@ -1,43 +1,56 @@
 /**
- * REST endpoints, relative to VITE_API_BASE_URL (default …/api/v1).
+ * REST endpoints of the FastAPI backend, relative to VITE_API_BASE_URL (…/api/v1).
  *
- * `auth` matches the FastAPI backend in this monorepo (backend/app/api/v1).
- * Everything else is still a PROPOSAL, not yet implemented by the backend.
- * Paths are kept in this single file so aligning them is a one-file change.
- * Status of each endpoint is tracked in docs/API_INTEGRATION.md.
+ * Every path below exists in the committed contract (docs/api/openapi.json,
+ * validated in CI) and was checked against backend/app/api/v1. Capabilities
+ * the backend does not offer are NOT listed here; their service methods
+ * report `not_available` instead (docs/BACKEND_INTEGRATION_GAP_ANALYSIS.md).
  */
+const id = (v: string) => encodeURIComponent(v);
+
 export const endpoints = {
   auth: {
-    login: '/auth/login', // implemented (backend Y02)
-    register: '/auth/register', // implemented
-    refresh: '/auth/refresh', // implemented, not yet used by the client
-    logout: '/auth/logout', // implemented — body { refresh_token }
-    me: '/users/me', // implemented
+    login: '/auth/login', // → TokenPair
+    register: '/auth/register', // → UserRead (no token)
+    refresh: '/auth/refresh', // rotates the refresh token (reuse ⇒ all sessions revoked)
+    logout: '/auth/logout', // 204, body { refresh_token }
+  },
+  users: {
+    me: '/users/me', // GET UserRead · PATCH { full_name }
+    password: '/users/me/password', // POST { current_password, new_password } → 204
   },
   market: {
-    candles: '/market/candles', // ?symbol=EURUSD&timeframe=15m&limit=500
-    quotes: '/market/quotes',
+    instruments: '/market/instruments', // Page<InstrumentRead>
+    candles: (instrumentId: string) => `/market/instruments/${id(instrumentId)}/candles`, // ?timeframe=&limit=
   },
-  opportunities: {
-    list: '/opportunities', // ?symbol=&timeframe=
-    latest: '/opportunities/latest', // ?symbol=&timeframe=
+  signals: {
+    list: '/signals', // strategy-engine signals, Page<SignalRead>
   },
-  predictions: {
-    history: '/predictions/history',
+  risk: {
+    profile: '/me/risk-profile', // GET / PUT
+    positionSize: '/risk/position-size', // POST → server plan
   },
   alerts: {
-    list: '/alerts/price',
-    item: (id: string) => `/alerts/price/${encodeURIComponent(id)}`,
-    opportunityPreferences: '/alerts/opportunity-preferences',
+    list: '/me/price-alerts', // GET Page · POST create
+    item: (alertId: string) => `/me/price-alerts/${id(alertId)}`, // PATCH / DELETE
   },
-  assistant: {
-    reply: '/assistant/replies', // POST { messages, context } — provider called server-side
+  notifications: {
+    list: '/me/notifications',
+    readAll: '/me/notifications/read-all',
+    read: (nid: string) => `/me/notifications/${id(nid)}/read`,
   },
-  community: {
-    news: '/news',
-    newsComments: (id: string) => `/news/${encodeURIComponent(id)}/comments`,
-    posts: '/posts',
-    experts: '/experts',
-    conversation: (expertId: string) => `/experts/${encodeURIComponent(expertId)}/messages`,
+  news: {
+    list: '/news', // Page<ArticleRead>
+  },
+  posts: {
+    list: '/posts', // GET feed · POST create
+    comments: (postId: string) => `/posts/${id(postId)}/comments`,
+  },
+  experts: {
+    list: '/experts', // Page<ExpertCard>
+  },
+  chat: {
+    open: '/conversations', // POST { expert_id } → ConversationRead (201 new / 200 existing)
+    messages: (conversationId: string) => `/conversations/${id(conversationId)}/messages`,
   },
 } as const;

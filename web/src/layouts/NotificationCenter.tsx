@@ -1,4 +1,4 @@
-import { Bell, BellRing, CheckCheck, Info, Sparkles, Trash2 } from 'lucide-react';
+import { Bell, BellRing, CheckCheck, Info, Radar, Sparkles, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { useServices } from '@/app/contexts';
 import { notificationStore, useNotifications, type AppNotification } from '@/app/notifications';
@@ -8,7 +8,7 @@ import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/cn';
 import { formatRelative } from '@/lib/format';
 
-const KIND_ICON = { price_alert: BellRing, opportunity: Sparkles, system: Info } as const;
+const KIND_ICON = { price_alert: BellRing, opportunity: Sparkles, signal: Radar, system: Info } as const;
 
 function Item({ n, onOpen }: { n: AppNotification; onOpen: () => void }) {
   const Icon = KIND_ICON[n.kind];

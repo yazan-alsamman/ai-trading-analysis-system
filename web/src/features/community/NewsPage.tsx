@@ -38,17 +38,21 @@ export function NewsPage() {
   if (res.status === 'error' && !res.data) return <ErrorState error={res.error} onRetry={res.reload} title="Could not load news" />;
   if (!res.data?.length) return <EmptyState title="No news right now" description="New items appear here as the news service publishes them." />;
 
+  // Backend news has no impact rating (it has model sentiment instead): the impact filter only appears when ratings exist.
+  const hasImpact = res.data.some((n) => n.impact);
   const items = res.data.filter((n) => (impact === 'all' || n.impact === impact) && (symbol === 'all' || n.symbols.some((s) => s === symbol)));
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Select aria-label="Filter by impact" value={impact} onChange={(e) => setImpact(e.target.value as 'all' | NewsImpact)} className="h-8 w-40">
-          <option value="all">All impact levels</option>
-          <option value="high">High impact</option>
-          <option value="medium">Medium impact</option>
-          <option value="low">Low impact</option>
-        </Select>
+        {hasImpact && (
+          <Select aria-label="Filter by impact" value={impact} onChange={(e) => setImpact(e.target.value as 'all' | NewsImpact)} className="h-8 w-40">
+            <option value="all">All impact levels</option>
+            <option value="high">High impact</option>
+            <option value="medium">Medium impact</option>
+            <option value="low">Low impact</option>
+          </Select>
+        )}
         <Select aria-label="Filter by instrument" value={symbol} onChange={(e) => setSymbol(e.target.value)} className="h-8 w-40">
           <option value="all">All instruments</option>
           {INSTRUMENTS.map((i) => (
@@ -67,7 +71,15 @@ export function NewsPage() {
         return (
           <article key={n.id} aria-labelledby={`news-${n.id}`} className="rounded-lg border border-line bg-surface px-4 py-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-3">
-              <Badge tone={IMPACT[n.impact].tone}>{IMPACT[n.impact].label}</Badge>
+              {n.impact && <Badge tone={IMPACT[n.impact].tone}>{IMPACT[n.impact].label}</Badge>}
+              {n.sentiment && (
+                <Badge
+                  tone={n.sentiment.label === 'positive' ? 'up' : n.sentiment.label === 'negative' ? 'down' : 'neutral'}
+                  title="Sentiment scored by the backend's language model (FinBERT). An automated reading of the text, not advice."
+                >
+                  {n.sentiment.label} sentiment{n.sentiment.score !== null ? ` · ${n.sentiment.score.toFixed(2)}` : ''}
+                </Badge>
+              )}
               <span>{n.source}</span>
               <span aria-hidden>·</span>
               <time dateTime={new Date(n.publishedAt).toISOString()} title={formatDateTime(n.publishedAt, timeZone)}>
@@ -77,11 +89,18 @@ export function NewsPage() {
             <h2 id={`news-${n.id}`} className="mt-1.5 text-base font-semibold text-fg">
               {n.title}
             </h2>
-            <p className="mt-1 text-sm text-fg-2">{n.summary}</p>
+            {n.summary && <p className="mt-1 text-sm text-fg-2">{n.summary}</p>}
+            {n.url && /^https?:\/\//i.test(n.url) && (
+              <a href={n.url} target="_blank" rel="noopener noreferrer nofollow" className="mt-1 inline-block text-xs text-fg-2 underline underline-offset-2 hover:text-fg">
+                Read at {n.source}
+                <span className="sr-only"> (opens in a new tab)</span>
+              </a>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {n.symbols.map((s) => (
                 <Badge key={s}>{getInstrument(s).display}</Badge>
               ))}
+              {n.commentsEnabled !== false && (
               <button
                 type="button"
                 aria-expanded={open}
@@ -95,8 +114,9 @@ export function NewsPage() {
                 <MessageSquare aria-hidden className="size-4" />
                 {n.commentCount} {n.commentCount === 1 ? 'comment' : 'comments'}
               </button>
+              )}
             </div>
-            {open && (
+            {open && n.commentsEnabled !== false && (
               <div id={`comments-${n.id}`}>
                 <CommentThread
                   threadId={n.id}

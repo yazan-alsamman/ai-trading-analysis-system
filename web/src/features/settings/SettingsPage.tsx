@@ -18,6 +18,7 @@ import { DEMO_SCENARIOS } from '@/services/demo/scenario';
 import { channelSettingsSchema, type ChannelSettingsForm } from './schemas';
 import { MembershipSettings } from '@/features/membership/MembershipSettings';
 import { WorkspacesSection } from './WorkspacesSection';
+import { AccountSection } from './AccountSection';
 
 function ChannelsSection() {
   const { prefs, setChannels } = usePreferences();
@@ -30,8 +31,22 @@ function ChannelsSection() {
   const submit = handleSubmit((values) => {
     setChannels(values);
     reset(values);
-    notify(source === 'demo' ? 'Channel settings saved in this browser (demo).' : 'Channel settings saved.', 'success');
+    notify('Channel settings saved in this browser (demo).', 'success');
   });
+
+  // Backend mode: delivery is the server's (notification preferences, Telegram linking, push devices).
+  // This browser-only form would not change it, so it is not offered.
+  if (source === 'api')
+    return (
+      <div id="channels" className="scroll-mt-4">
+        <Panel title="Notification channels" meta={<span>Managed by the server</span>}>
+          <p className="text-sm text-fg-2">
+            Alerts are evaluated on the server and appear in the notification centre here. Email, Telegram and push delivery are configured through your server
+            notification preferences, which this web client cannot edit yet.
+          </p>
+        </Panel>
+      </div>
+    );
 
   return (
     <div id="channels" className="scroll-mt-4">
@@ -189,6 +204,8 @@ export function SettingsPage() {
         }
       />
 
+      {source === 'api' && <AccountSection />}
+
       <div id="data-source" className="scroll-mt-4">
         <Panel title="Data source" meta={source === 'demo' ? <Badge tone="demo">Demo mode</Badge> : <Badge tone="info">API mode</Badge>}>
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[180px_1fr]">
@@ -196,13 +213,15 @@ export function SettingsPage() {
             <dd className="text-fg">
               {source === 'demo'
                 ? 'Demo — all prices, AI opportunities, statistics and community content are generated in the browser and labelled “Simulated”.'
-                : 'API — data is loaded from the backend.'}
+                : 'Backend — account, prices, alerts, notifications, news, posts and experts come from the project backend. The AI model’s analysis is not exposed by the backend yet, so those panels say so.'}
             </dd>
             <dt className="text-fg-3">Backend URL</dt>
             <dd className="num break-all text-fg-2">{source === 'api' ? config.apiBaseUrl : 'Not used in demo mode'}</dd>
             <dt className="text-fg-3">Price updates</dt>
             <dd className="text-fg-2">
-              {source === 'demo' ? 'Simulated tick every second while the market is open (Sun 22:00 – Fri 22:00 UTC).' : `Polling every ${config.pricePollMs / 1000}s until a streaming endpoint is available.`}
+              {source === 'demo'
+                ? 'Simulated tick every second while the market is open (Sun 22:00 – Fri 22:00 UTC).'
+                : `Streamed over the backend WebSocket (${config.wsUrl.replace(/\?.*$/, '')}), reconnecting automatically.`}
             </dd>
             <dt className="text-fg-3">Disclaimer</dt>
             <dd className="text-fg-2">

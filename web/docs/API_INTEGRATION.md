@@ -1,5 +1,7 @@
 # API integration
 
+> **Status 18 October 2026:** the web client is now integrated with the real FastAPI contract. The *proposed* endpoints below are kept for history and for the capabilities the backend still lacks; the authoritative description is `BACKEND_INTEGRATION_REPORT.md`.
+
 > **Status (round 3, 16 Oct 2026).** The monorepo backend is **FastAPI** (`backend/`, prefix `/api/v1`). Its **auth endpoints exist**, and the client's API adapter is aligned to them (§3 Auth). Every other endpoint below is still a **PROPOSAL** from the web client, not implemented by the backend.
 >
 > - Paths live in `src/services/api/endpoints.ts`.

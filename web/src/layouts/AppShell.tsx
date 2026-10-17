@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { usePreferences, useServices } from '@/app/contexts';
 import { IconButton } from '@/components/ui/Button';
 import { AlertMonitor } from '@/features/alerts/AlertMonitor';
+import { ServerInboxSync } from '@/features/notifications/ServerInboxSync';
 import { useNoIndex } from '@/hooks/useDocumentMeta';
 import { useOnlineStatus } from '@/hooks/useEnvironment';
 import { useHotkeys } from '@/hooks/useHotkeys';
@@ -172,6 +173,7 @@ export function AppShell() {
       <CommandPalette open={searchOpen} onClose={closeSearch} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <AlertMonitor />
+      <ServerInboxSync />
     </div>
   );
 }

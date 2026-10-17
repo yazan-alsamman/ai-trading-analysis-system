@@ -5,7 +5,9 @@ import type { InstrumentSymbol } from '@/domain/instruments';
 import type { Candle, CandleSeries, FeedStatus, Quote, Timeframe } from '@/domain/market';
 import type { Opportunity } from '@/domain/opportunity';
 import type { PredictionRecord } from '@/domain/predictions';
-import type { LoginInput, RegisterInput, Session } from '@/domain/user';
+import type { StrategySignal } from '@/domain/strategySignals';
+import type { LoginInput, RegisterInput, Session, User } from '@/domain/user';
+import type { AppNotification } from '@/app/notifications';
 import type { DataSource } from './config';
 
 /**
@@ -91,6 +93,59 @@ export interface AssistantService {
   reply(messages: readonly AssistantMessage[], context: AssistantContext, options?: CallOptions): Promise<AssistantReply>;
 }
 
+/** The signed-in account (backend: GET/PATCH /users/me, POST /users/me/password). */
+export interface AccountService {
+  getProfile(options?: CallOptions): Promise<User>;
+  updateProfile(input: { name: string }): Promise<User>;
+  changePassword(input: { currentPassword: string; newPassword: string }): Promise<void>;
+}
+
+/** Server notification inbox (backend: /me/notifications). Demo mode keeps notifications in the browser instead. */
+export interface InboxService {
+  list(options?: CallOptions): Promise<AppNotification[]>;
+  markRead(id: string): Promise<void>;
+  markAllRead(): Promise<void>;
+  /** Called when the server pushes a new notification (WebSocket user topic). */
+  subscribe(onPush: (notification: { title: string; body: string } | null) => void): Unsubscribe;
+}
+
+/** Rule-based strategy-engine signals (backend: GET /signals). Not the AI model's output. */
+export interface StrategySignalService {
+  list(query?: { symbol?: InstrumentSymbol; timeframe?: Timeframe; limit?: number }, options?: CallOptions): Promise<StrategySignal[]>;
+}
+
+/** The subset of the server risk profile the web client edits; the rest of the server config is preserved. */
+export interface ServerRiskProfile {
+  capital: number;
+  currency: string;
+  riskPerTradePct: number | null;
+  dailyLossLimitPct: number | null;
+  template: string | null;
+  updatedAt: number;
+}
+
+/** The server's own sizing of a trade, used as a cross-check of the browser calculation. */
+export interface ServerPositionPlan {
+  quantity: number | null;
+  notional: number | null;
+  riskAmount: number | null;
+  riskPct: number | null;
+  riskReward: number | null;
+  currency: string;
+  barTime: number;
+  invalidReason: string | null;
+}
+
+/** Server risk profile and position sizing (backend: /me/risk-profile, /risk/position-size). */
+export interface RiskProfileService {
+  get(options?: CallOptions): Promise<ServerRiskProfile>;
+  save(input: { capital: number; currency: string; riskPerTradePct: number; dailyLossLimitPct: number }): Promise<ServerRiskProfile>;
+  positionSize(
+    input: { symbol: InstrumentSymbol; timeframe: Timeframe; side: 'buy' | 'sell'; entry: number; stop: number; capital: number; riskPct: number },
+    options?: CallOptions,
+  ): Promise<ServerPositionPlan>;
+}
+
 export interface Services {
   source: DataSource;
   market: MarketDataService;
@@ -99,5 +154,9 @@ export interface Services {
   alerts: AlertService;
   community: CommunityService;
   auth: AuthService;
+  account: AccountService;
+  inbox: InboxService;
+  strategySignals: StrategySignalService;
+  riskProfile: RiskProfileService;
   assistant: AssistantService;
 }

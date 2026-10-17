@@ -45,10 +45,29 @@ function Conversation({ expert, chatAvailable }: { expert: Expert; chatAvailable
     <section aria-label={`Conversation with ${expert.name}`} className="flex min-h-[420px] flex-col rounded-lg border border-line bg-surface">
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
         <h2 className="text-sm font-semibold text-fg">{expert.name}</h2>
-        <Badge tone={AVAILABILITY[expert.availability].tone}>{AVAILABILITY[expert.availability].label}</Badge>
-        <Button size="sm" variant="primary" icon={Lock} className="ml-auto" disabled title="Subscriptions require the backend subscription service.">
-          Subscribe to chat
-        </Button>
+        <ExpertStatus expert={expert} />
+        {expert.isSubscribed ? (
+          <Badge tone="accent" className="ml-auto">
+            Subscribed
+          </Badge>
+        ) : (
+          <span className="ml-auto flex items-center gap-2">
+            {expert.cheapestPlan && (
+              <span className="text-xs text-fg-3">
+                From <span className="num text-fg-2">{expert.cheapestPlan.price} {expert.cheapestPlan.currency}</span> / {expert.cheapestPlan.interval}
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant="primary"
+              icon={Lock}
+              disabled
+              title="Subscribing is not available in the web client yet (the backend's checkout uses demo payments only)."
+            >
+              Subscribe to chat
+            </Button>
+          </span>
+        )}
       </header>
 
       {!chatAvailable && (
@@ -114,6 +133,22 @@ function Conversation({ expert, chatAvailable }: { expert: Expert; chatAvailable
   );
 }
 
+/** Demo: presence. Backend: whether the expert accepts chat (it reports no presence). */
+function ExpertStatus({ expert, className }: { expert: Expert; className?: string }) {
+  if (expert.availability)
+    return (
+      <Badge tone={AVAILABILITY[expert.availability].tone} {...(className ? { className } : {})}>
+        {AVAILABILITY[expert.availability].label}
+      </Badge>
+    );
+  if (expert.chatEnabled === undefined) return null;
+  return (
+    <Badge tone={expert.chatEnabled ? 'accent' : 'neutral'} {...(className ? { className } : {})}>
+      {expert.chatEnabled ? 'Chat open' : 'No chat'}
+    </Badge>
+  );
+}
+
 export function ExpertsPage() {
   const services = useServices();
   const res = useResource('experts', (signal) => services.community.listExperts({ signal }));
@@ -150,13 +185,12 @@ export function ExpertsPage() {
               >
                 <span className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-fg">{e.name}</span>
-                  <Badge tone={AVAILABILITY[e.availability].tone} className="ml-auto">
-                    {AVAILABILITY[e.availability].label}
-                  </Badge>
+                  <ExpertStatus expert={e} className="ml-auto" />
                 </span>
                 <span className="mt-0.5 block text-sm text-fg-2">{e.headline}</span>
                 <span className="mt-2 block text-xs text-fg-3">
-                  {e.specialties.join(' · ')} · {e.languages.join(', ')}
+                  {[...e.specialties, ...(e.marketCategories ?? [])].join(' · ')} · {e.languages.join(', ')}
+                  {e.responseTimeHint ? ` · replies ${e.responseTimeHint}` : ''}
                 </span>
                 <span className="mt-2 flex flex-wrap gap-1">
                   {e.markets.map((s) => (
@@ -168,7 +202,7 @@ export function ExpertsPage() {
           );
         })}
       </ul>
-      {selected && <Conversation key={selected.id} expert={selected} chatAvailable={chatAvailable} />}
+      {selected && <Conversation key={selected.id} expert={selected} chatAvailable={chatAvailable && selected.chatEnabled !== false} />}
     </div>
   );
 }

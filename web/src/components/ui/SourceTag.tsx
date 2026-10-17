@@ -9,7 +9,8 @@ import { Badge, type BadgeTone } from './Badge';
 export type SourceKind = 'live' | 'historical' | 'model' | 'user' | 'demo' | 'unavailable';
 
 const SOURCES: Record<SourceKind, { label: string; icon: LucideIcon; tone: BadgeTone; detail: string }> = {
-  live: { label: 'Live', icon: Radio, tone: 'neutral', detail: 'Verified market data from the connected backend feed.' },
+  // The backend does not state whether an instrument's candles come from a real collector or seeded demo data, so "live" is not claimed.
+  live: { label: 'Backend feed', icon: Radio, tone: 'neutral', detail: 'Data from the project backend. The backend does not yet state whether each instrument is a real market feed or seeded test data.' },
   historical: { label: 'Historical', icon: History, tone: 'neutral', detail: 'Recorded past data. It does not change.' },
   model: { label: 'Model output', icon: Sparkles, tone: 'forecast', detail: 'Produced by the AI model: a probabilistic estimate, not an observed price or a guarantee.' },
   user: { label: 'Your input', icon: SlidersHorizontal, tone: 'accent', detail: 'A parameter you entered. The platform does not verify it.' },

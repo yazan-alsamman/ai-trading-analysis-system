@@ -11,7 +11,7 @@ import { localId } from '@/lib/cn';
 import { readStored, writeStored } from '@/lib/storage';
 import { ApiError } from '../errors';
 import { OpportunityPreferencesSchema, PriceAlertSchema } from '../schemas';
-import type { AlertService, AssistantService, AuthService, CommunityService, MarketDataService, OpportunityService, PredictionService, Services } from '../types';
+import type { AccountService, AlertService, AssistantService, AuthService, CommunityService, InboxService, MarketDataService, OpportunityService, PredictionService, RiskProfileService, Services, StrategySignalService } from '../types';
 import { composeReply, DEMO_ASSISTANT } from './assistant';
 import { DemoMarket } from './demoMarket';
 import { demoList, simulateRequest } from './scenario';
@@ -253,6 +253,38 @@ function demoAssistantService(): AssistantService {
   };
 }
 
+const backendOnly = (what: string) => () => Promise.reject(new ApiError('not_available', `${what} comes from the backend. This app is running on simulated demo data.`));
+
+function demoAccountService(getSession: () => Session | null): AccountService {
+  return {
+    async getProfile() {
+      const s = getSession();
+      if (!s) throw new ApiError('unauthorized', 'Not signed in');
+      return s.user;
+    },
+    async updateProfile({ name }) {
+      const s = getSession();
+      if (!s) throw new ApiError('unauthorized', 'Not signed in');
+      await simulateRequest(undefined, 200);
+      return { ...s.user, name: name.trim() };
+    },
+    changePassword: () => Promise.reject(new ApiError('not_available', 'Demo sessions have no password. Connect the backend to manage a real account.')),
+  };
+}
+
+const demoInboxService = (): InboxService => ({
+  list: backendOnly('The server notification inbox'),
+  markRead: backendOnly('The server notification inbox'),
+  markAllRead: backendOnly('The server notification inbox'),
+  subscribe: () => () => undefined,
+});
+const demoStrategySignals = (): StrategySignalService => ({ list: backendOnly('Strategy-engine signals') });
+const demoRiskProfile = (): RiskProfileService => ({
+  get: backendOnly('The server risk profile'),
+  save: backendOnly('The server risk profile'),
+  positionSize: backendOnly('Server position sizing'),
+});
+
 export function createDemoServices(getSession: () => Session | null): Services {
   const market = new DemoMarket();
   return {
@@ -263,6 +295,10 @@ export function createDemoServices(getSession: () => Session | null): Services {
     alerts: demoAlertService(),
     community: demoCommunityService(getSession),
     auth: demoAuthService(),
+    account: demoAccountService(getSession),
+    inbox: demoInboxService(),
+    strategySignals: demoStrategySignals(),
+    riskProfile: demoRiskProfile(),
     assistant: demoAssistantService(),
   };
 }

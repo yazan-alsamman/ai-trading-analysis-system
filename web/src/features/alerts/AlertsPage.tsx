@@ -156,7 +156,7 @@ export function AlertsPage() {
                     <Td numeric className="text-fg-2">
                       {price === undefined ? '—' : formatPips(a.price - price, inst.pipSize)}
                     </Td>
-                    <Td className="text-fg-2">{a.channels.map((c) => CHANNEL_LABELS[c]).join(', ')}</Td>
+                    <Td className="text-fg-2">{services.source === 'api' ? 'Your notification settings' : a.channels.map((c) => CHANNEL_LABELS[c]).join(', ')}</Td>
                     <Td>
                       <Badge tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Badge>
                     </Td>
@@ -179,7 +179,8 @@ export function AlertsPage() {
                         />
                         <IconButton
                           icon={Pencil}
-                          label={`Edit alert for ${inst.display}`}
+                          disabled={a.condition !== 'crosses_above' && a.condition !== 'crosses_below'}
+                          label={a.condition === 'crosses_above' || a.condition === 'crosses_below' ? `Edit alert for ${inst.display}` : `This alert type is edited in the app that created it`}
                           size="sm"
                           onClick={() => {
                             setEditing(a);
