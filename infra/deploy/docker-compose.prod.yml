@@ -122,7 +122,8 @@ services:
     cpus: 0.5
 
   nginx:
-    image: nginx:1.27-alpine
+    # nginx:1.27-alpine plus the built web client (web/Dockerfile)
+    image: ${WEB_IMAGE:-ghcr.io/yazan-alsamman/ai-trading-web}:${IMAGE_TAG:?}
     restart: unless-stopped
     logging: *logging
     cpu_shares: 512
