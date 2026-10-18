@@ -350,6 +350,9 @@ def test_script(req: Req, examples: list[dict[str, Any]]) -> str:
             f"    if ({re.sub(r'[^A-Za-z0-9]', '_', var)} !== undefined && "
             f'{re.sub(r"[^A-Za-z0-9]", "_", var)} !== null) store.set("{var}", String('
             f"{re.sub(r'[^A-Za-z0-9]', '_', var)}));"
+            # a pick from a list that came back empty: clear the old id so the requests that
+            # need it skip instead of hitting a stale one
+            + (f'\n    else store.set("{var}", "");' if ".0" in path else "")
             for var, path in req.captures.items()
         )
         parts.append(
