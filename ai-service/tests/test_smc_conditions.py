@@ -3,7 +3,7 @@ import dataclasses
 import pandas as pd
 
 from app.smc.conditions import CONDITIONS, check
-from app.smc.params import StrategyParams
+from app.smc.params import FROZEN_V2, FROZEN_V3, StrategyParams
 from tests.test_smc_engine import SETUP_BARS, WARMUP, _frame, _scan
 
 AFTER = [
@@ -48,3 +48,9 @@ def test_bars_are_the_only_input():
     bars.loc[23, "close"] = 98.9  # the sweep bar now closes below the level
     assert check(s, bars, StrategyParams())["sweep"] == "sweep bar did not close back"
     assert isinstance(bars, pd.DataFrame)
+
+
+def test_frozen_v3_is_v2_with_exactly_the_three_review_changes():
+    v2, v3 = dataclasses.asdict(FROZEN_V2), dataclasses.asdict(FROZEN_V3)
+    changed = {k: v3[k] for k in v3 if v3[k] != v2[k]}
+    assert changed == {"min_fvg_atr": 0.25, "min_sweep_atr": 0.25, "k_ltf": 3}

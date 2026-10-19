@@ -441,6 +441,7 @@ scored.
 | 3 | 2026-10-19 | AB | A, plus Asian (20:00–00:00 NY) and London (02:00–05:00 NY) session highs and lows as levels | 297 | 143 | 26.6% | −0.045 (−0.26 to +0.18) | [variant_AB](phase2/variant_AB.md) |
 | 5 | 2026-10-19 | AB5F | AB5, plus: the FVG's third bar must be the CHoCH bar or one of the 6 entry bars before it (counted in bars). Sweep, CHoCH, entry, SL and TP unchanged | 843 | 384 | 27.3% | **−0.257 (−0.40 to −0.11)** | [variant_AB5F](phase2/variant_AB5F.md) |
 | 4 | 2026-10-19 | AB5 | AB with 5m entry bars (same 1h/4h and session levels). Bar windows scaled to the same clock time: CHoCH and entry windows 24 bars (2 h), horizon 144 bars (12 h); swing k and ATR period stay in entry bars | 807 | 364 | 25.8% | **−0.337 (−0.49 to −0.18)** | [variant_AB5](phase2/variant_AB5.md) |
+| 6 | 2026-10-19 | AB5F3 | AB5F, plus one combined change: FVG ≥ 0.25 ATR, sweep first-bar penetration ≥ 0.25 ATR, CHoCH reference swing k = 3 on 5m. Run on 2012–2017 only | not counted (2012–2017 only loaded) | 201 | 29.4% | **−0.208 (−0.40 to −0.02)** | [variant_AB5F3](phase2/variant_AB5F3.md) |
 
 **Status after attempt 4:**
 - 5m entries bring the sample close to target, with 807 closed trades before the lockbox.
@@ -503,6 +504,31 @@ replaces v1.**
   - Definition feedback goes in its own column and is decided once, after the review.
   - The gate passes at 45 of 50 ✅ or more, on a new sheet at
     [phase2/review/REVIEW.md](phase2/review/REVIEW.md). The sample is unchanged (seed 2026).
+
+**Decision, 2026-10-19 (Fadi): v3 replaces v2 after gate 2b failed (attempt 6).**
+- **Why:** gate 2b on v2 reached 14 of 20 ✅ with 6 not ✅. The gate allows at most 5 of 50, so it
+  had already failed. The sheet is archived in
+  [phase2/review_v2/REVIEW_v2_gate2b_partial.md](phase2/review_v2/REVIEW_v2_gate2b_partial.md).
+  Its definition feedback had three themes: weak or small FVGs (#1, #5, #6, #9, #13, #15), shallow
+  sweeps (#7, #9, #16, #18) and a CHoCH that breaks a minor swing (#12, #16, #20).
+- **One combined change, `FROZEN_V3`** (spec, Strategy rule 5, "Frozen v3"):
+  - FVG at least 0.25 ATR (was 0.1).
+  - Sweep: the first bar trades through the level by at least 0.25 ATR (was 0.1). The 1.5 ATR
+    maximum and the extension rule are unchanged.
+  - CHoCH reference: a 5m swing with k = 3 (was 2).
+- **Result on 2012–2017 only** (the walk-forward period was not loaded for this attempt):
+  - 201 closed trades, win rate 29.4% against a 32.3% break-even before costs.
+  - Gross R about 0.00; mean net R −0.21 (95% CI −0.40 to −0.02). Still a loss after costs.
+  - 349 setups reached a full trade plan. v2 had 649.
+- **Gate 2a: 349 of 349 pass** ([phase2/conditions.md](phase2/conditions.md)). The checker now
+  takes its thresholds from the parameters instead of printing 0.1 and 1.5.
+- **Gate 2b restarts on a new sample, seed 2027** (50 charts, 8–9 per year):
+  [phase2/review/REVIEW.md](phase2/review/REVIEW.md).
+  - The chart panel now prints the current minimums (0.25 ATR for the sweep and the FVG, k = 3);
+    before this fix it printed the v1 FVG minimum of 0.1 ATR.
+  - 10 of the 50 sweeps were also in an earlier sheet (v1 or v2). They are kept, to avoid biasing
+    the random sample, but the reviewer has seen them before.
+- **Attempt count:** this is the sixth variant tried on the development period.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 

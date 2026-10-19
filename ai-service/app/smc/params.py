@@ -13,9 +13,9 @@ ENTRY_TIMEFRAME = pd.Timedelta(minutes=15)  # the spec's entry timeframe
 @dataclass(frozen=True)
 class StrategyParams:
     k_htf: int = 3  # swing half-width on 1h and 4h
-    k_ltf: int = 2  # swing half-width on 15m
+    k_ltf: int = 2  # swing half-width on the entry bars (the CHoCH reference)
     atr_period: int = 14  # Wilder ATR on 15m
-    min_sweep_atr: float = 0.1  # minimum penetration beyond the level
+    min_sweep_atr: float = 0.1  # minimum penetration of the sweep's first bar beyond the level
     max_sweep_atr: float = 1.5  # deeper than this is a breakout, not a sweep
     choch_window: int = 8  # bars after the sweep in which the CHoCH must close
     min_fvg_atr: float = 0.1  # minimum gap size
@@ -59,9 +59,21 @@ FROZEN_V1 = StrategyParams(
 )
 
 # v2 rule set (attempt 5, "AB5F"): v1 plus an FVG within 6 entry bars before the CHoCH (or on it).
-# Frozen on 2026-10-19 by Fadi's decision. Do not change these values: Phase 3 and every later
-# result depend on them. A new rule set gets a new name and a new entry in the attempts log.
+# Frozen on 2026-10-19; superseded the same day by FROZEN_V3 after the pattern-validity review
+# (14 of 20, gate failed). Kept unchanged for the record.
 FROZEN_V2 = replace(FROZEN_V1, fvg_max_bars_before_choch=6)
+
+# v3 rule set (attempt 6, "AB5F3"): v2 with one combined change from the validity review: an FVG
+# of at least 0.25 ATR (displacement), a sweep of at least 0.25 ATR, and a CHoCH reference swing
+# with k = 3 on the entry bars. Frozen on 2026-10-19 by Fadi's decision. Do not change these values;
+# a new rule set gets a new name and a new entry in the attempts log.
+FROZEN_V3 = replace(FROZEN_V2, min_fvg_atr=0.25, min_sweep_atr=0.25, k_ltf=3)
+
+# The rule set every tool (report, review, conditions) uses by default.
+CURRENT = FROZEN_V3
+CURRENT_NAME = "FROZEN_V3"
+
+RULE_SETS = {"FROZEN_V1": FROZEN_V1, "FROZEN_V2": FROZEN_V2, "FROZEN_V3": FROZEN_V3}
 
 
 @dataclass(frozen=True)

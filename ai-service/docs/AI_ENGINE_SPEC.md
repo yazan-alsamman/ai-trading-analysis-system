@@ -166,6 +166,10 @@ development period and then frozen.
    valid if it meets the minimum size. The rules for the sweep, CHoCH, entry, SL and TP are unchanged.
    - **Frozen v2 rule set (`FROZEN_V2`):** 5m entry bars; the sweep may extend within 1.5 ATR; Asian and London
      session levels added; windows of 24, 24 and 144 bars. See the attempts log in PROJECT_CONTEXT.md.
+   - **Frozen v3 rule set (`FROZEN_V3`, 2026-10-19, after the pattern-validity review):** v2 with one combined
+     change. The FVG must be at least 0.25 × ATR (rule 5), the sweep's first bar must trade through the level by
+     at least 0.25 × ATR (rule 3), and the CHoCH reference is a swing with k = 3 on the entry bars (rules 1 and 4).
+     Everything else is v2.
 6. **Entry.** A sell limit at the FVG's proximal edge (the high of bar i). The midpoint is an ablation.
 7. **Stop-loss.** Sweep extreme + 0.1 × ATR + current spread.
 8. **Take-profit.** The nearest opposite liquidity level (confirmed 1h/4h swing low or previous day's low) that gives
