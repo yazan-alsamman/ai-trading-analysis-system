@@ -1,0 +1,995 @@
+{
+  "report_version": 1,
+  "symbol": "EURUSD",
+  "input": {
+    "file": "EURUSD_M5_mt5.csv",
+    "bytes": 94465278,
+    "sha256": "e0eb8aba952ac2857b734883e867c6a23e3da5f40f70cb435350dfcf8cea3079"
+  },
+  "range_utc": {
+    "first_bar": "2000-05-30 14:35",
+    "last_bar": "2026-02-13 14:50"
+  },
+  "parse": {
+    "rows_read": 1858964,
+    "rows_kept": 1858961,
+    "rows_rejected": 2,
+    "rejected_by_reason": {
+      "bad_timestamp": 1,
+      "ohlc_inconsistent": 1
+    },
+    "out_of_order_rows": 0,
+    "tail_bar_dropped": "2026-02-13T14:55:00+00:00",
+    "columns_in_export": [
+      "DATE",
+      "TIME",
+      "OPEN",
+      "HIGH",
+      "LOW",
+      "CLOSE"
+    ],
+    "rejected_examples": [
+      {
+        "line": 2,
+        "reason": "bad_timestamp",
+        "raw": "2000.05.30\t0.930217:25:00\t\t0.9302\t0.9302\t0.9302"
+      },
+      {
+        "line": 85256,
+        "reason": "ohlc_inconsistent",
+        "raw": "2001.09.11\t20:10:00\t-0.0001\t-0.0001\t-0.0001\t-0.0001"
+      }
+    ]
+  },
+  "bars_per_year": {
+    "5m": {
+      "2000": 38768,
+      "2001": 60429,
+      "2002": 54781,
+      "2003": 71055,
+      "2004": 72973,
+      "2005": 72567,
+      "2006": 73018,
+      "2007": 73206,
+      "2008": 74472,
+      "2009": 74500,
+      "2010": 74701,
+      "2011": 74704,
+      "2012": 74603,
+      "2013": 74389,
+      "2014": 74274,
+      "2015": 74560,
+      "2016": 74677,
+      "2017": 74483,
+      "2018": 74707,
+      "2019": 74544,
+      "2020": 74744,
+      "2021": 74611,
+      "2022": 74860,
+      "2023": 64857,
+      "2024": 74888,
+      "2025": 74663,
+      "2026": 8927
+    },
+    "15m": {
+      "2000": 13709,
+      "2001": 20897,
+      "2002": 18953,
+      "2003": 24041,
+      "2004": 24624,
+      "2005": 24613,
+      "2006": 24659,
+      "2007": 24760,
+      "2008": 24895,
+      "2009": 24869,
+      "2010": 24955,
+      "2011": 24928,
+      "2012": 24869,
+      "2013": 24798,
+      "2014": 24761,
+      "2015": 24856,
+      "2016": 24894,
+      "2017": 24828,
+      "2018": 24904,
+      "2019": 24849,
+      "2020": 24919,
+      "2021": 24875,
+      "2022": 24956,
+      "2023": 21632,
+      "2024": 24970,
+      "2025": 24896,
+      "2026": 2975
+    },
+    "1h": {
+      "2000": 3508,
+      "2001": 5290,
+      "2002": 4813,
+      "2003": 6058,
+      "2004": 6265,
+      "2005": 6293,
+      "2006": 6190,
+      "2007": 6202,
+      "2008": 6226,
+      "2009": 6220,
+      "2010": 6248,
+      "2011": 6235,
+      "2012": 6218,
+      "2013": 6200,
+      "2014": 6191,
+      "2015": 6215,
+      "2016": 6224,
+      "2017": 6207,
+      "2018": 6226,
+      "2019": 6213,
+      "2020": 6230,
+      "2021": 6219,
+      "2022": 6239,
+      "2023": 5409,
+      "2024": 6243,
+      "2025": 6225,
+      "2026": 743
+    },
+    "4h": {
+      "2000": 926,
+      "2001": 1392,
+      "2002": 1264,
+      "2003": 1568,
+      "2004": 1625,
+      "2005": 1645,
+      "2006": 1598,
+      "2007": 1605,
+      "2008": 1610,
+      "2009": 1608,
+      "2010": 1610,
+      "2011": 1610,
+      "2012": 1609,
+      "2013": 1603,
+      "2014": 1602,
+      "2015": 1607,
+      "2016": 1609,
+      "2017": 1604,
+      "2018": 1610,
+      "2019": 1608,
+      "2020": 1611,
+      "2021": 1607,
+      "2022": 1612,
+      "2023": 1591,
+      "2024": 1616,
+      "2025": 1610,
+      "2026": 192
+    }
+  },
+  "bars_total": {
+    "5m": 1858961,
+    "15m": 623885,
+    "1h": 156550,
+    "4h": 40752
+  },
+  "partial_buckets": {
+    "15m": 8245,
+    "1h": 6374,
+    "4h": 5427
+  },
+  "timezone": {
+    "server_clock": "Europe/Athens (UTC+2 winter / UTC+3 EU summer time)",
+    "weekly_open_expected_ny": "Sun 18:00",
+    "weeks": 1342,
+    "weekly_first_bar_ny": {
+      "Sun 18:00": 1302,
+      "Sun 18:05": 15,
+      "Mon 12:00": 3,
+      "Mon 13:00": 3,
+      "Sun 19:00": 3,
+      "Mon 10:00": 3,
+      "Sun 12:00": 2,
+      "Tue 10:35": 1
+    },
+    "weeks_opening_at_expected_time": 1302,
+    "bars_in_dst_mismatch_weeks": 102024,
+    "bars_inside_closed_hours": 121070,
+    "bars_inside_closed_hours_by_year": {
+      "2000": 1728,
+      "2001": 3237,
+      "2002": 3390,
+      "2003": 4771,
+      "2004": 4685,
+      "2005": 5043,
+      "2006": 4689,
+      "2007": 4754,
+      "2008": 4883,
+      "2009": 4892,
+      "2010": 4922,
+      "2011": 4847,
+      "2012": 4955,
+      "2013": 4943,
+      "2014": 4847,
+      "2015": 4943,
+      "2016": 4946,
+      "2017": 4763,
+      "2018": 4953,
+      "2019": 4895,
+      "2020": 4965,
+      "2021": 4965,
+      "2022": 4976,
+      "2023": 4556,
+      "2024": 4966,
+      "2025": 4980,
+      "2026": 576
+    },
+    "bars_inside_closed_hours_if_server_were_ny_plus_7": 121788,
+    "examples_inside_closed_hours": [
+      "Sun 2000-06-04 12:00",
+      "Sun 2000-06-04 12:10",
+      "Sun 2000-06-04 12:15",
+      "Sun 2000-06-04 12:35",
+      "Sun 2000-06-04 12:40"
+    ],
+    "jobs_report_bar_ny": {
+      "all_first_fridays": {
+        "09:55": 37,
+        "07:00": 22,
+        "07:55": 20,
+        "08:00": 18
+      },
+      "first_fridays_in_dst_mismatch_weeks": {
+        "07:00": 2,
+        "07:15": 2,
+        "07:55": 2,
+        "08:05": 2
+      },
+      "first_fridays_in_dst_mismatch_weeks_if_ny_plus_7": {
+        "07:05": 3,
+        "07:00": 2,
+        "07:10": 1,
+        "07:25": 1
+      }
+    }
+  },
+  "gaps": {
+    "definition": "Missing 5m bars inside expected trading hours (New York: Sunday 18:00 to Friday 17:00). Weekend and daily-break time is never a gap.",
+    "total_gaps": {
+      "mid_session": 8031,
+      "session_edge": 1270,
+      "holiday": 909
+    },
+    "total_missing_bars": {
+      "mid_session": 21396,
+      "session_edge": 129020,
+      "holiday": 27497
+    },
+    "mid_session_by_length": {
+      "5m": 5400,
+      "10-15m": 1537,
+      "20m-1h": 963,
+      "1h-4h": 119,
+      ">4h": 12
+    },
+    "session_edge_in_dst_mismatch_weeks": 68,
+    "per_year": {
+      "2000": {
+        "expected_bars": 43793,
+        "present_bars": 38768,
+        "coverage_pct": 88.53,
+        "mid_session_gaps": 1487,
+        "session_edge_gaps": 34,
+        "holiday_gaps": 69,
+        "mid_session_missing_bars": 3010,
+        "session_edge_missing_bars": 2710,
+        "holiday_missing_bars": 1348
+      },
+      "2001": {
+        "expected_bars": 74544,
+        "present_bars": 60429,
+        "coverage_pct": 81.06,
+        "mid_session_gaps": 1499,
+        "session_edge_gaps": 52,
+        "holiday_gaps": 88,
+        "mid_session_missing_bars": 2305,
+        "session_edge_missing_bars": 12131,
+        "holiday_missing_bars": 2882
+      },
+      "2002": {
+        "expected_bars": 74544,
+        "present_bars": 54781,
+        "coverage_pct": 73.49,
+        "mid_session_gaps": 1316,
+        "session_edge_gaps": 52,
+        "holiday_gaps": 85,
+        "mid_session_missing_bars": 2258,
+        "session_edge_missing_bars": 16906,
+        "holiday_missing_bars": 3912
+      },
+      "2003": {
+        "expected_bars": 74544,
+        "present_bars": 71055,
+        "coverage_pct": 95.32,
+        "mid_session_gaps": 608,
+        "session_edge_gaps": 49,
+        "holiday_gaps": 75,
+        "mid_session_missing_bars": 1041,
+        "session_edge_missing_bars": 5463,
+        "holiday_missing_bars": 1756
+      },
+      "2004": {
+        "expected_bars": 74808,
+        "present_bars": 72973,
+        "coverage_pct": 97.55,
+        "mid_session_gaps": 469,
+        "session_edge_gaps": 48,
+        "holiday_gaps": 56,
+        "mid_session_missing_bars": 1311,
+        "session_edge_missing_bars": 4214,
+        "holiday_missing_bars": 791
+      },
+      "2005": {
+        "expected_bars": 74256,
+        "present_bars": 72567,
+        "coverage_pct": 97.73,
+        "mid_session_gaps": 488,
+        "session_edge_gaps": 50,
+        "holiday_gaps": 41,
+        "mid_session_missing_bars": 1157,
+        "session_edge_missing_bars": 4744,
+        "holiday_missing_bars": 831
+      },
+      "2006": {
+        "expected_bars": 74268,
+        "present_bars": 73018,
+        "coverage_pct": 98.32,
+        "mid_session_gaps": 583,
+        "session_edge_gaps": 51,
+        "holiday_gaps": 91,
+        "mid_session_missing_bars": 701,
+        "session_edge_missing_bars": 4493,
+        "holiday_missing_bars": 961
+      },
+      "2007": {
+        "expected_bars": 74544,
+        "present_bars": 73206,
+        "coverage_pct": 98.21,
+        "mid_session_gaps": 659,
+        "session_edge_gaps": 51,
+        "holiday_gaps": 125,
+        "mid_session_missing_bars": 807,
+        "session_edge_missing_bars": 4216,
+        "holiday_missing_bars": 1057
+      },
+      "2008": {
+        "expected_bars": 74832,
+        "present_bars": 74472,
+        "coverage_pct": 99.52,
+        "mid_session_gaps": 94,
+        "session_edge_gaps": 48,
+        "holiday_gaps": 44,
+        "mid_session_missing_bars": 99,
+        "session_edge_missing_bars": 3995,
+        "holiday_missing_bars": 1148
+      },
+      "2009": {
+        "expected_bars": 74544,
+        "present_bars": 74500,
+        "coverage_pct": 99.94,
+        "mid_session_gaps": 43,
+        "session_edge_gaps": 46,
+        "holiday_gaps": 30,
+        "mid_session_missing_bars": 46,
+        "session_edge_missing_bars": 3815,
+        "holiday_missing_bars": 1136
+      },
+      "2010": {
+        "expected_bars": 74520,
+        "present_bars": 74701,
+        "coverage_pct": 100.24,
+        "mid_session_gaps": 67,
+        "session_edge_gaps": 48,
+        "holiday_gaps": 35,
+        "mid_session_missing_bars": 72,
+        "session_edge_missing_bars": 3985,
+        "holiday_missing_bars": 420
+      },
+      "2011": {
+        "expected_bars": 74256,
+        "present_bars": 74704,
+        "coverage_pct": 100.6,
+        "mid_session_gaps": 45,
+        "session_edge_gaps": 50,
+        "holiday_gaps": 15,
+        "mid_session_missing_bars": 45,
+        "session_edge_missing_bars": 4160,
+        "holiday_missing_bars": 194
+      },
+      "2012": {
+        "expected_bars": 74556,
+        "present_bars": 74603,
+        "coverage_pct": 100.06,
+        "mid_session_gaps": 1,
+        "session_edge_gaps": 50,
+        "holiday_gaps": 5,
+        "mid_session_missing_bars": 1,
+        "session_edge_missing_bars": 4164,
+        "holiday_missing_bars": 923
+      },
+      "2013": {
+        "expected_bars": 74544,
+        "present_bars": 74389,
+        "coverage_pct": 99.79,
+        "mid_session_gaps": 3,
+        "session_edge_gaps": 49,
+        "holiday_gaps": 5,
+        "mid_session_missing_bars": 10,
+        "session_edge_missing_bars": 4080,
+        "holiday_missing_bars": 1008
+      },
+      "2014": {
+        "expected_bars": 74544,
+        "present_bars": 74274,
+        "coverage_pct": 99.64,
+        "mid_session_gaps": 5,
+        "session_edge_gaps": 49,
+        "holiday_gaps": 7,
+        "mid_session_missing_bars": 5,
+        "session_edge_missing_bars": 4152,
+        "holiday_missing_bars": 912
+      },
+      "2015": {
+        "expected_bars": 74544,
+        "present_bars": 74560,
+        "coverage_pct": 100.02,
+        "mid_session_gaps": 1,
+        "session_edge_gaps": 46,
+        "holiday_gaps": 9,
+        "mid_session_missing_bars": 7,
+        "session_edge_missing_bars": 3816,
+        "holiday_missing_bars": 1236
+      },
+      "2016": {
+        "expected_bars": 74520,
+        "present_bars": 74677,
+        "coverage_pct": 100.21,
+        "mid_session_gaps": 1,
+        "session_edge_gaps": 50,
+        "holiday_gaps": 3,
+        "mid_session_missing_bars": 1,
+        "session_edge_missing_bars": 4176,
+        "holiday_missing_bars": 348
+      },
+      "2017": {
+        "expected_bars": 74268,
+        "present_bars": 74483,
+        "coverage_pct": 100.29,
+        "mid_session_gaps": 0,
+        "session_edge_gaps": 50,
+        "holiday_gaps": 5,
+        "mid_session_missing_bars": 0,
+        "session_edge_missing_bars": 4164,
+        "holiday_missing_bars": 564
+      },
+      "2018": {
+        "expected_bars": 74544,
+        "present_bars": 74707,
+        "coverage_pct": 100.22,
+        "mid_session_gaps": 1,
+        "session_edge_gaps": 50,
+        "holiday_gaps": 5,
+        "mid_session_missing_bars": 1,
+        "session_edge_missing_bars": 4164,
+        "holiday_missing_bars": 625
+      },
+      "2019": {
+        "expected_bars": 74544,
+        "present_bars": 74544,
+        "coverage_pct": 100.0,
+        "mid_session_gaps": 0,
+        "session_edge_gaps": 49,
+        "holiday_gaps": 7,
+        "mid_session_missing_bars": 0,
+        "session_edge_missing_bars": 4116,
+        "holiday_missing_bars": 779
+      },
+      "2020": {
+        "expected_bars": 74832,
+        "present_bars": 74744,
+        "coverage_pct": 99.88,
+        "mid_session_gaps": 5,
+        "session_edge_gaps": 48,
+        "holiday_gaps": 8,
+        "mid_session_missing_bars": 7,
+        "session_edge_missing_bars": 4164,
+        "holiday_missing_bars": 966
+      },
+      "2021": {
+        "expected_bars": 74520,
+        "present_bars": 74611,
+        "coverage_pct": 100.12,
+        "mid_session_gaps": 12,
+        "session_edge_gaps": 48,
+        "holiday_gaps": 5,
+        "mid_session_missing_bars": 14,
+        "session_edge_missing_bars": 4032,
+        "holiday_missing_bars": 564
+      },
+      "2022": {
+        "expected_bars": 74256,
+        "present_bars": 74860,
+        "coverage_pct": 100.81,
+        "mid_session_gaps": 3,
+        "session_edge_gaps": 50,
+        "holiday_gaps": 3,
+        "mid_session_missing_bars": 3,
+        "session_edge_missing_bars": 4200,
+        "holiday_missing_bars": 169
+      },
+      "2023": {
+        "expected_bars": 74268,
+        "present_bars": 64857,
+        "coverage_pct": 87.33,
+        "mid_session_gaps": 637,
+        "session_edge_gaps": 50,
+        "holiday_gaps": 43,
+        "mid_session_missing_bars": 8445,
+        "session_edge_missing_bars": 4392,
+        "holiday_missing_bars": 1310
+      },
+      "2024": {
+        "expected_bars": 74832,
+        "present_bars": 74888,
+        "coverage_pct": 100.07,
+        "mid_session_gaps": 3,
+        "session_edge_gaps": 49,
+        "holiday_gaps": 24,
+        "mid_session_missing_bars": 49,
+        "session_edge_missing_bars": 4116,
+        "holiday_missing_bars": 745
+      },
+      "2025": {
+        "expected_bars": 74544,
+        "present_bars": 74663,
+        "coverage_pct": 100.16,
+        "mid_session_gaps": 1,
+        "session_edge_gaps": 48,
+        "holiday_gaps": 25,
+        "mid_session_missing_bars": 1,
+        "session_edge_missing_bars": 4032,
+        "holiday_missing_bars": 828
+      },
+      "2026": {
+        "expected_bars": 9035,
+        "present_bars": 8927,
+        "coverage_pct": 98.8,
+        "mid_session_gaps": 0,
+        "session_edge_gaps": 5,
+        "holiday_gaps": 1,
+        "mid_session_missing_bars": 0,
+        "session_edge_missing_bars": 420,
+        "holiday_missing_bars": 84
+      }
+    },
+    "largest_mid_session": [
+      {
+        "start_utc": "2004-08-23 14:00",
+        "start_ny": "Mon 2004-08-23 10:00",
+        "missing_bars": 168
+      },
+      {
+        "start_utc": "2000-06-09 08:45",
+        "start_ny": "Fri 2000-06-09 04:45",
+        "missing_bars": 93
+      },
+      {
+        "start_utc": "2000-10-09 08:30",
+        "start_ny": "Mon 2000-10-09 04:30",
+        "missing_bars": 90
+      },
+      {
+        "start_utc": "2005-01-28 16:05",
+        "start_ny": "Fri 2005-01-28 11:05",
+        "missing_bars": 70
+      },
+      {
+        "start_utc": "2000-11-22 09:30",
+        "start_ny": "Wed 2000-11-22 04:30",
+        "missing_bars": 69
+      },
+      {
+        "start_utc": "2002-07-18 14:00",
+        "start_ny": "Thu 2002-07-18 10:00",
+        "missing_bars": 66
+      },
+      {
+        "start_utc": "2001-11-12 11:30",
+        "start_ny": "Mon 2001-11-12 06:30",
+        "missing_bars": 65
+      },
+      {
+        "start_utc": "2001-11-21 11:35",
+        "start_ny": "Wed 2001-11-21 06:35",
+        "missing_bars": 65
+      },
+      {
+        "start_utc": "2002-01-28 23:40",
+        "start_ny": "Mon 2002-01-28 18:40",
+        "missing_bars": 64
+      },
+      {
+        "start_utc": "2000-06-15 19:55",
+        "start_ny": "Thu 2000-06-15 15:55",
+        "missing_bars": 62
+      },
+      {
+        "start_utc": "2000-12-01 14:30",
+        "start_ny": "Fri 2000-12-01 09:30",
+        "missing_bars": 52
+      },
+      {
+        "start_utc": "2005-03-04 15:35",
+        "start_ny": "Fri 2005-03-04 10:35",
+        "missing_bars": 49
+      },
+      {
+        "start_utc": "2000-09-29 13:30",
+        "start_ny": "Fri 2000-09-29 09:30",
+        "missing_bars": 46
+      },
+      {
+        "start_utc": "2007-08-08 02:45",
+        "start_ny": "Tue 2007-08-07 22:45",
+        "missing_bars": 39
+      },
+      {
+        "start_utc": "2002-01-28 09:20",
+        "start_ny": "Mon 2002-01-28 04:20",
+        "missing_bars": 37
+      }
+    ]
+  },
+  "ohlc": {
+    "inconsistent_rows_rejected": 1,
+    "flat_bars_o_eq_h_eq_l_eq_c": 14146,
+    "flat_bars_by_year": {
+      "2000": 2912,
+      "2001": 2760,
+      "2002": 2436,
+      "2003": 903,
+      "2004": 727,
+      "2005": 1031,
+      "2006": 832,
+      "2007": 1052,
+      "2008": 223,
+      "2009": 201,
+      "2010": 166,
+      "2011": 69,
+      "2013": 1,
+      "2014": 6,
+      "2016": 5,
+      "2017": 3,
+      "2018": 3,
+      "2019": 33,
+      "2020": 57,
+      "2021": 132,
+      "2022": 214,
+      "2023": 245,
+      "2024": 91,
+      "2025": 43,
+      "2026": 1
+    }
+  },
+  "duplicates": {
+    "identical": 0,
+    "conflicting": 0,
+    "rule": "the first occurrence in file order is kept"
+  },
+  "jumps": {
+    "definition": "A bar is flagged when its close-to-close move (or its high-low range) is at least 30x the median of the previous 288 bars. Flags are reported, not removed: most are real news moves.",
+    "close_to_close": {
+      "count": 387,
+      "after_a_gap": 76,
+      "by_year": {
+        "2000": 14,
+        "2001": 20,
+        "2002": 22,
+        "2003": 10,
+        "2004": 12,
+        "2005": 13,
+        "2006": 23,
+        "2007": 15,
+        "2008": 8,
+        "2009": 3,
+        "2010": 3,
+        "2011": 6,
+        "2012": 7,
+        "2013": 22,
+        "2014": 32,
+        "2015": 25,
+        "2016": 19,
+        "2017": 17,
+        "2018": 2,
+        "2019": 16,
+        "2020": 1,
+        "2021": 9,
+        "2022": 14,
+        "2023": 24,
+        "2024": 28,
+        "2025": 20,
+        "2026": 2
+      },
+      "top": [
+        {
+          "ts_utc": "2001-06-07 20:30",
+          "ny": "Thu 2001-06-07 16:30",
+          "move": 1964.1516,
+          "ratio": 19641516.0,
+          "after_gap": false,
+          "close": 1965.0001
+        },
+        {
+          "ts_utc": "2001-06-07 20:40",
+          "ny": "Thu 2001-06-07 16:40",
+          "move": 1964.1515,
+          "ratio": 19641515.0,
+          "after_gap": true,
+          "close": 0.8486
+        },
+        {
+          "ts_utc": "2017-04-23 14:00",
+          "ny": "Sun 2017-04-23 10:00",
+          "move": 0.0174,
+          "ratio": 165.7,
+          "after_gap": true,
+          "close": 1.08978
+        },
+        {
+          "ts_utc": "2004-08-06 05:30",
+          "ny": "Fri 2004-08-06 01:30",
+          "move": 0.0138,
+          "ratio": 138.0,
+          "after_gap": false,
+          "close": 1.2213
+        },
+        {
+          "ts_utc": "2002-01-27 17:00",
+          "ny": "Sun 2002-01-27 12:00",
+          "move": 0.0133,
+          "ratio": 133.0,
+          "after_gap": true,
+          "close": 0.8644
+        },
+        {
+          "ts_utc": "2001-12-05 12:55",
+          "ny": "Wed 2001-12-05 07:55",
+          "move": 0.0133,
+          "ratio": 133.0,
+          "after_gap": false,
+          "close": 0.9
+        },
+        {
+          "ts_utc": "2001-12-05 13:20",
+          "ny": "Wed 2001-12-05 08:20",
+          "move": 0.0124,
+          "ratio": 124.0,
+          "after_gap": true,
+          "close": 0.8876
+        },
+        {
+          "ts_utc": "2000-09-22 05:00",
+          "ny": "Fri 2000-09-22 01:00",
+          "move": 0.0241,
+          "ratio": 120.5,
+          "after_gap": true,
+          "close": 0.894
+        },
+        {
+          "ts_utc": "2014-09-04 04:45",
+          "ny": "Thu 2014-09-04 00:45",
+          "move": 0.00926,
+          "ratio": 115.7,
+          "after_gap": false,
+          "close": 1.30368
+        },
+        {
+          "ts_utc": "2013-11-07 05:45",
+          "ny": "Thu 2013-11-07 00:45",
+          "move": 0.01328,
+          "ratio": 115.5,
+          "after_gap": false,
+          "close": 1.33679
+        },
+        {
+          "ts_utc": "2000-05-31 13:35",
+          "ny": "Wed 2000-05-31 09:35",
+          "move": 0.0214,
+          "ratio": 107.0,
+          "after_gap": false,
+          "close": 0.9375
+        },
+        {
+          "ts_utc": "2000-05-31 13:30",
+          "ny": "Wed 2000-05-31 09:30",
+          "move": 0.0213,
+          "ratio": 106.5,
+          "after_gap": false,
+          "close": 0.9161
+        },
+        {
+          "ts_utc": "2024-04-10 05:30",
+          "ny": "Wed 2024-04-10 01:30",
+          "move": 0.0072,
+          "ratio": 102.9,
+          "after_gap": false,
+          "close": 1.07906
+        },
+        {
+          "ts_utc": "2002-05-05 16:00",
+          "ny": "Sun 2002-05-05 12:00",
+          "move": 0.0098,
+          "ratio": 98.0,
+          "after_gap": true,
+          "close": 0.9168
+        },
+        {
+          "ts_utc": "2015-07-05 14:00",
+          "ny": "Sun 2015-07-05 10:00",
+          "move": 0.01305,
+          "ratio": 93.2,
+          "after_gap": true,
+          "close": 1.09823
+        }
+      ]
+    },
+    "range": {
+      "count": 76,
+      "after_a_gap": 1,
+      "by_year": {
+        "2000": 6,
+        "2001": 22,
+        "2002": 6,
+        "2004": 2,
+        "2006": 3,
+        "2007": 1,
+        "2008": 1,
+        "2009": 1,
+        "2012": 1,
+        "2013": 3,
+        "2014": 7,
+        "2015": 4,
+        "2016": 5,
+        "2019": 2,
+        "2021": 1,
+        "2022": 1,
+        "2023": 1,
+        "2024": 7,
+        "2025": 2
+      },
+      "top": [
+        {
+          "ts_utc": "2001-06-07 20:30",
+          "ny": "Thu 2001-06-07 16:30",
+          "range": 1964.1515,
+          "ratio": 4910378.8,
+          "after_gap": false,
+          "close": 1965.0001
+        },
+        {
+          "ts_utc": "2001-12-05 12:55",
+          "ny": "Wed 2001-12-05 07:55",
+          "range": 0.0229,
+          "ratio": 114.5,
+          "after_gap": false,
+          "close": 0.9
+        },
+        {
+          "ts_utc": "2000-05-31 13:45",
+          "ny": "Wed 2000-05-31 09:45",
+          "range": 0.0216,
+          "ratio": 108.0,
+          "after_gap": true,
+          "close": 0.9377
+        },
+        {
+          "ts_utc": "2001-12-11 20:00",
+          "ny": "Tue 2001-12-11 15:00",
+          "range": 0.0117,
+          "ratio": 58.5,
+          "after_gap": false,
+          "close": 0.8964
+        },
+        {
+          "ts_utc": "2013-11-07 05:45",
+          "ny": "Thu 2013-11-07 00:45",
+          "range": 0.01411,
+          "ratio": 52.3,
+          "after_gap": false,
+          "close": 1.33679
+        },
+        {
+          "ts_utc": "2001-12-05 13:00",
+          "ny": "Wed 2001-12-05 08:00",
+          "range": 0.0101,
+          "ratio": 50.5,
+          "after_gap": false,
+          "close": 0.9
+        },
+        {
+          "ts_utc": "2002-04-15 14:00",
+          "ny": "Mon 2002-04-15 10:00",
+          "range": 0.01,
+          "ratio": 50.0,
+          "after_gap": false,
+          "close": 0.8797
+        },
+        {
+          "ts_utc": "2014-09-04 04:45",
+          "ny": "Thu 2014-09-04 00:45",
+          "range": 0.00934,
+          "ratio": 49.2,
+          "after_gap": false,
+          "close": 1.30368
+        },
+        {
+          "ts_utc": "2014-06-05 04:45",
+          "ny": "Thu 2014-06-05 00:45",
+          "range": 0.00855,
+          "ratio": 45.0,
+          "after_gap": false,
+          "close": 1.35609
+        },
+        {
+          "ts_utc": "2024-04-10 05:30",
+          "ny": "Wed 2024-04-10 01:30",
+          "range": 0.00763,
+          "ratio": 44.9,
+          "after_gap": false,
+          "close": 1.07906
+        },
+        {
+          "ts_utc": "2006-11-03 06:30",
+          "ny": "Fri 2006-11-03 01:30",
+          "range": 0.0087,
+          "ratio": 43.5,
+          "after_gap": false,
+          "close": 1.2736
+        },
+        {
+          "ts_utc": "2016-03-10 07:10",
+          "ny": "Thu 2016-03-10 02:10",
+          "range": 0.01596,
+          "ratio": 43.1,
+          "after_gap": false,
+          "close": 1.10648
+        },
+        {
+          "ts_utc": "2019-09-12 04:45",
+          "ny": "Thu 2019-09-12 00:45",
+          "range": 0.00841,
+          "ratio": 43.1,
+          "after_gap": false,
+          "close": 1.09852
+        },
+        {
+          "ts_utc": "2015-12-03 05:45",
+          "ny": "Thu 2015-12-03 00:45",
+          "range": 0.01678,
+          "ratio": 42.0,
+          "after_gap": false,
+          "close": 1.06395
+        },
+        {
+          "ts_utc": "2000-05-31 14:00",
+          "ny": "Wed 2000-05-31 10:00",
+          "range": 0.0082,
+          "ratio": 41.0,
+          "after_gap": false,
+          "close": 0.93
+        }
+      ]
+    }
+  },
+  "spread": {
+    "available": false
+  },
+  "hashes": {
+    "5m": "9468312bf5acfaf98a8b401d93c6ed6f8841c2067391ce92f65bcc442cc1e280",
+    "15m": "58c18c126f097365fa3b332606c354067eabb2979cb5b5775d78e8a4f7488d76",
+    "1h": "37201ed1fe282e7c6d5c05a4e7ab25eff07a78be5dccca67f737d35a3dc77e16",
+    "4h": "7872b983018069f142a213d8b7121b00784bb64b22464c9e4cf3bf44ef28a8a0"
+  }
+}

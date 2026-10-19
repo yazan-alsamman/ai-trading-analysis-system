@@ -13,4 +13,5 @@ build/
 *.log
 mlruns/
 data/raw/
+ai-service/data/processed/
 *.egg-info/

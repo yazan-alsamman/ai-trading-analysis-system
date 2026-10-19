@@ -1,0 +1,936 @@
+{
+  "report_version": 1,
+  "symbol": "XAUUSD",
+  "input": {
+    "file": "XAUUSD_M5_mt5.csv",
+    "bytes": 61295475,
+    "sha256": "291252dbc621bebf9d292dfdf0bd4407efb9a64e5e55d01c6df9a7fa31d44dc3"
+  },
+  "range_utc": {
+    "first_bar": "2012-04-22 22:05",
+    "last_bar": "2026-01-09 15:55"
+  },
+  "parse": {
+    "rows_read": 963015,
+    "rows_kept": 963014,
+    "rows_rejected": 0,
+    "rejected_by_reason": {},
+    "out_of_order_rows": 0,
+    "tail_bar_dropped": "2026-01-09T16:00:00+00:00",
+    "columns_in_export": [
+      "DATE",
+      "TIME",
+      "OPEN",
+      "HIGH",
+      "LOW",
+      "CLOSE",
+      "TICKVOL",
+      "VOL",
+      "SPREAD"
+    ],
+    "rejected_examples": []
+  },
+  "bars_per_year": {
+    "5m": {
+      "2012": 48787,
+      "2013": 69814,
+      "2014": 69821,
+      "2015": 69583,
+      "2016": 70113,
+      "2017": 69813,
+      "2018": 69955,
+      "2019": 69916,
+      "2020": 70327,
+      "2021": 70224,
+      "2022": 70709,
+      "2023": 70671,
+      "2024": 71210,
+      "2025": 70487,
+      "2026": 1584
+    },
+    "15m": {
+      "2012": 16387,
+      "2013": 23440,
+      "2014": 23454,
+      "2015": 23361,
+      "2016": 23539,
+      "2017": 23440,
+      "2018": 23487,
+      "2019": 23475,
+      "2020": 23611,
+      "2021": 23581,
+      "2022": 23653,
+      "2023": 23559,
+      "2024": 23738,
+      "2025": 23547,
+      "2026": 528
+    },
+    "1h": {
+      "2012": 4103,
+      "2013": 5874,
+      "2014": 5872,
+      "2015": 5843,
+      "2016": 5889,
+      "2017": 5861,
+      "2018": 5873,
+      "2019": 5871,
+      "2020": 5904,
+      "2021": 5900,
+      "2022": 5917,
+      "2023": 5894,
+      "2024": 5938,
+      "2025": 5899,
+      "2026": 132
+    },
+    "4h": {
+      "2012": 1075,
+      "2013": 1545,
+      "2014": 1539,
+      "2015": 1532,
+      "2016": 1542,
+      "2017": 1534,
+      "2018": 1539,
+      "2019": 1540,
+      "2020": 1547,
+      "2021": 1542,
+      "2022": 1548,
+      "2023": 1542,
+      "2024": 1554,
+      "2025": 1545,
+      "2026": 34
+    }
+  },
+  "bars_total": {
+    "5m": 963014,
+    "15m": 322800,
+    "1h": 80770,
+    "4h": 21158
+  },
+  "partial_buckets": {
+    "15m": 5258,
+    "1h": 5285,
+    "4h": 5292
+  },
+  "timezone": {
+    "server_clock": "Europe/Athens (UTC+2 winter / UTC+3 EU summer time)",
+    "weekly_open_expected_ny": "Sun 18:00",
+    "weeks": 716,
+    "weekly_first_bar_ny": {
+      "Sun 18:05": 497,
+      "Sun 18:00": 171,
+      "Sun 19:05": 29,
+      "Mon 18:00": 4,
+      "Sun 18:15": 3,
+      "Sun 18:20": 2,
+      "Sun 18:45": 2,
+      "Mon 18:05": 2
+    },
+    "weeks_opening_at_expected_time": 171,
+    "bars_in_dst_mismatch_weeks": 62074,
+    "bars_inside_closed_hours": 113,
+    "bars_inside_closed_hours_by_year": {
+      "2012": 6,
+      "2013": 32,
+      "2014": 75,
+      "2015": 0,
+      "2016": 0,
+      "2017": 0,
+      "2018": 0,
+      "2019": 0,
+      "2020": 0,
+      "2021": 0,
+      "2022": 0,
+      "2023": 0,
+      "2024": 0,
+      "2025": 0,
+      "2026": 0
+    },
+    "bars_inside_closed_hours_if_server_were_ny_plus_7": 1029,
+    "examples_inside_closed_hours": [
+      "Mon 2012-10-29 17:05",
+      "Mon 2012-10-29 17:10",
+      "Mon 2012-10-29 17:15",
+      "Tue 2012-10-30 17:05",
+      "Tue 2012-10-30 17:10"
+    ],
+    "jobs_report_bar_ny": {
+      "all_first_fridays": {
+        "08:30": 112,
+        "08:35": 9,
+        "09:30": 7,
+        "08:20": 5
+      },
+      "first_fridays_in_dst_mismatch_weeks": {
+        "08:30": 9,
+        "07:55": 1
+      },
+      "first_fridays_in_dst_mismatch_weeks_if_ny_plus_7": {
+        "07:30": 8,
+        "07:50": 1,
+        "09:35": 1
+      }
+    }
+  },
+  "gaps": {
+    "definition": "Missing 5m bars inside expected trading hours (New York: Sunday 18:00 to Friday 17:00, minus the daily 17:00-18:00 break). Weekend and daily-break time is never a gap.",
+    "total_gaps": {
+      "mid_session": 77,
+      "session_edge": 4938,
+      "holiday": 394
+    },
+    "total_missing_bars": {
+      "mid_session": 392,
+      "session_edge": 7127,
+      "holiday": 17587
+    },
+    "mid_session_by_length": {
+      "5m": 26,
+      "10-15m": 22,
+      "20m-1h": 20,
+      "1h-4h": 9,
+      ">4h": 0
+    },
+    "session_edge_in_dst_mismatch_weeks": 271,
+    "per_year": {
+      "2012": {
+        "expected_bars": 49967,
+        "present_bars": 48787,
+        "coverage_pct": 97.64,
+        "mid_session_gaps": 8,
+        "session_edge_gaps": 327,
+        "holiday_gaps": 29,
+        "mid_session_missing_bars": 47,
+        "session_edge_missing_bars": 390,
+        "holiday_missing_bars": 1013
+      },
+      "2013": {
+        "expected_bars": 72036,
+        "present_bars": 69814,
+        "coverage_pct": 96.92,
+        "mid_session_gaps": 3,
+        "session_edge_gaps": 462,
+        "holiday_gaps": 38,
+        "mid_session_missing_bars": 9,
+        "session_edge_missing_bars": 876,
+        "holiday_missing_bars": 1369
+      },
+      "2014": {
+        "expected_bars": 72036,
+        "present_bars": 69821,
+        "coverage_pct": 96.93,
+        "mid_session_gaps": 10,
+        "session_edge_gaps": 464,
+        "holiday_gaps": 36,
+        "mid_session_missing_bars": 20,
+        "session_edge_missing_bars": 796,
+        "holiday_missing_bars": 1474
+      },
+      "2015": {
+        "expected_bars": 72036,
+        "present_bars": 69583,
+        "coverage_pct": 96.59,
+        "mid_session_gaps": 2,
+        "session_edge_gaps": 468,
+        "holiday_gaps": 36,
+        "mid_session_missing_bars": 10,
+        "session_edge_missing_bars": 782,
+        "holiday_missing_bars": 1661
+      },
+      "2016": {
+        "expected_bars": 72024,
+        "present_bars": 70113,
+        "coverage_pct": 97.35,
+        "mid_session_gaps": 2,
+        "session_edge_gaps": 484,
+        "holiday_gaps": 25,
+        "mid_session_missing_bars": 5,
+        "session_edge_missing_bars": 717,
+        "holiday_missing_bars": 925
+      },
+      "2017": {
+        "expected_bars": 71772,
+        "present_bars": 69813,
+        "coverage_pct": 97.27,
+        "mid_session_gaps": 0,
+        "session_edge_gaps": 484,
+        "holiday_gaps": 34,
+        "mid_session_missing_bars": 0,
+        "session_edge_missing_bars": 666,
+        "holiday_missing_bars": 1557
+      },
+      "2018": {
+        "expected_bars": 72036,
+        "present_bars": 69955,
+        "coverage_pct": 97.11,
+        "mid_session_gaps": 1,
+        "session_edge_gaps": 480,
+        "holiday_gaps": 39,
+        "mid_session_missing_bars": 2,
+        "session_edge_missing_bars": 665,
+        "holiday_missing_bars": 1414
+      },
+      "2019": {
+        "expected_bars": 72036,
+        "present_bars": 69916,
+        "coverage_pct": 97.06,
+        "mid_session_gaps": 3,
+        "session_edge_gaps": 481,
+        "holiday_gaps": 38,
+        "mid_session_missing_bars": 22,
+        "session_edge_missing_bars": 721,
+        "holiday_missing_bars": 1377
+      },
+      "2020": {
+        "expected_bars": 72312,
+        "present_bars": 70327,
+        "coverage_pct": 97.25,
+        "mid_session_gaps": 2,
+        "session_edge_gaps": 483,
+        "holiday_gaps": 31,
+        "mid_session_missing_bars": 14,
+        "session_edge_missing_bars": 663,
+        "holiday_missing_bars": 1308
+      },
+      "2021": {
+        "expected_bars": 72024,
+        "present_bars": 70224,
+        "coverage_pct": 97.5,
+        "mid_session_gaps": 7,
+        "session_edge_gaps": 489,
+        "holiday_gaps": 25,
+        "mid_session_missing_bars": 104,
+        "session_edge_missing_bars": 498,
+        "holiday_missing_bars": 934
+      },
+      "2022": {
+        "expected_bars": 71760,
+        "present_bars": 70709,
+        "coverage_pct": 98.54,
+        "mid_session_gaps": 3,
+        "session_edge_gaps": 239,
+        "holiday_gaps": 17,
+        "mid_session_missing_bars": 4,
+        "session_edge_missing_bars": 268,
+        "holiday_missing_bars": 779
+      },
+      "2023": {
+        "expected_bars": 71772,
+        "present_bars": 70671,
+        "coverage_pct": 98.47,
+        "mid_session_gaps": 3,
+        "session_edge_gaps": 1,
+        "holiday_gaps": 12,
+        "mid_session_missing_bars": 11,
+        "session_edge_missing_bars": 1,
+        "holiday_missing_bars": 1353
+      },
+      "2024": {
+        "expected_bars": 72312,
+        "present_bars": 71210,
+        "coverage_pct": 98.48,
+        "mid_session_gaps": 0,
+        "session_edge_gaps": 0,
+        "holiday_gaps": 12,
+        "mid_session_missing_bars": 0,
+        "session_edge_missing_bars": 0,
+        "holiday_missing_bars": 1102
+      },
+      "2025": {
+        "expected_bars": 72036,
+        "present_bars": 70487,
+        "coverage_pct": 97.85,
+        "mid_session_gaps": 33,
+        "session_edge_gaps": 76,
+        "holiday_gaps": 22,
+        "mid_session_missing_bars": 144,
+        "session_edge_missing_bars": 84,
+        "holiday_missing_bars": 1321
+      },
+      "2026": {
+        "expected_bars": 1848,
+        "present_bars": 1584,
+        "coverage_pct": 85.71,
+        "mid_session_gaps": 0,
+        "session_edge_gaps": 0,
+        "holiday_gaps": 0,
+        "mid_session_missing_bars": 0,
+        "session_edge_missing_bars": 0,
+        "holiday_missing_bars": 0
+      }
+    },
+    "largest_mid_session": [
+      {
+        "start_utc": "2021-09-24 15:25",
+        "start_ny": "Fri 2021-09-24 11:25",
+        "missing_bars": 39
+      },
+      {
+        "start_utc": "2025-01-07 02:05",
+        "start_ny": "Mon 2025-01-06 21:05",
+        "missing_bars": 35
+      },
+      {
+        "start_utc": "2025-10-23 17:10",
+        "start_ny": "Thu 2025-10-23 13:10",
+        "missing_bars": 23
+      },
+      {
+        "start_utc": "2012-08-06 03:50",
+        "start_ny": "Sun 2012-08-05 23:50",
+        "missing_bars": 22
+      },
+      {
+        "start_utc": "2021-06-18 13:35",
+        "start_ny": "Fri 2021-06-18 09:35",
+        "missing_bars": 20
+      },
+      {
+        "start_utc": "2021-06-15 10:55",
+        "start_ny": "Tue 2021-06-15 06:55",
+        "missing_bars": 18
+      },
+      {
+        "start_utc": "2019-02-27 02:30",
+        "start_ny": "Tue 2019-02-26 21:30",
+        "missing_bars": 15
+      },
+      {
+        "start_utc": "2021-06-17 18:20",
+        "start_ny": "Thu 2021-06-17 14:20",
+        "missing_bars": 14
+      },
+      {
+        "start_utc": "2012-04-25 22:45",
+        "start_ny": "Wed 2012-04-25 18:45",
+        "missing_bars": 13
+      },
+      {
+        "start_utc": "2025-01-07 09:00",
+        "start_ny": "Tue 2025-01-07 04:00",
+        "missing_bars": 10
+      },
+      {
+        "start_utc": "2020-10-26 22:10",
+        "start_ny": "Mon 2020-10-26 18:10",
+        "missing_bars": 9
+      },
+      {
+        "start_utc": "2025-12-29 23:05",
+        "start_ny": "Mon 2025-12-29 18:05",
+        "missing_bars": 9
+      },
+      {
+        "start_utc": "2015-07-01 00:05",
+        "start_ny": "Tue 2015-06-30 20:05",
+        "missing_bars": 8
+      },
+      {
+        "start_utc": "2014-03-20 16:40",
+        "start_ny": "Thu 2014-03-20 12:40",
+        "missing_bars": 7
+      },
+      {
+        "start_utc": "2013-02-06 01:30",
+        "start_ny": "Tue 2013-02-05 20:30",
+        "missing_bars": 6
+      }
+    ]
+  },
+  "ohlc": {
+    "inconsistent_rows_rejected": 0,
+    "flat_bars_o_eq_h_eq_l_eq_c": 146,
+    "flat_bars_by_year": {
+      "2012": 5,
+      "2013": 4,
+      "2014": 34,
+      "2015": 22,
+      "2016": 1,
+      "2019": 4,
+      "2020": 11,
+      "2021": 4,
+      "2022": 6,
+      "2023": 1,
+      "2024": 1,
+      "2025": 53
+    }
+  },
+  "duplicates": {
+    "identical": 0,
+    "conflicting": 0,
+    "rule": "the first occurrence in file order is kept"
+  },
+  "jumps": {
+    "definition": "A bar is flagged when its close-to-close move (or its high-low range) is at least 30x the median of the previous 288 bars. Flags are reported, not removed: most are real news moves.",
+    "close_to_close": {
+      "count": 203,
+      "after_a_gap": 25,
+      "by_year": {
+        "2012": 17,
+        "2013": 21,
+        "2014": 29,
+        "2015": 20,
+        "2016": 16,
+        "2017": 16,
+        "2018": 3,
+        "2019": 19,
+        "2020": 5,
+        "2021": 17,
+        "2022": 15,
+        "2023": 16,
+        "2024": 8,
+        "2025": 1
+      },
+      "top": [
+        {
+          "ts_utc": "2015-07-20 01:25",
+          "ny": "Sun 2015-07-19 21:25",
+          "move": 30.87,
+          "ratio": 171.5,
+          "after_gap": false,
+          "close": 1100.19
+        },
+        {
+          "ts_utc": "2013-11-07 13:30",
+          "ny": "Thu 2013-11-07 08:30",
+          "move": 18.84,
+          "ratio": 89.7,
+          "after_gap": false,
+          "close": 1297.89
+        },
+        {
+          "ts_utc": "2021-08-08 22:55",
+          "ny": "Sun 2021-08-08 18:55",
+          "move": 28.09,
+          "ratio": 85.1,
+          "after_gap": false,
+          "close": 1692.3
+        },
+        {
+          "ts_utc": "2016-09-02 12:30",
+          "ny": "Fri 2016-09-02 08:30",
+          "move": 19.47,
+          "ratio": 84.7,
+          "after_gap": false,
+          "close": 1326.74
+        },
+        {
+          "ts_utc": "2012-09-13 16:30",
+          "ny": "Thu 2012-09-13 12:30",
+          "move": 24.7,
+          "ratio": 79.7,
+          "after_gap": false,
+          "close": 1747.64
+        },
+        {
+          "ts_utc": "2014-06-05 12:45",
+          "ny": "Thu 2014-06-05 08:45",
+          "move": 12.32,
+          "ratio": 77.0,
+          "after_gap": false,
+          "close": 1257.47
+        },
+        {
+          "ts_utc": "2017-06-26 08:00",
+          "ny": "Mon 2017-06-26 04:00",
+          "move": 12.28,
+          "ratio": 76.7,
+          "after_gap": false,
+          "close": 1241.53
+        },
+        {
+          "ts_utc": "2012-11-28 13:20",
+          "ny": "Wed 2012-11-28 08:20",
+          "move": 21.12,
+          "ratio": 75.4,
+          "after_gap": false,
+          "close": 1714.39
+        },
+        {
+          "ts_utc": "2017-04-23 22:05",
+          "ny": "Sun 2017-04-23 18:05",
+          "move": 15.66,
+          "ratio": 74.6,
+          "after_gap": true,
+          "close": 1268.63
+        },
+        {
+          "ts_utc": "2013-09-06 12:30",
+          "ny": "Fri 2013-09-06 08:30",
+          "move": 30.73,
+          "ratio": 71.5,
+          "after_gap": false,
+          "close": 1390.64
+        },
+        {
+          "ts_utc": "2016-06-03 12:30",
+          "ny": "Fri 2016-06-03 08:30",
+          "move": 17.05,
+          "ratio": 71.0,
+          "after_gap": false,
+          "close": 1230.36
+        },
+        {
+          "ts_utc": "2019-08-25 22:05",
+          "ny": "Sun 2019-08-25 18:05",
+          "move": 19.66,
+          "ratio": 67.8,
+          "after_gap": true,
+          "close": 1545.91
+        },
+        {
+          "ts_utc": "2023-10-08 22:00",
+          "ny": "Sun 2023-10-08 18:00",
+          "move": 21.67,
+          "ratio": 67.7,
+          "after_gap": true,
+          "close": 1853.51
+        },
+        {
+          "ts_utc": "2020-01-05 23:05",
+          "ny": "Sun 2020-01-05 18:05",
+          "move": 25.01,
+          "ratio": 65.8,
+          "after_gap": true,
+          "close": 1576.45
+        },
+        {
+          "ts_utc": "2015-11-06 13:30",
+          "ny": "Fri 2015-11-06 08:30",
+          "move": 12.25,
+          "ratio": 64.5,
+          "after_gap": false,
+          "close": 1094.48
+        }
+      ]
+    },
+    "range": {
+      "count": 23,
+      "after_a_gap": 0,
+      "by_year": {
+        "2012": 6,
+        "2013": 2,
+        "2014": 3,
+        "2015": 3,
+        "2016": 3,
+        "2017": 2,
+        "2019": 2,
+        "2021": 1,
+        "2024": 1
+      },
+      "top": [
+        {
+          "ts_utc": "2015-07-20 01:25",
+          "ny": "Sun 2015-07-19 21:25",
+          "range": 61.59,
+          "ratio": 150.2,
+          "after_gap": false,
+          "close": 1100.19
+        },
+        {
+          "ts_utc": "2021-08-08 22:55",
+          "ny": "Sun 2021-08-08 18:55",
+          "range": 36.65,
+          "ratio": 47.0,
+          "after_gap": false,
+          "close": 1692.3
+        },
+        {
+          "ts_utc": "2017-06-26 08:00",
+          "ny": "Mon 2017-06-26 04:00",
+          "range": 17.81,
+          "ratio": 45.7,
+          "after_gap": false,
+          "close": 1241.53
+        },
+        {
+          "ts_utc": "2016-09-02 12:30",
+          "ny": "Fri 2016-09-02 08:30",
+          "range": 26.65,
+          "ratio": 45.6,
+          "after_gap": false,
+          "close": 1326.74
+        },
+        {
+          "ts_utc": "2012-09-13 16:30",
+          "ny": "Thu 2012-09-13 12:30",
+          "range": 33.36,
+          "ratio": 43.3,
+          "after_gap": false,
+          "close": 1747.64
+        },
+        {
+          "ts_utc": "2015-07-20 01:35",
+          "ny": "Sun 2015-07-19 21:35",
+          "range": 17.71,
+          "ratio": 42.2,
+          "after_gap": false,
+          "close": 1098.82
+        },
+        {
+          "ts_utc": "2024-03-20 22:15",
+          "ny": "Wed 2024-03-20 18:15",
+          "range": 29.91,
+          "ratio": 36.5,
+          "after_gap": false,
+          "close": 2209.99
+        },
+        {
+          "ts_utc": "2014-01-06 15:10",
+          "ny": "Mon 2014-01-06 10:10",
+          "range": 33.4,
+          "ratio": 35.9,
+          "after_gap": false,
+          "close": 1235.85
+        },
+        {
+          "ts_utc": "2017-08-25 13:40",
+          "ny": "Fri 2017-08-25 09:40",
+          "range": 15.41,
+          "ratio": 35.8,
+          "after_gap": false,
+          "close": 1282.76
+        },
+        {
+          "ts_utc": "2012-11-06 18:15",
+          "ny": "Tue 2012-11-06 13:15",
+          "range": 24.73,
+          "ratio": 35.6,
+          "after_gap": false,
+          "close": 1716.62
+        },
+        {
+          "ts_utc": "2012-11-06 18:10",
+          "ny": "Tue 2012-11-06 13:10",
+          "range": 24.42,
+          "ratio": 35.4,
+          "after_gap": false,
+          "close": 1718.84
+        },
+        {
+          "ts_utc": "2012-11-28 13:20",
+          "ny": "Wed 2012-11-28 08:20",
+          "range": 22.53,
+          "ratio": 34.7,
+          "after_gap": false,
+          "close": 1714.39
+        },
+        {
+          "ts_utc": "2019-06-20 01:00",
+          "ny": "Wed 2019-06-19 21:00",
+          "range": 23.26,
+          "ratio": 34.2,
+          "after_gap": false,
+          "close": 1383.79
+        },
+        {
+          "ts_utc": "2013-11-07 13:30",
+          "ny": "Thu 2013-11-07 08:30",
+          "range": 18.47,
+          "ratio": 34.2,
+          "after_gap": false,
+          "close": 1297.89
+        },
+        {
+          "ts_utc": "2016-06-03 12:30",
+          "ny": "Fri 2016-06-03 08:30",
+          "range": 18.32,
+          "ratio": 33.9,
+          "after_gap": false,
+          "close": 1230.36
+        }
+      ]
+    }
+  },
+  "spread": {
+    "available": true,
+    "unit": "price (USD for XAUUSD)",
+    "per_year": {
+      "2012": {
+        "min": 0.0,
+        "p05": 0.32,
+        "p25": 0.35,
+        "p50": 0.4,
+        "p75": 0.48,
+        "p95": 0.6,
+        "p99": 0.72,
+        "max": 2.86,
+        "mean": 0.42249,
+        "zero_bars": 97
+      },
+      "2013": {
+        "min": 0.0,
+        "p05": 0.2,
+        "p25": 0.26,
+        "p50": 0.32,
+        "p75": 0.41,
+        "p95": 0.52,
+        "p99": 0.62,
+        "max": 2.34,
+        "mean": 0.34186,
+        "zero_bars": 94
+      },
+      "2014": {
+        "min": 0.0,
+        "p05": 0.31,
+        "p25": 0.38,
+        "p50": 0.41,
+        "p75": 0.51,
+        "p95": 0.57,
+        "p99": 0.66,
+        "max": 5.3,
+        "mean": 0.43928,
+        "zero_bars": 1459
+      },
+      "2015": {
+        "min": 0.0,
+        "p05": 0.24,
+        "p25": 0.33,
+        "p50": 0.4,
+        "p75": 0.45,
+        "p95": 0.53,
+        "p99": 0.62,
+        "max": 4.49,
+        "mean": 0.39493,
+        "zero_bars": 11
+      },
+      "2016": {
+        "min": 0.0,
+        "p05": 0.24,
+        "p25": 0.25,
+        "p50": 0.29,
+        "p75": 0.33,
+        "p95": 0.39,
+        "p99": 0.47,
+        "max": 0.82,
+        "mean": 0.299,
+        "zero_bars": 322
+      },
+      "2017": {
+        "min": 0.0,
+        "p05": 0.24,
+        "p25": 0.24,
+        "p50": 0.24,
+        "p75": 0.31,
+        "p95": 0.38,
+        "p99": 0.41,
+        "max": 0.56,
+        "mean": 0.27803,
+        "zero_bars": 2
+      },
+      "2018": {
+        "min": 0.0,
+        "p05": 0.14,
+        "p25": 0.15,
+        "p50": 0.19,
+        "p75": 0.22,
+        "p95": 0.36,
+        "p99": 0.38,
+        "max": 1.23,
+        "mean": 0.19577,
+        "zero_bars": 37
+      },
+      "2019": {
+        "min": 0.0,
+        "p05": 0.16,
+        "p25": 0.19,
+        "p50": 0.21,
+        "p75": 0.22,
+        "p95": 0.24,
+        "p99": 0.26,
+        "max": 1.49,
+        "mean": 0.20371,
+        "zero_bars": 16
+      },
+      "2020": {
+        "min": 0.0,
+        "p05": 0.05,
+        "p25": 0.05,
+        "p50": 0.11,
+        "p75": 0.18,
+        "p95": 0.43,
+        "p99": 1.16,
+        "max": 12.11,
+        "mean": 0.16109,
+        "zero_bars": 58
+      },
+      "2021": {
+        "min": 0.0,
+        "p05": 0.0,
+        "p25": 0.05,
+        "p50": 0.05,
+        "p75": 0.06,
+        "p95": 0.14,
+        "p99": 0.2,
+        "max": 1.95,
+        "mean": 0.0593,
+        "zero_bars": 6408
+      },
+      "2022": {
+        "min": 0.0,
+        "p05": 0.0,
+        "p25": 0.04,
+        "p50": 0.05,
+        "p75": 0.08,
+        "p95": 0.12,
+        "p99": 0.21,
+        "max": 1.06,
+        "mean": 0.05845,
+        "zero_bars": 10021
+      },
+      "2023": {
+        "min": 0.0,
+        "p05": 0.04,
+        "p25": 0.06,
+        "p50": 0.07,
+        "p75": 0.08,
+        "p95": 0.16,
+        "p99": 0.21,
+        "max": 0.99,
+        "mean": 0.07993,
+        "zero_bars": 518
+      },
+      "2024": {
+        "min": 0.0,
+        "p05": 0.05,
+        "p25": 0.08,
+        "p50": 0.14,
+        "p75": 0.2,
+        "p95": 0.33,
+        "p99": 0.34,
+        "max": 2.24,
+        "mean": 0.16122,
+        "zero_bars": 9
+      },
+      "2025": {
+        "min": 0.0,
+        "p05": 0.04,
+        "p25": 0.09,
+        "p50": 0.15,
+        "p75": 0.17,
+        "p95": 0.18,
+        "p99": 0.23,
+        "max": 5.95,
+        "mean": 0.1293,
+        "zero_bars": 321
+      },
+      "2026": {
+        "min": 0.04,
+        "p05": 0.04,
+        "p25": 0.04,
+        "p50": 0.04,
+        "p75": 0.04,
+        "p95": 0.04,
+        "p99": 0.17,
+        "max": 0.44,
+        "mean": 0.04577,
+        "zero_bars": 0
+      }
+    }
+  },
+  "hashes": {
+    "5m": "2e8a9d50fab97e62c4cfe282ef4bb7ee9eee8dfa685bdb98ae114823e8fc7162",
+    "15m": "b25d77a02b733c72921ace8de561600fe6bd999b7c9adf67d1529d7b859da0f4",
+    "1h": "8d5e6e8386126514ed4dcb23f3dc1aaeb72e64d0bebc254939fc8560ee0c98e9",
+    "4h": "2d1284c0f7fdca48a7a6113be5503c14c8031bb32ea85379212a7b08e9846e41"
+  }
+}
