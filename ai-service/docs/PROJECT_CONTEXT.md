@@ -439,6 +439,7 @@ scored.
 | 1 | 2026-10-19 | baseline | Spec's initial rules | 149 | 71 | 21.1% | −0.065 (−0.35 to +0.22) | [rules_only](phase2/rules_only.md) |
 | 2 | 2026-10-19 | A | A new extreme extends the sweep while depth ≤ 1.5 ATR, instead of discarding | 178 | 87 | 21.8% | −0.084 (−0.34 to +0.17) | [variant_A](phase2/variant_A.md) |
 | 3 | 2026-10-19 | AB | A, plus Asian (20:00–00:00 NY) and London (02:00–05:00 NY) session highs and lows as levels | 297 | 143 | 26.6% | −0.045 (−0.26 to +0.18) | [variant_AB](phase2/variant_AB.md) |
+| 5 | 2026-10-19 | AB5F | AB5, plus: the FVG's third bar must be the CHoCH bar or one of the 6 entry bars before it (counted in bars). Sweep, CHoCH, entry, SL and TP unchanged | 843 | 384 | 27.3% | **−0.257 (−0.40 to −0.11)** | [variant_AB5F](phase2/variant_AB5F.md) |
 | 4 | 2026-10-19 | AB5 | AB with 5m entry bars (same 1h/4h and session levels). Bar windows scaled to the same clock time: CHoCH and entry windows 24 bars (2 h), horizon 144 bars (12 h); swing k and ATR period stay in entry bars | 807 | 364 | 25.8% | **−0.337 (−0.49 to −0.18)** | [variant_AB5](phase2/variant_AB5.md) |
 
 **Status after attempt 4:**
@@ -463,6 +464,26 @@ scored.
   - Fadi marks each chart. The gate passes at 45 of 50 correct or more.
   - Claude spot-checked charts #01, #10, #25 and #37: the rule elements and the plan were drawn where
     the rules put them. This is not the review itself.
+
+**Decision, 2026-10-19 (Fadi), after reviewing v1 charts 1–5: the FVG definition is amended, and v2
+replaces v1.**
+- **The v1 review:** Fadi marked #2, #3 and #5 ❌ and #1, #4 ⚠️, all about FVG timing or visibility.
+  - A data check showed all five matched the written v1 rules.
+  - #2's gap formed 19 bars (95 min) before the CHoCH, far from the displacement that broke structure.
+  - The partial sheet is kept in
+    [phase2/review_v1/REVIEW_v1_partial.md](phase2/review_v1/REVIEW_v1_partial.md). Its charts can be
+    regenerated from commit `ed12bc5`; the files in `review/` are now v2's.
+- **The amended rule (spec, Strategy rule 5):**
+  - The gap's third bar is the CHoCH bar or one of the 6 entry bars before it, counted in bars.
+  - It stays inside the move from the sweep extreme.
+  - A small gap is valid if it meets the minimum size. Nothing else changes.
+- **Frozen v2 = `FROZEN_V2`** (attempt 5, AB5F). FROZEN_V1 is kept unchanged for the record.
+- **Result on 2012–2017:**
+  - 843 closed trades before the lockbox.
+  - Development mean net R −0.26 (95% CI −0.40 to −0.11): still a loss after costs, about break-even
+    before them.
+- **The review restarts from chart 1** on v2 (same seed). The charts now outline thin FVGs and print
+  the gap size and its distance from the CHoCH.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 

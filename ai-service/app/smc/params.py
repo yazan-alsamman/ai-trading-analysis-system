@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 import pandas as pd
 
@@ -34,6 +34,10 @@ class StrategyParams:
     # Entry bars in minutes (15 for the spec; 5 for attempt 4). Bar-count windows above are in entry
     # bars, so a 5m run scales them (8 -> 24, 48 -> 144) to keep the same clock time.
     entry_tf_minutes: int = 15
+    # Attempt 5 (2026-10-19, Fadi's review): the FVG's third bar must be the CHoCH bar or one of
+    # the N entry bars before it, so the gap belongs to the displacement that broke structure.
+    # Counted in bars, not minutes. None keeps the v1 rule (any gap from the extreme to the CHoCH).
+    fvg_max_bars_before_choch: int | None = None
 
     @property
     def entry_timeframe(self) -> pd.Timedelta:
@@ -43,9 +47,8 @@ class StrategyParams:
         return asdict(self)
 
 
-# The frozen v1 rule set (attempt 4, "AB5"), frozen on 2026-10-19 by Fadi's decision. Do not change
-# these values: Phase 3 and every later result depend on them. A new rule set gets a new name and a
-# new entry in the attempts log.
+# v1 rule set (attempt 4, "AB5"), frozen on 2026-10-19 and superseded the same day by FROZEN_V2
+# after the manual review found FVGs far from the CHoCH. Kept unchanged for the record.
 FROZEN_V1 = StrategyParams(
     extend_sweep=True,
     session_levels=True,
@@ -54,6 +57,11 @@ FROZEN_V1 = StrategyParams(
     entry_window=24,
     horizon=144,
 )
+
+# v2 rule set (attempt 5, "AB5F"): v1 plus an FVG within 6 entry bars before the CHoCH (or on it).
+# Frozen on 2026-10-19 by Fadi's decision. Do not change these values: Phase 3 and every later
+# result depend on them. A new rule set gets a new name and a new entry in the attempts log.
+FROZEN_V2 = replace(FROZEN_V1, fvg_max_bars_before_choch=6)
 
 
 @dataclass(frozen=True)

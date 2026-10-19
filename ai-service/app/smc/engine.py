@@ -217,7 +217,10 @@ class _LongScanner:
         s.choch_idx, s.ref_idx, s.ref_price = j, ref, float(self.h[ref])
         self.developing = None
         a = s.atr
-        for i in range(s.extreme_idx + 2, j + 1):
+        first = s.extreme_idx + 2  # the gap's three bars lie in the move from the extreme
+        if self.p.fvg_max_bars_before_choch is not None:
+            first = max(first, j - self.p.fvg_max_bars_before_choch)
+        for i in range(first, j + 1):
             gap_low, gap_high = self.h[i - 2], self.lo[i]
             if gap_high - gap_low >= self.p.min_fvg_atr * a:
                 s.fvg_idx, s.fvg_low, s.fvg_high = i, float(gap_low), float(gap_high)

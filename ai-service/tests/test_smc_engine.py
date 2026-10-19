@@ -213,3 +213,37 @@ def test_no_lookahead_with_all_variant_options():
     for cut in (1500, 3333):
         part = run(m15.iloc[:cut], h1, h4, params)
         assert _snapshot(part, cut) == _snapshot(full, cut)
+
+
+DELAYED_CHOCH = SETUP_BARS[:5] + [
+    (99.9, 101.6, 99.9, 100.9),  # 25: gap with bar 23, but closes below the 101 swing high
+    (100.9, 101.0, 100.3, 100.5),  # 26: gap with bar 24 (100.0 < 100.3)
+    (100.5, 101.3, 100.4, 101.2),  # 27: CHoCH, no gap of its own
+]
+
+
+def _scan_rows(rows, params):
+    m15 = _frame(WARMUP + rows)
+    sc = _LongScanner(m15, _levels(), params, CostParams(), "buy")
+    for j in range(len(m15)):
+        sc.step(j)
+    (s,) = sc.finish()
+    return s
+
+
+def test_fvg_window_takes_the_first_gap_inside_it():
+    s = _scan_rows(DELAYED_CHOCH, StrategyParams(fvg_max_bars_before_choch=1))
+    assert (s.choch_idx, s.fvg_idx) == (27, 26)
+    assert s.entry == 100.3  # the gap was accepted (the plan is then rejected for R below 1.5)
+    assert s.reason == "no opposite liquidity at 1.5R or more"
+
+
+def test_fvg_window_rejects_gaps_further_back():
+    s = _scan_rows(DELAYED_CHOCH, StrategyParams(fvg_max_bars_before_choch=0))
+    assert s.state == "DISCARDED"
+    assert s.reason == "no qualifying FVG"
+
+
+def test_without_a_window_the_first_gap_after_the_extreme_is_used():
+    s = _scan_rows(DELAYED_CHOCH, StrategyParams())
+    assert s.fvg_idx == 25

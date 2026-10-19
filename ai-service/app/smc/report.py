@@ -224,7 +224,9 @@ def _overrides(pairs: list[str]) -> dict:
         if not hasattr(defaults, key):
             raise SystemExit(f"unknown parameter: {key}")
         default = getattr(defaults, key)
-        if isinstance(default, bool):
+        if default is None:  # optional integer fields
+            out[key] = None if raw.lower() == "none" else int(raw)
+        elif isinstance(default, bool):
             out[key] = raw.lower() in ("1", "true", "yes")
         else:
             out[key] = type(default)(raw)

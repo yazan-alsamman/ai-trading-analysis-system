@@ -161,6 +161,11 @@ development period and then frozen.
    before the sweep extreme. A new high above the sweep extreme first discards the setup (**DISCARDED**).
 5. **FVG.** In the move from the sweep extreme to the CHoCH bar, take the first bearish three-bar gap: the low of
    bar i−2 is above the high of bar i. Its size must be at least 0.1 × ATR. No qualifying FVG discards the setup.
+   **Amended 2026-10-19 (v2, after the manual review):** bar i must be the CHoCH bar or one of the 6 entry bars
+   before it, counted in bars, so the gap belongs to the displacement that broke structure. A small gap stays
+   valid if it meets the minimum size. The rules for the sweep, CHoCH, entry, SL and TP are unchanged.
+   - **Frozen v2 rule set (`FROZEN_V2`):** 5m entry bars; the sweep may extend within 1.5 ATR; Asian and London
+     session levels added; windows of 24, 24 and 144 bars. See the attempts log in PROJECT_CONTEXT.md.
 6. **Entry.** A sell limit at the FVG's proximal edge (the high of bar i). The midpoint is an ablation.
 7. **Stop-loss.** Sweep extreme + 0.1 × ATR + current spread.
 8. **Take-profit.** The nearest opposite liquidity level (confirmed 1h/4h swing low or previous day's low) that gives
