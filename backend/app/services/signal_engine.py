@@ -269,17 +269,46 @@ def _risk_history(activations, profiles, result: EvaluationResult) -> int:
     return needed
 
 
+async def _lot_sizing(
+    session: AsyncSession,
+    job: Job,
+    df,
+    activations: list[Activation],
+    profiles: dict,
+    result: EvaluationResult,
+) -> dict[str, risk_service.LotSizing]:
+    """Account currency -> lot sizing on this instrument (empty without contract specs)."""
+    try:
+        instrument = await session.get(Instrument, job.instrument_id)
+        if instrument is None or not instrument.has_specs:
+            return {}
+        entry = float(df["close"].iloc[-1])
+        currencies = {
+            risk_service.effective(a.risk_override, profiles.get(a.user_id))[2] for a in activations
+        }
+        return {
+            c: await risk_service.lot_sizing(session, instrument, c, entry)
+            for c in sorted(currencies)
+        }
+    except Exception as exc:  # noqa: BLE001 - plans fall back to the quantity only
+        logger.exception("Lot sizing for %s failed", job)
+        result.errors.append(f"lot sizing: {type(exc).__name__}: {exc}")
+        return {}
+
+
 def _plans(
     df,
     inserted: list[dict[str, Any]],
     activations: list[Activation],
     profiles: dict,
     result: EvaluationResult,
+    sizing: dict[str, risk_service.LotSizing] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]]]:
     """(signal_plans rows, (signal id, user id) -> [(activation, plan or None)])."""
+    sizing = sizing or {}
     rows: list[dict[str, Any]] = []
     by_user: dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]] = defaultdict(list)
-    cache: dict[tuple[str, float, int], dict[str, Any]] = {}
+    cache: dict[tuple[str, float, int, str], dict[str, Any]] = {}
     for signal in inserted:
         side = 1 if SignalSide(signal["side"]) == SignalSide.buy else -1
         for a in activations:
@@ -290,9 +319,11 @@ def _plans(
                 config, size, currency, source = risk_service.effective(
                     a.risk_override, profiles.get(a.user_id)
                 )
-                key = (risk_service.config_key(config), size, side)
+                key = (risk_service.config_key(config), size, side, currency)
                 if key not in cache:
-                    cache[key] = risk_service.plan_dict(df, side, config, size)
+                    cache[key] = risk_service.plan_dict(
+                        df, side, config, size, sizing.get(currency)
+                    )
                 plan = {
                     **cache[key],
                     "account_size": size,
@@ -374,7 +405,12 @@ async def evaluate(
                     .returning(*Signal.__table__.columns)
                 )
                 inserted = [dict(r._mapping) for r in (await session.execute(stmt)).all()]
-            plan_rows, by_user = _plans(df, inserted, activations, profiles, result)
+            sizing = (
+                await _lot_sizing(session, job, df, activations, profiles, result)
+                if inserted
+                else {}
+            )
+            plan_rows, by_user = _plans(df, inserted, activations, profiles, result, sizing)
             if plan_rows:
                 stmt = (
                     insert(SignalPlan)

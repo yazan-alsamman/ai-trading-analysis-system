@@ -4,12 +4,15 @@ calculator and the per-user trade plans of live signals.
 - A profile is created on first read with the ``balanced`` template and 10,000 USDT.
 - The rules of a plan come from the activation's ``risk_override`` if set, else the profile,
   else the default template (a user who never opened the profile).
+- Instruments with contract specs are sized in the account currency (the profile's
+  ``quote_currency``) and get ``lots`` (``lot_sizing``; docs/instruments.md).
 """
 
 import json
 import logging
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.candle import Timeframe
+from app.models.instrument import Instrument
 from app.models.risk import RiskProfile, SignalPlan
 from app.models.strategy import Signal
 from app.models.user import User
@@ -33,6 +37,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_ACCOUNT_SIZE = 10_000.0
 DEFAULT_CURRENCY = "USDT"
 PLACEHOLDER_STOP = {"type": "percent", "value": 1.0}  # replaced by an explicit stop price
+# Dollar stablecoins count as USD when no exact conversion exists (with a warning on the plan).
+USD_ALIASES = frozenset({"USD", "USDT", "USDC"})
 
 
 def templates() -> dict[str, dict[str, Any]]:
@@ -152,11 +158,112 @@ def history_for(config: dict[str, Any]) -> int:
     return tb.risk.history(tb.BacktestConfig.from_risk(config))
 
 
+@dataclass(frozen=True)
+class LotSizing:
+    """How to size on an instrument with contract specs for one account currency: the spec,
+    the conversion rate (account currency per quote unit; None = not found) and notes for
+    the plan's ``sizing_warnings``. Without a spec, plans are computed as before."""
+
+    spec: tb.ContractSpec | None = None
+    rate: float | None = None
+    notes: tuple[str, ...] = ()
+
+
+def contract_spec(instrument: Instrument) -> tb.ContractSpec | None:
+    if not instrument.has_specs:
+        return None
+    return tb.ContractSpec(
+        contract_size=instrument.contract_size,
+        lot_step=instrument.lot_step,
+        quote_currency=instrument.pnl_currency,
+        min_lot=instrument.min_lot,
+        max_lot=instrument.max_lot,
+    )
+
+
+def _usd(currency: str) -> str:
+    return "USD" if currency in USD_ALIASES else currency
+
+
+def _names(currency: str) -> set[str]:
+    return set(USD_ALIASES) if currency in USD_ALIASES else {currency}
+
+
+async def _market_rate(
+    session: AsyncSession, quote: set[str], account: set[str]
+) -> tuple[float, str] | None:
+    """Latest 1m close of an active QUOTE/ACCOUNT market (or 1 / that of ACCOUNT/QUOTE); the
+    freshest candle wins when several sources list the pair."""
+    rows = await session.scalars(
+        select(Instrument).where(
+            Instrument.is_active.is_(True),
+            ((Instrument.base_asset.in_(quote)) & (Instrument.quote_asset.in_(account)))
+            | ((Instrument.base_asset.in_(account)) & (Instrument.quote_asset.in_(quote))),
+        )
+    )
+    best = None
+    for market in rows.all():
+        latest = await market_service.get_latest_candle(session, market.id, Timeframe.m1)
+        if latest is None or not latest.close > 0:
+            continue
+        if best is None or latest.ts > best[0]:
+            inverted = market.base_asset in account
+            rate = 1 / latest.close if inverted else latest.close
+            best = (latest.ts, rate, f"{market.source}:{market.symbol}")
+    return None if best is None else (best[1], best[2])
+
+
+async def conversion_rate(
+    session: AsyncSession, instrument: Instrument, account_currency: str, entry: float
+) -> tuple[float | None, list[str]]:
+    """(account currency per unit of the instrument's quote currency, notes).
+
+    Same currency: 1. Account currency = base (USD/JPY, USD account): 1 / entry. Otherwise the
+    latest close of a matching market. USD, USDT and USDC count as one currency only when there
+    is no exact match, and the notes say so. None when nothing matches: never assumed 1."""
+    quote, base, account = instrument.pnl_currency, instrument.base_asset, account_currency
+    rate = tb.direct_rate(base, quote, account, entry)
+    if rate is not None:
+        return rate, []
+    found = await _market_rate(session, {quote}, {account})
+    if found is not None:
+        return found[0], []
+    if not USD_ALIASES & {quote, base, account}:
+        return None, []
+    note = "USD, USDT and USDC treated as the same dollar (1:1)"
+    rate = tb.direct_rate(_usd(base), _usd(quote), _usd(account), entry)
+    if rate is not None:
+        return rate, [note]
+    found = await _market_rate(session, _names(quote), _names(account))
+    if found is not None:
+        return found[0], [f"{note}; converted with {found[1]}"]
+    return None, []
+
+
+async def lot_sizing(
+    session: AsyncSession, instrument: Instrument, account_currency: str, entry: float
+) -> LotSizing:
+    spec = contract_spec(instrument)
+    if spec is None:
+        return LotSizing()
+    rate, notes = await conversion_rate(session, instrument, account_currency, entry)
+    return LotSizing(spec, rate, tuple(notes))
+
+
 def plan_dict(
-    df: pd.DataFrame, side: int, config: dict[str, Any], account_size: float, **kw: Any
+    df: pd.DataFrame,
+    side: int,
+    config: dict[str, Any],
+    account_size: float,
+    sizing: LotSizing | None = None,
+    **kw: Any,
 ) -> dict[str, Any]:
-    plan = tb.plan_trade(df, len(df) - 1, side, config, account_size, **kw)
-    return plan.to_dict()
+    if sizing is not None and sizing.spec is not None:
+        kw.update(spec=sizing.spec, conversion_rate=sizing.rate)
+    plan = tb.plan_trade(df, len(df) - 1, side, config, account_size, **kw).to_dict()
+    if sizing is not None and sizing.notes:
+        plan["sizing_warnings"] = [*sizing.notes, *plan["sizing_warnings"]]
+    return plan
 
 
 # --- calculator ------------------------------------------------------------------------------
@@ -173,7 +280,7 @@ async def position_size(
         {**(raw or {}), "stop": PLACEHOLDER_STOP} if needs_placeholder else raw
     )
     account_size = data.account_size or profile.account_size
-    await market_service.get_instrument_or_404(session, data.instrument_id)
+    instrument = await market_service.get_instrument_or_404(session, data.instrument_id)
     now = datetime.now(UTC)
     last_closed = market_service.floor_to_bucket(now, data.timeframe.interval)
     last_closed -= data.timeframe.interval
@@ -190,7 +297,10 @@ async def position_size(
         )
     df = indicator_service.frame(candles)
     side = 1 if data.side == "buy" else -1
-    plan = plan_dict(df, side, config, account_size, entry=data.entry, stop=data.stop)
+    sizing = await lot_sizing(
+        session, instrument, profile.quote_currency, data.entry or candles[-1].close
+    )
+    plan = plan_dict(df, side, config, account_size, sizing, entry=data.entry, stop=data.stop)
     if needs_placeholder:
         config = {**config, "stop": None}
     return {
