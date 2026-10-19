@@ -37,10 +37,10 @@ Markers: ▲/▼ sweep extreme · ● fill · ✕ exit. Times are New York time.
 | 14 | [14_sell_20130827_0030.png](14_sell_20130827_0030.png) | sell | 2013-08-26 20:30 | expired | ✅ | Reviewer: all five conditions met per the numbers panel. |
 | 15 | [15_buy_20131009_0405.png](15_buy_20131009_0405.png) | buy | 2013-10-09 00:05 | tp | ✅ | Reviewer: all five conditions met per the numbers panel. |
 | 16 | [16_buy_20131202_1040.png](16_buy_20131202_1040.png) | buy | 2013-12-02 05:40 | sl | ✅ | Reviewer: all five conditions met. |
-| 17 | [17_sell_20131211_1205.png](17_sell_20131211_1205.png) | sell | 2013-12-11 07:05 | invalidated | | |
+| 17 | [17_sell_20131211_1205.png](17_sell_20131211_1205.png) | sell | 2013-12-11 07:05 | invalidated | ❌ | Reviewer (re-judged): CHoCH closed below the ref, but the panel does not clearly confirm a valid break. Data check: close 1256.16 vs ref 1256.48 (-0.32), which meets the sell rule. |
 | 18 | [18_sell_20131226_1120.png](18_sell_20131226_1120.png) | sell | 2013-12-26 06:20 | sl | ❌ | Reviewer: CHoCH closed below the ref, but the FVG does not look clearly tied to the breaking move. Data check: FVG 1206.38-1206.75 (0.37), bars 06:25-06:35 starting at the extreme bar, 2 bars before the CHoCH; within the v2 rule. |
-| 19 | [19_buy_20140205_1500.png](19_buy_20140205_1500.png) | buy | 2014-02-05 10:00 | timeout | | |
-| 20 | [20_buy_20140206_1455.png](20_buy_20140206_1455.png) | buy | 2014-02-06 09:55 | expired | | |
+| 19 | [19_buy_20140205_1500.png](19_buy_20140205_1500.png) | buy | 2014-02-05 10:00 | timeout | ❌ | Reviewer (re-judged): FVG timing correct (1 bar before the CHoCH); no confirmed error visible, earlier timing objection withdrawn; mark kept as ❌. Data check: all five conditions met. |
+| 20 | [20_buy_20140206_1455.png](20_buy_20140206_1455.png) | buy | 2014-02-06 09:55 | expired | ✅ | Reviewer (re-judged): sweep closed above the level, CHoCH closed above the ref, FVG inside the window, plan clear. |
 | 21 | [21_sell_20140305_1740.png](21_sell_20140305_1740.png) | sell | 2014-03-05 12:40 | expired | | |
 | 22 | [22_sell_20140404_0935.png](22_sell_20140404_0935.png) | sell | 2014-04-04 05:35 | sl | | |
 | 23 | [23_buy_20140501_0455.png](23_buy_20140501_0455.png) | buy | 2014-05-01 00:55 | sl | | |
