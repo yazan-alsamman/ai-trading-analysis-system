@@ -95,7 +95,7 @@ def draw(s: Setup, bars: pd.DataFrame, path: Path, number: int) -> None:
     end = min(len(bars) - 1, last + AFTER, start + MAX_BARS)
     w = bars.iloc[start : end + 1]
     x = np.arange(start, end + 1)
-    fig, ax = plt.subplots(figsize=(11, 5.6), dpi=80)
+    fig, ax = plt.subplots(figsize=(11, 7.0), dpi=80)
 
     for xi, (o, h, lo, c) in zip(x, w[["open", "high", "low", "close"]].to_numpy(), strict=True):
         up = c >= o
@@ -140,7 +140,7 @@ def draw(s: Setup, bars: pd.DataFrame, path: Path, number: int) -> None:
         color="#1f77b4",
     )
     ax.axvline(s.choch_idx, color="#1f77b4", lw=0.8, alpha=0.6)
-    ax.text(s.choch_idx, ax.get_ylim()[1], " CHoCH", va="top", fontsize=8, color="#1f77b4")
+    ax.text(s.choch_idx, ax.get_ylim()[0], " CHoCH", va="bottom", fontsize=8, color="#1f77b4")
 
     fvg_end = s.fill_idx if s.fill_idx is not None else end
     gap = s.fvg_high - s.fvg_low
@@ -189,19 +189,18 @@ def draw(s: Setup, bars: pd.DataFrame, path: Path, number: int) -> None:
     outcome = s.outcome or s.state.lower()
     ax.set_title(f"#{number:02d}  {s.setup_id}  ·  {s.direction}  ·  {outcome}", fontsize=10)
     ax.grid(alpha=0.15)
-    ax.text(
-        0.005,
-        0.995,
+    # The numbers panel sits under the chart, so it never hides candles or markers.
+    fig.subplots_adjust(left=0.07, right=0.89, top=0.94, bottom=0.27)
+    fig.text(
+        0.01,
+        0.015,
         "\n".join(_panel(s, bars)),
-        transform=ax.transAxes,
-        va="top",
+        va="bottom",
         ha="left",
-        fontsize=7.5,
+        fontsize=8,
         family="monospace",
-        bbox={"boxstyle": "round,pad=0.4", "fc": "white", "ec": "#999999", "alpha": 0.9},
-        zorder=10,
+        bbox={"boxstyle": "round,pad=0.4", "fc": "white", "ec": "#999999"},
     )
-    fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
 
