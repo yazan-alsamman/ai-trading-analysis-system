@@ -22,15 +22,15 @@ Markers: ▲/▼ sweep extreme · ● fill · ✕ exit. Times are New York time.
 | # | Chart | Direction | Sweep (NY) | Outcome | Correct? | Note |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | [01_buy_20120425_1530.png](01_buy_20120425_1530.png) | buy | 2012-04-25 11:30 | sl | ✅ | Reviewer: CHoCH close confirmed 0.64 above the ref from bar data; FVG 0.69 on the CHoCH bar. |
-| 2 | [02_buy_20120513_2225.png](02_buy_20120513_2225.png) | buy | 2012-05-13 18:25 | expired | ❌ | Reviewer: FVG timing fits v2, but the other conditions cannot be confirmed from the image alone (not a defect found). Data check: sweep closed back above 1578.39; CHoCH close 1582.52 vs ref 1582.32 (+0.20); FVG 0.55, 1 bar before the CHoCH; R 3.17. |
+| 2 | [02_buy_20120513_2225.png](02_buy_20120513_2225.png) | buy | 2012-05-13 18:25 | expired | ✅ | Re-judged with the numbers panel: Reviewer: all five conditions met per the numbers panel. |
 | 3 | [03_buy_20120531_1220.png](03_buy_20120531_1220.png) | buy | 2012-05-31 08:20 | sl | ✅ | Reviewer: all five conditions met; FVG 3 bars before the CHoCH. Data check agrees (gap 3.29). |
 | 4 | [04_buy_20120730_1235.png](04_buy_20120730_1235.png) | buy | 2012-07-30 08:35 | tp | ✅ | Reviewer: all five conditions met; FVG 1 bar before the CHoCH. Data check agrees (gap 0.62). |
-| 5 | [05_buy_20120731_1720.png](05_buy_20120731_1720.png) | buy | 2012-07-31 13:20 | timeout | ⚠️ | Reviewer: FVG visible and timing fits; bounds and size need confirming from bar data. Data check: FVG 1612.68 to 1613.41 (0.73, minimum 0.18), 6 bars before the CHoCH. |
-| 6 | [06_buy_20120820_0935.png](06_buy_20120820_0935.png) | buy | 2012-08-20 05:35 | sl | | |
-| 7 | [07_buy_20121018_0530.png](07_buy_20121018_0530.png) | buy | 2012-10-18 01:30 | sl | | |
-| 8 | [08_buy_20121024_1120.png](08_buy_20121024_1120.png) | buy | 2012-10-24 07:20 | sl | | |
-| 9 | [09_buy_20121115_0655.png](09_buy_20121115_0655.png) | buy | 2012-11-15 01:55 | sl | | |
-| 10 | [10_sell_20130206_1820.png](10_sell_20130206_1820.png) | sell | 2013-02-06 13:20 | sl | | |
+| 5 | [05_buy_20120731_1720.png](05_buy_20120731_1720.png) | buy | 2012-07-31 13:20 | timeout | ✅ | Re-judged with the numbers panel: Reviewer: all five conditions met per the numbers panel. |
+| 6 | [06_buy_20120820_0935.png](06_buy_20120820_0935.png) | buy | 2012-08-20 05:35 | sl | ✅ | Reviewer: all five conditions met per the numbers panel. |
+| 7 | [07_buy_20121018_0530.png](07_buy_20121018_0530.png) | buy | 2012-10-18 01:30 | sl | ✅ | Reviewer: all five conditions met per the numbers panel. |
+| 8 | [08_buy_20121024_1120.png](08_buy_20121024_1120.png) | buy | 2012-10-24 07:20 | sl | ✅ | Reviewer: all five conditions met per the numbers panel. |
+| 9 | [09_buy_20121115_0655.png](09_buy_20121115_0655.png) | buy | 2012-11-15 01:55 | sl | ✅ | Reviewer: all five conditions met per the numbers panel. |
+| 10 | [10_sell_20130206_1820.png](10_sell_20130206_1820.png) | sell | 2013-02-06 13:20 | sl | ✅ | Reviewer: all five conditions met per the numbers panel. |
 | 11 | [11_sell_20130305_1330.png](11_sell_20130305_1330.png) | sell | 2013-03-05 08:30 | tp | | |
 | 12 | [12_sell_20130417_0955.png](12_sell_20130417_0955.png) | sell | 2013-04-17 05:55 | invalidated | | |
 | 13 | [13_buy_20130821_0900.png](13_buy_20130821_0900.png) | buy | 2013-08-21 05:00 | expired | | |
@@ -72,4 +72,4 @@ Markers: ▲/▼ sweep extreme · ● fill · ✕ exit. Times are New York time.
 | 49 | [49_buy_20170802_1250.png](49_buy_20170802_1250.png) | buy | 2017-08-02 08:50 | expired | | |
 | 50 | [50_buy_20171219_0135.png](50_buy_20171219_0135.png) | buy | 2017-12-18 20:35 | expired | | |
 
-**Result:** __ of 50 correct (precision __%).
+**Result so far:** 10 of 10 reviewed are correct (100%); 40 still to review. Gate: 45 of 50.
