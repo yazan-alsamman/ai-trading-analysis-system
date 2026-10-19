@@ -3096,7 +3096,7 @@
           "strategies"
         ],
         "summary": "List Signals",
-        "description": "Signals, newest bar first.",
+        "description": "Signals you may see, newest bar first: those of global strategies and of custom\nstrategies you may use (your own, or public ones). A private custom strategy's signals\nare left out of the page and of ``total``; admins see every signal.",
         "operationId": "strategies_list_signals",
         "parameters": [
           {
@@ -7045,7 +7045,7 @@
           "risk"
         ],
         "summary": "My Signal Plans",
-        "description": "The trade plans of your live signals (one per signal and activation), newest bar first.",
+        "description": "The trade plans of your live signals (one per signal and activation), newest bar first.\nPlans of a strategy you may no longer use (made private by its author) are left out.",
         "operationId": "risk_my_signal_plans",
         "parameters": [
           {
