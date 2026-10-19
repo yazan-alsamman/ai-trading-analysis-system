@@ -43,6 +43,19 @@ class StrategyParams:
         return asdict(self)
 
 
+# The frozen v1 rule set (attempt 4, "AB5"), frozen on 2026-10-19 by Fadi's decision. Do not change
+# these values: Phase 3 and every later result depend on them. A new rule set gets a new name and a
+# new entry in the attempts log.
+FROZEN_V1 = StrategyParams(
+    extend_sweep=True,
+    session_levels=True,
+    entry_tf_minutes=5,
+    choch_window=24,
+    entry_window=24,
+    horizon=144,
+)
+
+
 @dataclass(frozen=True)
 class CostParams:
     """Round-trip cost in price units: the recorded spread plus the larger of ``extra_frac`` of it

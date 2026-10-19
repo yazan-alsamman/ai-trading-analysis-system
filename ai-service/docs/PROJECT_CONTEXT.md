@@ -452,6 +452,18 @@ scored.
 - Further changes wait for Fadi's decision. Variant attempts are capped to keep the multiple-testing
   count honest.
 
+**Decision, 2026-10-19 (Fadi): AB5 is frozen as the v1 rule set.**
+- It is `FROZEN_V1` in `app/smc/params.py`. No more rule variants will be tried.
+- The Phase 3 question becomes: can a model select a subset of these setups that is profitable after
+  costs, when the rules alone lose? Either answer is a reportable result.
+- **Phase 2 gate, manual detector review: pending.**
+  - Run `python -m app.smc.review`. It writes 50 charts of planned setups, stratified by year over
+    2012–2017 (seed 2026), and a checklist at
+    [phase2/review/REVIEW.md](phase2/review/REVIEW.md).
+  - Fadi marks each chart. The gate passes at 45 of 50 correct or more.
+  - Claude spot-checked charts #01, #10, #25 and #37: the rule elements and the plan were drawn where
+    the rules put them. This is not the review itself.
+
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 
 - **Code:** `app/smc/` (primitives, bar-by-bar engine with the full lifecycle, report). Run it with
