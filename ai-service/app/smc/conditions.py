@@ -33,25 +33,29 @@ def _frame(bars: pd.DataFrame, direction: str) -> tuple[np.ndarray, ...]:
     return o, h, lo, c
 
 
-_CACHE: dict[tuple[int, str], tuple[np.ndarray, ...]] = {}
+class Bars:
+    """Bars plus the per-direction arrays the checks need, computed once."""
+
+    def __init__(self, bars: pd.DataFrame, period: int):
+        self.frame = bars
+        self.ts = bars["ts_utc"]
+        self.spread = bars["spread"].fillna(0.0).to_numpy(float)
+        self.arrays = {}
+        for direction in ("buy", "sell"):
+            _, h, lo, c = _frame(bars, direction)
+            self.arrays[direction] = (h, lo, c, atr(h, lo, c, period))
 
 
-def _arrays(bars: pd.DataFrame, direction: str, period: int) -> tuple[np.ndarray, ...]:
-    key = (id(bars), direction)
-    if key not in _CACHE:
-        _, h, lo, c = _frame(bars, direction)
-        _CACHE[key] = (h, lo, c, atr(h, lo, c, period))
-    return _CACHE[key]
-
-
-def check(s: Setup, bars: pd.DataFrame, p: StrategyParams) -> dict[str, bool | str]:
+def check(s: Setup, bars: pd.DataFrame | Bars, p: StrategyParams) -> dict[str, bool | str]:
     """Each written condition for one setup, re-derived from the bars. Values are True, or a short
     reason it fails."""
     sign = 1.0 if s.direction == "buy" else -1.0
-    h, lo, c, atr_all = _arrays(bars, s.direction, p.atr_period)
-    spread = bars["spread"].fillna(0.0).to_numpy(float)
+    if not isinstance(bars, Bars):
+        bars = Bars(bars, p.atr_period)
+    h, lo, c, atr_all = bars.arrays[s.direction]
+    spread = bars.spread
     a = atr_all[s.sweep_idx]
-    ts = bars["ts_utc"]
+    ts = bars.ts
     level = sign * s.level.price
     extreme = sign * s.extreme
     out: dict[str, bool | str] = {}
@@ -140,9 +144,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     bars = bars[bars["ts_utc"] < DEV_END].reset_index(drop=True)
     planned = [s for s in run(bars, h1, h4, p, CostParams()) if s.tp is not None and s.r_multiple]
+    ctx = Bars(bars, p.atr_period)
     rows = []
     for s in planned:
-        res = check(s, bars, p)
+        res = check(s, ctx, p)
         rows.append({"setup_id": s.setup_id, "direction": s.direction, **res})
     df = pd.DataFrame(rows)
     summary = {
