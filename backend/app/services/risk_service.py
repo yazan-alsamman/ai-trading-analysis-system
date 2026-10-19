@@ -30,7 +30,7 @@ from app.models.risk import RiskProfile, SignalPlan
 from app.models.strategy import Signal
 from app.models.user import User
 from app.schemas.risk import PositionSizeRequest, RiskProfileUpdate
-from app.services import indicator_service, market_service
+from app.services import indicator_service, market_service, strategy_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +328,11 @@ async def list_plans(
     strategy_key: str | None = None,
     since: datetime | None = None,
 ) -> tuple[list[tuple[SignalPlan, Signal]], int]:
-    filters = [SignalPlan.user_id == user.id]
+    # your own plans, of signals you may still see (a strategy made private hides them)
+    filters = [
+        SignalPlan.user_id == user.id,
+        strategy_resolver.visible_signal(Signal.strategy_key, user),
+    ]
     if instrument_id is not None:
         filters.append(Signal.instrument_id == instrument_id)
     if timeframe is not None:

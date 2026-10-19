@@ -65,7 +65,8 @@ async def my_signal_plans(
     strategy_key: Annotated[str | None, Query(max_length=64)] = None,
     since: Annotated[datetime | None, Query(description="bar_time >= since (ISO 8601)")] = None,
 ):
-    """The trade plans of your live signals (one per signal and activation), newest bar first."""
+    """The trade plans of your live signals (one per signal and activation), newest bar first.
+    Plans of a strategy you may no longer use (made private by its author) are left out."""
     if since is not None and since.tzinfo is None:
         since = since.replace(tzinfo=UTC)
     rows, total = await service.list_plans(

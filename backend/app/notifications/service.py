@@ -29,7 +29,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from redis.asyncio import Redis
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import ColumnElement, and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -61,6 +61,7 @@ from app.notifications.channels.telegram import TelegramClient
 from app.notifications.preferences import EXTERNAL, Prefs
 from app.realtime import publisher
 from app.realtime.topics import channel_for, user_topic
+from app.services import strategy_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -728,6 +729,16 @@ async def stats(session: AsyncSession, redis: Redis) -> dict[str, Any]:
 # --- inbox ---------------------------------------------------------------------------------------
 
 
+def _visible(user: User) -> ColumnElement[bool]:
+    """Signal notifications follow the signal visibility rule: those of a strategy the user may
+    no longer use (made private by its author, or deleted) are hidden from the inbox."""
+    key = Notification.data["signal"]["strategy_key"].astext
+    return or_(
+        Notification.type != NotificationType.signal,
+        strategy_resolver.visible_signal(key, user),
+    )
+
+
 async def list_inbox(
     session: AsyncSession,
     user: User,
@@ -737,7 +748,7 @@ async def list_inbox(
     type_: NotificationType | None = None,
     unread: bool | None = None,
 ) -> tuple[list[Notification], int]:
-    conditions = [Notification.user_id == user.id]
+    conditions = [Notification.user_id == user.id, _visible(user)]
     if type_ is not None:
         conditions.append(Notification.type == type_)
     if unread is True:
@@ -762,7 +773,7 @@ async def unread_count(session: AsyncSession, user: User) -> int:
         await session.scalar(
             select(func.count())
             .select_from(Notification)
-            .where(Notification.user_id == user.id, Notification.read_at.is_(None))
+            .where(Notification.user_id == user.id, Notification.read_at.is_(None), _visible(user))
         )
         or 0
     )

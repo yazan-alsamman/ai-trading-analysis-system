@@ -24,6 +24,19 @@ def signals_topic(instrument_id: uuid.UUID) -> str:
     return f"signals:{instrument_id}"
 
 
+def private_signals_topic(instrument_id: uuid.UUID | str, user_id: uuid.UUID | None) -> str:
+    """Where the signals of a **private** custom strategy are published, instead of
+    ``signals:{instrument_id}``: ``signals:{instrument_id}:user:{owner}`` for its owner and
+    ``signals:{instrument_id}:admins`` for admins (``user_id=None``). Clients never subscribe to
+    these by name: subscribing to ``signals:{instrument_id}`` also subscribes the connection to
+    its own one (admins: the admins one), and the frames carry ``topic: signals:{id}``."""
+    return f"signals:{instrument_id}:" + ("admins" if user_id is None else f"user:{user_id}")
+
+
+def is_private_signals(topic: str) -> bool:
+    return topic.startswith("signals:") and topic.count(":") >= 2
+
+
 def news_topic(instrument_id: uuid.UUID | str | None = None) -> str:
     """New articles (Y18): ``news`` gets all of them, ``news:{instrument_id}`` those tagged
     with that instrument."""

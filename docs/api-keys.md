@@ -201,6 +201,8 @@ The protocol is the same as with a login token ([websocket.md](websocket.md)). T
 acts as the key's owner, so it may also subscribe to the owner's `user:` topic.
 
 - Missing/invalid/revoked/expired key, or no `stream` scope → closed with **4401**.
+- Revoking the key (or removing `stream` from it, or deactivating its owner) closes its open
+  sockets right away: `{"type":"error","code":"auth_revoked",...}`, then **4401**.
 - More than 5 open connections for one key (or one user) → closed with **4429**.
 - More than 20 new connections per minute from one IP → closed with **4429**.
 

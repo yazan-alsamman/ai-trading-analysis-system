@@ -144,7 +144,19 @@ def build() -> dict[str, Any]:
         }
     server = {
         "Subscribed": typed("subscribed", {}, ["topic"], "A subscribe was accepted."),
-        "Unsubscribed": typed("unsubscribed", {}, ["topic"], "An unsubscribe was done."),
+        "Unsubscribed": typed(
+            "unsubscribed",
+            {
+                "reason": {
+                    "type": "string",
+                    "enum": ["forbidden"],
+                    "description": "set when the server dropped the topic itself: the role or "
+                    "the API key's scopes no longer allow it",
+                }
+            },
+            ["topic"],
+            "An unsubscribe was done (by the client, or by the server with a reason).",
+        ),
         "Snapshot": typed(
             "snapshot",
             {"candle": {"anyOf": [{"type": "null"}, candle]}},
@@ -165,13 +177,16 @@ def build() -> dict[str, Any]:
                         protocol.FORBIDDEN,
                         protocol.TOO_MANY_SUBSCRIPTIONS,
                         protocol.TOKEN_EXPIRED,
+                        protocol.AUTH_REVOKED,
                         protocol.UNAVAILABLE,
                     ],
                 },
                 "message": {"type": "string"},
             },
             ["code", "message"],
-            "A rejected client message; the socket stays open (token_expired closes it).",
+            "A rejected client message; the socket stays open. token_expired (the token or key "
+            "expired) and auth_revoked (API key revoked, expired or without stream; user "
+            "deactivated or deleted; message = the reason) are followed by a close with 4401.",
         ),
         "Candle": typed(
             "candle",
@@ -179,7 +194,13 @@ def build() -> dict[str, Any]:
             ["instrument_id", "timeframe", "candle"],
             "Live update of the current candle (at most one per publish).",
         ),
-        "Signal": typed("signal", {"signal": SIGNAL}, ["signal"], "A live strategy signal."),
+        "Signal": typed(
+            "signal",
+            {"signal": SIGNAL},
+            ["signal"],
+            "A live strategy signal. A private custom strategy's signals reach only its owner "
+            "and admins (same frame and topic).",
+        ),
         "UserSignal": typed(
             "signal",
             {
@@ -307,7 +328,9 @@ def build() -> dict[str, Any]:
                 "?api_key=<key with the stream scope>; refused connections are closed with 4401 "
                 "(4429 over the connection limits). At most 50 topic subscriptions per "
                 "connection, 4 KB per client frame; idle 75 s closes with 1001; a client that "
-                "falls 256 messages behind is closed with 1013."
+                "falls 256 messages behind is closed with 1013. The user and API key are "
+                "re-checked on every heartbeat and at once when a key is revoked or the user "
+                "deactivated (error auth_revoked, then 4401)."
             ),
             "messages": refs(
                 "Subscribe",

@@ -21,7 +21,9 @@ channels:
     description: One connection carries every topic. Authenticate with ?token=<access JWT> or ?api_key=<key
       with the stream scope>; refused connections are closed with 4401 (4429 over the connection limits).
       At most 50 topic subscriptions per connection, 4 KB per client frame; idle 75 s closes with 1001;
-      a client that falls 256 messages behind is closed with 1013.
+      a client that falls 256 messages behind is closed with 1013. The user and API key are re-checked
+      on every heartbeat and at once when a key is revoked or the user deactivated (error auth_revoked,
+      then 4401).
     messages:
       Subscribe:
         $ref: '#/components/messages/Subscribe'
@@ -392,7 +394,7 @@ components:
     Unsubscribed:
       name: Unsubscribed
       title: Unsubscribed
-      summary: An unsubscribe was done.
+      summary: An unsubscribe was done (by the client, or by the server with a reason).
       contentType: application/json
       payload:
         type: object
@@ -405,6 +407,12 @@ components:
           topic:
             type: string
           sent_at: *id001
+          reason:
+            type: string
+            enum:
+            - forbidden
+            description: 'set when the server dropped the topic itself: the role or the API key''s scopes
+              no longer allow it'
     Snapshot:
       name: Snapshot
       title: Snapshot
@@ -498,7 +506,9 @@ components:
     Error:
       name: Error
       title: Error
-      summary: A rejected client message; the socket stays open (token_expired closes it).
+      summary: A rejected client message; the socket stays open. token_expired (the token or key expired)
+        and auth_revoked (API key revoked, expired or without stream; user deactivated or deleted; message
+        = the reason) are followed by a close with 4401.
       contentType: application/json
       payload:
         type: object
@@ -521,6 +531,7 @@ components:
             - forbidden
             - too_many_subscriptions
             - token_expired
+            - auth_revoked
             - unavailable
           message:
             type: string
@@ -551,7 +562,8 @@ components:
     Signal:
       name: Signal
       title: Signal
-      summary: A live strategy signal.
+      summary: A live strategy signal. A private custom strategy's signals reach only its owner and admins
+        (same frame and topic).
       contentType: application/json
       payload:
         type: object
