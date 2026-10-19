@@ -27,7 +27,7 @@ from app.smc.params import FROZEN_V2, CostParams  # noqa: E402
 from app.smc.report import DATA_DIR, DEV_END, OUT_DIR  # noqa: E402
 
 PLANNED = {"CLOSED", "EXPIRED", "INVALIDATED"}
-BEFORE, AFTER, MAX_BARS = 36, 18, 240
+BEFORE, AFTER, AFTER_CHOCH = 36, 18, 60  # bars shown; the pattern stays legible
 
 
 def sample(setups: list[Setup], ts: pd.Series, n: int, seed: int) -> list[Setup]:
@@ -86,13 +86,22 @@ def _panel(s: Setup, bars: pd.DataFrame) -> list[str]:
         f" | {s.choch_idx - s.fvg_idx} bars before CHoCH (max 6)",
         f"5 Plan    entry {s.entry:.2f} | SL {s.sl:.2f} | TP {s.tp:.2f}"
         f" ({'4R cap' if s.tp_source == 'cap' else 'opposite level'}) | R {s.r_multiple:.2f}",
+        f"6 Result  {_result(s, bars)}",
     ]
+
+
+def _result(s: Setup, bars: pd.DataFrame) -> str:
+    when = _ny(bars["ts_utc"].iloc[s.events[-1][0]])
+    if s.outcome is None:
+        return f"{s.state.lower()} at {when} NY ({s.reason})"
+    return f"{s.outcome} at {s.exit_price:.2f}, {when} NY, net {s.net_r:+.2f}R"
 
 
 def draw(s: Setup, bars: pd.DataFrame, path: Path, number: int) -> None:
     last = s.exit_idx if s.exit_idx is not None else s.events[-1][0]
     start = max(0, min(s.ref_idx, s.extreme_idx) - BEFORE)
-    end = min(len(bars) - 1, last + AFTER, start + MAX_BARS)
+    # Show the pattern and the fill, not the whole holding period; the outcome is in the panel.
+    end = min(len(bars) - 1, last + AFTER, s.choch_idx + AFTER_CHOCH)
     w = bars.iloc[start : end + 1]
     x = np.arange(start, end + 1)
     fig, ax = plt.subplots(figsize=(11, 7.0), dpi=80)
