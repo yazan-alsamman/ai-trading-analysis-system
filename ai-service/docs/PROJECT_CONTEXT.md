@@ -431,7 +431,10 @@ Still open:
    another rule set?~~ Answered on 2026-10-19: fix them (`FROZEN_V4`), then Phase 3.
 8. ~~**Phase 3 sample size (443 labels vs about 1,000):**~~ Answered on 2026-10-19: proceed with
    low-capacity models and a documented power limit.
-9. **Approve Phase 3 protocol v1** (spec, Machine learning) before the single walk-forward run?
+9. ~~**Approve Phase 3 protocol v1?**~~ Approved on 2026-10-20 and run once; the gate failed.
+10. **After the negative Phase 3 result:** write it up as the project's finding and build the
+    product honestly around it (the signal layer abstains: NO TRADE, `ev_insufficient`), or try a
+    new, logged research direction?
 
 ## Experiments log
 
@@ -646,6 +649,29 @@ restarts from chart 1 on the same sample.**
   - The trades are counter-trend on average: mean 1h trend −0.97 ATR in the trade's direction.
 - **The protocol is fixed in the spec** ("Phase 3 protocol v1"). The walk-forward run waits for
   Fadi's approval. It runs once.
+
+**Result, 2026-10-20: the single walk-forward run of protocol v1 (approved by Fadi). Phase 3 gate
+not met.** Report: [phase3/walkforward.md](phase3/walkforward.md).
+- **Rules alone, out of sample (2018 → 2024-06):**
+  - 252 trades, win rate 24.2%.
+  - Mean net R −0.28 (95% CI −0.45 to −0.11). The rules lose after costs on unseen data.
+- **Probability quality:**
+  - Logistic regression: Brier skill −0.018 (CI −0.096 to +0.058), ECE 0.055.
+  - GBM: Brier skill −0.007 (CI −0.081 to +0.070), ECE 0.051.
+  - Neither beats the base rate. AUC is 0.59–0.60, a weak ranking signal that does not survive
+    calibration.
+- **Value of the EV filter:**
+  - No model improves on the rules. The differences' CIs span about −0.5 to +0.4 R.
+  - The selected trades (22–42 setups) still lose on average.
+  - At 2× costs the picture is the same.
+- **Gate (Brier skill > 0, ECE < 0.05, beats rules after costs): fails on all three.**
+- **The lockbox stays closed:** nothing qualified to be tested on it.
+- **Reportable conclusion:**
+  - The written Sweep → CHoCH → FVG rules on XAUUSD 5m have no edge after realistic costs,
+    2018–2024.
+  - Low-capacity models on 21 setup and context features cannot find a profitable subset.
+  - With 443 labels, only a large effect could have been detected.
+- **Open decision (Fadi):** what next. See Open questions.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 
