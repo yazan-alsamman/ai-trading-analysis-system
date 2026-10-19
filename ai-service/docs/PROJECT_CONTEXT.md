@@ -428,6 +428,23 @@ Still open:
 
 ## Experiments log
 
+### Phase 2 rule-variant attempts (multiple-testing record)
+
+Every variant tried on the development period is listed here, including the ones that are not
+kept. This is the count of attempts for the final report. The walk-forward period is counted, not
+scored.
+
+| # | Date | Variant | Change | Closed trades before lockbox | Dev trades | Dev win rate | Dev mean net R (95% CI) | Report |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 2026-10-19 | baseline | Spec's initial rules | 149 | 71 | 21.1% | −0.065 (−0.35 to +0.22) | [rules_only](phase2/rules_only.md) |
+| 2 | 2026-10-19 | A | A new extreme extends the sweep while depth ≤ 1.5 ATR, instead of discarding | 178 | 87 | 21.8% | −0.084 (−0.34 to +0.17) | [variant_A](phase2/variant_A.md) |
+| 3 | 2026-10-19 | AB | A, plus Asian (20:00–00:00 NY) and London (02:00–05:00 NY) session highs and lows as levels | 297 | 143 | 26.6% | −0.045 (−0.26 to +0.18) | [variant_AB](phase2/variant_AB.md) |
+
+**Status after attempt 3:** the sample-size target (~1,000 closed trades before the lockbox) is still
+not met: 297 trades, about 24 a year. No variant shows a development-period edge after costs; every
+CI includes zero. Further changes wait for Fadi's decision (variant attempts are capped to keep the
+multiple-testing count honest).
+
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 
 - **Code:** `app/smc/` (primitives, bar-by-bar engine with the full lifecycle, report). Run it with

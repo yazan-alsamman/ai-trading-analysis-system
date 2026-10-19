@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from app.data.sessions import trading_day
+from app.data.sessions import MARKET_TZ, trading_day
 
 
 def atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int) -> np.ndarray:
@@ -111,6 +111,44 @@ def previous_day_levels(bars: pd.DataFrame, timeframe: pd.Timedelta) -> list[Lev
         d = np.datetime64(pd.Timestamp(day_ts).date(), "D")
         levels.append(Level(float(row["high"]), "high", "pd", origin, available, d))
         levels.append(Level(float(row["low"]), "low", "pd", origin, available, d))
+    return levels
+
+
+# ICT-style session windows in New York time: [start, end) in minutes after midnight.
+SESSIONS = {"asia": (20 * 60, 24 * 60), "london": (2 * 60, 5 * 60)}
+
+
+def session_levels(bars: pd.DataFrame, timeframe: pd.Timedelta) -> list[Level]:
+    """The high and low of each Asian (20:00-00:00 New York) and London (02:00-05:00 New York)
+    session, available once the session has ended."""
+    ny = bars["ts_utc"].dt.tz_convert(MARKET_TZ)
+    mins = (ny.dt.hour * 60 + ny.dt.minute).to_numpy()
+    date = ny.dt.tz_localize(None).dt.normalize().to_numpy()
+    days = trading_day(bars["ts_utc"]).to_numpy().astype("datetime64[D]")
+    levels: list[Level] = []
+    for name, (start, end) in SESSIONS.items():
+        mask = (mins >= start) & (mins < end)
+        if not mask.any():
+            continue
+        sub = pd.DataFrame(
+            {
+                "date": date[mask],
+                "high": bars["high"].to_numpy()[mask],
+                "low": bars["low"].to_numpy()[mask],
+                "day": days[mask],
+                "first": bars["ts_utc"].to_numpy()[mask],
+            }
+        )
+        g = sub.groupby("date", sort=True).agg(
+            high=("high", "max"), low=("low", "min"), day=("day", "first"), first=("first", "min")
+        )
+        for d, row in g.iterrows():
+            end_ts = (pd.Timestamp(d) + pd.Timedelta(minutes=end)).tz_localize(MARKET_TZ)
+            available = end_ts.tz_convert("UTC")
+            origin = pd.Timestamp(row["first"]).tz_convert("UTC")
+            od = np.datetime64(row["day"], "D")
+            levels.append(Level(float(row["high"]), "high", name, origin, available, od))
+            levels.append(Level(float(row["low"]), "low", name, origin, available, od))
     return levels
 
 

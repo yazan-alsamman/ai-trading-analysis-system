@@ -86,3 +86,15 @@ def test_mirror_swaps_high_and_low():
     m = mirror(bars)
     assert (m["high"].iloc[0], m["low"].iloc[0]) == (-9.0, -12.0)
     pd.testing.assert_frame_equal(mirror(m), bars)
+
+
+def test_session_levels_available_when_the_session_ends():
+    from app.smc.primitives import session_levels
+
+    # London 02:00-05:00 New York = 07:00-10:00 UTC in January.
+    ts = pd.date_range("2024-01-10 06:45", periods=14, freq="15min")
+    highs = [1.0] + [2.0] * 12 + [9.0]
+    bars = _bars(ts, highs, highs, [h - 0.5 for h in highs], highs)
+    london = [lv for lv in session_levels(bars, pd.Timedelta(minutes=15)) if lv.source == "london"]
+    assert {(lv.kind, lv.price) for lv in london} == {("high", 2.0), ("low", 1.5)}
+    assert all(lv.available_at == pd.Timestamp("2024-01-10 10:00", tz="UTC") for lv in london)

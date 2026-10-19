@@ -182,3 +182,34 @@ def test_no_lookahead_on_real_data():
     end = pd.Timestamp("2013-07-01", tz="UTC")
     m15 = m15[m15["ts_utc"] < end].reset_index(drop=True)
     _assert_no_lookahead(m15, h1, h4, [3_000, 11_111, 17_500, len(m15) - 1])
+
+
+def test_extend_sweep_keeps_a_developing_setup_within_max_depth():
+    rows = WARMUP + SETUP_BARS[:4] + [(99.2, 99.4, 98.6, 99.0)]  # new low 98.6, depth 0.4
+    m15 = _frame(rows)
+    sc = _LongScanner(m15, _levels(), StrategyParams(extend_sweep=True), CostParams(), "buy")
+    for j in range(len(m15)):
+        sc.step(j)
+    (s,) = sc.finish()
+    assert s.state == "DEVELOPING"
+    assert (s.extreme, s.extreme_idx, s.extensions) == (98.6, 24, 1)
+
+
+def test_extend_sweep_still_discards_beyond_max_depth():
+    rows = WARMUP + SETUP_BARS[:4] + [(99.2, 99.4, 96.0, 96.5)]  # 3.0 below the level
+    m15 = _frame(rows)
+    sc = _LongScanner(m15, _levels(), StrategyParams(extend_sweep=True), CostParams(), "buy")
+    for j in range(len(m15)):
+        sc.step(j)
+    (s,) = sc.finish()
+    assert s.state == "DISCARDED"
+
+
+def test_no_lookahead_with_all_variant_options():
+    m15 = _random_walk(seed=11)
+    h1, h4 = _resample(m15, "1h"), _resample(m15, "4h")
+    params = StrategyParams(extend_sweep=True, session_levels=True)
+    full = run(m15, h1, h4, params)
+    for cut in (1500, 3333):
+        part = run(m15.iloc[:cut], h1, h4, params)
+        assert _snapshot(part, cut) == _snapshot(full, cut)

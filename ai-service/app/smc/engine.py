@@ -24,6 +24,7 @@ from app.smc.primitives import (
     htf_swing_levels,
     mirror,
     previous_day_levels,
+    session_levels,
     swing_highs,
 )
 
@@ -42,7 +43,9 @@ class Setup:
     extreme_idx: int
     extreme: float
     atr: float
+    scan_level: float  # the swept level in the scanner's frame (negated for sells); internal
     state: str = "DEVELOPING"
+    extensions: int = 0  # bars that moved the sweep extreme (``StrategyParams.extend_sweep``)
     choch_idx: int | None = None
     ref_idx: int | None = None  # the 15m swing the CHoCH closed beyond
     ref_price: float | None = None
@@ -196,9 +199,14 @@ class _LongScanner:
 
     def _try_choch(self, s: Setup, j: int) -> None:
         if self.lo[j] < s.extreme and j > s.sweep_idx:
-            s.move(j, "DISCARDED", "new extreme before the CHoCH")
-            self.developing = None
-            return
+            depth = s.scan_level - self.lo[j]
+            if self.p.extend_sweep and depth <= self.p.max_sweep_atr * s.atr:
+                s.extreme, s.extreme_idx = float(self.lo[j]), j  # the sweep is still running
+                s.extensions += 1
+            else:
+                s.move(j, "DISCARDED", "new extreme before the CHoCH")
+                self.developing = None
+                return
         if j - s.sweep_idx > self.p.choch_window:
             s.move(j, "DISCARDED", "no CHoCH within the window")
             self.developing = None
@@ -260,6 +268,7 @@ class _LongScanner:
             extreme_idx=extreme_idx,
             extreme=float(self.lo[extreme_idx]),
             atr=float(a),
+            scan_level=lv.price,
         )
         s.move(sweep_idx, "DEVELOPING", "sweep")
         self.setups.append(s)
@@ -325,11 +334,14 @@ def _real_prices(s: Setup) -> Setup:
 
 
 def build_levels(h1: pd.DataFrame, h4: pd.DataFrame, m15: pd.DataFrame, p: StrategyParams):
-    return (
+    levels = (
         htf_swing_levels(h1, H1, p.k_htf, "1h")
         + htf_swing_levels(h4, H4, p.k_htf, "4h")
         + previous_day_levels(m15, ENTRY_TIMEFRAME)
     )
+    if p.session_levels:
+        levels += session_levels(m15, ENTRY_TIMEFRAME)
+    return levels
 
 
 def run(

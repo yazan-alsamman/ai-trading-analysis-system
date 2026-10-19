@@ -26,6 +26,11 @@ class StrategyParams:
     horizon: int = 48  # bars an ACTIVE trade is held at most, counting the fill bar
     level_max_age_days: int = 5  # trading days a liquidity level stays active
     entry: str = "proximal"  # "proximal" edge of the FVG, or "midpoint" (ablation)
+    # Variant A (2026-10-19): a new extreme after the sweep extends it instead of discarding the
+    # setup, while the total depth below the level stays within ``max_sweep_atr``.
+    extend_sweep: bool = False
+    # Variant B: Asian and London session highs and lows as extra liquidity levels.
+    session_levels: bool = False
 
     def as_dict(self) -> dict:
         return asdict(self)
