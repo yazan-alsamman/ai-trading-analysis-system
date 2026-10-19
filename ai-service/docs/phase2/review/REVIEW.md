@@ -19,11 +19,11 @@ small". Definition feedback is decided once, after the review. The gate is **45 
 
 | # | Chart | Dir | Sweep (NY) | Outcome | Valid? | Visible reason | Definition feedback |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | [01_buy_20120425_1530.png](01_buy_20120425_1530.png) | buy | 2012-04-25 11:30 | sl | | | |
-| 2 | [02_buy_20120513_2225.png](02_buy_20120513_2225.png) | buy | 2012-05-13 18:25 | expired | | | |
-| 3 | [03_buy_20120531_1220.png](03_buy_20120531_1220.png) | buy | 2012-05-31 08:20 | sl | | | |
-| 4 | [04_buy_20120730_1235.png](04_buy_20120730_1235.png) | buy | 2012-07-30 08:35 | tp | | | |
-| 5 | [05_buy_20120731_1720.png](05_buy_20120731_1720.png) | buy | 2012-07-31 13:20 | timeout | | | |
+| 1 | [01_buy_20120425_1530.png](01_buy_20120425_1530.png) | buy | 2012-04-25 11:30 | sl | ❌ | The sweep and CHoCH are there, but the marked FVG does not look like a clear impulsive gap causally tied to the structure break. | Displacement strength (FVG not impulsive) |
+| 2 | [02_buy_20120513_2225.png](02_buy_20120513_2225.png) | buy | 2012-05-13 18:25 | expired | ✅ | Sweep of the 1h low, close above the CHoCH ref, bullish FVG tied to the move; convincing sequence. |  |
+| 3 | [03_buy_20120531_1220.png](03_buy_20120531_1220.png) | buy | 2012-05-31 08:20 | sl | ✅ | Clear sweep below the 1h low, bullish CHoCH, FVG around the transition move; the later SL does not cancel validity. |  |
+| 4 | [04_buy_20120730_1235.png](04_buy_20120730_1235.png) | buy | 2012-07-30 08:35 | tp | ✅ | Sweep of a reference low, bullish structure shift, FVG consistent with the impulse. |  |
+| 5 | [05_buy_20120731_1720.png](05_buy_20120731_1720.png) | buy | 2012-07-31 13:20 | timeout | ⚠️ | Sweep and CHoCH present, but the impulse after the change is limited and the FVG small and visually inconclusive. | Displacement strength (small FVG, weak impulse) |
 | 6 | [06_buy_20120820_0935.png](06_buy_20120820_0935.png) | buy | 2012-08-20 05:35 | sl | | | |
 | 7 | [07_buy_20121018_0530.png](07_buy_20121018_0530.png) | buy | 2012-10-18 01:30 | sl | | | |
 | 8 | [08_buy_20121024_1120.png](08_buy_20121024_1120.png) | buy | 2012-10-24 07:20 | sl | | | |
@@ -70,4 +70,4 @@ small". Definition feedback is decided once, after the review. The gate is **45 
 | 49 | [49_buy_20170802_1250.png](49_buy_20170802_1250.png) | buy | 2017-08-02 08:50 | expired | | | |
 | 50 | [50_buy_20171219_0135.png](50_buy_20171219_0135.png) | buy | 2017-12-18 20:35 | expired | | | |
 
-**Result:** __ of 50 correct (precision __%).
+**Result so far:** 3 of 5 reviewed are valid patterns; 45 still to review. Gate: 45 of 50 (at most 5 not ✅).
