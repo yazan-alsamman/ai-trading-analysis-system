@@ -30,9 +30,15 @@ The AI side analyses gold (XAU/USD) first, then forex.
       1 point = $0.01).
     - `EURUSD_M5_mt5.csv`: M5 from 2000-05-30 to 2026-02-13, no spread column, and its first data row is
       malformed.
-  - Checked 2026-10-19: timestamps are broker server time, **New York time + 7h** (UTC+2 in winter, UTC+3
-    under US DST). The weekly open is Monday 01:00 server time all year, and the daily break runs from
-    about 23:55 to 01:00 server time (17:00–18:00 New York). Convert to UTC before any use.
+  - Timestamps are broker server time on **EU daylight saving** (`Europe/Athens`: UTC+2 in winter, UTC+3
+    from the last Sunday of March to the last Sunday of October).
+    - The first check said "New York time + 7h". The Phase 1 importer corrected it on 2026-10-19, using
+      the jobs-report evidence.
+    - Outside the US/EU mismatch weeks: the weekly open is Monday 01:00 and the daily break about
+      23:55–01:00 server time (17:00–18:00 New York).
+    - In the mismatch weeks: server time is New York + 6h, so the break and the open come one hour
+      earlier.
+    - Convert to UTC with `Europe/Athens` before any use.
   - XAUUSD median bar spread by year: about 40 points in 2012–2015, 5 in 2021–2022, 14–15 in 2024–2025.
     The MT5 bar spread is the minimum spread within the bar, so it understates real costs; treat it as a
     lower bound.
