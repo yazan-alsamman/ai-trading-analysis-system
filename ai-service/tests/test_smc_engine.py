@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from app.data.schema import SessionSpec
+from app.data.sessions import is_open
 from app.smc.engine import _LongScanner, _real_prices, run
 from app.smc.params import CostParams, StrategyParams
 from app.smc.primitives import Level
@@ -247,3 +249,60 @@ def test_fvg_window_rejects_gaps_further_back():
 def test_without_a_window_the_first_gap_after_the_extreme_is_used():
     s = _scan_rows(DELAYED_CHOCH, StrategyParams())
     assert s.fvg_idx == 25
+
+
+GUARD = StrategyParams(session_guard=True)
+
+
+def _scan_times(rows, times, params=GUARD):
+    m15 = _frame(rows)
+    m15["ts_utc"] = pd.DatetimeIndex(times)
+    sc = _LongScanner(m15, _levels(), params, CostParams(), "buy")
+    for j in range(len(m15)):
+        sc.step(j)
+    return sc.finish()
+
+
+def _times(n, hole_before=None, start=START):
+    """15m bar times from ``start``; a 2-hour hole before bar ``hole_before``."""
+    t = list(pd.date_range(start, periods=n, freq="15min"))
+    if hole_before is not None:
+        t = t[:hole_before] + [x + pd.Timedelta(hours=2) for x in t[hole_before:]]
+    return t
+
+
+def test_session_guard_keeps_a_setup_in_one_continuous_stretch():
+    rows = WARMUP + SETUP_BARS
+    (s,) = _scan_times(rows, _times(len(rows)))
+    assert (s.choch_idx, s.fvg_idx) == (25, 25)
+
+
+def test_session_guard_blocks_a_sweep_soon_after_a_break():
+    rows = WARMUP + SETUP_BARS
+    assert _scan_times(rows, _times(len(rows), hole_before=19)) == []  # sweep is the 5th bar after
+    assert len(_scan_times(rows, _times(len(rows), hole_before=19), StrategyParams())) == 1
+
+
+def test_session_guard_discards_a_pattern_across_a_break():
+    rows = WARMUP + SETUP_BARS
+    (s,) = _scan_times(rows, _times(len(rows), hole_before=24))  # break between sweep and CHoCH
+    assert (s.state, s.reason) == ("DISCARDED", "session break before the CHoCH")
+
+
+def test_session_guard_blocks_the_daily_break():
+    rows = WARMUP + SETUP_BARS
+    sweep = pd.Timestamp("2024-01-02 16:30", tz="America/New_York").tz_convert("UTC")
+    t = _times(len(rows), start=sweep - pd.Timedelta(minutes=15 * 23))  # bar 25 opens at 17:00 NY
+    (s,) = _scan_times(rows, t)
+    assert (s.state, s.reason) == ("DISCARDED", "session break before the CHoCH")
+
+
+def test_no_lookahead_with_the_session_guard():
+    m15 = _random_walk(seed=5)
+    m15 = m15[is_open(m15["ts_utc"], SessionSpec())].reset_index(drop=True)  # real breaks
+    h1, h4 = _resample(m15, "1h"), _resample(m15, "4h")
+    full = run(m15, h1, h4, GUARD)
+    assert len(full) > 0
+    for cut in (1200, 2900):
+        part = run(m15.iloc[:cut], h1, h4, GUARD)
+        assert _snapshot(part, cut) == _snapshot(full, cut)

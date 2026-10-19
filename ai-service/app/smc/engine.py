@@ -16,7 +16,8 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from app.data.sessions import trading_day
+from app.data.schema import SessionSpec
+from app.data.sessions import is_open, trading_day
 from app.smc.params import CostParams, StrategyParams
 from app.smc.primitives import (
     Level,
@@ -80,6 +81,22 @@ class _Probe:
     idx: int
 
 
+def _session_guard(
+    ts: pd.Series, t: np.ndarray, p: StrategyParams
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per bar: the continuous stretch it belongs to (a new one starts after a gap of
+    ``break_gap_minutes`` or more), and whether rule bars may not sit on it (inside the daily break
+    or the weekend by the calendar, or among the first ``bars_after_break`` bars of a stretch).
+    Both depend only on the bar's own and earlier timestamps."""
+    n = len(t)
+    if not p.session_guard or n == 0:
+        return np.zeros(n, dtype=np.int64), np.zeros(n, dtype=bool)
+    gap = np.r_[True, np.diff(t) >= p.break_gap_minutes * 60]
+    segment = np.cumsum(gap) - 1
+    position = np.arange(n) - np.flatnonzero(gap)[segment]
+    return segment, ~is_open(ts, SessionSpec()) | (position < p.bars_after_break)
+
+
 class _LongScanner:
     """Buy-side rules on one price frame (real prices for buys, mirrored for sells)."""
 
@@ -101,6 +118,8 @@ class _LongScanner:
         self.spread = m15["spread"].fillna(0.0).to_numpy(float)
         self.atr = atr(self.h, self.lo, self.cl, params.atr_period)
         self.day = trading_day(self.ts).to_numpy().astype("datetime64[D]")
+        self.t = self.ts.to_numpy(dtype="datetime64[ns]").astype("datetime64[s]").astype(np.int64)
+        self.segment, self.blocked = _session_guard(self.ts, self.t, params)
         # 15m swing highs: the CHoCH reference for a buy. Confirmed when bar i + k closes.
         sh = np.flatnonzero(swing_highs(self.h, params.k_ltf))
         self.sh_idx = sh.tolist()
@@ -116,6 +135,10 @@ class _LongScanner:
         self.setups: list[Setup] = []
 
     # ---- helpers -------------------------------------------------------------------------------
+
+    def _guarded(self, j: int, anchor: int) -> bool:
+        """Bar j may not belong to a pattern that started at bar ``anchor`` (session guard)."""
+        return bool(self.blocked[j]) or self.segment[j] != self.segment[anchor]
 
     def _real(self, x: float | None) -> float | None:
         return None if x is None else self.sign * x
@@ -198,6 +221,10 @@ class _LongScanner:
     # ---- the rules ------------------------------------------------------------------------------
 
     def _try_choch(self, s: Setup, j: int) -> None:
+        if self._guarded(j, s.sweep_idx):
+            s.move(j, "DISCARDED", "session break before the CHoCH")
+            self.developing = None
+            return
         if self.lo[j] < s.extreme and j > s.sweep_idx:
             depth = s.scan_level - self.lo[j]
             if self.p.extend_sweep and depth <= self.p.max_sweep_atr * s.atr:
@@ -220,7 +247,10 @@ class _LongScanner:
         first = s.extreme_idx + 2  # the gap's three bars lie in the move from the extreme
         if self.p.fvg_max_bars_before_choch is not None:
             first = max(first, j - self.p.fvg_max_bars_before_choch)
+        two_bars = 2 * 60 * self.p.entry_tf_minutes
         for i in range(first, j + 1):
+            if self.p.session_guard and self.t[i] - self.t[i - 2] != two_bars:
+                continue  # the three bars are not consecutive in time
             gap_low, gap_high = self.h[i - 2], self.lo[i]
             if gap_high - gap_low >= self.p.min_fvg_atr * a:
                 s.fvg_idx, s.fvg_low, s.fvg_high = i, float(gap_low), float(gap_high)
@@ -297,7 +327,12 @@ class _LongScanner:
             lv, first = self.probe.level, self.probe.idx
             self.probe = None
             depth = lv.price - min(self.lo[first], lo)
-            if cl > lv.price and depth <= self.p.max_sweep_atr * a and self.developing is None:
+            if (
+                cl > lv.price
+                and depth <= self.p.max_sweep_atr * a
+                and self.developing is None
+                and not self._guarded(j, first)  # the probe bar itself was not blocked
+            ):
                 self._new_setup(lv, j, first)
                 self._try_choch(self.developing, j)
 
@@ -305,7 +340,7 @@ class _LongScanner:
         if not traded:
             return
         self.lows = [lv for lv in self.lows if lo >= lv.price]  # traded-through levels are spent
-        if self.developing is not None:
+        if self.developing is not None or self.blocked[j]:
             return
         valid = [
             lv

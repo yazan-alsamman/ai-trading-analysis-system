@@ -38,6 +38,13 @@ class StrategyParams:
     # the N entry bars before it, so the gap belongs to the displacement that broke structure.
     # Counted in bars, not minutes. None keeps the v1 rule (any gap from the extreme to the CHoCH).
     fvg_max_bars_before_choch: int | None = None
+    # Attempt 7 (2026-10-19, after the AI review): every bar from the sweep's first bar to the CHoCH
+    # lies in one continuous stretch of bars (no gap of ``break_gap_minutes`` or more), outside the
+    # daily break (17:00-18:00 New York) and not among the first ``bars_after_break`` bars after a
+    # gap; the FVG's three bars are consecutive in time. False keeps the earlier rules.
+    session_guard: bool = False
+    break_gap_minutes: int = 30
+    bars_after_break: int = 6
 
     @property
     def entry_timeframe(self) -> pd.Timedelta:
@@ -65,15 +72,26 @@ FROZEN_V2 = replace(FROZEN_V1, fvg_max_bars_before_choch=6)
 
 # v3 rule set (attempt 6, "AB5F3"): v2 with one combined change from the validity review: an FVG
 # of at least 0.25 ATR (displacement), a sweep of at least 0.25 ATR, and a CHoCH reference swing
-# with k = 3 on the entry bars. Frozen on 2026-10-19 by Fadi's decision. Do not change these values;
-# a new rule set gets a new name and a new entry in the attempts log.
+# with k = 3 on the entry bars. Frozen on 2026-10-19; superseded the same day by FROZEN_V4 after the
+# AI validity review found patterns across data holes. Kept unchanged for the record.
 FROZEN_V3 = replace(FROZEN_V2, min_fvg_atr=0.25, min_sweep_atr=0.25, k_ltf=3)
 
-# The rule set every tool (report, review, conditions) uses by default.
-CURRENT = FROZEN_V3
-CURRENT_NAME = "FROZEN_V3"
+# v4 rule set (attempt 7, "AB5F3S"): v3 plus the session guard (no pattern across the daily break
+# or the weekly open, no FVG across a hole in the data). Frozen on 2026-10-19 by Fadi's decision as
+# the rule set for Phase 3. Do not change these values; a new rule set gets a new name and a new
+# entry in the attempts log.
+FROZEN_V4 = replace(FROZEN_V3, session_guard=True)
 
-RULE_SETS = {"FROZEN_V1": FROZEN_V1, "FROZEN_V2": FROZEN_V2, "FROZEN_V3": FROZEN_V3}
+# The rule set every tool (report, review, conditions) uses by default.
+CURRENT = FROZEN_V4
+CURRENT_NAME = "FROZEN_V4"
+
+RULE_SETS = {
+    "FROZEN_V1": FROZEN_V1,
+    "FROZEN_V2": FROZEN_V2,
+    "FROZEN_V3": FROZEN_V3,
+    "FROZEN_V4": FROZEN_V4,
+}
 
 
 @dataclass(frozen=True)

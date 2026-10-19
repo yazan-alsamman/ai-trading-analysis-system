@@ -54,3 +54,13 @@ def test_frozen_v3_is_v2_with_exactly_the_three_review_changes():
     v2, v3 = dataclasses.asdict(FROZEN_V2), dataclasses.asdict(FROZEN_V3)
     changed = {k: v3[k] for k in v3 if v3[k] != v2[k]}
     assert changed == {"min_fvg_atr": 0.25, "min_sweep_atr": 0.25, "k_ltf": 3}
+
+
+def test_session_condition_catches_a_hole_inside_the_pattern():
+    _, s = _scan(AFTER)
+    bars, guard = _bars(), StrategyParams(session_guard=True)
+    assert check(s, bars, guard)["session"] is True
+    holed = bars.copy()
+    holed.loc[25:, "ts_utc"] += pd.Timedelta(hours=2)  # the CHoCH bar opens after a break
+    assert check(s, holed, guard)["session"] is not True
+    assert check(s, holed, StrategyParams())["session"] is True  # earlier rule sets ignore it

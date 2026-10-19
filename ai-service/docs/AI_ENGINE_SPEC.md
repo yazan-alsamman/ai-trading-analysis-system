@@ -170,6 +170,13 @@ development period and then frozen.
      change. The FVG must be at least 0.25 × ATR (rule 5), the sweep's first bar must trade through the level by
      at least 0.25 × ATR (rule 3), and the CHoCH reference is a swing with k = 3 on the entry bars (rules 1 and 4).
      Everything else is v2.
+   - **Frozen v4 rule set (`FROZEN_V4`, 2026-10-19, the rule set for Phase 3):** v3 plus a session guard.
+     - Every bar from the sweep's first bar to the CHoCH lies in one continuous stretch of bars, with no gap of 30
+       minutes or more.
+     - None of those bars is inside the daily break or the weekend by the session calendar, or among the first 6
+       bars after a gap.
+     - The FVG's three bars are consecutive in time.
+     - This removes patterns built across the weekly open or the daily break, which the review found.
 6. **Entry.** A sell limit at the FVG's proximal edge (the high of bar i). The midpoint is an ablation.
 7. **Stop-loss.** Sweep extreme + 0.1 × ATR + current spread.
 8. **Take-profit.** The nearest opposite liquidity level (confirmed 1h/4h swing low or previous day's low) that gives

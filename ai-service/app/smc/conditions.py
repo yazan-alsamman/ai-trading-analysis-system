@@ -1,4 +1,4 @@
-"""Automated check of the five written conditions for every planned setup.
+"""Automated check of the written conditions for every planned setup.
 
     python -m app.smc.conditions        # docs/phase2/conditions.{md,json}
 
@@ -17,12 +17,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from app.data.schema import SessionSpec
+from app.data.sessions import is_open
 from app.smc.engine import Setup, run
 from app.smc.params import CURRENT, CURRENT_NAME, CostParams, StrategyParams
 from app.smc.primitives import atr
 from app.smc.report import DATA_DIR, DEV_END, OUT_DIR
 
-CONDITIONS = ("level", "sweep", "choch", "fvg", "plan")
+CONDITIONS = ("level", "sweep", "choch", "fvg", "plan", "session")
 TOL = 1e-6
 
 
@@ -40,6 +42,7 @@ class Bars:
     def __init__(self, bars: pd.DataFrame, period: int):
         self.frame = bars
         self.ts = bars["ts_utc"]
+        self.t = self.ts.to_numpy(dtype="datetime64[ns]").astype("datetime64[s]").astype(np.int64)
         self.spread = bars["spread"].fillna(0.0).to_numpy(float)
         self.arrays = {}
         for direction in ("buy", "sell"):
@@ -134,6 +137,21 @@ def check(s: Setup, bars: pd.DataFrame | Bars, p: StrategyParams) -> dict[str, b
         out["plan"] = f"R {rr:.2f} outside 1.5-4"
     else:
         out["plan"] = True
+
+    # 6. Session (v4 only): no gap of break_gap_minutes or more from bars_after_break - 1 bars
+    #    before the sweep's first bar to the CHoCH, every rule bar from the first one to the CHoCH
+    #    inside trading hours, and the FVG's three bars consecutive in time.
+    out["session"] = True
+    if p.session_guard and first is not None:
+        t = bars.t
+        start = first - p.bars_after_break + 1
+        rule_bars = slice(first, s.choch_idx + 1)
+        if start < 1 or np.any(np.diff(t[start - 1 : s.choch_idx + 1]) >= 60 * p.break_gap_minutes):
+            out["session"] = "a session break before or inside the pattern"
+        elif not is_open(ts.iloc[rule_bars], SessionSpec()).all():
+            out["session"] = "a rule bar outside trading hours"
+        elif t[i] - t[i - 2] != 2 * 60 * p.entry_tf_minutes:
+            out["session"] = "the FVG's bars are not consecutive in time"
     return out
 
 
@@ -177,7 +195,7 @@ def main(argv: list[str] | None = None) -> None:
         "from the raw 5m bars for every setup that reached a full trade plan._",
         "",
         f"Setups checked: **{summary['setups_checked']}**. "
-        f"All five conditions pass: **{summary['all_pass']}**.",
+        f"All conditions pass: **{summary['all_pass']}**.",
         "",
         "| Condition | Pass rate |",
         "| --- | --- |",
@@ -189,7 +207,7 @@ def main(argv: list[str] | None = None) -> None:
             f"| {f['setup_id']} | {f['condition']} | {f['reason']} |" for f in summary["failures"]
         ]
     (args.out / "conditions.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"{summary['all_pass']} of {summary['setups_checked']} pass all five conditions")
+    print(f"{summary['all_pass']} of {summary['setups_checked']} pass all conditions")
 
 
 if __name__ == "__main__":

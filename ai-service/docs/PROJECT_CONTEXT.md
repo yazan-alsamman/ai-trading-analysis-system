@@ -427,9 +427,8 @@ Still open:
 5. **University requirements:** is there a required report template, literature review or length?
 6. ~~**FVG timing:** keep the displacement reading or require strict order?~~ Answered on
    2026-10-19: keep it (option A); see the experiments log.
-7. **After the AI review failed gate 2b on v3 (40 of 50):** fix the data-hole defect, then
-   either accept 80% precision as a documented limitation and start Phase 3 (a model can learn
-   to filter weak setups), or try another rule set (attempt 7+) to chase 90%?
+7. ~~**After the AI review failed gate 2b on v3:** fix the data holes and start Phase 3, or try
+   another rule set?~~ Answered on 2026-10-19: fix them (`FROZEN_V4`), then Phase 3.
 
 ## Experiments log
 
@@ -446,6 +445,7 @@ scored.
 | 3 | 2026-10-19 | AB | A, plus Asian (20:00–00:00 NY) and London (02:00–05:00 NY) session highs and lows as levels | 297 | 143 | 26.6% | −0.045 (−0.26 to +0.18) | [variant_AB](phase2/variant_AB.md) |
 | 5 | 2026-10-19 | AB5F | AB5, plus: the FVG's third bar must be the CHoCH bar or one of the 6 entry bars before it (counted in bars). Sweep, CHoCH, entry, SL and TP unchanged | 843 | 384 | 27.3% | **−0.257 (−0.40 to −0.11)** | [variant_AB5F](phase2/variant_AB5F.md) |
 | 4 | 2026-10-19 | AB5 | AB with 5m entry bars (same 1h/4h and session levels). Bar windows scaled to the same clock time: CHoCH and entry windows 24 bars (2 h), horizon 144 bars (12 h); swing k and ATR period stay in entry bars | 807 | 364 | 25.8% | **−0.337 (−0.49 to −0.18)** | [variant_AB5](phase2/variant_AB5.md) |
+| 7 | 2026-10-19 | AB5F3S | AB5F3 plus the session guard: no rule bar across a gap of 30+ min, in the daily break or within 6 bars after a gap; FVG bars consecutive in time. Run on 2012–2017 only | not counted (2012–2017 only loaded) | 191 | 28.8% | **−0.211 (−0.40 to −0.02)** | [variant_AB5F3S](phase2/variant_AB5F3S.md) |
 | 6 | 2026-10-19 | AB5F3 | AB5F, plus one combined change: FVG ≥ 0.25 ATR, sweep first-bar penetration ≥ 0.25 ATR, CHoCH reference swing k = 3 on 5m. Run on 2012–2017 only | not counted (2012–2017 only loaded) | 201 | 29.4% | **−0.208 (−0.40 to −0.02)** | [variant_AB5F3](phase2/variant_AB5F3.md) |
 
 **Status after attempt 4:**
@@ -595,6 +595,28 @@ restarts from chart 1 on the same sample.**
 - **Earlier human reviews** reached similar precision: v2 gate 2b 14 of 20 (70%), and the first
   v2 review 19 of 25 (76%).
 - **Open decision (Fadi):** next step after gate 2b failed on v3. See Open questions.
+
+**Decision, 2026-10-19 (Fadi): fix the data holes, then Phase 3 on `FROZEN_V4` (attempt 7).**
+- **The session guard** (spec, Strategy rule 5, "Frozen v4"):
+  - Every bar from the sweep's first bar to the CHoCH lies in one continuous stretch, with no gap
+    of 30 minutes or more.
+  - None of those bars is in the daily break or the weekend, or among the first 6 bars after a
+    gap.
+  - The FVG's three bars are consecutive in time.
+  - The threshold comes from the data: nearly every gap of 30 minutes or more is the daily break
+    (reopen 18:05 NY, or 19:05 in the DST-mismatch weeks) or the weekend; ordinary missing bars
+    are under 30 minutes.
+- **Result on 2012–2017 only:**
+  - 336 planned setups, none touching a data hole (v3 had 12 of 349). #9, #25 and #45 of the AI
+    review are gone.
+  - 191 closed trades, win rate 28.8%, mean net R −0.21 (95% CI −0.40 to −0.02).
+  - 48 developing setups ended with "session break before the CHoCH".
+- **Gate 2a: 336 of 336** pass the six conditions; the new sixth condition, "session", is checked
+  independently in `conditions.py`.
+- **Gate 2b is not rerun.** Precision about 80% (AI review of v3) is accepted as a documented
+  limitation. The remaining weak groups (minor CHoCH references, quiet-session range noise, slow
+  sweeps) are left for the Phase 3 model to filter.
+- **Rule iteration ends here:** 7 variants were tried on the development period.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 
