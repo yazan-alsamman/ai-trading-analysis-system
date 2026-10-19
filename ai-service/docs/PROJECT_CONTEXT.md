@@ -427,6 +427,9 @@ Still open:
 5. **University requirements:** is there a required report template, literature review or length?
 6. ~~**FVG timing:** keep the displacement reading or require strict order?~~ Answered on
    2026-10-19: keep it (option A); see the experiments log.
+7. **After the AI review failed gate 2b on v3 (40 of 50):** fix the data-hole defect, then
+   either accept 80% precision as a documented limitation and start Phase 3 (a model can learn
+   to filter weak setups), or try another rule set (attempt 7+) to chase 90%?
 
 ## Experiments log
 
@@ -563,6 +566,35 @@ restarts from chart 1 on the same sample.**
   - Objections to the definition go in the feedback column; the acceptance criterion does not
     change chart by chart.
   - The strict-order verdicts for charts 1–6 are archived and do not count.
+
+**Decision, 2026-10-19 (Fadi): gate 2b becomes an AI review by Claude.**
+- **Why:** the restarted human review again judged the FVG timing, which the written definition
+  had settled, instead of pattern validity.
+- **Limitation for the report:** gate 2b was not judged by a human. The human sheet
+  [phase2/review/REVIEW.md](phase2/review/REVIEW.md) stays empty.
+- **Result:** [phase2/review/REVIEW_claude.md](phase2/review/REVIEW_claude.md) (FROZEN_V3, seed
+  2027, all 50 charts reviewed):
+  - **40 of 50 ✅ (precision 80%)**, 5 ❌ and 5 ⚠️. **Gate 2b fails** (45 needed); under the stop
+    rule it would have stopped at #24.
+- **The ten non-✅ marks fall into four groups:**
+
+  | Group | Charts | What is visible |
+  | --- | --- | --- |
+  | Data holes | ❌ #9, #45 (weekly open), ⚠️ #2, ❌ #25 (daily break) | #9 and #45: the "sweep" is the Sunday open gap. #25: the "FVG" spans an 80-minute hole (17:45 → 19:05) and the extreme is a zero-range bar with a 2.01 spread |
+  | Minor CHoCH reference | ⚠️ #17, ❌ #18 | A micro-swing inside a consolidation; the trend's real lower highs are untouched |
+  | Range noise in quiet sessions | ❌ #24, ⚠️ #31 | Sweep and break of 0.1–0.2 inside a one- to two-dollar range |
+  | Slow or accepted sweeps | ⚠️ #14, ⚠️ #38 | An hour of closes beyond the level; a break two hours later after a retest |
+
+- **Data check (all 349 planned v3 setups):**
+  - 12 (3.4%) touch a data hole: 6 FVGs span a gap in time, and 6 sweeps come within 6 bars
+    after a 30+ minute gap (3 at the weekly open).
+  - The sample drew 3 of them.
+  - The engine treats consecutive rows as consecutive bars, so a three-bar gap can straddle the
+    daily break. This is a data-handling defect, not a definition question.
+  - Excluding the three still leaves 7 non-✅, so fixing it alone does not pass the gate.
+- **Earlier human reviews** reached similar precision: v2 gate 2b 14 of 20 (70%), and the first
+  v2 review 19 of 25 (76%).
+- **Open decision (Fadi):** next step after gate 2b failed on v3. See Open questions.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 
