@@ -134,7 +134,7 @@ async def test_subscribe_ack_and_snapshot(
         assert snapshot == {
             "type": "snapshot",
             "topic": topic,
-            "candle": CandleOut.from_candle(latest).model_dump(),
+            "candle": CandleOut.from_candle(latest).model_dump(exclude_none=True),
         }
         assert snapshot["candle"]["time"] == int((T0 + timedelta(hours=1)).timestamp())
 

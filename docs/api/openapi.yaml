@@ -1134,7 +1134,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
         '401':
           description: Missing, invalid or expired credentials
           content:
@@ -9644,6 +9646,28 @@ components:
             minimum: 0.0
           - type: 'null'
           title: Trades
+        spread:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Spread
+          description: price units (XAU/USD 0.01)
+        source:
+          anyOf:
+          - type: string
+            maxLength: 32
+            minLength: 1
+          - type: 'null'
+          title: Source
+          description: e.g. fxpro_ctrader, binance
+        received_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Received At
+          description: 'when the backend received the bar (default: now)'
       type: object
       required:
       - ts
@@ -9677,6 +9701,12 @@ components:
         volume:
           type: number
           title: Volume
+        spread:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Spread
+          description: 1m only, price units
       type: object
       required:
       - time
@@ -9686,7 +9716,9 @@ components:
       - close
       - volume
       title: CandleOut
-      description: 'Lightweight Charts friendly: ``time`` is unix seconds (UTC) of the bucket start.'
+      description: 'Lightweight Charts friendly: ``time`` is unix seconds (UTC) of the bucket start.
+
+        ``spread`` is only present on 1m candles that have one.'
     CandleSeries:
       properties:
         instrument_id:
@@ -10345,6 +10377,21 @@ components:
       additionalProperties: false
       type: object
       title: CustomStrategyUpdate
+    DailyBreak:
+      properties:
+        start:
+          type: string
+          title: Start
+        end:
+          type: string
+          title: End
+      additionalProperties: false
+      type: object
+      required:
+      - start
+      - end
+      title: DailyBreak
+      description: Closed every day from ``start`` to ``end`` (``end`` < ``start`` crosses midnight).
     DefinitionIssue:
       properties:
         path:
@@ -10957,6 +11004,38 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    Holiday:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Name
+        date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date
+        start:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start
+        end:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End
+      additionalProperties: false
+      type: object
+      title: Holiday
+      description: 'Closed for the whole local ``date``, or from ``start`` to ``end`` (local date-times
+
+        without an offset, e.g. ``2026-12-24T16:55``).'
     IndicatorOverlay:
       properties:
         id:
@@ -11183,6 +11262,69 @@ components:
       title: IngestResult
     InstrumentCreate:
       properties:
+        contract_size:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Contract Size
+          description: units per 1.0 lot (XAU/USD 100 oz, FX 100,000)
+        tick_size:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Tick Size
+          description: minimum price increment
+        lot_step:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Lot Step
+          description: volume step in lots
+        min_lot:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Min Lot
+        max_lot:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Max Lot
+        quote_currency:
+          anyOf:
+          - type: string
+            maxLength: 16
+            minLength: 1
+          - type: 'null'
+          title: Quote Currency
+          description: 'currency of the P&L per price unit (default: quote_asset)'
+        margin_rate:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Margin Rate
+          description: margin as a fraction of notional at 1:1 (0.01 = 1:100); null = the user's leverage
+        price_basis:
+          anyOf:
+          - $ref: '#/components/schemas/PriceBasis'
+          - type: 'null'
+          description: price the candles use
+        session_calendar:
+          anyOf:
+          - $ref: '#/components/schemas/SessionCalendar'
+          - type: 'null'
         symbol:
           type: string
           maxLength: 32
@@ -11289,6 +11431,61 @@ components:
         is_active:
           type: boolean
           title: Is Active
+        contract_size:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Contract Size
+        tick_size:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Tick Size
+        lot_step:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lot Step
+        min_lot:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Min Lot
+        max_lot:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Max Lot
+        quote_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Quote Currency
+        margin_rate:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Margin Rate
+        price_basis:
+          anyOf:
+          - $ref: '#/components/schemas/PriceBasis'
+          - type: 'null'
+        session_calendar:
+          anyOf:
+          - $ref: '#/components/schemas/SessionCalendar'
+          - type: 'null'
+        spec_source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Spec Source
+          description: typical, fxpro_ctrader or manual
+        spec_updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Spec Updated At
         created_at:
           type: string
           format: date-time
@@ -11308,6 +11505,17 @@ components:
       - price_precision
       - quantity_precision
       - is_active
+      - contract_size
+      - tick_size
+      - lot_step
+      - min_lot
+      - max_lot
+      - quote_currency
+      - margin_rate
+      - price_basis
+      - session_calendar
+      - spec_source
+      - spec_updated_at
       - created_at
       - updated_at
       title: InstrumentRead
@@ -11359,6 +11567,69 @@ components:
       title: InstrumentSentiment
     InstrumentUpdate:
       properties:
+        contract_size:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Contract Size
+          description: units per 1.0 lot (XAU/USD 100 oz, FX 100,000)
+        tick_size:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Tick Size
+          description: minimum price increment
+        lot_step:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Lot Step
+          description: volume step in lots
+        min_lot:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Min Lot
+        max_lot:
+          anyOf:
+          - type: number
+            maximum: 1000000000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Max Lot
+        quote_currency:
+          anyOf:
+          - type: string
+            maxLength: 16
+            minLength: 1
+          - type: 'null'
+          title: Quote Currency
+          description: 'currency of the P&L per price unit (default: quote_asset)'
+        margin_rate:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Margin Rate
+          description: margin as a fraction of notional at 1:1 (0.01 = 1:100); null = the user's leverage
+        price_basis:
+          anyOf:
+          - $ref: '#/components/schemas/PriceBasis'
+          - type: 'null'
+          description: price the candles use
+        session_calendar:
+          anyOf:
+          - $ref: '#/components/schemas/SessionCalendar'
+          - type: 'null'
         base_asset:
           anyOf:
           - type: string
@@ -11394,6 +11665,9 @@ components:
           title: Is Active
       type: object
       title: InstrumentUpdate
+      description: 'Changing any spec field sets ``spec_source`` to ``manual``. Spec fields can be cleared
+
+        with null.'
     InvoiceRead:
       properties:
         id:
@@ -13351,6 +13625,14 @@ components:
       type: object
       title: PriceAlertUpdate
       description: Missing fields keep their value; the combination is checked again as a whole.
+    PriceBasis:
+      type: string
+      enum:
+      - bid
+      - mid
+      - last
+      title: PriceBasis
+      description: Which price the candles are built from.
     ProfileRead:
       properties:
         id:
@@ -13898,6 +14180,37 @@ components:
       - updated
       - errors
       title: SentimentResult
+    SessionCalendar:
+      properties:
+        tz:
+          type: string
+          title: Tz
+        week_open:
+          anyOf:
+          - $ref: '#/components/schemas/WeekPoint'
+          - type: 'null'
+        week_close:
+          anyOf:
+          - $ref: '#/components/schemas/WeekPoint'
+          - type: 'null'
+        daily_breaks:
+          items:
+            $ref: '#/components/schemas/DailyBreak'
+          type: array
+          maxItems: 8
+          title: Daily Breaks
+        holidays:
+          items:
+            $ref: '#/components/schemas/Holiday'
+          type: array
+          maxItems: 500
+          title: Holidays
+      additionalProperties: false
+      type: object
+      required:
+      - tz
+      title: SessionCalendar
+      description: When the market is open. Without ``week_open``/``week_close`` it trades all week.
     Severity:
       type: string
       enum:
@@ -14999,6 +15312,28 @@ components:
       - private
       - public
       title: Visibility
+    WeekPoint:
+      properties:
+        day:
+          type: string
+          enum:
+          - mon
+          - tue
+          - wed
+          - thu
+          - fri
+          - sat
+          - sun
+          title: Day
+        time:
+          type: string
+          title: Time
+      additionalProperties: false
+      type: object
+      required:
+      - day
+      - time
+      title: WeekPoint
     WorkspaceCreate:
       properties:
         name:

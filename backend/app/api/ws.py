@@ -293,7 +293,9 @@ async def _subscribe(
         if msg.topic in ("signals", "news"):
             return  # no snapshot: GET /api/v1/signals and /news list the past ones
         latest = await market_service.get_latest_candle(session, msg.instrument_id, msg.timeframe)
-    candle = CandleOut.from_candle(latest).model_dump() if latest is not None else None
+    candle = (
+        CandleOut.from_candle(latest).model_dump(exclude_none=True) if latest is not None else None
+    )
     client.send(protocol.snapshot(topic, candle))
 
 

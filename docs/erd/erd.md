@@ -179,6 +179,17 @@ erDiagram
         int price_precision
         int quantity_precision
         bool is_active
+        double contract_size
+        double tick_size
+        double lot_step
+        double min_lot
+        double max_lot
+        varchar quote_currency
+        double margin_rate
+        varchar price_basis
+        jsonb session_calendar
+        varchar spec_source
+        timestamptz spec_updated_at
         timestamptz created_at
         timestamptz updated_at
     }
@@ -191,6 +202,9 @@ erDiagram
         double close
         double volume
         int trades
+        double spread
+        varchar source
+        timestamptz received_at
     }
     signals {
         uuid id PK

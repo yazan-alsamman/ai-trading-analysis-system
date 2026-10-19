@@ -427,7 +427,9 @@ components:
             - type: 'null'
             - &id002
               description: 'Lightweight Charts friendly: ``time`` is unix seconds (UTC) of the bucket
-                start.'
+                start.
+
+                ``spread`` is only present on 1m candles that have one.'
               properties:
                 time:
                   title: Time
@@ -447,6 +449,13 @@ components:
                 volume:
                   title: Volume
                   type: number
+                spread:
+                  anyOf:
+                  - type: number
+                  - type: 'null'
+                  default: null
+                  description: 1m only, price units
+                  title: Spread
               required:
               - time
               - open

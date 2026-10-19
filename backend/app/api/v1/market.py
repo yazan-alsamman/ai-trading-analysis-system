@@ -54,7 +54,11 @@ async def get_instrument(instrument_id: uuid.UUID, _: MarketReader, session: Ses
     return await market_service.get_instrument_or_404(session, instrument_id)
 
 
-@router.get("/instruments/{instrument_id}/candles", response_model=CandleSeries)
+@router.get(
+    "/instruments/{instrument_id}/candles",
+    response_model=CandleSeries,
+    response_model_exclude_none=True,  # spread only when the candle has one
+)
 async def get_candles(
     instrument_id: uuid.UUID,
     _: MarketReader,
