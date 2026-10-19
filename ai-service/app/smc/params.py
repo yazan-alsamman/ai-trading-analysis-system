@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 
 import pandas as pd
 
-ENTRY_TIMEFRAME = pd.Timedelta(minutes=15)
+ENTRY_TIMEFRAME = pd.Timedelta(minutes=15)  # the spec's entry timeframe
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,13 @@ class StrategyParams:
     extend_sweep: bool = False
     # Variant B: Asian and London session highs and lows as extra liquidity levels.
     session_levels: bool = False
+    # Entry bars in minutes (15 for the spec; 5 for attempt 4). Bar-count windows above are in entry
+    # bars, so a 5m run scales them (8 -> 24, 48 -> 144) to keep the same clock time.
+    entry_tf_minutes: int = 15
+
+    @property
+    def entry_timeframe(self) -> pd.Timedelta:
+        return pd.Timedelta(minutes=self.entry_tf_minutes)
 
     def as_dict(self) -> dict:
         return asdict(self)

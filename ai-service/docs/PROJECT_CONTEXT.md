@@ -439,11 +439,18 @@ scored.
 | 1 | 2026-10-19 | baseline | Spec's initial rules | 149 | 71 | 21.1% | −0.065 (−0.35 to +0.22) | [rules_only](phase2/rules_only.md) |
 | 2 | 2026-10-19 | A | A new extreme extends the sweep while depth ≤ 1.5 ATR, instead of discarding | 178 | 87 | 21.8% | −0.084 (−0.34 to +0.17) | [variant_A](phase2/variant_A.md) |
 | 3 | 2026-10-19 | AB | A, plus Asian (20:00–00:00 NY) and London (02:00–05:00 NY) session highs and lows as levels | 297 | 143 | 26.6% | −0.045 (−0.26 to +0.18) | [variant_AB](phase2/variant_AB.md) |
+| 4 | 2026-10-19 | AB5 | AB with 5m entry bars (same 1h/4h and session levels). Bar windows scaled to the same clock time: CHoCH and entry windows 24 bars (2 h), horizon 144 bars (12 h); swing k and ATR period stay in entry bars | 807 | 364 | 25.8% | **−0.337 (−0.49 to −0.18)** | [variant_AB5](phase2/variant_AB5.md) |
 
-**Status after attempt 3:** the sample-size target (~1,000 closed trades before the lockbox) is still
-not met: 297 trades, about 24 a year. No variant shows a development-period edge after costs; every
-CI includes zero. Further changes wait for Fadi's decision (variant attempts are capped to keep the
-multiple-testing count honest).
+**Status after attempt 4:**
+- 5m entries bring the sample close to target, with 807 closed trades before the lockbox.
+- On 5m, however, the rules **lose money with statistical confidence** on the development period: the
+  whole CI is below zero.
+  - Gross R is already about −0.07.
+  - Costs weigh much more, because 5m stops are tighter.
+  - The win rate is 25.8% against a 31.2% break-even.
+- On 15m (AB) the rules sit near zero after costs, with only 297 trades.
+- Further changes wait for Fadi's decision. Variant attempts are capped to keep the multiple-testing
+  count honest.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 

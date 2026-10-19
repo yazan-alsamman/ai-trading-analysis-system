@@ -106,7 +106,8 @@ def performance(df: pd.DataFrame) -> dict:
 
 
 def build(params: StrategyParams, costs: CostParams) -> tuple[pd.DataFrame, dict]:
-    m15, h1, h4 = (pd.read_parquet(DATA_DIR / f"{tf}.parquet") for tf in ("15m", "1h", "4h"))
+    entry_tf = f"{params.entry_tf_minutes}m"
+    m15, h1, h4 = (pd.read_parquet(DATA_DIR / f"{tf}.parquet") for tf in (entry_tf, "1h", "4h"))
     m15 = m15[m15["ts_utc"] < LOCKBOX_START].reset_index(drop=True)
     setups = run(m15, h1, h4, params, costs)
     df = setups_frame(setups, m15["ts_utc"])

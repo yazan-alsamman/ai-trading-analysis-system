@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from app.data.sessions import trading_day
-from app.smc.params import ENTRY_TIMEFRAME, CostParams, StrategyParams
+from app.smc.params import CostParams, StrategyParams
 from app.smc.primitives import (
     Level,
     atr,
@@ -337,10 +337,10 @@ def build_levels(h1: pd.DataFrame, h4: pd.DataFrame, m15: pd.DataFrame, p: Strat
     levels = (
         htf_swing_levels(h1, H1, p.k_htf, "1h")
         + htf_swing_levels(h4, H4, p.k_htf, "4h")
-        + previous_day_levels(m15, ENTRY_TIMEFRAME)
+        + previous_day_levels(m15, p.entry_timeframe)
     )
     if p.session_levels:
-        levels += session_levels(m15, ENTRY_TIMEFRAME)
+        levels += session_levels(m15, p.entry_timeframe)
     return levels
 
 
@@ -358,7 +358,7 @@ def run(
     params = params or StrategyParams()
     costs = costs or CostParams()
     m15 = m15.reset_index(drop=True)
-    end = m15["ts_utc"].iloc[-1] + ENTRY_TIMEFRAME if len(m15) else None
+    end = m15["ts_utc"].iloc[-1] + params.entry_timeframe if len(m15) else None
     if end is not None:
         h1 = h1[h1["ts_utc"] + H1 <= end]
         h4 = h4[h4["ts_utc"] + H4 <= end]
