@@ -177,6 +177,22 @@ development period and then frozen.
 9. **Context (features, not filters).** 1h/4h trend, volatility regime, session (Asia, London, New York), distance
    to daily levels, and time to the next high-impact event.
 
+**Written pattern definition (Fadi, 2026-10-19, after the v3 review).** This is the definition the human
+review judges against. Disagreement with it goes in the review's definition-feedback column; it does not change
+the acceptance criterion chart by chart. A change to it is a new rule set and a new review.
+
+- **Liquidity sweep:** price trades beyond a liquidity level defined by the engine's rules (2 and 3), and the
+  required close back is met.
+- **CHoCH:** the break is confirmed by a bar *closing* beyond the reference structure level (rule 4), not by a
+  wick.
+- **FVG:** a three-bar fair value gap that meets the engine's size rule (rule 5).
+- **Timing:** the gap's formation and the signal's confirmation are different moments. In `FROZEN_V3` the gap may
+  form on the CHoCH bar or up to 6 bars before it; a gap before the CHoCH is not a defect. The proposed text also
+  allowed a gap that forms after the CHoCH. v3 does not implement that, so it is logged as definition feedback;
+  adopting it would be a new rule set.
+- **No look-ahead:** a setup is confirmed only at the bar close at which all of its conditions are knowable. In
+  v3 that is the CHoCH bar's close, when the gap is already complete.
+
 **Baselines** that use the same entry, SL, TP and horizon mechanics:
 
 - **Base rate:** random entries, as already measured (see Validation).
