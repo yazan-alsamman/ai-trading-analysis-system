@@ -34,11 +34,11 @@ small". Definition feedback is decided once, after the review. The gate is **45 
 | 13 | [13_buy_20130821_0900.png](13_buy_20130821_0900.png) | buy | 2013-08-21 05:00 | expired | ✅ | Sweep of the London low, fairly clear bullish CHoCH, small bullish FVG; price never reached the entry in the window. | Small FVG |
 | 14 | [14_sell_20130827_0030.png](14_sell_20130827_0030.png) | sell | 2013-08-26 20:30 | expired | ✅ | Clear sweep of the 1h high, impulsive drop breaking structure, FVG consistent with the move. |  |
 | 15 | [15_buy_20131009_0405.png](15_buy_20131009_0405.png) | buy | 2013-10-09 00:05 | tp | ✅ | Sweep of the Asian low, bullish CHoCH and a small FVG; later extension reaches the target. | Small FVG |
-| 16 | [16_buy_20131202_1040.png](16_buy_20131202_1040.png) | buy | 2013-12-02 05:40 | sl | | | |
-| 17 | [17_sell_20131211_1205.png](17_sell_20131211_1205.png) | sell | 2013-12-11 07:05 | invalidated | | | |
-| 18 | [18_sell_20131226_1120.png](18_sell_20131226_1120.png) | sell | 2013-12-26 06:20 | sl | | | |
-| 19 | [19_buy_20140205_1500.png](19_buy_20140205_1500.png) | buy | 2014-02-05 10:00 | timeout | | | |
-| 20 | [20_buy_20140206_1455.png](20_buy_20140206_1455.png) | buy | 2014-02-06 09:55 | expired | | | |
+| 16 | [16_buy_20131202_1040.png](16_buy_20131202_1040.png) | buy | 2013-12-02 05:40 | sl | ⚠️ | Sweep of the Asian low fairly clear but shallow (0.29); CHoCH and FVG visible, but the break may be a small local high rather than structural. | Shallow sweep; CHoCH breaks a minor swing |
+| 17 | [17_sell_20131211_1205.png](17_sell_20131211_1205.png) | sell | 2013-12-11 07:05 | invalidated | ✅ | Clear sweep of the London high, bearish structure break, FVG; coherent sequence. |  |
+| 18 | [18_sell_20131226_1120.png](18_sell_20131226_1120.png) | sell | 2013-12-26 06:20 | sl | ⚠️ | Session high exceeded then bearish CHoCH and FVG, but the sweep is very shallow (0.17) inside a tight range; unclear the swept high is meaningful liquidity. | Shallow sweep; level significance in a tight range |
+| 19 | [19_buy_20140205_1500.png](19_buy_20140205_1500.png) | buy | 2014-02-05 10:00 | timeout | ✅ | Clear and relatively deep sweep of the Asian low (1.00), bullish CHoCH, clear FVG. |  |
+| 20 | [20_buy_20140206_1455.png](20_buy_20140206_1455.png) | buy | 2014-02-06 09:55 | expired | ⚠️ | Sweep clear and deep (2.33), but the CHoCH sits on minor local structure; significance of the break needs review. | CHoCH breaks a minor swing |
 | 21 | [21_sell_20140305_1740.png](21_sell_20140305_1740.png) | sell | 2014-03-05 12:40 | expired | | | |
 | 22 | [22_sell_20140404_0935.png](22_sell_20140404_0935.png) | sell | 2014-04-04 05:35 | sl | | | |
 | 23 | [23_buy_20140501_0455.png](23_buy_20140501_0455.png) | buy | 2014-05-01 00:55 | sl | | | |
@@ -70,4 +70,4 @@ small". Definition feedback is decided once, after the review. The gate is **45 
 | 49 | [49_buy_20170802_1250.png](49_buy_20170802_1250.png) | buy | 2017-08-02 08:50 | expired | | | |
 | 50 | [50_buy_20171219_0135.png](50_buy_20171219_0135.png) | buy | 2017-12-18 20:35 | expired | | | |
 
-**Result so far:** 12 of 15 reviewed are valid patterns; 35 still to review. Gate: 45 of 50 (at most 5 not ✅).
+**Result so far:** 14 of 20 reviewed are valid patterns; 30 still to review. Gate: 45 of 50 (at most 5 not ✅).
