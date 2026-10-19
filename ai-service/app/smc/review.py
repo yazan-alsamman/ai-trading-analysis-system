@@ -59,6 +59,36 @@ def _level_label(lv) -> str:
     return f"{lv.source} swing {lv.kind} (bar of {_ny(lv.origin_ts)} NY)"
 
 
+def _panel(s: Setup, bars: pd.DataFrame) -> list[str]:
+    """The numbers behind each check, read from the bars, so a reviewer can verify them on the
+    chart."""
+    buy = s.direction == "buy"
+    side = "above" if buy else "below"
+    level = s.level.price
+    sweep_close = float(bars["close"].iloc[s.sweep_idx])
+    choch_close = float(bars["close"].iloc[s.choch_idx])
+    back = sweep_close > level if buy else sweep_close < level
+    beyond = choch_close > s.ref_price if buy else choch_close < s.ref_price
+    depth = abs(level - s.extreme)
+    gap = s.fvg_high - s.fvg_low
+
+    def ok(flag: bool) -> str:
+        return "OK" if flag else "FAIL"
+
+    return [
+        f"1 Level   {_level_label(s.level)} = {level:.2f}",
+        f"2 Sweep   close {sweep_close:.2f} {side} level {level:.2f}: {ok(back)}"
+        f" | extreme {s.extreme:.2f}, depth {depth:.2f} = {depth / s.atr:.2f} ATR"
+        f" (max 1.5) | extensions {s.extensions}",
+        f"3 CHoCH   close {choch_close:.2f} {side} ref {s.ref_price:.2f}"
+        f" ({choch_close - s.ref_price:+.2f}): {ok(beyond)}",
+        f"4 FVG     {s.fvg_low:.2f}-{s.fvg_high:.2f} = {gap:.2f} (min {0.1 * s.atr:.2f})"
+        f" | {s.choch_idx - s.fvg_idx} bars before CHoCH (max 6)",
+        f"5 Plan    entry {s.entry:.2f} | SL {s.sl:.2f} | TP {s.tp:.2f}"
+        f" ({'4R cap' if s.tp_source == 'cap' else 'opposite level'}) | R {s.r_multiple:.2f}",
+    ]
+
+
 def draw(s: Setup, bars: pd.DataFrame, path: Path, number: int) -> None:
     last = s.exit_idx if s.exit_idx is not None else s.events[-1][0]
     start = max(0, min(s.ref_idx, s.extreme_idx) - BEFORE)
@@ -159,6 +189,18 @@ def draw(s: Setup, bars: pd.DataFrame, path: Path, number: int) -> None:
     outcome = s.outcome or s.state.lower()
     ax.set_title(f"#{number:02d}  {s.setup_id}  ·  {s.direction}  ·  {outcome}", fontsize=10)
     ax.grid(alpha=0.15)
+    ax.text(
+        0.005,
+        0.995,
+        "\n".join(_panel(s, bars)),
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        fontsize=7.5,
+        family="monospace",
+        bbox={"boxstyle": "round,pad=0.4", "fc": "white", "ec": "#999999", "alpha": 0.9},
+        zorder=10,
+    )
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
@@ -195,6 +237,9 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("-n", type=int, default=50)
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--out", type=Path, default=OUT_DIR / "review")
+    ap.add_argument(
+        "--reset-sheet", action="store_true", help="rewrite REVIEW.md even if it has verdicts"
+    )
     args = ap.parse_args(argv)
 
     params = FROZEN_V2
@@ -204,6 +249,7 @@ def main(argv: list[str] | None = None) -> None:
     setups = run(bars, h1, h4, params, CostParams())
     chosen = sample(setups, bars["ts_utc"], args.n, args.seed)
 
+    ap_reset = args.reset_sheet
     args.out.mkdir(parents=True, exist_ok=True)
     for old in args.out.glob("*.png"):
         old.unlink()
@@ -217,7 +263,14 @@ def main(argv: list[str] | None = None) -> None:
     need = int(np.ceil(0.9 * len(chosen)))
     text = CHECKLIST.format(seed=args.seed, need=need, n=len(chosen)) + "\n".join(rows) + "\n"
     text += f"\n**Result:** __ of {len(chosen)} correct (precision __%).\n"
-    (args.out / "REVIEW.md").write_text(text, encoding="utf-8")
+    sheet = args.out / "REVIEW.md"
+    if ap_reset or not sheet.exists():
+        sheet.write_text(text, encoding="utf-8")
+    else:  # keep recorded verdicts; the sample is deterministic, so rows still match
+        existing = sheet.read_text(encoding="utf-8")
+        missing = [r.split(" | ")[1] for r in rows if r.split(" | ")[1] not in existing]
+        if missing:
+            raise SystemExit(f"REVIEW.md does not match this sample: {missing[:3]}")
     print(f"wrote {len(chosen)} charts to {args.out}")
 
 

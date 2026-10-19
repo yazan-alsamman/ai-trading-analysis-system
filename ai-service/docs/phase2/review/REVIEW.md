@@ -21,11 +21,11 @@ Markers: ▲/▼ sweep extreme · ● fill · ✕ exit. Times are New York time.
 
 | # | Chart | Direction | Sweep (NY) | Outcome | Correct? | Note |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | [01_buy_20120425_1530.png](01_buy_20120425_1530.png) | buy | 2012-04-25 11:30 | sl | | |
-| 2 | [02_buy_20120513_2225.png](02_buy_20120513_2225.png) | buy | 2012-05-13 18:25 | expired | | |
-| 3 | [03_buy_20120531_1220.png](03_buy_20120531_1220.png) | buy | 2012-05-31 08:20 | sl | | |
-| 4 | [04_buy_20120730_1235.png](04_buy_20120730_1235.png) | buy | 2012-07-30 08:35 | tp | | |
-| 5 | [05_buy_20120731_1720.png](05_buy_20120731_1720.png) | buy | 2012-07-31 13:20 | timeout | | |
+| 1 | [01_buy_20120425_1530.png](01_buy_20120425_1530.png) | buy | 2012-04-25 11:30 | sl | ✅ | Reviewer: CHoCH close confirmed 0.64 above the ref from bar data; FVG 0.69 on the CHoCH bar. |
+| 2 | [02_buy_20120513_2225.png](02_buy_20120513_2225.png) | buy | 2012-05-13 18:25 | expired | ❌ | Reviewer: FVG timing fits v2, but the other conditions cannot be confirmed from the image alone (not a defect found). Data check: sweep closed back above 1578.39; CHoCH close 1582.52 vs ref 1582.32 (+0.20); FVG 0.55, 1 bar before the CHoCH; R 3.17. |
+| 3 | [03_buy_20120531_1220.png](03_buy_20120531_1220.png) | buy | 2012-05-31 08:20 | sl | ✅ | Reviewer: all five conditions met; FVG 3 bars before the CHoCH. Data check agrees (gap 3.29). |
+| 4 | [04_buy_20120730_1235.png](04_buy_20120730_1235.png) | buy | 2012-07-30 08:35 | tp | ✅ | Reviewer: all five conditions met; FVG 1 bar before the CHoCH. Data check agrees (gap 0.62). |
+| 5 | [05_buy_20120731_1720.png](05_buy_20120731_1720.png) | buy | 2012-07-31 13:20 | timeout | ⚠️ | Reviewer: FVG visible and timing fits; bounds and size need confirming from bar data. Data check: FVG 1612.68 to 1613.41 (0.73, minimum 0.18), 6 bars before the CHoCH. |
 | 6 | [06_buy_20120820_0935.png](06_buy_20120820_0935.png) | buy | 2012-08-20 05:35 | sl | | |
 | 7 | [07_buy_20121018_0530.png](07_buy_20121018_0530.png) | buy | 2012-10-18 01:30 | sl | | |
 | 8 | [08_buy_20121024_1120.png](08_buy_20121024_1120.png) | buy | 2012-10-24 07:20 | sl | | |
