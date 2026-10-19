@@ -49,6 +49,7 @@ from app.schemas.posts import (
     ReportCreate,
     ReportResolve,
 )
+from app.services import strategy_resolver
 from app.social import notify
 from app.social.notify import display_name
 
@@ -136,7 +137,10 @@ async def validate_attachments(
             )
             message = "post not found or not shareable"
         else:
-            ok = await session.get(Signal, ref.id) is not None
+            row = await session.get(Signal, ref.id)
+            ok = row is not None and bool(
+                await strategy_resolver.visible_keys(session, [row.strategy_key], author)
+            )
             message = "signal not found"
         if not ok:
             errors.append(_invalid(i, message))
@@ -146,9 +150,13 @@ async def validate_attachments(
 
 
 async def resolve_attachments(
-    session: AsyncSession, viewer: User, posts: list[Post]
+    session: AsyncSession, viewer: User | None, posts: list[Post]
 ) -> dict[uuid.UUID, list[dict[str, Any]]]:
-    """Summaries of every attachment of these posts, one query per attachment type."""
+    """Summaries of every attachment of these posts, one query per attachment type, as
+    ``viewer`` may see them (``None``: only what every user may see, for a live message that
+    several people receive). A signal of a private custom strategy is only available to users
+    who may use the strategy (``strategy_resolver.visible_keys``)."""
+    viewer_id = viewer.id if viewer is not None else None
     wanted: dict[str, set[uuid.UUID]] = defaultdict(set)
     for post in posts:
         for ref in post.attachments or []:
@@ -210,7 +218,13 @@ async def resolve_attachments(
             .join(Instrument, Instrument.id == Signal.instrument_id)
             .where(Signal.id.in_(wanted["signal"]))
         )
-        for sig, symbol in rows.all():
+        rows = rows.all()
+        visible = await strategy_resolver.visible_keys(
+            session, {sig.strategy_key for sig, _ in rows}, viewer
+        )
+        for sig, symbol in rows:
+            if sig.strategy_key not in visible:
+                continue  # shown as unavailable, without its content
             found[("signal", str(sig.id))] = {
                 "instrument_id": sig.instrument_id,
                 "symbol": symbol,
@@ -244,11 +258,11 @@ async def resolve_attachments(
             available = bool(summary)
             if ref["type"] == "custom_strategy" and summary:
                 # a strategy made private again is only shown to its owner
-                available = summary.pop("public") or summary["owner_id"] == viewer.id
+                available = summary.pop("public") or summary["owner_id"] == viewer_id
             if ref["type"] == "shared_workspace" and summary:
                 available = summary.pop("shared")
             if ref["type"] == "post" and summary:
-                available = summary.pop("shown") or summary["owner_id"] == viewer.id
+                available = summary.pop("shown") or summary["owner_id"] == viewer_id
             summary.pop("owner_id", None)
             items.append(
                 {"type": ref["type"], "id": ref["id"], "available": available}

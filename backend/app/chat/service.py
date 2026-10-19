@@ -340,12 +340,14 @@ async def publish_message(
     session: AsyncSession | None = None,
 ) -> None:
     """``chat_message`` / ``chat_message_updated`` on the conversation topic (never raises).
-    Attachments are summarised as the sender sees them; ``client_id`` is included so the
-    sender's other devices can match their optimistic copy."""
+    Attachments are summarised as every user may see them (a private strategy or signal is
+    ``available: false`` here; the history endpoint resolves them per viewer); ``client_id`` is
+    included so the sender's other devices can match their optimistic copy."""
     try:
         attachments: list = []
         if message.attachments and message.deleted_at is None and sender and session:
-            attachments = (await social.resolve_attachments(session, sender, [message]))[message.id]
+            # the topic reaches both participants (and admins): only what everyone may see
+            attachments = (await social.resolve_attachments(session, None, [message]))[message.id]
         payload = _json(wire(message, message.sender_id, attachments))
         await publisher.publish(
             chat_topic(message.conversation_id),
