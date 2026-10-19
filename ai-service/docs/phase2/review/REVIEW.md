@@ -19,12 +19,12 @@ small". Definition feedback is decided once, after the review. The gate is **45 
 
 | # | Chart | Dir | Sweep (NY) | Outcome | Valid? | Visible reason | Definition feedback |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | [01_buy_20120425_1530.png](01_buy_20120425_1530.png) | buy | 2012-04-25 11:30 | sl | | | |
-| 2 | [02_buy_20120513_2225.png](02_buy_20120513_2225.png) | buy | 2012-05-13 18:25 | expired | | | |
-| 3 | [03_sell_20120531_1345.png](03_sell_20120531_1345.png) | sell | 2012-05-31 09:45 | tp | | | |
-| 4 | [04_sell_20120706_1230.png](04_sell_20120706_1230.png) | sell | 2012-07-06 08:30 | expired | | | |
-| 5 | [05_buy_20120802_1135.png](05_buy_20120802_1135.png) | buy | 2012-08-02 07:35 | sl | | | |
-| 6 | [06_buy_20120827_0705.png](06_buy_20120827_0705.png) | buy | 2012-08-27 03:05 | sl | | | |
+| 1 | [01_buy_20120425_1530.png](01_buy_20120425_1530.png) | buy | 2012-04-25 11:30 | sl | ⚠️ | Sweep and bullish CHoCH visible, but the FVG is recorded on the CHoCH bar itself; the order of the two events cannot be confirmed from the chart. | FVG must form at or after the CHoCH (strict order Sweep → CHoCH → FVG) |
+| 2 | [02_buy_20120513_2225.png](02_buy_20120513_2225.png) | buy | 2012-05-13 18:25 | expired | ❌ | Sweep of the low and bullish CHoCH, but the FVG is recorded 1 bar before the CHoCH; the required sequence is not met in time. | FVG must form at or after the CHoCH (strict order Sweep → CHoCH → FVG) |
+| 3 | [03_sell_20120531_1345.png](03_sell_20120531_1345.png) | sell | 2012-05-31 09:45 | tp | ⚠️ | Sweep of the high and bearish break fairly clear, but the FVG and the CHoCH are on the same bar; the order is not settled. | FVG must form at or after the CHoCH (strict order Sweep → CHoCH → FVG) |
+| 4 | [04_sell_20120706_1230.png](04_sell_20120706_1230.png) | sell | 2012-07-06 08:30 | expired | ❌ | Sweep of the high, then a bearish move breaking structure, but the FVG is recorded 1 bar before the CHoCH. | FVG must form at or after the CHoCH (strict order Sweep → CHoCH → FVG) |
+| 5 | [05_buy_20120802_1135.png](05_buy_20120802_1135.png) | buy | 2012-08-02 07:35 | sl | ❌ | Sweep of the low, then a bullish break, but the FVG is recorded 3 bars before the CHoCH; does not match the required sequence. | FVG must form at or after the CHoCH (strict order Sweep → CHoCH → FVG) |
+| 6 | [06_buy_20120827_0705.png](06_buy_20120827_0705.png) | buy | 2012-08-27 03:05 | sl | ❌ | Sweep of the Asian low, then a bullish break, but the FVG is recorded 4 bars before the CHoCH; does not match the required sequence. | FVG must form at or after the CHoCH (strict order Sweep → CHoCH → FVG) |
 | 7 | [07_sell_20120828_0915.png](07_sell_20120828_0915.png) | sell | 2012-08-28 05:15 | sl | | | |
 | 8 | [08_buy_20120830_0135.png](08_buy_20120830_0135.png) | buy | 2012-08-29 21:35 | tp | | | |
 | 9 | [09_sell_20121216_2305.png](09_sell_20121216_2305.png) | sell | 2012-12-16 18:05 | invalidated | | | |
@@ -70,4 +70,6 @@ small". Definition feedback is decided once, after the review. The gate is **45 
 | 49 | [49_sell_20170801_0440.png](49_sell_20170801_0440.png) | sell | 2017-08-01 00:40 | tp | | | |
 | 50 | [50_sell_20171019_1220.png](50_sell_20171019_1220.png) | sell | 2017-10-19 08:20 | sl | | | |
 
-**Result:** __ of 50 correct (precision __%).
+**Result:** stopped at chart 6, the sixth chart without ✅: 0 of 6 ✅ (2 ⚠️, 4 ❌). Gate 2b failed on FROZEN_V3; charts 7–50 not reviewed.
+
+**Data check (Claude):** the FVG's third bar is 0, 1, 0, 1, 3 and 4 bars before the CHoCH on charts 1–6, as the reviewer read them. All six meet the written rule (third bar on the CHoCH bar or up to 6 bars before it). No v3 setup has its FVG after the CHoCH: of the 349 planned setups, 107 have it on the CHoCH bar and 242 before it.

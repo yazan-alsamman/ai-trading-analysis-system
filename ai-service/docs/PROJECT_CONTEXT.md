@@ -425,6 +425,9 @@ Still open:
 3. **FxPro connection for production:** cTrader Open API or a Windows MT5 pusher (Yazan).
 4. **Historical economic calendar:** which free source (Yazan).
 5. **University requirements:** is there a required report template, literature review or length?
+6. **FVG timing (Fadi), after gate 2b failed on v3:** keep the displacement reading (the gap
+   belongs to the move that broke structure, up to 6 bars before the CHoCH), or require the
+   strict order (the gap forms on or after the CHoCH bar), which is a new rule set (attempt 7)?
 
 ## Experiments log
 
@@ -529,6 +532,17 @@ replaces v1.**
   - 10 of the 50 sweeps were also in an earlier sheet (v1 or v2). They are kept, to avoid biasing
     the random sample, but the reviewer has seen them before.
 - **Attempt count:** this is the sixth variant tried on the development period.
+
+**Result, 2026-10-19: gate 2b failed on v3 at chart 6** (0 ✅, 2 ⚠️, 4 ❌; charts 7–50 not
+reviewed). Sheet: [phase2/review/REVIEW.md](phase2/review/REVIEW.md).
+- **One reason throughout:** the FVG forms on the CHoCH bar (#1, #3, ⚠️) or 1–4 bars before it
+  (#2, #4, #5, #6, ❌). The reviewer expects the strict order Sweep → CHoCH → FVG.
+- **Data check:** the offsets on the charts are right (0, 1, 0, 1, 3, 4 bars), and all six meet
+  the written rule (v2 amendment: third bar on the CHoCH bar or up to 6 bars before it).
+- **Consequence:** this is a conflict with the definition, not a sampling or implementation issue.
+  No v3 setup has its FVG after the CHoCH. Of 349 planned setups, 107 have it on the CHoCH bar and
+  242 before it. Under the strict-order reading, no sample from v2 or v3 can pass the gate.
+- **Open decision (Fadi):** which FVG timing is the definition? See Open questions.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 
