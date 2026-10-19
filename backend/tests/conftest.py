@@ -80,7 +80,21 @@ def migrated_db() -> str:
     cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     cfg.attributes["keep_logging"] = True  # alembic.ini's logging would drop pytest's handlers
     command.upgrade(cfg, "head")
+    asyncio.run(_remove_seeded_instruments(TEST_DATABASE_URL))
     return TEST_DATABASE_URL
+
+
+async def _remove_seeded_instruments(url: str) -> None:
+    """Migration 0013 creates the fxpro XAU/USD; tests start from an empty catalog (the data
+    step itself is tested on its own database in test_migration_0013.py)."""
+    u = make_url(url)
+    conn = await asyncpg.connect(
+        user=u.username, password=u.password, host=u.host, port=u.port, database=u.database
+    )
+    try:
+        await conn.execute("DELETE FROM instruments WHERE source = 'fxpro'")
+    finally:
+        await conn.close()
 
 
 @pytest.fixture
