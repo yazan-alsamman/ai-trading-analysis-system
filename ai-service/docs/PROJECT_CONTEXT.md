@@ -428,6 +428,46 @@ Still open:
 
 ## Experiments log
 
+### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
+
+- **Code:** `app/smc/` (primitives, bar-by-bar engine with the full lifecycle, report). Run it with
+  `python -m app.smc.report`; the output is in [phase2/rules_only.md](phase2/rules_only.md).
+- **Data:** XAUUSD 15m/1h/4h in UTC, cut at 2024-07-01. The lockbox is not loaded.
+  - Performance is computed on the development period (2012–2017) only.
+  - The walk-forward period is counted, not scored.
+- **Parameters:** the spec's initial values; costs are spread + max(50%, $0.10), plus $0.10 SL slippage.
+- **Tests:** 47 pass. These include prefix-equality no-look-ahead tests on a random walk and on real data.
+- **Results:**
+
+  | Measure | Value |
+  | --- | --- |
+  | Setups detected, 2012 to 2024-06 | about 5,400 |
+  | Setups reaching a trade plan | about 360 |
+  | Closed trades | 149 |
+  | Development-period trades | 71 |
+  | Development win rate | 21.1% (95% CI 13–32%) |
+  | Break-even win rate before costs | 32.5% |
+  | Mean net R | −0.07 (95% CI −0.35 to +0.22) |
+
+- **Where setups die (all periods):**
+
+  | Reason | Count |
+  | --- | --- |
+  | New extreme before the CHoCH | 3,238 |
+  | No CHoCH within 8 bars | 1,387 |
+  | No qualifying FVG | 420 |
+
+- **Takeaways:**
+  1. **The sample-size check fails.** 149 trades before the lockbox is far below the ~1,000 the spec
+     requires before model work. Per the spec, the rules must be revisited, on development data only.
+  2. With 71 development trades, the rules show no evidence of an edge. Their confidence interval is
+     wide and includes both a loss and a gain.
+  3. The main bottleneck is the rule that discards a setup when price makes a new extreme after the
+     sweep. Most sweeps keep running for a bar or two.
+- **Next:** decide which rule changes to try on 2012–2017. Log every variant tried, so the number of
+  attempts is reported (multiple-testing control). Then run the manual detector review on the final
+  rules.
+
 ### 2026-10-19 — Phase 1 history import and data-quality report (XAUUSD, EURUSD)
 
 - **Command:** `cd ai-service && python -m app.data.importer --raw-dir <path to data/raw>` (about 30 s for
