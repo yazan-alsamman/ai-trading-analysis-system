@@ -5,7 +5,7 @@ experiment finishes. The detailed evidence is in [REPOSITORY_AUDIT.md](REPOSITOR
 of the audit is the doc "AI Trading Engine — Repository Audit"
 (https://claude.ai/artifact/XJCecjPXZeAYx7JSSK3Q8L).
 
-_Last updated: 2026-10-19. Full-platform audit of `main` @ `5b91175`. The remote `main` has since moved to
+_Last updated: 2026-10-19 (Phase 1 history import added). Full-platform audit of `main` @ `5b91175`. The remote `main` has since moved to
 `593cfbf`, which has not been audited._
 
 ## Purpose and scope
@@ -30,9 +30,17 @@ The AI side analyses gold (XAU/USD) first, then forex.
       1 point = $0.01).
     - `EURUSD_M5_mt5.csv`: M5 from 2000-05-30 to 2026-02-13, no spread column, and its first data row is
       malformed.
-  - Checked 2026-10-19: timestamps are broker server time, **New York time + 7h** (UTC+2 in winter, UTC+3
-    under US DST). The weekly open is Monday 01:00 server time all year, and the daily break runs from
-    about 23:55 to 01:00 server time (17:00–18:00 New York). Convert to UTC before any use.
+  - Timestamps are broker server time. **Corrected 2026-10-19 by the history importer:** the server clock
+    follows **EU** daylight saving (`Europe/Athens`: UTC+2 in winter, UTC+3 from the last Sunday of March
+    to the last Sunday of October), not "New York time + 7h". The two agree except in the US/EU mismatch
+    weeks (second Sunday of March → last Sunday of March, last Sunday of October → first Sunday of
+    November), when server time is New York + 6h: the daily break moves to 23:00–00:00 server time, the
+    weekly open to Monday 00:00, and the 08:30 New York jobs report sits at 14:30 server time. Outside
+    those weeks the weekly open is Monday 01:00 and the daily break about 23:55–01:00 server time
+    (17:00–18:00 New York). The importer converts to UTC; see the experiments log.
+  - The UTC research store is built with `python -m app.data.importer` (in `ai-service/`): Parquet in
+    `ai-service/data/processed/<SYMBOL>/{5m,15m,1h,4h}.parquet` (untracked) and the report in
+    `ai-service/docs/data_quality/`.
   - XAUUSD median bar spread by year: about 40 points in 2012–2015, 5 in 2021–2022, 14–15 in 2024–2025.
     The MT5 bar spread is the minimum spread within the bar, so it understates real costs; treat it as a
     lower bound.
@@ -419,6 +427,70 @@ Still open:
 5. **University requirements:** is there a required report template, literature review or length?
 
 ## Experiments log
+
+### 2026-10-19 — Phase 1 history import and data-quality report (XAUUSD, EURUSD)
+
+- **Command:** `cd ai-service && python -m app.data.importer --raw-dir <path to data/raw>` (about 30 s for
+  both files). Re-running gives byte-identical Parquet and reports. Reports:
+  [data_quality/XAUUSD_M5.md](data_quality/XAUUSD_M5.md), [data_quality/EURUSD_M5.md](data_quality/EURUSD_M5.md),
+  with JSON next to each.
+- **Input:** `XAUUSD_M5_mt5.csv`, SHA-256 `291252dbc621bebf9d292dfdf0bd4407efb9a64e5e55d01c6df9a7fa31d44dc3`.
+- **Method:**
+  - Server time → UTC with the `Europe/Athens` clock; spread × $0.01 per point.
+  - Bars that are malformed, OHLC-inconsistent, off the 5-minute grid or duplicated are dropped and listed
+    with their line number.
+  - The export's final bar is dropped when it may still have been forming.
+  - 15m/1h/4h bars come from closed 5m bars only. 4h bars start at 17:00 New York, the trading-day start.
+    Each bar carries `n_bars` and `n_expected` (5m slots inside trading hours).
+  - Gaps are counted only inside trading hours (Sunday 18:00 to Friday 17:00 New York, minus 17:00–18:00
+    daily). They are classed as mid-session, session edge (next to the break or weekend) or holiday.
+- **XAUUSD results:**
+
+  | Item | Value |
+  | --- | --- |
+  | Range (UTC) | 2012-04-22 22:05 → 2026-01-09 15:55; the 16:00 bar dropped as possibly forming |
+  | Bars | 5m 963,014; 15m 322,800; 1h 80,770; 4h 21,158 |
+  | Rows rejected | 0 (no malformed rows, OHLC inconsistencies or duplicate timestamps) |
+  | Coverage of expected 5m slots | 96.6–98.5% per full year |
+  | Mid-session gaps | 77 (392 bars; the largest is 39 bars, 2021-09-24 11:25 NY) |
+  | Session-edge / holiday gaps | 4,938 (7,127 bars) / 394 (17,587 bars); mostly the 16:55 NY bar before the break and late Sunday opens |
+  | Partial higher-timeframe bars | 15m 5,258; 1h 5,285; 4h 5,292 |
+  | Jump flags (≥ 30× the trailing median, reported, not removed) | 203 close-to-close, 23 range; many at 08:30 NY releases or Sunday opens |
+  | Flat bars (O = H = L = C) | 146 |
+  | 5m content hash | `2e8a9d50fab97e62c4cfe282ef4bb7ee9eee8dfa685bdb98ae114823e8fc7162` |
+
+- **Timezone evidence (XAUUSD):**
+  - With the EU-DST clock, 113 bars fall inside expected closed hours, all in 2012–2014 mismatch weeks,
+    when the broker kept a fixed server-time session. If the clock were New York + 7h, 1,029 bars would.
+  - On first Fridays in mismatch weeks, the widest bar between 07:00 and 10:00 NY is at 08:30 NY on 9 of
+    10 days with this clock. Under New York + 7h it would be at 07:30 on 8 of 10.
+  - Over all first Fridays, the widest bar is at 08:30 NY on 112 days.
+- **XAUUSD spread** (median / P95 per year, in $):
+
+  | Year | Median | P95 |
+  | --- | --- | --- |
+  | 2012–2015 | 0.32–0.41 | 0.52–0.60 |
+  | 2016–2019 | 0.19–0.29 | 0.24–0.39 |
+  | 2020 | 0.11 | 0.43 |
+  | 2021–2023 | 0.05–0.07 | 0.12–0.16 |
+  | 2024–2025 | 0.14–0.15 | 0.18–0.33 |
+
+  Zero-spread bars cluster in 2021 (6,408) and 2022 (10,021). This is the in-bar minimum, so the cost
+  margin in the validation protocol applies.
+- **EURUSD:**
+  - 1,858,961 bars kept (2000-05-30 → 2026-02-13). Two rows were rejected: line 2 (the malformed first
+    row) and line 85,256 (2001-09-11, all prices −0.0001).
+  - **Not clean.** 121,070 bars lie on Sundays 10:00–18:00 NY, before the normal weekly open, in every
+    year.
+  - 8,031 mid-session gaps.
+  - The jobs-report check does not peak at 08:30 NY, so the clock of this export is **not verified**.
+  - Review it before using EURUSD, even as an ablation.
+- **Takeaways:**
+  - XAUUSD passes the Phase 1 quality gate on history.
+  - The spec's timezone rule ("New York time + 7 h") must be corrected to the EU-DST server clock. Live
+    adapters must use the same clock, or better, take UTC from the broker API.
+  - The base-rate experiment below used server time with no UTC conversion, so its numbers are
+    unaffected.
 
 ### 2026-10-19 — random-entry base rates on XAUUSD (sanity baseline)
 
