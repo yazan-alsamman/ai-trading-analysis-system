@@ -429,6 +429,9 @@ Still open:
    2026-10-19: keep it (option A); see the experiments log.
 7. ~~**After the AI review failed gate 2b on v3:** fix the data holes and start Phase 3, or try
    another rule set?~~ Answered on 2026-10-19: fix them (`FROZEN_V4`), then Phase 3.
+8. **Phase 3 sample size (443 labels vs about 1,000 in the spec):** proceed with low-capacity
+   models and a documented power limit, add EURUSD under the same frozen rules, or revise the
+   rules again?
 
 ## Experiments log
 
@@ -617,6 +620,17 @@ restarts from chart 1 on the same sample.**
   limitation. The remaining weak groups (minor CHoCH references, quiet-session range noise, slow
   sweeps) are left for the Phase 3 model to filter.
 - **Rule iteration ends here:** 7 variants were tried on the development period.
+
+**Phase 3 sample-size check, 2026-10-19 (`FROZEN_V4`, counts only, 2012 → 2024-06):**
+- **443 closed trades** (the training labels): 191 in development and 252 in walk-forward, 17 to
+  48 per year. The spec asks for about 1,000 before model work and otherwise sends the rules back
+  for revision, which conflicts with the decision to stop rule iteration.
+- **Power, roughly:** net R per trade has a standard deviation of about 1.3 R.
+  - Over the 252 walk-forward trades, a mean is known to about ±0.16 R (95%).
+  - A filtered subset of about 100 trades is known to about ±0.26 R. Its CI clears zero only if
+    its mean is above about +0.26 R, from −0.21 for the rules alone.
+  - Only a large model effect would be detectable.
+- **Open decision (Fadi):** see Open questions.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 
