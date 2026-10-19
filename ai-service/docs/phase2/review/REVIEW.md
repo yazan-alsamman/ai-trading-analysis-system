@@ -29,11 +29,11 @@ small". Definition feedback is decided once, after the review. The gate is **45 
 | 8 | [08_buy_20121024_1120.png](08_buy_20121024_1120.png) | buy | 2012-10-24 07:20 | sl | ✅ | Sweep and CHoCH clear, FVG fits the move; the later pullback does not cancel the pattern. |  |
 | 9 | [09_buy_20121115_0655.png](09_buy_20121115_0655.png) | buy | 2012-11-15 01:55 | sl | ✅ | Kept positive provisionally. | Weakest sweep of the batch (0.09, 0.16 ATR) and a very small FVG (0.08); depth and size to review |
 | 10 | [10_sell_20130206_1820.png](10_sell_20130206_1820.png) | sell | 2013-02-06 13:20 | sl | ✅ | Clear sell sequence: sweep of a reference high, CHoCH close, fitting FVG. | FVG 5 bars before the CHoCH, inside the window; watch |
-| 11 | [11_sell_20130305_1330.png](11_sell_20130305_1330.png) | sell | 2013-03-05 08:30 | tp | | | |
-| 12 | [12_sell_20130417_0955.png](12_sell_20130417_0955.png) | sell | 2013-04-17 05:55 | invalidated | | | |
-| 13 | [13_buy_20130821_0900.png](13_buy_20130821_0900.png) | buy | 2013-08-21 05:00 | expired | | | |
-| 14 | [14_sell_20130827_0030.png](14_sell_20130827_0030.png) | sell | 2013-08-26 20:30 | expired | | | |
-| 15 | [15_buy_20131009_0405.png](15_buy_20131009_0405.png) | buy | 2013-10-09 00:05 | tp | | | |
+| 11 | [11_sell_20130305_1330.png](11_sell_20130305_1330.png) | sell | 2013-03-05 08:30 | tp | ✅ | Clear sweep above the 1h high, bearish CHoCH breaking local structure, bearish FVG tied to the move. |  |
+| 12 | [12_sell_20130417_0955.png](12_sell_20130417_0955.png) | sell | 2013-04-17 05:55 | invalidated | ❌ | Sweep acceptable, but the bearish CHoCH does not look clear enough to confirm the shift before the entry zone. (Also cited: the later sharp rally through the entry, which is an outcome, not a validity criterion.) | CHoCH clarity / break strength |
+| 13 | [13_buy_20130821_0900.png](13_buy_20130821_0900.png) | buy | 2013-08-21 05:00 | expired | ✅ | Sweep of the London low, fairly clear bullish CHoCH, small bullish FVG; price never reached the entry in the window. | Small FVG |
+| 14 | [14_sell_20130827_0030.png](14_sell_20130827_0030.png) | sell | 2013-08-26 20:30 | expired | ✅ | Clear sweep of the 1h high, impulsive drop breaking structure, FVG consistent with the move. |  |
+| 15 | [15_buy_20131009_0405.png](15_buy_20131009_0405.png) | buy | 2013-10-09 00:05 | tp | ✅ | Sweep of the Asian low, bullish CHoCH and a small FVG; later extension reaches the target. | Small FVG |
 | 16 | [16_buy_20131202_1040.png](16_buy_20131202_1040.png) | buy | 2013-12-02 05:40 | sl | | | |
 | 17 | [17_sell_20131211_1205.png](17_sell_20131211_1205.png) | sell | 2013-12-11 07:05 | invalidated | | | |
 | 18 | [18_sell_20131226_1120.png](18_sell_20131226_1120.png) | sell | 2013-12-26 06:20 | sl | | | |
@@ -70,4 +70,4 @@ small". Definition feedback is decided once, after the review. The gate is **45 
 | 49 | [49_buy_20170802_1250.png](49_buy_20170802_1250.png) | buy | 2017-08-02 08:50 | expired | | | |
 | 50 | [50_buy_20171219_0135.png](50_buy_20171219_0135.png) | buy | 2017-12-18 20:35 | expired | | | |
 
-**Result so far:** 8 of 10 reviewed are valid patterns; 40 still to review. Gate: 45 of 50 (at most 5 not ✅).
+**Result so far:** 12 of 15 reviewed are valid patterns; 35 still to review. Gate: 45 of 50 (at most 5 not ✅).
