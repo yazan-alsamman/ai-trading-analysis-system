@@ -429,9 +429,9 @@ Still open:
    2026-10-19: keep it (option A); see the experiments log.
 7. ~~**After the AI review failed gate 2b on v3:** fix the data holes and start Phase 3, or try
    another rule set?~~ Answered on 2026-10-19: fix them (`FROZEN_V4`), then Phase 3.
-8. **Phase 3 sample size (443 labels vs about 1,000 in the spec):** proceed with low-capacity
-   models and a documented power limit, add EURUSD under the same frozen rules, or revise the
-   rules again?
+8. ~~**Phase 3 sample size (443 labels vs about 1,000):**~~ Answered on 2026-10-19: proceed with
+   low-capacity models and a documented power limit.
+9. **Approve Phase 3 protocol v1** (spec, Machine learning) before the single walk-forward run?
 
 ## Experiments log
 
@@ -631,6 +631,21 @@ restarts from chart 1 on the same sample.**
     its mean is above about +0.26 R, from −0.21 for the rules alone.
   - Only a large model effect would be detectable.
 - **Open decision (Fadi):** see Open questions.
+
+**Decision, 2026-10-19 (Fadi): Phase 3 goes ahead with low-capacity models** (open question 8).
+- **Built:**
+  - `app/ml/dataset.py`: 443 labelled rows, 21 scale-free features, no-look-ahead tests on a
+    random walk and on real 2016 data. The report is [phase3/dataset.md](phase3/dataset.md); it
+    describes the development period only.
+  - `app/ml/walkforward.py`: windows, purge and embargo, Platt calibration, metrics and the
+    report. Synthetic tests show it does not leak (rewriting the future leaves a window's
+    predictions unchanged) and that it finds a planted signal.
+- **On the development data:**
+  - The mean cost is 0.21 R per trade.
+  - The gross R is about 0, so costs are the whole loss.
+  - The trades are counter-trend on average: mean 1h trend −0.97 ATR in the trade's direction.
+- **The protocol is fixed in the spec** ("Phase 3 protocol v1"). The walk-forward run waits for
+  Fadi's approval. It runs once.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 

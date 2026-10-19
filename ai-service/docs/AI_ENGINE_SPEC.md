@@ -320,6 +320,42 @@ score). Raw-candle sequence networks (LSTM, Transformer) are deferred: a few tho
 
 **Sample size check:** Phase 3 starts by counting rule-qualified setups per year. If there are fewer than about
 1,000 in total, the rules are revisited on development data before any model work.
+**Amended 2026-10-19 (Fadi):** `FROZEN_V4` gives 443 closed setups before the lockbox, and rule iteration has
+ended. Phase 3 goes ahead with low-capacity models. The small sample is a documented limitation: only a large
+model effect can be detected.
+
+**Phase 3 protocol v1 (written before the first walk-forward run; not changed after it)**
+
+- **Data:** `python -m app.ml.dataset`, one row per CLOSED `FROZEN_V4` setup from 2012 to 2024-06.
+- **Features:** 21, measured at the CHoCH bar's close, all scale-free, with a no-look-ahead test.
+  - Geometry: R, risk in ATR, FVG size, sweep depth, CHoCH displacement, entry distance, bars from sweep to
+    CHoCH, FVG offset.
+  - Context: 1h and 4h trend as (close − EMA50) / ATR in the trade's direction, ATR against its 20-day median,
+    room to and from the previous day's high and low, session, level type, direction.
+  - Cost: spread against the same-time median of the previous 20 days, and round-trip cost in R.
+- **Left out of v1:**
+  - News timing: no historical calendar yet.
+  - Day of week: five more columns for a weak effect at this sample size.
+  - The MLP: too many parameters for 443 rows. The comparison is base rate, logistic regression and GBM.
+- **Models, hyperparameters fixed in advance and never tuned on walk-forward data:**
+  - Logistic regression: median imputation, standardisation, L2 with C = 0.1.
+  - GBM: scikit-learn `HistGradientBoostingClassifier` with depth 2, learning rate 0.05, 100 trees, at least 20
+    samples per leaf and L2 of 1.0.
+- **Splits:**
+  - Test windows are 12 months, 2018 to 2023, then 2024-01 to 2024-06.
+  - Each window trains on every earlier setup that closed at least one day before the window opens (purge plus
+    embargo).
+  - The last 20% of the training rows, in time, fit Platt scaling. Isotonic needs more data than this.
+- **Metrics, on the pooled out-of-sample predictions:**
+  - Brier skill against the training base rate, with a paired bootstrap 95% CI.
+  - ECE over 10 bins, and AUC.
+  - Value: mean net R of setups with EV_R > 0 against all rule setups, with a paired bootstrap CI of the
+    difference, at recorded and at 2× costs.
+  - Every metric is reported per window as well.
+- **Decision rule in Phase 3:** the point estimate EV_R > 0. The armed-signal rule (the lower bound of an EV
+  confidence interval) needs an uncertainty estimate per setup. It belongs to the Phase 4 decision layer.
+- **The run:** `python -m app.ml.walkforward` runs once, after this protocol is approved. Any change after it
+  is a new, logged attempt.
 
 ## Risk engine and position sizing
 
