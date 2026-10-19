@@ -801,7 +801,10 @@ FOLDERS: list[Folder] = [
                 "List signals",
                 "GET",
                 "/signals",
-                "Signals, newest bar first. `mine=true`: only signals of my active strategies. "
+                "Signals you may see, newest bar first: global strategies and custom strategies "
+                "you may use (your own or public ones). A private custom strategy's signals are "
+                "left out of the page and of `total`; admins see every signal. `mine=true`: only "
+                "signals of my active strategies. "
                 "`time` is `bar_time` in unix seconds; a signal is actionable at the open of the "
                 "next bar.",
                 query=[("limit", "20", "1–100"), ("offset", "0", "")],
@@ -931,7 +934,8 @@ FOLDERS: list[Folder] = [
                 "The trade plans of your live signals (one per signal and activation), newest "
                 "bar first, each with its `signal`. A plan with `invalid_reason` set (e.g. "
                 "`stop_unavailable`) should not be traded. Each plan carries `risk_source` "
-                "(`override`, `profile` or `default`) and the exact `risk_config` used.",
+                "(`override`, `profile` or `default`) and the exact `risk_config` used. Plans of "
+                "a strategy you may no longer use (made private by its author) are left out.",
                 query=[("limit", "20", "1–100"), ("offset", "0", "")],
                 optional_query=[
                     ("instrument_id", "{{instrument_id}}", ""),
@@ -1653,7 +1657,8 @@ FOLDERS: list[Folder] = [
                 "Revoke API key",
                 "DELETE",
                 "/me/api-keys/:key_id",
-                "Immediate and permanent. Requests with the key answer 401 afterwards.",
+                "Immediate and permanent. Requests with the key answer 401 afterwards, and open "
+                "WebSocket connections using it get `auth_revoked` and are closed with 4401.",
                 path_vars={"key_id": ("{{api_key_id}}", "API key UUID")},
                 expect=[204],
             ),
@@ -3093,7 +3098,8 @@ FOLDERS: list[Folder] = [
                         "Revoke any API key",
                         "DELETE",
                         "/admin/api-keys/:key_id",
-                        "Revokes another user's key (e.g. a leaked one). Points at `api_key_id` "
+                        "Revokes another user's key (e.g. a leaked one); its open WebSocket "
+                        "connections are closed at once. Points at `api_key_id` "
                         "(the key created in **API Keys**, already revoked there), so running the "
                         "collection never revokes someone else's key by accident.",
                         auth="admin",
@@ -3357,7 +3363,10 @@ and use the URL and messages below. Full protocol: `docs/websocket.md`.
 ```
 
 Invalid/expired credentials: the server accepts, then closes with **4401**. Refresh the token \
-and reconnect.
+and reconnect. Open sockets are re-checked on every heartbeat and at once when the API key is \
+revoked (or loses `stream`) or the user is deactivated: `error` `auth_revoked` (message = the \
+reason), then **4401**. A topic the role or key scopes no longer allow is dropped with \
+`unsubscribed` + `reason: "forbidden"`.
 
 ### Client → server (JSON text frames, max 4 KB)
 
@@ -3377,6 +3386,7 @@ and reconnect.
 ```json
 {"type": "subscribed", "topic": "candles:<uuid>:1m"}
 {"type": "unsubscribed", "topic": "candles:<uuid>:1m"}
+{"type": "unsubscribed", "topic": "chat:<uuid>", "reason": "forbidden"}   # dropped by the server
 {"type": "snapshot",   "topic": "candles:<uuid>:1m", "candle": {"time": 1760000000, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0, "spread": 0.02}}
 {"type": "candle",     "topic": "candles:<uuid>:1m", "instrument_id": "<uuid>", "timeframe": "1m", "candle": {"time": 1760000040, "open": 1.0, "high": 1.2, "low": 0.9, "close": 1.1, "volume": 3.5, "spread": 0.02}, "sent_at": 1760000041234}
 {"type": "signal",     "topic": "signals:<uuid>", "signal": {"strategy_key": "rsi_reversal", "side": "buy", "time": 1760000000, "price": 61234.5, "...": "..."}}
@@ -3388,7 +3398,11 @@ and reconnect.
 {"type": "pong"}
 {"type": "heartbeat"}
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
+{"type": "error", "code": "auth_revoked", "message": "API key revoked"}  # then close 4401
 ```
+
+A private custom strategy's signals reach only its owner and admins on `signals:<uuid>` (same \
+frame and topic); public and global strategies reach every subscriber.
 
 `spread` (price units) is only present on 1m candles that have one.
 
@@ -3414,7 +3428,7 @@ indicator after ~5 s without a new one.
 | Server heartbeat | every 25 s; send `{"op":"ping"}` every ~30 s |
 | Idle timeout | 75 s without a client frame → **1001** |
 | Slow consumer | > 256 undelivered messages → **1013** |
-| Bad / expired token or key | **4401** |
+| Bad / expired / revoked token or key, deactivated user | **4401** |
 | Connections | 5 per identity, 20 new per minute per IP → **4429** |
 
 Reconnect with exponential backoff (1 s → 30 s, with jitter) and send your `subscribe` ops \
