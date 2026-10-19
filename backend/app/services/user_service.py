@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password, verify_password
 from app.models.user import User, UserRole
+from app.realtime import auth_events
 from app.schemas.user import PasswordChange, UserCreate, UserUpdate
 from app.services import auth_service
 
@@ -90,9 +91,12 @@ async def set_role(session: AsyncSession, actor: User, user_id: uuid.UUID, role:
     user = await get_or_404(session, user_id)
     if user.id == actor.id and role != UserRole.admin:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Admins cannot demote themselves")
+    changed = user.role != role
     user.role = role
     await session.commit()
     await session.refresh(user)
+    if changed:  # open WebSockets drop topics the new role does not allow
+        await auth_events.publish(user_id=user.id)
     return user
 
 
@@ -107,6 +111,8 @@ async def set_status(
         await auth_service.revoke_all_refresh_tokens(session, user.id)
     await session.commit()
     await session.refresh(user)
+    if not is_active:  # their WebSockets (logins and API keys) close now
+        await auth_events.publish(user_id=user.id)
     return user
 
 
