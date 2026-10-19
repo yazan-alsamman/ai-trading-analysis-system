@@ -31,8 +31,8 @@ Markers: ▲/▼ sweep extreme · ● fill · ✕ exit. Times are New York time.
 | 8 | [08_buy_20121024_1120.png](08_buy_20121024_1120.png) | buy | 2012-10-24 07:20 | sl | ✅ | Reviewer: all five conditions met per the numbers panel. |
 | 9 | [09_buy_20121115_0655.png](09_buy_20121115_0655.png) | buy | 2012-11-15 01:55 | sl | ✅ | Reviewer: all five conditions met per the numbers panel. |
 | 10 | [10_sell_20130206_1820.png](10_sell_20130206_1820.png) | sell | 2013-02-06 13:20 | sl | ✅ | Reviewer: all five conditions met per the numbers panel. |
-| 11 | [11_sell_20130305_1330.png](11_sell_20130305_1330.png) | sell | 2013-03-05 08:30 | tp | | |
-| 12 | [12_sell_20130417_0955.png](12_sell_20130417_0955.png) | sell | 2013-04-17 05:55 | invalidated | | |
+| 11 | [11_sell_20130305_1330.png](11_sell_20130305_1330.png) | sell | 2013-03-05 08:30 | tp | ✅ | Re-judged on the corrected chart: all five conditions met. |
+| 12 | [12_sell_20130417_0955.png](12_sell_20130417_0955.png) | sell | 2013-04-17 05:55 | invalidated | ⚠️ | Reviewer: sweep and CHoCH look correct, but the sweep is very shallow (0.25, 0.12 ATR). It meets the 0.1 ATR minimum, so this is feedback on the definition (minimum sweep depth), not a detection error. |
 | 13 | [13_buy_20130821_0900.png](13_buy_20130821_0900.png) | buy | 2013-08-21 05:00 | expired | ✅ | Reviewer: all five conditions met per the numbers panel. |
 | 14 | [14_sell_20130827_0030.png](14_sell_20130827_0030.png) | sell | 2013-08-26 20:30 | expired | ✅ | Reviewer: all five conditions met per the numbers panel. |
 | 15 | [15_buy_20131009_0405.png](15_buy_20131009_0405.png) | buy | 2013-10-09 00:05 | tp | ✅ | Reviewer: all five conditions met per the numbers panel. |
