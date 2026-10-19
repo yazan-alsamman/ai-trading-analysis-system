@@ -1,0 +1,14 @@
+{
+  "rule_set": "FROZEN_V2",
+  "period": "2012-2017 (development)",
+  "setups_checked": 649,
+  "pass_rate": {
+    "level": 1.0,
+    "sweep": 1.0,
+    "choch": 1.0,
+    "fvg": 1.0,
+    "plan": 1.0
+  },
+  "all_pass": 649,
+  "failures": []
+}

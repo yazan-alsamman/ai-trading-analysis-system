@@ -485,6 +485,25 @@ replaces v1.**
 - **The review restarts from chart 1** on v2 (same seed). The charts now outline thin FVGs and print
   the gap size and its distance from the CHoCH.
 
+**Decision, 2026-10-19 (Fadi): the Phase 2 gate is split in two.**
+- **Why:** the v2 review of charts 1–25 reached 19 of 25. Five of the six non-✅ marks gave reasons
+  that contradicted the numbers printed on the chart, for example a sell CHoCH "closing above" when
+  it closed below. No implementation error was found. That sheet is archived in
+  [phase2/review_v2/REVIEW_v2_partial.md](phase2/review_v2/REVIEW_v2_partial.md). The reviewer's
+  only definitional point was #12 (minimum sweep depth).
+- **Gate 2a, implementation matches the written definition (automated):**
+  - `python -m app.smc.conditions` re-derives the five conditions from the raw bars for every planned
+    setup, without the engine's decision code. It writes [phase2/conditions.md](phase2/conditions.md).
+  - **Result: 649 of 649 setups pass** in 2012–2017.
+  - One apparent failure was a bug in the checker itself (it used the ATR of the wrong bar), now fixed.
+  - Tests in `tests/test_smc_conditions.py` show that tampered setups fail the matching condition.
+- **Gate 2b, pattern validity (human, Fadi in person):**
+  - One question per chart: would an SMC trader recognise this as a genuine sweep → CHoCH → FVG?
+  - A ❌ must name what is visible on the chart.
+  - Definition feedback goes in its own column and is decided once, after the review.
+  - The gate passes at 45 of 50 ✅ or more, on a new sheet at
+    [phase2/review/REVIEW.md](phase2/review/REVIEW.md). The sample is unchanged (seed 2026).
+
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 
 - **Code:** `app/smc/` (primitives, bar-by-bar engine with the full lifecycle, report). Run it with
