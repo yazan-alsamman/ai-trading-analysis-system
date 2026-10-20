@@ -60,12 +60,18 @@ request is sent again. Postman v2.1 files cannot hold WebSocket requests, so fol
 ```bash
 npx newman run docs/postman/AI-Trading-Platform.postman_collection.json \
   -e docs/postman/environments/Local.postman_environment.json \
+  --working-dir docs/postman \
   --env-var user_email=you@example.com --env-var user_password='...' \
   --env-var admin_email=admin@example.com --env-var admin_password='...'
 ```
 
-On production, Register, Admin and the create requests write real data: prefer Local for full
-runs.
+**Admin → Market Data → Import economic calendar CSV** uploads
+[`samples/calendar_history_sample.csv`](samples/calendar_history_sample.csv). Newman resolves it
+through `--working-dir docs/postman`; in the Postman app, pick the file again in the request's
+**Body → form-data** tab (or set Postman's working directory to this folder).
+
+On production, Register, Admin and the create requests write real data (the calendar import adds
+the sample's events): prefer Local for full runs.
 
 ## Updating after an API change
 

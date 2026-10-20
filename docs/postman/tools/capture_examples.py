@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from spec import FOLDERS, Folder, Req, Variant  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "examples.json"
+POSTMAN = Path(__file__).resolve().parents[1]  # files of multipart requests live here
 KEEP_HEADERS = {
     "content-type",
     "etag",
@@ -167,7 +168,12 @@ class Runner:
                     headers[k] = v
         body = variant.body if variant and variant.body is not None else req.body
         kwargs: dict[str, Any] = {"params": query, "headers": headers}
-        if req.form is not None:
+        if req.files is not None:
+            kwargs["files"] = {
+                k: (Path(src).name, (POSTMAN / src).read_bytes(), "text/csv")
+                for k, src, _ in req.files
+            }
+        elif req.form is not None:
             kwargs["data"] = {k: self.resolve(v) for k, v, _ in req.form}
         elif isinstance(body, str):
             kwargs["content"] = self.resolve(body)
@@ -378,6 +384,20 @@ class Runner:
         if res.status_code not in (201, 409):
             res.raise_for_status()
         admin = self.auth_headers("admin")
+        # Calendar history (the sample CSV the admin import request also sends), so the events
+        # list and an event's history have something to show
+        self.http.post(
+            "/api/v1/admin/calendar/import",
+            params={"tz": "America/New_York"},
+            files={
+                "file": (
+                    "sample.csv",
+                    (POSTMAN / "samples/calendar_history_sample.csv").read_bytes(),
+                    "text/csv",
+                )
+            },
+            headers=admin,
+        ).raise_for_status()
         users = self.http.get(
             "/api/v1/admin/users", params={"q": CAPTURE_EMAIL}, headers=admin
         ).json()
