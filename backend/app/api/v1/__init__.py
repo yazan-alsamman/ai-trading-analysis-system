@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from app.api.limits import limit_identity
 from app.api.v1 import (
     admin,
+    admin_ai,
     admin_api_keys,
     admin_market,
     admin_realtime,
@@ -38,6 +39,7 @@ limited_router.include_router(market.router)
 limited_router.include_router(admin_market.router)
 limited_router.include_router(admin_realtime.router)
 limited_router.include_router(admin_system.router)
+limited_router.include_router(admin_ai.router)
 limited_router.include_router(admin_api_keys.router)
 limited_router.include_router(indicators.router)
 limited_router.include_router(strategies.router)

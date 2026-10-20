@@ -118,7 +118,7 @@ services:
     restart: unless-stopped
     logging: *logging
     cpu_shares: 512
-    mem_limit: 256m
+    mem_limit: 512m  # B7: models and features in memory (approved; was 256m)
     cpus: 0.5
 
   nginx:

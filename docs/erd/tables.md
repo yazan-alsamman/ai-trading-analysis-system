@@ -465,6 +465,142 @@ The trade plan of one signal for one user (and activation): entry, stop, targets
 
 - `ix_signal_plans_user_created` (signal_plans.user_id, created_at DESC)
 
+## AI engine (ai-service setups and models)
+
+### `ai_setups`
+
+A setup as ai-service last described it. ``last_payload`` is the setup exactly as last returned (with ``state`` kept in step with transitions): the next evaluate request echoes it in ``open_setups``.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `setup_id` | varchar(128) | no |  | PK |
+| `instrument_id` | uuid | no |  | FK |
+| `profile` | varchar(32) | no |  |  |
+| `direction` | varchar(4) | no |  |  |
+| `state` | varchar(16) | no |  |  |
+| `entry` | double precision | yes |  |  |
+| `sl` | double precision | yes |  |  |
+| `tp` | double precision | yes |  |  |
+| `r_multiple` | double precision | yes |  |  |
+| `probability` | double precision | yes |  |  |
+| `ev_r` | double precision | yes |  |  |
+| `ev_r_lower` | double precision | yes |  |  |
+| `grade` | varchar(4) | yes |  |  |
+| `valid_until` | timestamp with time zone | yes |  |  |
+| `horizon_until` | timestamp with time zone | yes |  |  |
+| `realized_r` | double precision | yes |  |  |
+| `evidence` | jsonb | no | `'{}'::jsonb` |  |
+| `features` | jsonb | no | `'{}'::jsonb` |  |
+| `last_payload` | jsonb | no |  |  |
+| `strategy_version` | varchar(64) | yes |  |  |
+| `model_version` | varchar(128) | yes |  |  |
+| `features_version` | varchar(64) | yes |  |  |
+| `first_request_id` | varchar(160) | no |  |  |
+| `last_request_id` | varchar(160) | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `updated_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (setup_id)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
+- CHECK `ck_ai_setups_direction`: `direction IN ('buy', 'sell')`
+- CHECK `ck_ai_setups_probability`: `probability IS NULL OR probability BETWEEN 0 AND 1`
+- CHECK `ck_ai_setups_state`: `state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
+
+**Indexes**
+
+- `ix_ai_setups_created` (created_at DESC)
+- `ix_ai_setups_open` (ai_setups.instrument_id, ai_setups.profile, ai_setups.state)
+
+### `ai_setup_events`
+
+Append-only history of a setup's states. ``from_state`` is null for its first appearance. Unique ``(setup_id, to_state, at)``: re-applying a response adds nothing.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | bigint | no | `Identity()` | PK |
+| `setup_id` | varchar(128) | no |  | FK |
+| `from_state` | varchar(16) | yes |  |  |
+| `to_state` | varchar(16) | no |  |  |
+| `at` | timestamp with time zone | no |  |  |
+| `reason` | varchar(255) | yes |  |  |
+| `realized_r` | double precision | yes |  |  |
+| `request_id` | varchar(160) | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- CHECK `ck_ai_setup_events_from`: `from_state IS NULL OR from_state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
+- CHECK `ck_ai_setup_events_to`: `to_state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
+- UNIQUE `uq_ai_setup_events_setup_state_at` (setup_id, to_state, at)
+
+### `ai_model_versions`
+
+The model registry. At most one row is active (partial unique index). Versions that ai-service reports and nobody registered are added inactive, with a note.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `model_id` | varchar(128) | no |  | PK |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `training_from` | timestamp with time zone | yes |  |  |
+| `training_to` | timestamp with time zone | yes |  |  |
+| `data_hash` | varchar(128) | yes |  |  |
+| `metrics` | jsonb | no | `'{}'::jsonb` |  |
+| `is_active` | boolean | no | `false` |  |
+| `notes` | text | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (model_id)
+
+**Indexes**
+
+- `uq_ai_model_versions_one_active` UNIQUE (ai_model_versions.is_active) WHERE `is_active`
+
+### `ai_setup_sizes`
+
+A setup sized for one user by ai-service ``/v1/size`` (filled by B10). ``inputs`` is the account and risk that were sent.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `setup_id` | varchar(128) | no |  | PK, FK |
+| `user_id` | uuid | no |  | PK, FK |
+| `lots` | double precision | no |  |  |
+| `risk_usd` | double precision | no |  |  |
+| `margin_required` | double precision | yes |  |  |
+| `feasible` | boolean | no |  |  |
+| `warnings` | jsonb | no | `'[]'::jsonb` |  |
+| `inputs` | jsonb | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (setup_id, user_id)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- FK (user_id) → users (id) ON DELETE CASCADE
+
+### `ai_setup_explanations`
+
+A setup explained by ai-service ``/v1/explain`` in one language (filled by B9/B11).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `setup_id` | varchar(128) | no |  | PK, FK |
+| `lang` | varchar(8) | no |  | PK |
+| `text` | text | no |  |  |
+| `verified` | boolean | no |  |  |
+| `template_used` | boolean | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (setup_id, lang)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- CHECK `ck_ai_setup_explanations_lang`: `lang IN ('ar', 'en')`
+
 ## Workspaces
 
 ### `workspaces`

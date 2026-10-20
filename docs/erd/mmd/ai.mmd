@@ -1,0 +1,76 @@
+erDiagram
+    ai_setups {
+        varchar setup_id PK
+        uuid instrument_id FK
+        varchar profile
+        varchar direction
+        varchar state
+        double entry
+        double sl
+        double tp
+        double r_multiple
+        double probability
+        double ev_r
+        double ev_r_lower
+        varchar grade
+        timestamptz valid_until
+        timestamptz horizon_until
+        double realized_r
+        jsonb evidence
+        jsonb features
+        jsonb last_payload
+        varchar strategy_version
+        varchar model_version
+        varchar features_version
+        varchar first_request_id
+        varchar last_request_id
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    ai_setup_events {
+        bigint id PK
+        varchar setup_id FK
+        varchar from_state
+        varchar to_state
+        timestamptz at
+        varchar reason
+        double realized_r
+        varchar request_id
+        timestamptz created_at
+    }
+    ai_model_versions {
+        varchar model_id PK
+        timestamptz created_at
+        timestamptz training_from
+        timestamptz training_to
+        varchar data_hash
+        jsonb metrics
+        bool is_active
+        text notes
+    }
+    ai_setup_sizes {
+        varchar setup_id PK, FK
+        uuid user_id PK, FK
+        double lots
+        double risk_usd
+        double margin_required
+        bool feasible
+        jsonb warnings
+        jsonb inputs
+        timestamptz created_at
+    }
+    ai_setup_explanations {
+        varchar setup_id PK, FK
+        varchar lang PK
+        text text
+        bool verified
+        bool template_used
+        timestamptz created_at
+    }
+    instruments
+    users
+    ai_setup_events }o--|| ai_setups : "setup_id"
+    ai_setup_explanations }o--|| ai_setups : "setup_id"
+    ai_setup_sizes }o--|| ai_setups : "setup_id"
+    ai_setup_sizes }o--|| users : "user_id"
+    ai_setups }o--|| instruments : "instrument_id"
