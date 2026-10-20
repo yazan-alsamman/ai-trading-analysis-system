@@ -354,6 +354,9 @@ if (!pm.variables.get("plan_id")) pm.execution.skipRequest();"""
 SKIP_NO_CALENDAR_EVENT = """// No calendar event in the listed range yet (import the sample CSV in Admin): nothing to show.
 if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
 
+SKIP_NO_AI_SETUP = """// The AI engine has stored no setup yet (ai-service not connected): nothing to show.
+if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
+
 SKIP_NO_CHECKOUT = """// No checkout was opened (no expert with an active plan yet): nothing to pay.
 if (!pm.variables.get("checkout_id")) pm.execution.skipRequest();"""
 
@@ -3301,6 +3304,118 @@ FOLDERS: list[Folder] = [
                         "notification channels, unhandled errors in "
                         "the last hour and the last daily summary.",
                         auth="admin",
+                    ),
+                ],
+            ),
+            Folder(
+                "AI Engine",
+                "What the backend stored from ai-service (`docs/ai-contract.md`): trade setups "
+                "with their state events, and the model registry. Read-only for setups; the "
+                "backend writes them from each evaluate response. User-facing reads come later.",
+                [
+                    Req(
+                        "admin_ai_setups",
+                        "List AI setups",
+                        "GET",
+                        "/admin/ai/setups",
+                        "Newest first. A setup is one trade idea of the engine: direction, entry, "
+                        "stop (`sl`), target (`tp`), `probability`, expected value in R (`ev_r`, "
+                        "`ev_r_lower`), `grade`, validity window and its `state` (DEVELOPING → "
+                        "ARMED → ACTIVE → CLOSED, or EXPIRED / INVALIDATED). `realized_r` is set "
+                        "once it closes; the strategy, model and features versions that produced "
+                        "it are kept. The first one is stored as `ai_setup_id`.",
+                        auth="admin",
+                        query=[("limit", "50", "1–200")],
+                        optional_query=[
+                            (
+                                "state",
+                                "ARMED",
+                                "DEVELOPING | ARMED | ACTIVE | CLOSED | EXPIRED | INVALIDATED",
+                            ),
+                            ("instrument_id", "{{instrument_id}}", "Instrument UUID"),
+                        ],
+                        captures={"ai_setup_id": "0.setup_id"},
+                        variants=[
+                            Variant(
+                                "422 Unknown state",
+                                422,
+                                query={"limit": "50", "state": "OPEN"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_setup",
+                        "Get AI setup",
+                        "GET",
+                        "/admin/ai/setups/:setup_id",
+                        "A setup with its `evidence`, `features`, the payload exactly as "
+                        "ai-service last returned it (`last_payload`) and every state event, "
+                        "oldest first (`from_state` null: the setup appeared; `reason` and "
+                        "`realized_r` on the move that closed it).",
+                        auth="admin",
+                        path_vars={"setup_id": ("{{ai_setup_id}}", "From the setups list")},
+                        pre=SKIP_NO_AI_SETUP,
+                        variants=[
+                            Variant(
+                                "404 Setup not found",
+                                404,
+                                path_vars={"setup_id": "unknown-setup"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_models",
+                        "List AI models",
+                        "GET",
+                        "/admin/ai/models",
+                        "The model registry, newest first, with training window, data hash, "
+                        "metrics and notes; the one model in use has `is_active: true`. A model "
+                        "named in an evaluate response is registered automatically.",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_ai_model_register",
+                        "Register AI model",
+                        "POST",
+                        "/admin/ai/models",
+                        "Registers a model as **inactive**, or updates the description of a known "
+                        "`model_id` (letters, digits, `.`, `_`, `:`, `-`). Stored as "
+                        "`ai_model_id`.",
+                        auth="admin",
+                        body={
+                            "model_id": "postman-demo-model",
+                            "training_from": "2018-01-01T00:00:00Z",
+                            "training_to": "2026-09-30T00:00:00Z",
+                            "data_hash": "sha256:5f2c0e",
+                            "metrics": {"auc": 0.61, "brier": 0.231, "ev_r_test": 0.18},
+                            "notes": "Registered from Postman.",
+                        },
+                        captures={"ai_model_id": "model_id"},
+                        variants=[
+                            Variant(
+                                "422 Invalid model_id",
+                                422,
+                                body={"model_id": "my model!"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_model_activate",
+                        "Activate AI model",
+                        "POST",
+                        "/admin/ai/models/:model_id/activate",
+                        "Makes this model the only active one (every other one is deactivated).\n\n"
+                        "> ⚠️ On production this switches the model the engine reports as in use: "
+                        "set `model_id` to the model you mean.",
+                        auth="admin",
+                        path_vars={"model_id": ("{{ai_model_id}}", "From Register AI model")},
+                        variants=[
+                            Variant(
+                                "404 Model not found",
+                                404,
+                                path_vars={"model_id": "unknown-model"},
+                            )
+                        ],
                     ),
                 ],
             ),

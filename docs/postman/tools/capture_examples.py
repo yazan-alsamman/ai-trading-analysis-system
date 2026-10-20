@@ -59,6 +59,53 @@ EXPERT_PASSWORD = "Expert12345"
 BACKEND = Path(__file__).resolve().parents[3] / "backend"
 
 
+SEED_AI_SETUP = """
+import asyncio, json
+from datetime import timedelta
+from pathlib import Path
+from sqlalchemy import select
+from app.ai import contract as c, store
+from app.db.session import SessionLocal
+from app.models.instrument import Instrument
+
+EXAMPLES = Path("../docs/api/ai-service-examples")
+
+
+def load(name):
+    return json.loads((EXAMPLES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+async def main():
+    async with SessionLocal() as session:
+        gold = await session.scalar(
+            select(Instrument).order_by((Instrument.symbol == "XAU/USD").desc(), Instrument.symbol)
+        )
+        req = c.EvaluateRequest.model_validate(load("evaluate-request"))
+        resp = load("evaluate-response-ok")
+        resp["transitions"] = []
+        first = await store.apply_evaluation(
+            session, gold, req, c.EvaluateResponse.model_validate(resp)
+        )
+        close = req.bar_close_ts + timedelta(minutes=15)
+        nxt = req.model_copy(
+            update={"request_id": c.make_request_id("XAUUSD", "intraday", close),
+                    "bar_close_ts": close}
+        )
+        setup_id = resp["new_setups"][0]["setup_id"]
+        move = {"setup_id": setup_id, "from": "ARMED", "to": "ACTIVE",
+                "at": c.iso_z(close - timedelta(minutes=6)), "reason": "entry_filled"}
+        second = await store.apply_evaluation(
+            session, gold, nxt, c.EvaluateResponse.model_validate(
+                {**resp, "request_id": nxt.request_id, "new_setups": [], "transitions": [move]}
+            )
+        )
+        print(first.inserted, second.transitions_applied)
+
+
+asyncio.run(main())
+"""
+
+
 def get_path(data: Any, path: str) -> Any:
     for part in path.split("."):
         if isinstance(data, list):
@@ -359,6 +406,14 @@ class Runner:
         )
         print(f"   alert engine: {(out.stdout or out.stderr).strip()[-200:]}")
 
+    def seed_ai_setup(self) -> None:
+        """An AI setup with two events for the Admin → AI examples: the contract's example
+        evaluate response, then the setup going ARMED → ACTIVE (in-process, like the worker)."""
+        out = subprocess.run(
+            [sys.executable, "-c", SEED_AI_SETUP], cwd=BACKEND, capture_output=True, text=True
+        )
+        print(f"   ai setup: {(out.stdout or out.stderr).strip()[-200:]}")
+
     def wait_backtest(self, var: str) -> None:
         for _ in range(60):
             res = self.http.get(
@@ -398,6 +453,7 @@ class Runner:
             },
             headers=admin,
         ).raise_for_status()
+        self.seed_ai_setup()
         users = self.http.get(
             "/api/v1/admin/users", params={"q": CAPTURE_EMAIL}, headers=admin
         ).json()
