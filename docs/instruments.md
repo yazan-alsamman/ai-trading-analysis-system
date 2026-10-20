@@ -92,8 +92,8 @@ week has 7,135 − 4 × 65 = **6,875** one-minute bars.
 
 ### `app/services/sessions.py`
 
-Pure functions (no database), for B5's data-quality gate to tell real gaps from weekends and
-breaks:
+Pure functions (no database), for B5's data-quality gate ([data-quality.md](data-quality.md))
+to tell real gaps from weekends and breaks:
 
 | Function | Returns |
 |---|---|
@@ -121,6 +121,12 @@ generators write `source = "seed"`.
 
 The 1m read endpoint and the WebSocket candle payloads include `spread` only when the candle
 has one. Higher timeframes never have it.
+
+`GET /api/v1/market/instruments/{id}/candles` takes `closed_only=true` to leave out the bar that
+is still forming (the newest bucket of every aggregate, and the running 1m bar). The answer
+then also carries `last_closed_bar` (unix seconds). The default (`false`) is unchanged, because
+charts want the forming bar. The rule and the data-quality gate built on it are in
+[data-quality.md](data-quality.md).
 
 **Why the check is not in the database:** TimescaleDB 2.17 refuses `ALTER TABLE ... ADD
 CONSTRAINT` on any hypertable with compression enabled, even `NOT VALID` ("operation not

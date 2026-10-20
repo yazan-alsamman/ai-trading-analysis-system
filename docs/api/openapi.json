@@ -59,6 +59,7 @@
           "health"
         ],
         "summary": "Ready",
+        "description": "``status`` is ``ok`` when the database and Redis answer (the deploy waits for it).\n``data`` is the worst data-quality status (``/health/data``), for information only: it\nnever changes ``status`` or the HTTP code.",
         "operationId": "health_ready",
         "responses": {
           "200": {
@@ -69,6 +70,38 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Ready Api V1 Health Ready Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/data": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Data",
+        "description": "Data quality of every monitored instrument (``DATA_QUALITY_INSTRUMENTS``): the latest\nreport of the ``data_quality.check`` task (computed now if there is none). **503** when\nany instrument is ``degraded`` or ``no_data``, 200 when all are ``ok`` or ``closed``.\nPublic and read-only; ``/health/ready`` does not depend on it (docs/data-quality.md).",
+        "operationId": "health_data",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataHealth"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "an instrument is degraded or no_data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataHealth"
                 }
               }
             }
@@ -1579,7 +1612,7 @@
           "market"
         ],
         "summary": "Get Candles",
-        "description": "Candles ascending by time. With ``start``: the first ``limit`` candles from ``start``;\notherwise the latest ``limit`` candles (up to ``end`` if given).",
+        "description": "Candles ascending by time. With ``start``: the first ``limit`` candles from ``start``;\notherwise the latest ``limit`` candles (up to ``end`` if given).\n\nWith ``closed_only=true`` only bars that have ended are returned: ``time + timeframe <=``\nthe end of the last closed 1m bar (docs/data-quality.md). At 10:07 with 1m data up to\n10:06, the 15m bar of 10:00 is still forming and 09:45 is the last closed one.",
         "operationId": "market_get_candles",
         "parameters": [
           {
@@ -1649,6 +1682,18 @@
               "default": 500,
               "title": "Limit"
             }
+          },
+          {
+            "name": "closed_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only closed bars: leave out the bar that is still forming (the default includes it, as charts want). Adds `last_closed_bar`.",
+              "default": false,
+              "title": "Closed Only"
+            },
+            "description": "Only closed bars: leave out the bar that is still forming (the default includes it, as charts want). Adds `last_closed_bar`."
           }
         ],
         "responses": {
@@ -2078,7 +2123,7 @@
           "admin"
         ],
         "summary": "System Status View",
-        "description": "Version, uptime, database (size, connections, migration, slowest queries when\npg_stat_statements is installed), Redis, Celery (queue lengths, live workers, last run of the\nscheduled tasks), market data freshness per active instrument, WebSocket clients of every API\nprocess, notification channels, unhandled errors in the last hour, the last daily summary.",
+        "description": "Version, uptime, database (size, connections, migration, slowest queries when\npg_stat_statements is installed), Redis, Celery (queue lengths, live workers, last run of the\nscheduled tasks), market data freshness per active instrument, the data-quality report of\nevery monitored instrument, WebSocket clients of every API process, notification channels,\nunhandled errors in the last hour, the last daily summary.",
         "operationId": "admin_system_status_view",
         "responses": {
           "200": {
@@ -15837,6 +15882,18 @@
             },
             "type": "array",
             "title": "Candles"
+          },
+          "last_closed_bar": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Closed Bar",
+            "description": "with closed_only=true: unix seconds of the newest closed bar (absent when there is none)"
           }
         },
         "type": "object",
@@ -16810,6 +16867,28 @@
         ],
         "title": "DailyBreak",
         "description": "Closed every day from ``start`` to ``end`` (``end`` < ``start`` crosses midnight)."
+      },
+      "DataHealth": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "worst instrument status; `disabled` when no instrument is monitored"
+          },
+          "instruments": {
+            "items": {
+              "$ref": "#/components/schemas/InstrumentDataHealth"
+            },
+            "type": "array",
+            "title": "Instruments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "instruments"
+        ],
+        "title": "DataHealth"
       },
       "DefinitionIssue": {
         "properties": {
@@ -18278,6 +18357,81 @@
           "market"
         ],
         "title": "InstrumentCreate"
+      },
+      "InstrumentDataHealth": {
+        "properties": {
+          "instrument": {
+            "type": "string",
+            "title": "Instrument",
+            "examples": [
+              "fxpro:XAU/USD"
+            ]
+          },
+          "timeframe": {
+            "$ref": "#/components/schemas/Timeframe"
+          },
+          "status": {
+            "$ref": "#/components/schemas/QualityStatus"
+          },
+          "last_closed_bar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Closed Bar"
+          },
+          "lag_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Seconds"
+          },
+          "next_open": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Open"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Evaluated At"
+          },
+          "failed_checks": {
+            "items": {
+              "$ref": "#/components/schemas/QualityCheck"
+            },
+            "type": "array",
+            "title": "Failed Checks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument",
+          "timeframe",
+          "status",
+          "last_closed_bar",
+          "lag_seconds",
+          "evaluated_at",
+          "failed_checks"
+        ],
+        "title": "InstrumentDataHealth"
       },
       "InstrumentInfo": {
         "properties": {
@@ -21789,6 +21943,39 @@
         ],
         "title": "PublicCustomStrategy",
         "description": "A public strategy as other users see it: no user ids."
+      },
+      "QualityCheck": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "ok",
+          "detail"
+        ],
+        "title": "QualityCheck"
+      },
+      "QualityStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "degraded",
+          "closed",
+          "no_data"
+        ],
+        "title": "QualityStatus"
       },
       "QuietHours": {
         "properties": {

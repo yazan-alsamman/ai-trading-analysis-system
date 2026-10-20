@@ -73,6 +73,10 @@ curl -s "http://localhost/api/v1/market/instruments/$ID/candles?timeframe=1h&lim
   -H "X-API-Key: $TK_KEY"
 ```
 
+Add `&closed_only=true` to get only bars that have ended (the forming bar is left out; the
+answer also has `last_closed_bar`), as a model that trades on closed bars needs
+([data-quality.md](data-quality.md)).
+
 | Status | Meaning |
 |---|---|
 | 401 | unknown, malformed, revoked or expired key |
