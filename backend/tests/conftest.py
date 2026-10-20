@@ -38,6 +38,7 @@ import pytest  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from redis.asyncio import Redis  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncConnection,
@@ -116,6 +117,55 @@ def session_factory(db_connection: AsyncConnection) -> async_sessionmaker[AsyncS
     return async_sessionmaker(
         bind=db_connection, expire_on_commit=False, join_transaction_mode="create_savepoint"
     )
+
+
+async def _row_counts(conn: AsyncConnection) -> dict[str, int]:
+    tables = await conn.scalars(
+        text("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1")
+    )
+    return {t: await conn.scalar(text(f'SELECT count(*) FROM "{t}"')) for t in tables.all()}
+
+
+async def _ids(conn: AsyncConnection, table: str) -> list:
+    return list((await conn.scalars(text(f"SELECT id FROM {table}"))).all())
+
+
+@pytest.fixture
+async def committed_session_factory(
+    migrated_db: str,
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    """Sessions on their own connection pool that commit for real, like production.
+
+    For tests whose server-side code opens database sessions concurrently, e.g. the WebSocket
+    re-checks that one Redis auth event wakes on several sockets at once. The default
+    ``session_factory`` binds every session to one connection inside one transaction, with a
+    savepoint per session. Concurrent sessions there release savepoints out of order ("savepoint
+    ... does not exist") and the whole connection is then aborted. Here each session gets its
+    own connection, as with the app's pool.
+
+    Afterwards the users and instruments the test created are deleted (their rows in other
+    tables go with them, ON DELETE CASCADE). The teardown fails if any table does not return to
+    its row count from before the test, so nothing leaks into later tests.
+    """
+    engine = create_async_engine(migrated_db, pool_size=5, max_overflow=5)
+    async with engine.connect() as conn:
+        before = await _row_counts(conn)
+        users, instruments = await _ids(conn, "users"), await _ids(conn, "instruments")
+    try:
+        yield async_sessionmaker(engine, expire_on_commit=False)
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM users WHERE NOT (id = ANY(:keep))"), {"keep": users}
+            )
+            await conn.execute(
+                text("DELETE FROM instruments WHERE NOT (id = ANY(:keep))"), {"keep": instruments}
+            )
+        async with engine.connect() as conn:
+            after = await _row_counts(conn)
+        await engine.dispose()
+        leaked = {t: (before.get(t), n) for t, n in after.items() if before.get(t) != n}
+        assert not leaked, f"rows left behind by the test (table: (before, after)): {leaked}"
 
 
 @pytest.fixture

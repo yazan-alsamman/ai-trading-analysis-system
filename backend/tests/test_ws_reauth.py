@@ -11,7 +11,7 @@ import pytest
 from httpx import AsyncClient
 from httpx_ws import WebSocketDisconnect
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import rate_limit
 from app.core.security import create_access_token
@@ -29,6 +29,17 @@ from tests.ws_utils import recv_until, wait_for, ws_connect
 
 SLOW = HubConfig(heartbeat_seconds=60, idle_timeout_seconds=120)  # only the event can be fast
 FAST = HubConfig(heartbeat_seconds=0.3, idle_timeout_seconds=30)
+
+
+@pytest.fixture
+def session_factory(
+    committed_session_factory: async_sessionmaker[AsyncSession],
+) -> async_sessionmaker[AsyncSession]:
+    """Real sessions on their own pool (``committed_session_factory``), for the test, its API
+    requests and the server's WebSocket code alike. One auth event wakes the re-checks of
+    several sockets at once, while the request that sent it still uses its session. On the
+    shared savepoint-wrapped test connection those sessions overlapped and broke each other."""
+    return committed_session_factory
 
 
 @pytest.fixture
