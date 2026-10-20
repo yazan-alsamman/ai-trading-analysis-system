@@ -92,5 +92,22 @@
       "latest_exit_plus_embargo_before_start": true
     }
   },
-  "costs_consistent": true
+  "costs_consistent": true,
+  "stress_2x_with_slippage": {
+    "rules_mean_net_r": -0.4111467377381281,
+    "rules_mean_net_r_ci95_months": [
+      -0.5869932127393952,
+      -0.24034647311300825
+    ],
+    "difference_ci95_months": {
+      "logistic": [
+        -0.5035165642447862,
+        0.41396428746085
+      ],
+      "gbm": [
+        -0.42125843685497594,
+        0.8586823653742497
+      ]
+    }
+  }
 }

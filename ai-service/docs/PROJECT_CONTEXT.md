@@ -5,8 +5,22 @@ experiment finishes. The detailed evidence is in [REPOSITORY_AUDIT.md](REPOSITOR
 of the audit is the doc "AI Trading Engine — Repository Audit"
 (https://claude.ai/artifact/XJCecjPXZeAYx7JSSK3Q8L).
 
-_Last updated: 2026-10-19 (Phase 1 history import added). Full-platform audit of `main` @ `5b91175`. The remote `main` has since moved to
-`593cfbf`, which has not been audited._
+_Last updated: 2026-10-20 (Phase 3 result and decision 10). Full-platform audit of `main` @ `5b91175`;
+`main` has moved since (see "Platform state at the audit")._
+
+## Status at a glance (2026-10-20)
+
+| Phase | State | Evidence |
+| --- | --- | --- |
+| 1. Trustworthy data | History importer and data-quality report done (XAUUSD, EURUSD, in UTC). The live FxPro feed is not built (open question 3, Yazan) | [data_quality/](data_quality/) |
+| 2. Rule engine | Sweep → CHoCH → FVG engine with lifecycle; rules frozen as `FROZEN_V4` after 7 logged attempts. Gate 2a: 336 of 336. Gate 2b: an AI review (not human) found about 80% precision against a 90% target, accepted as a limitation | [phase2/](phase2/), attempts log below |
+| 3. Evaluation and ML | 443 labelled setups; protocol v1 run once on 2018 → 2024-06. Rules alone −0.28 R per trade (95% CI −0.45 to −0.11); no model beat the base rate. Gate not met; lockbox closed | [phase3/](phase3/) |
+| Decision 10 | No edge is claimed. v1 signals abstain by default (`NO TRADE`, `ev_insufficient`). Phase 4 goes ahead without claiming an edge | Experiments log |
+| 4. Serving and assistant | Next | Spec, Development phases |
+
+- **Code:** `app/data/` (import, sessions, quality), `app/smc/` (rules, report, conditions,
+  review), `app/ml/` (dataset, walk-forward, robustness).
+- **Reproduce everything:** [REPRODUCE.md](REPRODUCE.md).
 
 ## Purpose and scope
 
@@ -19,7 +33,12 @@ The AI side analyses gold (XAU/USD) first, then forex.
 - **Timeframe:** Scalping is the stated initial priority. The exact timeframe and horizon are still open (see
   below).
 
-## Current state (facts)
+## Platform state at the audit (2026-10-19, `main` @ `5b91175`)
+
+These facts describe the platform when it was audited, before the AI research work above. Since
+then `main` has merged B4 (instrument contract specs, session calendar, candle spread and source)
+and B12 part 1 (private-signal isolation and WebSocket re-authorisation). By their PR titles they
+address some of the gaps below; this has not been re-audited.
 
 - **ai-service is a placeholder.** `POST /v1/signal` always returns `hold`, and nothing calls it.
   `ai_service_url` in the backend config is never read. No manifest contains an ML or LLM dependency.
@@ -448,10 +467,10 @@ scored.
 | 1 | 2026-10-19 | baseline | Spec's initial rules | 149 | 71 | 21.1% | −0.065 (−0.35 to +0.22) | [rules_only](phase2/rules_only.md) |
 | 2 | 2026-10-19 | A | A new extreme extends the sweep while depth ≤ 1.5 ATR, instead of discarding | 178 | 87 | 21.8% | −0.084 (−0.34 to +0.17) | [variant_A](phase2/variant_A.md) |
 | 3 | 2026-10-19 | AB | A, plus Asian (20:00–00:00 NY) and London (02:00–05:00 NY) session highs and lows as levels | 297 | 143 | 26.6% | −0.045 (−0.26 to +0.18) | [variant_AB](phase2/variant_AB.md) |
-| 5 | 2026-10-19 | AB5F | AB5, plus: the FVG's third bar must be the CHoCH bar or one of the 6 entry bars before it (counted in bars). Sweep, CHoCH, entry, SL and TP unchanged | 843 | 384 | 27.3% | **−0.257 (−0.40 to −0.11)** | [variant_AB5F](phase2/variant_AB5F.md) |
 | 4 | 2026-10-19 | AB5 | AB with 5m entry bars (same 1h/4h and session levels). Bar windows scaled to the same clock time: CHoCH and entry windows 24 bars (2 h), horizon 144 bars (12 h); swing k and ATR period stay in entry bars | 807 | 364 | 25.8% | **−0.337 (−0.49 to −0.18)** | [variant_AB5](phase2/variant_AB5.md) |
-| 7 | 2026-10-19 | AB5F3S | AB5F3 plus the session guard: no rule bar across a gap of 30+ min, in the daily break or within 6 bars after a gap; FVG bars consecutive in time. Run on 2012–2017 only | not counted (2012–2017 only loaded) | 191 | 28.8% | **−0.211 (−0.40 to −0.02)** | [variant_AB5F3S](phase2/variant_AB5F3S.md) |
+| 5 | 2026-10-19 | AB5F | AB5, plus: the FVG's third bar must be the CHoCH bar or one of the 6 entry bars before it (counted in bars). Sweep, CHoCH, entry, SL and TP unchanged | 843 | 384 | 27.3% | **−0.257 (−0.40 to −0.11)** | [variant_AB5F](phase2/variant_AB5F.md) |
 | 6 | 2026-10-19 | AB5F3 | AB5F, plus one combined change: FVG ≥ 0.25 ATR, sweep first-bar penetration ≥ 0.25 ATR, CHoCH reference swing k = 3 on 5m. Run on 2012–2017 only | not counted (2012–2017 only loaded) | 201 | 29.4% | **−0.208 (−0.40 to −0.02)** | [variant_AB5F3](phase2/variant_AB5F3.md) |
+| 7 | 2026-10-19 | AB5F3S | AB5F3 plus the session guard: no rule bar across a gap of 30+ min, in the daily break or within 6 bars after a gap; FVG bars consecutive in time. Run on 2012–2017 only | not counted (2012–2017 only loaded) | 191 | 28.8% | **−0.211 (−0.40 to −0.02)** | [variant_AB5F3S](phase2/variant_AB5F3S.md) |
 
 **Status after attempt 4:**
 - 5m entries bring the sample close to target, with 807 closed trades before the lockbox.
@@ -471,7 +490,7 @@ scored.
 - **Phase 2 gate, manual detector review: pending.**
   - Run `python -m app.smc.review`. It writes 50 charts of planned setups, stratified by year over
     2012–2017 (seed 2026), and a checklist at
-    [phase2/review/REVIEW.md](phase2/review/REVIEW.md).
+    [phase2/review/REVIEW.md](phase2/review_v1/REVIEW_v1_partial.md) (archived).
   - Fadi marks each chart. The gate passes at 45 of 50 correct or more.
   - Claude spot-checked charts #01, #10, #25 and #37: the rule elements and the plan were drawn where
     the rules put them. This is not the review itself.
@@ -513,7 +532,8 @@ replaces v1.**
   - A ❌ must name what is visible on the chart.
   - Definition feedback goes in its own column and is decided once, after the review.
   - The gate passes at 45 of 50 ✅ or more, on a new sheet at
-    [phase2/review/REVIEW.md](phase2/review/REVIEW.md). The sample is unchanged (seed 2026).
+    [phase2/review/REVIEW.md](phase2/review_v2/REVIEW_v2_gate2b_partial.md) (archived).
+    The sample is unchanged (seed 2026).
 
 **Decision, 2026-10-19 (Fadi): v3 replaces v2 after gate 2b failed (attempt 6).**
 - **Why:** gate 2b on v2 reached 14 of 20 ✅ with 6 not ✅. The gate allows at most 5 of 50, so it
@@ -533,7 +553,7 @@ replaces v1.**
 - **Gate 2a: 349 of 349 pass** ([phase2/conditions.md](phase2/conditions.md)). The checker now
   takes its thresholds from the parameters instead of printing 0.1 and 1.5.
 - **Gate 2b restarts on a new sample, seed 2027** (50 charts, 8–9 per year):
-  [phase2/review/REVIEW.md](phase2/review/REVIEW.md).
+  [phase2/review_v3/REVIEW_v3_strict_order_partial.md](phase2/review_v3/REVIEW_v3_strict_order_partial.md).
   - The chart panel now prints the current minimums (0.25 ATR for the sweep and the FVG, k = 3);
     before this fix it printed the v1 FVG minimum of 0.1 ATR.
   - 10 of the 50 sweeps were also in an earlier sheet (v1 or v2). They are kept, to avoid biasing
@@ -566,7 +586,7 @@ restarts from chart 1 on the same sample.**
   - A gap that forms after the CHoCH. Fadi's text allowed it, but v3 does not implement it. It is
     definition feedback; adopting it would be a new rule set.
 - **The review restarts from chart 1** on the same sample (seed 2027, now the default):
-  [phase2/review/REVIEW.md](phase2/review/REVIEW.md).
+  [phase2/review_v3/REVIEW_v3_human_unreviewed.md](phase2/review_v3/REVIEW_v3_human_unreviewed.md).
   - The sheet prints the definition above the table, and the charts are unchanged.
   - Objections to the definition go in the feedback column; the acceptance criterion does not
     change chart by chart.
@@ -576,8 +596,8 @@ restarts from chart 1 on the same sample.**
 - **Why:** the restarted human review again judged the FVG timing, which the written definition
   had settled, instead of pattern validity.
 - **Limitation for the report:** gate 2b was not judged by a human. The human sheet
-  [phase2/review/REVIEW.md](phase2/review/REVIEW.md) stays empty.
-- **Result:** [phase2/review/REVIEW_claude.md](phase2/review/REVIEW_claude.md) (FROZEN_V3, seed
+  [phase2/review_v3/REVIEW_v3_human_unreviewed.md](phase2/review_v3/REVIEW_v3_human_unreviewed.md) stays empty.
+- **Result:** [phase2/review_v3/REVIEW_claude.md](phase2/review_v3/REVIEW_claude.md) (FROZEN_V3, seed
   2027, all 50 charts reviewed):
   - **40 of 50 ✅ (precision 80%)**, 5 ❌ and 5 ⚠️. **Gate 2b fails** (45 needed); under the stop
     rule it would have stopped at #24.
@@ -686,7 +706,10 @@ written:
     CHoCH close.
 - **Costs:**
   - `CostParams` defaults throughout, and net R = realized R − round-trip cost for every row.
-  - The 2× stress doubles the round-trip cost but not the $0.10 stop slippage.
+  - The walk-forward report's 2× stress doubles the round-trip cost but not the $0.10 stop
+    slippage.
+  - A full 2× stress that also doubles the slippage (added 2026-10-20) gives the rules −0.41 R
+    (95% CI −0.59 to −0.24, months resampled). The models' differences still span zero.
 - **Correction to the figures quoted in the decision text:** AUC was 0.59 (logistic) and 0.60
   (GBM), not 0.51–0.55.
 

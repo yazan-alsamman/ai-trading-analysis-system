@@ -131,8 +131,14 @@ The engine needs closed XAU/USD bars in UTC with a spread value, from one consis
 
 **Rules the pipeline must follow:**
 
-- **Timezone:** FxPro server time is New York time + 7 h (UTC+2 winter, UTC+3 under US daylight saving), verified
-  on the export. Convert to UTC before any use.
+- **Timezone:** FxPro server time follows **EU daylight saving** (`Europe/Athens`: UTC+2 in winter, UTC+3 from
+  the last Sunday of March to the last Sunday of October). This was verified by the Phase 1 importer: with this clock,
+  the 08:30 New York jobs-report bar lands at 08:30 New York.
+  - **The mismatch weeks:** from the second to the last Sunday of March, and from the last Sunday of October to the
+    first Sunday of November, server time is New York + 6 h, not + 7 h.
+  - **What moves in those weeks:** the daily break moves to 23:00–00:00 server time and the weekly open to Monday 00:00.
+  - **The rule:** convert to UTC with `Europe/Athens` before any use. Live adapters must use the same clock, or better,
+    take UTC timestamps from the broker API.
 - **Price basis:** OHLC on bid, plus the spread. The MT5 bar spread is the in-bar minimum, so costs add a margin
   (see Validation).
 - **Closed bars only:** higher timeframes are built from closed lower bars, and a 1h or 4h value is used only after

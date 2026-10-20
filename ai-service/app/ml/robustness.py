@@ -116,6 +116,18 @@ def run_checks(df: pd.DataFrame, pred: pd.DataFrame) -> dict:
         "leakage": leakage_check(df),
         "costs_consistent": bool(np.allclose(df["net_r"], df["realized_r"] - df["cost_r"])),
     }
+    # Full 2x stress: the round-trip cost and the stop slippage both doubled. A stop's slippage in
+    # R is what its realized R falls below -1.
+    slip = np.where(pred["outcome"] == "sl", -(1 + pred["realized_r"]), 0.0)
+    stressed = pred.assign(net_r=pred["realized_r"] - 2 * pred["cost_r"] - slip)
+    stressed["cost_r"] = 2 * pred["cost_r"]  # the EV decision sees the doubled cost
+    res["stress_2x_with_slippage"] = {
+        "rules_mean_net_r": _mean_net(stressed),
+        "rules_mean_net_r_ci95_months": cluster_boot(stressed, keys["month"], _mean_net),
+        "difference_ci95_months": {
+            name: cluster_boot(stressed, keys["month"], _difference(name)) for name in MODELS
+        },
+    }
     return res
 
 
@@ -162,8 +174,19 @@ def render(res: dict) -> str:
         f"- Net R equals realized R minus the round-trip cost for every row: "
         f"**{'yes' if res['costs_consistent'] else 'NO'}**. The cost definition is `CostParams` "
         "defaults throughout (spread plus the larger of 50% or $0.10; $0.10 slippage on stops, "
-        "inside realized R). The 2× stress doubles the round-trip cost, not the stop slippage.",
+        "inside realized R). The walk-forward report's 2× stress doubles the round-trip cost, not "
+        "the stop slippage; the full stress below doubles both.",
+        "",
+        "## Full 2× stress (round-trip cost and stop slippage doubled; months resampled)",
+        "",
     ]
+    s = res["stress_2x_with_slippage"]
+    lines.append(
+        f"- Rules, mean net R: {s['rules_mean_net_r']:.3f} "
+        f"(95% CI {ci(s['rules_mean_net_r_ci95_months'])})."
+    )
+    for name, d in s["difference_ci95_months"].items():
+        lines.append(f"- {name}, EV filter minus rules: 95% CI {ci(d)}.")
     return "\n".join(lines) + "\n"
 
 
