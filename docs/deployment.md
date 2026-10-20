@@ -10,6 +10,7 @@
 | التوثيق (Swagger) | http://187.127.76.76:8080/docs (مطفأ افتراضياً، انظر «تشغيل /docs يوم العرض») |
 | الجاهزية | http://187.127.76.76:8080/api/v1/health/ready |
 | جودة البيانات | http://187.127.76.76:8080/api/v1/health/data (503 إذا كانت أداة `degraded` أو `no_data`؛ لا يؤثر على النشر، انظر [data-quality.md](data-quality.md)) |
+| التقويم الاقتصادي | `GET /api/v1/calendar/events` (بتسجيل دخول)، والاستيراد التاريخي `POST /api/v1/admin/calendar/import`، انظر [economic-calendar.md](economic-calendar.md) |
 | WebSocket | `ws://187.127.76.76:8080/ws/market` |
 
 لا يوجد دومين حالياً، ولذلك لا يوجد HTTPS. عند إضافة دومين نضع أمامه موقع nginx للسيرفر مع certbot.
@@ -127,9 +128,27 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s "http://187.127.76.76:8080/api/v1/pay/demo/<checkout_id>" | grep -o '<title>[^<]*'
   ```
 
+## التقويم الاقتصادي (B6)
+- لا خدمات جديدة ولا أسرار. الـ `worker` ينفّذ `calendar.refresh` (يفحصه الـ `beat` كل 15 دقيقة،
+  ويرسل طلباً واحداً فقط إلى ForexFactory كل 4 ساعات على الأكثر، ولا شيء لمدة 6 ساعات بعد 429/403).
+- Migration `0014` تنشئ جدول `economic_events` وفهارسه فقط، ولا تلمس أي جدول آخر.
+- متغيرات جديدة بقيم افتراضية آمنة: `CALENDAR_ENABLED=true`، `CALENDAR_FF_URL`،
+  `CALENDAR_FETCH_INTERVAL_MINUTES=240`، `CALENDAR_FETCH_TIMEOUT_SECONDS=15`،
+  `CALENDAR_FETCH_MAX_BYTES=2097152`، `CALENDAR_BACKOFF_HOURS=6`، `CALENDAR_CURRENCIES=USD`.
+- Nginx يقبل حتى 51MB على مسار الاستيراد وحده (`/api/v1/admin/calendar/import`).
+- البيانات التاريخية (Kaggle) لا تُرفع إلى المستودع أبداً: يرفعها المدير بنفسه عبر
+  `POST /api/v1/admin/calendar/import` (الخطوات في [economic-calendar.md](economic-calendar.md)).
+- فحص بعد النشر:
+  ```bash
+  curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/calendar/refresh
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/system/status | python3 -c 'import sys,json;print(json.load(sys.stdin)["calendar"])'
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/calendar/events?min_impact=medium"
+  ```
+
 ## توزيع المهام على الـ workers (T05/T07 + hardening)
 - `worker` (`-Q celery,notifications`): المسار الحي فقط: محرك الإشارات (`signals.*`)، تنبيهات الأسعار
-  (`alerts.*`)، وإرسال الإشعارات والملخصات.
+  (`alerts.*`)، وإرسال الإشعارات والملخصات، وفحص جودة البيانات (`data_quality.check`)، وجلب التقويم
+  الاقتصادي (`calendar.refresh`: طلب واحد كل 4 ساعات، 15 ثانية كحد أقصى).
 - `worker-backtest` (`-Q backtests,maintenance`): الاختبارات التاريخية، والمهام غير العاجلة على طابور
   `maintenance`: جلب RSS وتنظيف الأخبار (`news.*`)، تنظيف التوكنات والمفاتيح (`housekeeping.*`)،
   احتفاظ صندوق الإشعارات (`notifications.cleanup`)، التجديدات (`subscriptions.renew`)، والملخص اليومي (`ops.*`).

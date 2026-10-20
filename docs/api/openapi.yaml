@@ -1326,7 +1326,9 @@ paths:
 
         scheduled tasks), market data freshness per active instrument, the data-quality report of
 
-        every monitored instrument, WebSocket clients of every API process, notification channels,
+        every monitored instrument, the economic-calendar refresh (last success, last error,
+
+        back-off, stored rows), WebSocket clients of every API process, notification channels,
 
         unhandled errors in the last hour, the last daily summary.'
       operationId: admin_system_status_view
@@ -8710,6 +8712,335 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - BearerJWT: []
+  /api/v1/calendar/events:
+    get:
+      tags:
+      - calendar
+      summary: List Events
+      description: 'The events scheduled between ``start`` and ``end`` (at most 31 days), sorted by time:
+
+        per event the newest version known at ``as_of`` (default now). Events without a time
+
+        (All Day, Tentative) are included by their New York day. Impact order: holiday < low <
+
+        medium < high.'
+      operationId: calendar_list_events
+      parameters:
+      - name: start
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'default: today 00:00 UTC'
+          title: Start
+        description: 'default: today 00:00 UTC'
+      - name: end
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'default: start + 7 days'
+          title: End
+        description: 'default: start + 7 days'
+      - name: currencies
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          description: 'comma list (default CALENDAR_CURRENCIES, i.e. USD); ALL: every currency'
+          title: Currencies
+        description: 'comma list (default CALENDAR_CURRENCIES, i.e. USD); ALL: every currency'
+      - name: min_impact
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/EventImpact'
+          default: low
+      - name: as_of
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'admins only (ignored otherwise): what was known at this time'
+          title: As Of
+        description: 'admins only (ignored otherwise): what was known at this time'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+      - ApiKey: []
+  /api/v1/calendar/events/{event_key}/history:
+    get:
+      tags:
+      - calendar
+      summary: Event History
+      description: 'Every stored version of an event, oldest first (revisions: time moved, actual released,
+
+        impact changed).'
+      operationId: calendar_event_history
+      parameters:
+      - name: event_key
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 64
+          title: Event Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHistory'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+      - ApiKey: []
+  /api/v1/admin/calendar/import:
+    post:
+      tags:
+      - calendar
+      summary: Import History
+      description: 'Load calendar history from an uploaded CSV (multipart field ``file``), the same import
+
+        as ``scripts/load_calendar_csv.py``: the file is spooled to disk by the upload parser and
+
+        read in batches of 5,000 rows, never held in memory. Idempotent (a second upload inserts
+
+        nothing). ``dry_run`` parses and reports without writing. 413 above 50 MB.'
+      operationId: calendar_import_history
+      parameters:
+      - name: tz
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: timezone of the CSV times (e.g. America/New_York, UTC); required unless the file
+            carries offsets
+          title: Tz
+        description: timezone of the CSV times (e.g. America/New_York, UTC); required unless the file
+          carries offsets
+      - name: source
+        in: query
+        required: false
+        schema:
+          enum:
+          - forexfactory_kaggle
+          - manual
+          type: string
+          default: forexfactory_kaggle
+          title: Source
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          default: '2018-01-01'
+          title: From
+      - name: map
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          description: field=Column,... e.g. title=Name
+          title: Map
+        description: field=Column,... e.g. title=Name
+      - name: date_format
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Date Format
+      - name: dry_run
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Dry Run
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '400':
+          description: Bad request (a rule of the endpoint, see the message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Request body too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: the CSV (UTF-8, header row first), at most 50 MB
+      security:
+      - BearerJWT: []
+  /api/v1/admin/calendar/refresh:
+    post:
+      tags:
+      - calendar
+      summary: Refresh Now
+      description: 'Fetch the ForexFactory week now (one request), whatever the interval, and store the
+        new
+
+        versions. Not during a back-off after a 429/403 (``status: backoff``); ``locked`` when a
+
+        fetch is already running.'
+      operationId: calendar_refresh_now
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResult'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
 components:
   schemas:
     AdminApiKeyRead:
@@ -10747,6 +11078,174 @@ components:
       - months
       - recent_invoices
       title: EarningsRead
+    EventHistory:
+      properties:
+        event_key:
+          type: string
+          title: Event Key
+        versions:
+          items:
+            $ref: '#/components/schemas/EventRead'
+          type: array
+          title: Versions
+          description: oldest first
+      type: object
+      required:
+      - event_key
+      - versions
+      title: EventHistory
+    EventImpact:
+      type: string
+      enum:
+      - holiday
+      - low
+      - medium
+      - high
+      title: EventImpact
+    EventList:
+      properties:
+        as_of:
+          type: string
+          format: date-time
+          title: As Of
+          description: the versions known at this time are shown
+        start:
+          type: string
+          format: date-time
+          title: Start
+        end:
+          type: string
+          format: date-time
+          title: End
+        currencies:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Currencies
+          description: 'null: every currency'
+        min_impact:
+          $ref: '#/components/schemas/EventImpact'
+        events:
+          items:
+            $ref: '#/components/schemas/EventRead'
+          type: array
+          title: Events
+      type: object
+      required:
+      - as_of
+      - start
+      - end
+      - currencies
+      - min_impact
+      - events
+      title: EventList
+    EventRead:
+      properties:
+        event_key:
+          type: string
+          title: Event Key
+          description: stable identity of the event across its versions
+        scheduled_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Scheduled At
+          description: UTC; null for All Day / Tentative
+        scheduled_date:
+          type: string
+          format: date
+          title: Scheduled Date
+          description: the event's day in New York (ForexFactory's day)
+        time_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Time Label
+          examples:
+          - All Day
+          - Tentative
+        currency:
+          type: string
+          title: Currency
+          examples:
+          - USD
+        impact:
+          $ref: '#/components/schemas/EventImpact'
+        title:
+          type: string
+          title: Title
+          examples:
+          - CPI m/m
+        actual:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actual
+          description: as published
+          examples:
+          - 0.3%
+        forecast:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Forecast
+          examples:
+          - 0.2%
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Previous
+          examples:
+          - 0.4%
+        actual_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Value
+          description: 'parsed: % stripped, K/M/B multiplied'
+        forecast_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Forecast Value
+        previous_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Previous Value
+        fetched_at:
+          type: string
+          format: date-time
+          title: Fetched At
+          description: when this version became known
+        source:
+          type: string
+          title: Source
+          examples:
+          - forexfactory_live
+      type: object
+      required:
+      - event_key
+      - scheduled_at
+      - scheduled_date
+      - time_label
+      - currency
+      - impact
+      - title
+      - actual
+      - forecast
+      - previous
+      - actual_value
+      - forecast_value
+      - previous_value
+      - fetched_at
+      - source
+      title: EventRead
+      description: One version of an event (the newest known at ``as_of`` in a list).
     ExpertCard:
       properties:
         id:
@@ -11116,6 +11615,81 @@ components:
       description: 'Closed for the whole local ``date``, or from ``start`` to ``end`` (local date-times
 
         without an offset, e.g. ``2026-12-24T16:55``).'
+    ImportResult:
+      properties:
+        dry_run:
+          type: boolean
+          title: Dry Run
+        columns:
+          additionalProperties:
+            type: string
+          type: object
+          title: Columns
+          description: field -> CSV column used
+        rows_read:
+          type: integer
+          title: Rows Read
+        skipped:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Skipped
+          description: skipped rows by reason
+        skipped_examples:
+          items:
+            type: string
+          type: array
+          title: Skipped Examples
+        versions:
+          type: integer
+          title: Versions
+          description: versions built (a row with actual gives two)
+        inserted:
+          type: integer
+          title: Inserted
+        unchanged:
+          type: integer
+          title: Unchanged
+          description: versions already stored
+        first_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: First Date
+        last_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Last Date
+        events_per_impact:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Events Per Impact
+        sample:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Sample
+          description: the first parsed rows
+      type: object
+      required:
+      - dry_run
+      - columns
+      - rows_read
+      - skipped
+      - skipped_examples
+      - versions
+      - inserted
+      - unchanged
+      - first_date
+      - last_date
+      - events_per_impact
+      - sample
+      title: ImportResult
     IndicatorOverlay:
       properties:
         id:
@@ -13931,6 +14505,53 @@ components:
       required:
       - refresh_token
       title: RefreshRequest
+    RefreshResult:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: 'ok | not_modified | blocked (429/403: back-off) | backoff | error | locked (another
+            fetch runs) | disabled'
+        inserted:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Inserted
+        unchanged:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Unchanged
+        items:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Items
+        skipped:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Skipped
+        http_status:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Http Status
+        until:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Until
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - status
+      title: RefreshResult
     ReportCreate:
       properties:
         target_type:
@@ -15819,5 +16440,8 @@ tags:
   description: Checkout, subscriptions, invoices (demo payments) and admin tools.
 - name: payments-demo
   description: The demo provider's hosted payment pages and the payment webhook (no login; no real money).
+- name: calendar
+  description: 'Economic calendar: point-in-time events (market:read); history import and live refresh
+    (admin).'
 - name: chat
   description: Expert chat (REST; live delivery on the WebSocket, see asyncapi.yaml).

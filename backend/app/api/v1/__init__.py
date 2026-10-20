@@ -10,6 +10,7 @@ from app.api.v1 import (
     api_keys,
     auth,
     backtests,
+    calendar,
     chat,
     custom_strategies,
     experts,
@@ -60,6 +61,8 @@ limited_router.include_router(subscriptions.router)
 limited_router.include_router(subscriptions.admin_router)
 limited_router.include_router(chat.router)
 limited_router.include_router(chat.admin_router)
+limited_router.include_router(calendar.router)
+limited_router.include_router(calendar.admin_router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)

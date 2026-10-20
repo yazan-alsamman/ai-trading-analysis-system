@@ -56,6 +56,7 @@ DESCRIPTIONS = {
     404: "Not found (or not visible to you)",
     409: "Conflict with the current state (version, duplicate, already done)",
     410: "Gone",
+    413: "Request body too large",
     422: "Invalid input",
     429: "Rate limit exceeded (Retry-After header)",
     502: "Upstream provider error",
@@ -83,6 +84,8 @@ TAG_DESCRIPTIONS = {
     "subscriptions": "Checkout, subscriptions, invoices (demo payments) and admin tools.",
     "payments-demo": "The demo provider's hosted payment pages and the payment webhook "
     "(no login; no real money).",
+    "calendar": "Economic calendar: point-in-time events (market:read); history import "
+    "and live refresh (admin).",
     "chat": "Expert chat (REST; live delivery on the WebSocket, see asyncapi.yaml).",
 }
 STATUS_RE = re.compile(r"HTTP_(\d{3})_|status_code\s*=\s*(\d{3})")

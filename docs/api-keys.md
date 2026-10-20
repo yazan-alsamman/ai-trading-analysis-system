@@ -87,7 +87,7 @@ answer also has `last_closed_bar`), as a model that trades on closed bars needs
 
 | Scope | Endpoints |
 |---|---|
-| `market:read` | `GET /market/instruments`, `GET /market/instruments/{id}`, `GET /market/instruments/{id}/candles` |
+| `market:read` | `GET /market/instruments`, `GET /market/instruments/{id}`, `GET /market/instruments/{id}/candles`, `GET /calendar/events`, `GET /calendar/events/{event_key}/history` ([economic-calendar.md](economic-calendar.md)) |
 | `indicators:read` | `GET /indicators`, `POST /market/instruments/{id}/indicators` |
 | `strategies:read` | `GET /strategies`, `POST /strategies/{key}/preview` (global keys, and `custom:<uuid>` for your own or public custom strategies), `GET /custom-strategies/schema`, `GET /custom-strategies/public` |
 | `signals:read` | `GET /signals` (with `mine=true`: signals of the key owner's active strategies) |

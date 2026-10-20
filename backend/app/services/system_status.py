@@ -17,6 +17,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.calendar import service as calendar_service
 from app.core import ops
 from app.core.config import get_settings
 from app.notifications import breaker
@@ -35,6 +36,7 @@ BEAT_TASKS = (
     "subscriptions.renew",
     "ops.daily_summary",
     "data_quality.check",
+    "calendar.refresh",
 )
 
 
@@ -144,6 +146,11 @@ async def _data_quality(session: AsyncSession, redis: Redis) -> list[dict[str, A
     return [r.model_dump(mode="json") for r in await data_health.current(session, redis)]
 
 
+async def _calendar(session: AsyncSession, redis: Redis) -> dict[str, Any]:
+    """The economic-calendar refresh (B6): last success, last error, back-off, stored rows."""
+    return {**await calendar_service.state(redis), **await calendar_service.table_stats(session)}
+
+
 async def _notifications(redis: Redis) -> dict[str, Any]:
     server = enabled_channels()
     return {
@@ -197,6 +204,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
         "celery": lambda: _celery(redis, now),
         "market_data": lambda: _market(session, now),
         "data_quality": lambda: _data_quality(session, redis),
+        "calendar": lambda: _calendar(session, redis),
         "notifications": lambda: _notifications(redis),
         "errors_last_hour": lambda: ops.errors_last_hour(redis),
     }

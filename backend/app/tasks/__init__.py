@@ -28,6 +28,7 @@ celery_app = Celery(
         "app.tasks.subscriptions",
         "app.tasks.ops",
         "app.tasks.data_quality",
+        "app.tasks.calendar",
     ],
 )
 celery_app.conf.update(
@@ -78,6 +79,13 @@ celery_app.conf.update(
             "task": "data_quality.check",
             "schedule": crontab(minute="*"),
             "options": {"countdown": 15, "expires": 55},
+        },
+        # economic calendar (B6): checked every 15 minutes, one ForexFactory request per
+        # CALENDAR_FETCH_INTERVAL_MINUTES at most (the task skips the runs that are not due)
+        "calendar-refresh": {
+            "task": "calendar.refresh",
+            "schedule": crontab(minute="7,22,37,52"),
+            "options": {"expires": 600},
         },
         # price alerts on the 1m bar that just closed (evaluated ~10 s after the boundary)
         "alerts-tick": {"task": "alerts.tick", "schedule": crontab(minute="*")},

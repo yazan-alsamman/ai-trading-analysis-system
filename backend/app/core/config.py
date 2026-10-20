@@ -135,6 +135,15 @@ class Settings(BaseSettings):
     data_quality_max_lag_seconds: int = 120  # watermark lag allowed while the market is open
     data_quality_max_missing_pct: float = 1.0  # missing 1m bars over the lookback window
     data_quality_spike_pct: float = 2.0  # largest 1m close-to-close move on the evaluated bar
+    # Economic calendar (B6, docs/economic-calendar.md): the ForexFactory weekly JSON, fetched
+    # at most once per interval (one request), with a back-off after a 429/403
+    calendar_enabled: bool = True
+    calendar_ff_url: str = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+    calendar_fetch_interval_minutes: int = 240
+    calendar_fetch_timeout_seconds: float = 15.0  # whole request
+    calendar_fetch_max_bytes: int = 2 * 1024 * 1024
+    calendar_backoff_hours: float = 6.0  # no request at all for this long after a 429/403
+    calendar_currencies: str = "USD"  # default filter of reads and of for_evaluate (comma list)
 
     @field_validator("api_docs_enabled", mode="before")
     @classmethod
@@ -198,6 +207,15 @@ class Settings(BaseSettings):
                 pair = (source.strip().lower(), symbol.strip().upper())
                 if pair not in out:
                     out.append(pair)
+        return out
+
+    @property
+    def calendar_currency_list(self) -> list[str]:
+        out = []
+        for item in self.calendar_currencies.split(","):
+            code = item.strip().upper()
+            if code and code not in out:
+                out.append(code)
         return out
 
     @property
