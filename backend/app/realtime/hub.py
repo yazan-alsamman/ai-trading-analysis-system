@@ -9,9 +9,15 @@ their own sockets.
 Back-pressure: every client has a bounded outgoing queue drained by its own sender task. The
 fan-out only does ``put_nowait``; a client whose queue is full is dropped (close 1013) instead
 of slowing everyone else down.
+
+Re-authorisation: the hub also listens on ``AUTH_CHANNEL``. When a key is revoked or a user is
+deactivated or changes role, ``auth_events.publish`` sends ``{"user_id"}`` / ``{"key_id"}``
+there and every API process wakes the matching connections' watchdogs (``Client.recheck``),
+which re-check the identity in the database and close or trim the connection.
 """
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -30,10 +36,11 @@ logger = logging.getLogger(__name__)
 CLOSE_NORMAL = 1000
 CLOSE_GOING_AWAY = 1001  # idle timeout / server shutdown
 CLOSE_TRY_AGAIN_LATER = 1013  # client too slow (queue full)
-CLOSE_UNAUTHORIZED = 4401  # invalid or expired access token
+CLOSE_UNAUTHORIZED = 4401  # invalid/expired token, revoked key, deactivated user
 CLOSE_RATE_LIMITED = 4429  # too many connections (per identity) or new connections (per IP)
 
 SUBSCRIBE_CONFIRM_TIMEOUT = 1.0  # seconds to wait for Redis to confirm a SUBSCRIBE
+AUTH_CHANNEL = "ws-auth"  # identity changes (not a topic: no "ws:" prefix)
 
 
 @dataclass(frozen=True)
@@ -58,10 +65,19 @@ class HubConfig:
 class Client:
     """One accepted WebSocket connection."""
 
-    def __init__(self, websocket: WebSocket, user_id: uuid.UUID, queue_size: int) -> None:
+    def __init__(
+        self,
+        websocket: WebSocket,
+        user_id: uuid.UUID,
+        queue_size: int,
+        key_id: uuid.UUID | None = None,
+    ) -> None:
         self.id = uuid.uuid4()
         self.websocket = websocket
         self.user_id = user_id
+        self.key_id = key_id  # the API key it connected with (None: a login)
+        self.is_admin = False  # kept current by the watchdog's re-check
+        self.recheck = asyncio.Event()  # set by an auth event: re-check the identity now
         self.queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=queue_size)
         self.topics: set[str] = set()
         self.presence: set[uuid.UUID] = set()  # chats this connection is looking at (Y19)
@@ -102,6 +118,9 @@ class WebSocketHub:
         self._topics: dict[str, set[Client]] = {}
         self._clients: set[Client] = set()
         self._lock = asyncio.Lock()
+        # re-authorisation checks run one at a time per process: a burst (an event waking
+        # many connections) never holds more than one database connection
+        self.auth_lock = asyncio.Lock()
         self._pubsub_ready = asyncio.Event()  # redis-py needs a subscribe() before reading
         self._reader: asyncio.Task | None = None
         self.started_at = time.time()
@@ -128,7 +147,23 @@ class WebSocketHub:
         except Exception:  # noqa: BLE001
             logger.exception("Closing the hub's Redis Pub/Sub connection failed")
 
+    async def _listen_auth(self) -> None:
+        """Subscribe to ``AUTH_CHANNEL`` (retried until Redis answers; redis-py re-subscribes
+        after a reconnect)."""
+        while True:
+            try:
+                async with self._lock:
+                    await self._pubsub.subscribe(AUTH_CHANNEL)
+                self._pubsub_ready.set()
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                logger.warning("Subscribing to %s failed; retrying in 1s", AUTH_CHANNEL)
+                await asyncio.sleep(1)
+
     async def _read_loop(self) -> None:
+        await self._listen_auth()
         while True:
             try:
                 await self._pubsub_ready.wait()
@@ -148,6 +183,9 @@ class WebSocketHub:
                 continue
             if message.get("type") != "message":
                 continue
+            if message["channel"] == AUTH_CHANNEL:
+                self.auth_changed(message["data"])
+                continue
             topic = topic_for(message["channel"])
             if topic is not None:
                 self.messages_received += 1
@@ -155,8 +193,29 @@ class WebSocketHub:
 
     # --- clients ---------------------------------------------------------------------------
 
-    def new_client(self, websocket: WebSocket, user_id: uuid.UUID) -> Client:
-        return Client(websocket, user_id, self.config.queue_size)
+    def new_client(
+        self, websocket: WebSocket, user_id: uuid.UUID, key_id: uuid.UUID | None = None
+    ) -> Client:
+        return Client(websocket, user_id, self.config.queue_size, key_id)
+
+    def auth_changed(self, data: str) -> int:
+        """Wake the connections of the user / API key named in an ``AUTH_CHANNEL`` message, so
+        their watchdogs re-check them now. Returns how many were woken."""
+        try:
+            event = json.loads(data)
+            user_id = uuid.UUID(event["user_id"]) if event.get("user_id") else None
+            key_id = uuid.UUID(event["key_id"]) if event.get("key_id") else None
+        except (ValueError, TypeError, KeyError, AttributeError):
+            logger.warning("Ignoring a malformed %s message", AUTH_CHANNEL)
+            return 0
+        woken = 0
+        for client in list(self._clients):
+            if (user_id is not None and client.user_id == user_id) or (
+                key_id is not None and client.key_id == key_id
+            ):
+                client.recheck.set()
+                woken += 1
+        return woken
 
     async def register(self, client: Client) -> None:
         self._clients.add(client)

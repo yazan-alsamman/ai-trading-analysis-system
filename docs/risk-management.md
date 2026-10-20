@@ -196,9 +196,41 @@ included), `risk_pct`, `r_multiple` and `fills`.
 | `rr` | reward:risk of the first target |
 | `invalid_reason` | `null`, or why it should not be traded (`stop_unavailable`, `stop_wrong_side`, `atr_unavailable`, `no_equity`, `size_below_min`) |
 | `equity`, `atr` (volatility sizing), `trailing` | inputs, for display |
+| `lots`, `lots_feasible` | instruments with contract specs only: `quantity / contract_size` rounded **down** to the lot step, 0 and `false` below the minimum lot or without a conversion rate; `null` without specs |
+| `lots_risk_amount` | price-move loss of `lots` at the stop, account currency |
+| `conversion_rate` | account currency per unit of the quote currency (1 for the same currency) |
+| `sizing_warnings` | what was adjusted or is missing (min/max lot, no conversion rate, USDT counted as USD) |
 
 It reads bars up to the signal bar only. The backtest engine computes every entry with the same
 code, passing the real fill as `entry`.
+
+### Account currency and lots (B4 sizing fix)
+
+Before B4 the size treated `account_size` as if it were in the instrument's **quote**
+currency. That is right for BTC/USDT with a USDT account, but a USD/JPY plan for a 10,000 USD
+account sized as if the account held 10,000 JPY, about 150× too small.
+
+Now, on an instrument with contract specs (`contract_size` and `lot_step`, see
+[instruments.md](instruments.md)), the plan converts the equity into the quote currency
+before sizing (`equity / conversion_rate`). The account currency is the profile's
+`quote_currency`. `risk_amount` and `risk_pct` come back in the account currency, `notional`
+stays in the quote currency, and the plan adds `lots`. The conversion rate is:
+
+1. 1 when the quote currency is the account currency;
+2. `1 / entry` when the account currency is the base (USD/JPY for a USD account);
+3. otherwise the latest 1m close of an active `QUOTE/ACCOUNT` market (or `1 /` that of
+   `ACCOUNT/QUOTE`);
+4. USD, USDT and USDC count as one dollar only when 1–3 find nothing exact, and
+   `sizing_warnings` says so (the default profile currency is USDT);
+5. nothing found: `lots = 0`, `lots_feasible = false` and a warning. The quantity is then the
+   unconverted one, as before. A rate of 1 is never assumed silently.
+
+Example: USD/JPY at 150.000, stop 149.500, account 10,000 USD, 1 % risk, no fees →
+quantity **30,000** USD (was 200) = **0.30 lots**; `risk_amount` = 100 USD. Instruments without
+specs (and backtests) are sized exactly as before, and every old field is kept. `fee_bps` still
+counts in `quantity`, so with the default 10 bps an XAU/USD plan gets fewer lots than the
+fee-free hand calculation in instruments.md. `margin_rate` is stored but not used for sizing
+yet: the cap is still `max_position_pct` (the user's leverage).
 
 ### Worked example
 

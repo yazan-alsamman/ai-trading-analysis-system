@@ -380,3 +380,98 @@ async def test_ingest_refreshes_aggregates_only_for_old_data(
     )
     assert res.status_code == 200
     assert refresh_calls == [(T0, T0 + timedelta(minutes=2))]
+
+
+# --- spread, source, received_at (migration 0013) ---------------------------------------------
+
+
+async def _extra(session: AsyncSession, instrument_id: uuid.UUID) -> list[tuple]:
+    session.expire_all()
+    rows = await session.execute(
+        select(Candle.spread, Candle.source, Candle.received_at)
+        .where(Candle.instrument_id == instrument_id)
+        .order_by(Candle.ts)
+    )
+    return list(rows.all())
+
+
+async def test_upsert_spread_source_received_at(session: AsyncSession) -> None:
+    instrument_id = (await make_instrument(session)).id  # _extra() expires ORM objects
+    first_arrival = datetime(2026, 1, 5, 10, 1, 2, tzinfo=UTC)
+    [bar] = known_candles(T0, 1)
+    sent = bar.model_copy(
+        update={"spread": 0.25, "source": "fxpro_ctrader", "received_at": first_arrival}
+    )
+    await market_service.upsert_candles(session, instrument_id, [sent])
+    assert await _extra(session, instrument_id) == [(0.25, "fxpro_ctrader", first_arrival)]
+
+    # a re-send without spread/source keeps them and keeps the first arrival time
+    later = first_arrival + timedelta(minutes=5)
+    resent = bar.model_copy(update={"close": bar.close, "received_at": later})
+    await market_service.upsert_candles(session, instrument_id, [resent])
+    assert await _extra(session, instrument_id) == [(0.25, "fxpro_ctrader", first_arrival)]
+
+    # new values overwrite spread/source; an earlier arrival time wins
+    earlier = first_arrival - timedelta(seconds=30)
+    update = bar.model_copy(update={"spread": 0.4, "source": "other", "received_at": earlier})
+    await market_service.upsert_candles(session, instrument_id, [update])
+    assert await _extra(session, instrument_id) == [(0.4, "other", earlier)]
+
+
+async def test_received_at_defaults_to_now(session: AsyncSession) -> None:
+    instrument_id = (await make_instrument(session)).id
+    before = datetime.now(UTC) - timedelta(seconds=5)
+    await market_service.upsert_candles(session, instrument_id, known_candles(T0, 2))
+    rows = await _extra(session, instrument_id)
+    assert [(spread, source) for spread, source, _ in rows] == [(None, None), (None, None)]
+    assert all(received >= before for _, _, received in rows)
+
+
+async def test_spread_on_1m_reads_only(
+    client: AsyncClient, session: AsyncSession, trader_headers, admin_headers
+) -> None:
+    instrument_id = (await make_instrument(session)).id
+    payload = [candle_json(T0 + timedelta(minutes=i)) for i in range(10)]
+    payload[0] |= {"spread": 0.03, "source": " FXPRO_cTrader "}
+    res = await client.post(
+        ingest_url(instrument_id), json={"candles": payload}, headers=admin_headers
+    )
+    assert res.status_code == 200, res.text
+    assert (await _extra(session, instrument_id))[0][:2] == (0.03, "fxpro_ctrader")
+
+    res = await client.get(
+        candles_url(instrument_id),
+        params={"timeframe": "1m", "start": T0.isoformat()},
+        headers=trader_headers,
+    )
+    candles = res.json()["candles"]
+    assert candles[0]["spread"] == 0.03
+    assert "spread" not in candles[1]  # omitted when unknown
+    res = await client.get(
+        candles_url(instrument_id),
+        params={"timeframe": "5m", "start": T0.isoformat()},
+        headers=trader_headers,
+    )
+    assert all("spread" not in c for c in res.json()["candles"])
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"spread": -0.01},
+        {"spread": "nan"},
+        {"source": ""},
+        {"source": "x" * 33},
+        {"source": "bad source"},
+        {"received_at": "2026-01-05T10:00:00"},  # needs an offset
+    ],
+)
+async def test_candle_fields_validation_422(
+    client: AsyncClient, session: AsyncSession, admin_headers, extra: dict
+) -> None:
+    instrument = await make_instrument(session)
+    candle = candle_json(T0, **extra)
+    res = await client.post(
+        ingest_url(instrument.id), json={"candles": [candle]}, headers=admin_headers
+    )
+    assert res.status_code == 422

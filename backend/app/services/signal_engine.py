@@ -4,7 +4,8 @@ Every minute (Celery beat, ~10 s after the boundary) the engine finds the timefr
 closed a bar and evaluates, once per (instrument, timeframe), every *distinct* active strategy
 setup on the **last closed bar only**. New signals are stored idempotently and published to
 ``signals:{instrument_id}`` and to the ``user:{id}`` topic of each user whose active setup
-produced them with ``notify = true``.
+produced them with ``notify = true``. A signal of a **private** custom strategy is never
+broadcast: it goes to its owner's and the admins' ``private_signals_topic`` instead.
 
 Global and custom strategies (``custom:<uuid>``, resolved by ``strategy_resolver``) run in the
 same evaluation, on candles loaded once. A custom setup always runs its current definition and
@@ -34,7 +35,7 @@ from app.models.risk import SignalPlan
 from app.models.strategy import Signal, SignalSide, UserStrategy
 from app.notifications import service as notifications
 from app.realtime import publisher
-from app.realtime.topics import signals_topic, user_topic
+from app.realtime.topics import private_signals_topic, signals_topic, user_topic
 from app.services import indicator_service, market_service, risk_service, strategy_resolver
 from app.services.market_service import floor_to_bucket
 from app.services.strategy_resolver import Resolved
@@ -269,17 +270,46 @@ def _risk_history(activations, profiles, result: EvaluationResult) -> int:
     return needed
 
 
+async def _lot_sizing(
+    session: AsyncSession,
+    job: Job,
+    df,
+    activations: list[Activation],
+    profiles: dict,
+    result: EvaluationResult,
+) -> dict[str, risk_service.LotSizing]:
+    """Account currency -> lot sizing on this instrument (empty without contract specs)."""
+    try:
+        instrument = await session.get(Instrument, job.instrument_id)
+        if instrument is None or not instrument.has_specs:
+            return {}
+        entry = float(df["close"].iloc[-1])
+        currencies = {
+            risk_service.effective(a.risk_override, profiles.get(a.user_id))[2] for a in activations
+        }
+        return {
+            c: await risk_service.lot_sizing(session, instrument, c, entry)
+            for c in sorted(currencies)
+        }
+    except Exception as exc:  # noqa: BLE001 - plans fall back to the quantity only
+        logger.exception("Lot sizing for %s failed", job)
+        result.errors.append(f"lot sizing: {type(exc).__name__}: {exc}")
+        return {}
+
+
 def _plans(
     df,
     inserted: list[dict[str, Any]],
     activations: list[Activation],
     profiles: dict,
     result: EvaluationResult,
+    sizing: dict[str, risk_service.LotSizing] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]]]:
     """(signal_plans rows, (signal id, user id) -> [(activation, plan or None)])."""
+    sizing = sizing or {}
     rows: list[dict[str, Any]] = []
     by_user: dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]] = defaultdict(list)
-    cache: dict[tuple[str, float, int], dict[str, Any]] = {}
+    cache: dict[tuple[str, float, int, str], dict[str, Any]] = {}
     for signal in inserted:
         side = 1 if SignalSide(signal["side"]) == SignalSide.buy else -1
         for a in activations:
@@ -290,9 +320,11 @@ def _plans(
                 config, size, currency, source = risk_service.effective(
                     a.risk_override, profiles.get(a.user_id)
                 )
-                key = (risk_service.config_key(config), size, side)
+                key = (risk_service.config_key(config), size, side, currency)
                 if key not in cache:
-                    cache[key] = risk_service.plan_dict(df, side, config, size)
+                    cache[key] = risk_service.plan_dict(
+                        df, side, config, size, sizing.get(currency)
+                    )
                 plan = {
                     **cache[key],
                     "account_size": size,
@@ -374,7 +406,12 @@ async def evaluate(
                     .returning(*Signal.__table__.columns)
                 )
                 inserted = [dict(r._mapping) for r in (await session.execute(stmt)).all()]
-            plan_rows, by_user = _plans(df, inserted, activations, profiles, result)
+            sizing = (
+                await _lot_sizing(session, job, df, activations, profiles, result)
+                if inserted
+                else {}
+            )
+            plan_rows, by_user = _plans(df, inserted, activations, profiles, result, sizing)
             if plan_rows:
                 stmt = (
                     insert(SignalPlan)
@@ -384,9 +421,11 @@ async def evaluate(
                 )
                 result.plans = len((await session.execute(stmt)).all())
             prepared = await _notifications(session, redis, job, inserted, by_user, setups, result)
+            keys = {r["strategy_key"] for r in inserted}
+            owners = await strategy_resolver.signal_owners(session, keys) if keys else {}
             await session.commit()
         result.inserted = len(inserted)
-        await _publish(redis, inserted, by_user, result)
+        await _publish(redis, inserted, by_user, result, owners)
         await notifications.after_commit(redis, prepared)
         await redis.set(job.lock_key, "done", px=int(DONE_TTL.total_seconds() * 1000))
     except BaseException:
@@ -460,18 +499,31 @@ async def _publish(
     inserted: list[dict[str, Any]],
     by_user: dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Activation, Any]]],
     result: EvaluationResult,
+    owners: dict[str, uuid.UUID | None],
 ) -> None:
     """Publishing failures are logged: the signals and plans are stored and listed by the API.
-    Users get one message per signal with the plans of their activations (``notify`` only)."""
+    Users get one message per signal with the plans of their activations (``notify`` only).
+
+    ``owners`` (``strategy_resolver.signal_owners``): a global or public strategy's signal is
+    broadcast once on ``signals:{instrument_id}``; a private one only to its owner's and the
+    admins' private topics (same frame); a deleted strategy's to no one."""
     for row in inserted:
         payload = signal_payload(row)
+        key, topic = row["strategy_key"], signals_topic(row["instrument_id"])
+        message = {"type": "signal", "signal": payload}
         try:
-            await publisher.publish(
-                signals_topic(row["instrument_id"]), {"type": "signal", "signal": payload}, redis
-            )
+            if key not in owners:
+                continue
+            owner = owners[key]
+            if owner is None:
+                await publisher.publish(topic, message, redis)
+            else:
+                for audience in (owner, None):
+                    via = private_signals_topic(row["instrument_id"], audience)
+                    await publisher.publish(topic, message, redis, via=via)
             result.published += 1
             for (signal_id, user_id), items in by_user.items():
-                if signal_id != row["id"]:
+                if signal_id != row["id"] or owner not in (None, user_id):
                     continue
                 notified = [(a, plan) for a, plan in items if a.notify]
                 if not notified:

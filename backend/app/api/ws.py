@@ -13,6 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from pydantic import ValidationError
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import get_session_factory
@@ -20,7 +21,7 @@ from app.api.limits import WsConnectionSlot, client_ip, ws_ip_allowed
 from app.chat import presence
 from app.core.redis import get_redis
 from app.core.security import decode_token
-from app.models.api_key import Scope
+from app.models.api_key import ApiKey, Scope
 from app.models.chat import Conversation
 from app.models.instrument import Instrument
 from app.models.user import User, UserRole
@@ -33,7 +34,15 @@ from app.realtime.hub import (
     WebSocketHub,
 )
 from app.realtime.protocol import SubscribeMessage, TypingMessage, UnsubscribeMessage
-from app.realtime.topics import candles_topic, chat_topic, news_topic, signals_topic, user_topic
+from app.realtime.topics import (
+    candles_topic,
+    chat_topic,
+    is_private_signals,
+    news_topic,
+    private_signals_topic,
+    signals_topic,
+    user_topic,
+)
 from app.schemas.market import CandleOut
 from app.services import api_key_service, market_service
 
@@ -44,13 +53,14 @@ router = APIRouter(tags=["realtime"])
 SessionFactory = Annotated[async_sessionmaker[AsyncSession], Depends(get_session_factory)]
 
 
-@dataclass(frozen=True)
+@dataclass
 class _Auth:
     user: User
     expires_at: float  # unix seconds of the token's / key's expiry (inf: never)
     identity: str  # rate-limit identity: user:<id> (JWT) or key:<id> (API key)
     credential: str  # "access token" / "API key", for the expiry message
     scopes: frozenset[str] | None = None  # an API key's scopes (None: a login, every scope)
+    key_id: uuid.UUID | None = None  # the API key (None: a login)
 
 
 async def _authenticate(
@@ -77,7 +87,7 @@ async def _authenticate(
         if Scope.stream.value not in row.scopes:
             return "API key lacks the 'stream' scope"
         expires_at = row.expires_at.timestamp() if row.expires_at is not None else math.inf
-        return _Auth(user, expires_at, f"key:{row.id}", "API key", frozenset(row.scopes))
+        return _Auth(user, expires_at, f"key:{row.id}", "API key", frozenset(row.scopes), row.id)
     return "invalid or expired token"
 
 
@@ -125,13 +135,14 @@ async def _serve(
 ) -> None:
     user = auth.user
     await websocket.accept()
-    client = hub.new_client(websocket, user.id)
+    client = hub.new_client(websocket, user.id, auth.key_id)
+    client.is_admin = user.role == UserRole.admin
     await hub.register(client)
     receiver = watchdog = stop_wait = None
     try:
         await hub.subscribe(client, user_topic(user.id))
         receiver = asyncio.create_task(_receive_loop(client, hub, session_factory, auth))
-        watchdog = asyncio.create_task(_watchdog(client, hub, auth, slot))
+        watchdog = asyncio.create_task(_watchdog(client, hub, auth, slot, session_factory))
         stop_wait = asyncio.create_task(client.stopped.wait())
         await asyncio.wait({receiver, stop_wait}, return_when=asyncio.FIRST_COMPLETED)
     except Exception:  # noqa: BLE001
@@ -154,9 +165,16 @@ async def _serve(
                 pass
 
 
-async def _watchdog(client: Client, hub: WebSocketHub, auth: _Auth, slot: WsConnectionSlot) -> None:
-    """Heartbeats (which also refresh the connection slot), idle timeout and expiry of the
-    access token or API key."""
+async def _watchdog(
+    client: Client,
+    hub: WebSocketHub,
+    auth: _Auth,
+    slot: WsConnectionSlot,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Heartbeats (which also refresh the connection slot), idle timeout, expiry of the access
+    token or API key, and re-authorisation: on every heartbeat, and right away when an auth
+    event wakes it (``client.recheck``), the user and key are read again (``_recheck``)."""
     loop = asyncio.get_running_loop()
     heartbeat, idle = hub.config.heartbeat_seconds, hub.config.idle_timeout_seconds
     next_heartbeat = loop.time() + heartbeat
@@ -170,7 +188,12 @@ async def _watchdog(client: Client, hub: WebSocketHub, auth: _Auth, slot: WsConn
         if now - client.last_seen >= idle:
             client.close(CLOSE_GOING_AWAY, "idle timeout")
             return
-        if now >= next_heartbeat:
+        due = now >= next_heartbeat
+        if due or client.recheck.is_set():
+            client.recheck.clear()
+            if not await _recheck(client, hub, session_factory, auth):
+                return
+        if due:
             if not client.send(protocol.heartbeat()):
                 hub.drop(client)
                 return
@@ -179,7 +202,123 @@ async def _watchdog(client: Client, hub: WebSocketHub, auth: _Auth, slot: WsConn
             for conversation_id in list(client.presence):
                 await presence.mark(get_redis(), conversation_id, client.user_id)
         wait = min(next_heartbeat - now, client.last_seen + idle - now, seconds_to_exp)
-        await asyncio.sleep(max(wait, 0.01) if math.isfinite(wait) else heartbeat)
+        try:
+            await asyncio.wait_for(
+                client.recheck.wait(), max(wait, 0.01) if math.isfinite(wait) else heartbeat
+            )
+        except TimeoutError:
+            pass
+
+
+def _revoked(found, auth: _Auth) -> str | None:
+    """Why the connection may no longer stay open (None: it may)."""
+    if found is None:
+        return "API key revoked" if auth.key_id is not None else "user deactivated"
+    if not found.is_active:
+        return "user deactivated"
+    if auth.key_id is None:
+        return None
+    if found.revoked_at is not None:
+        return "API key revoked"
+    if found.expires_at is not None and found.expires_at.timestamp() <= time.time():
+        return "API key expired"
+    if Scope.stream.value not in found.scopes:
+        return "API key lacks the 'stream' scope"
+    return None
+
+
+async def _recheck(
+    client: Client,
+    hub: WebSocketHub,
+    session_factory: async_sessionmaker[AsyncSession],
+    auth: _Auth,
+) -> bool:
+    """Read the user (and API key) again: one primary-key query. Closes the connection with
+    ``auth_revoked`` / 4401 if the user is gone or inactive, or the key is revoked, expired or
+    without ``stream``; otherwise drops the topics the role or scopes no longer allow. False
+    if it closed. A database error keeps the connection (checked again next heartbeat)."""
+    if auth.key_id is None:
+        query = select(User.is_active, User.role).where(User.id == client.user_id)
+    else:
+        query = (
+            select(User.is_active, User.role, ApiKey.revoked_at, ApiKey.expires_at, ApiKey.scopes)
+            .join(User, User.id == ApiKey.user_id)
+            .where(ApiKey.id == auth.key_id)
+        )
+    try:
+        async with hub.auth_lock, session_factory() as session:
+            found = (await session.execute(query)).first()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Re-checking WebSocket %s failed (%s); next try at the heartbeat",
+            client.id,
+            type(exc).__name__,
+        )
+        return True
+    reason = _revoked(found, auth)
+    if reason is not None:
+        logger.info("Closing WebSocket %s (user %s): %s", client.id, client.user_id, reason)
+        client.send(protocol.error(protocol.AUTH_REVOKED, reason))
+        client.close(CLOSE_UNAUTHORIZED, reason, flush=True)
+        return False
+    if auth.key_id is not None:
+        auth.scopes = frozenset(found.scopes)
+    await _trim(client, hub, session_factory, auth, found.role == UserRole.admin)
+    return True
+
+
+async def _trim(
+    client: Client,
+    hub: WebSocketHub,
+    session_factory: async_sessionmaker[AsyncSession],
+    auth: _Auth,
+    is_admin: bool,
+) -> None:
+    """Apply a role or scope change to the topics: news without ``news:read``, chats a demoted
+    admin does not take part in, and the private-signal topic that matches the role."""
+    dropped = []
+    if auth.scopes is not None and Scope.news_read.value not in auth.scopes:
+        dropped += [t for t in client.topics if t == "news" or t.startswith("news:")]
+    if is_admin != client.is_admin:
+        client.is_admin = is_admin
+        chats = [t for t in client.topics if t.startswith("chat:")]
+        if chats and not is_admin:
+            async with session_factory() as session:
+                mine = set(
+                    await session.scalars(
+                        select(Conversation.id).where(
+                            or_(
+                                Conversation.user_id == client.user_id,
+                                Conversation.expert_id == client.user_id,
+                            )
+                        )
+                    )
+                )
+            dropped += [t for t in chats if uuid.UUID(t.split(":", 1)[1]) not in mine]
+        for topic in [t for t in client.topics if _is_signals(t)]:
+            await _sync_private_signals(client, hub, topic)
+    for topic in dropped:
+        await hub.unsubscribe(client, topic)
+        client.send(protocol.unsubscribed(topic, reason="forbidden"))
+
+
+def _is_signals(topic: str) -> bool:
+    return topic.startswith("signals:") and not is_private_signals(topic)
+
+
+def _private_topics(client: Client, topic: str) -> tuple[str, str]:
+    """(the private-signal topic this connection should hold for the public signals ``topic``:
+    its own, or the admins' one for an admin; the other one)."""
+    instrument_id = topic.split(":", 1)[1]
+    own = private_signals_topic(instrument_id, client.user_id)
+    admins = private_signals_topic(instrument_id, None)
+    return (admins, own) if client.is_admin else (own, admins)
+
+
+async def _sync_private_signals(client: Client, hub: WebSocketHub, topic: str) -> None:
+    wanted, other = _private_topics(client, topic)
+    await hub.unsubscribe(client, other)
+    await hub.subscribe(client, wanted)
 
 
 async def _receive_loop(
@@ -230,7 +369,7 @@ def _first_error(exc: ValidationError) -> str:
 
 def _counted_subscriptions(client: Client) -> int:
     own = user_topic(client.user_id)
-    return sum(1 for topic in client.topics if topic != own)
+    return sum(1 for t in client.topics if t != own and not is_private_signals(t))
 
 
 async def _subscribe(
@@ -285,6 +424,9 @@ async def _subscribe(
             return
         try:
             await hub.subscribe(client, topic)
+            if msg.topic == "signals":
+                # private custom-strategy signals arrive on the connection's own private topic
+                await _sync_private_signals(client, hub, topic)
         except Exception:  # noqa: BLE001
             logger.exception("Subscribing %s to %s failed", client.id, topic)
             client.send(protocol.error(protocol.UNAVAILABLE, "live updates are unavailable"))
@@ -293,7 +435,9 @@ async def _subscribe(
         if msg.topic in ("signals", "news"):
             return  # no snapshot: GET /api/v1/signals and /news list the past ones
         latest = await market_service.get_latest_candle(session, msg.instrument_id, msg.timeframe)
-    candle = CandleOut.from_candle(latest).model_dump() if latest is not None else None
+    candle = (
+        CandleOut.from_candle(latest).model_dump(exclude_none=True) if latest is not None else None
+    )
     client.send(protocol.snapshot(topic, candle))
 
 
@@ -394,4 +538,7 @@ async def _unsubscribe(client: Client, hub: WebSocketHub, msg: UnsubscribeMessag
         client.presence.discard(msg.conversation_id)
         await presence.clear(get_redis(), msg.conversation_id, client.user_id)
     await hub.unsubscribe(client, topic)
+    if msg.topic == "signals":
+        for private in _private_topics(client, topic):
+            await hub.unsubscribe(client, private)
     client.send(protocol.unsubscribed(topic))

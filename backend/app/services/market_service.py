@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models.candle import AGGREGATE_TIMEFRAMES, Timeframe
-from app.models.instrument import Instrument, MarketType
+from app.models.instrument import SPEC_FIELDS, Instrument, MarketType, SpecSource
 from app.schemas.market import CandleIn, InstrumentCreate, InstrumentUpdate
 
 UPSERT_CHUNK_SIZE = 5000
@@ -31,6 +31,7 @@ class CandleRow:
     close: float
     volume: float
     trades: int | None
+    spread: float | None = None  # 1m only
 
 
 # One lightweight table construct per timeframe. Relation names come only from the Timeframe
@@ -46,14 +47,19 @@ _RELATIONS = {
         sa_column("close", Double),
         sa_column("volume", Double),
         sa_column("trades", Integer),
+        *([sa_column("spread", Double)] if tf == Timeframe.m1 else []),
     )
     for tf in Timeframe
 }
 
+# spread/source only overwrite with a value; received_at keeps the earliest arrival (least()
+# ignores NULL), so a re-sent bar does not hide the feed's real lag.
 _UPSERT = text(
     """
-    INSERT INTO candles_1m AS c (instrument_id, ts, open, high, low, close, volume, trades)
-    SELECT CAST(:instrument_id AS uuid), *
+    INSERT INTO candles_1m AS c
+        (instrument_id, ts, open, high, low, close, volume, trades, spread, source, received_at)
+    SELECT CAST(:instrument_id AS uuid), u.ts, u.open, u.high, u.low, u.close, u.volume,
+           u.trades, u.spread, u.source, coalesce(u.received_at, now())
     FROM unnest(
         CAST(:ts AS timestamptz[]),
         CAST(:open AS double precision[]),
@@ -61,15 +67,21 @@ _UPSERT = text(
         CAST(:low AS double precision[]),
         CAST(:close AS double precision[]),
         CAST(:volume AS double precision[]),
-        CAST(:trades AS integer[])
-    )
+        CAST(:trades AS integer[]),
+        CAST(:spread AS double precision[]),
+        CAST(:source AS varchar[]),
+        CAST(:received_at AS timestamptz[])
+    ) AS u(ts, open, high, low, close, volume, trades, spread, source, received_at)
     ON CONFLICT (instrument_id, ts) DO UPDATE SET
         open = excluded.open,
         high = excluded.high,
         low = excluded.low,
         close = excluded.close,
         volume = excluded.volume,
-        trades = excluded.trades
+        trades = excluded.trades,
+        spread = coalesce(excluded.spread, c.spread),
+        source = coalesce(excluded.source, c.source),
+        received_at = least(c.received_at, excluded.received_at)
     """
 )
 
@@ -130,10 +142,25 @@ async def get_instrument_by_symbol(
     )
 
 
+def _spec_values(data: InstrumentCreate | InstrumentUpdate) -> dict:
+    """The fields that were set, with the session calendar as JSON (dates as strings)."""
+    values = data.model_dump(exclude_unset=True, exclude={"session_calendar"})
+    if "session_calendar" in data.model_fields_set:
+        calendar = data.session_calendar
+        values["session_calendar"] = (
+            None if calendar is None else calendar.model_dump(mode="json", exclude_none=True)
+        )
+    return values
+
+
 async def create_instrument(session: AsyncSession, data: InstrumentCreate) -> Instrument:
     if await get_instrument_by_symbol(session, data.source, data.symbol) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Instrument already exists for this source")
-    instrument = Instrument(**data.model_dump())
+    values = {**data.model_dump(exclude={"session_calendar"}), **_spec_values(data)}
+    values["quote_currency"] = values.get("quote_currency") or data.quote_asset
+    if any(values.get(name) is not None for name in SPEC_FIELDS if name != "quote_currency"):
+        values.update(spec_source=SpecSource.manual, spec_updated_at=datetime.now(UTC))
+    instrument = Instrument(**values)
     session.add(instrument)
     try:
         await session.commit()
@@ -149,7 +176,15 @@ async def create_instrument(session: AsyncSession, data: InstrumentCreate) -> In
 async def update_instrument(
     session: AsyncSession, instrument: Instrument, data: InstrumentUpdate
 ) -> Instrument:
-    for name, value in data.model_dump(exclude_unset=True).items():
+    """Apply the given fields. A changed spec marks the specs as ``manual``."""
+    changes = _spec_values(data)
+    min_lot = changes.get("min_lot", instrument.min_lot)
+    max_lot = changes.get("max_lot", instrument.max_lot)
+    if min_lot is not None and max_lot is not None and min_lot > max_lot:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "min_lot must be <= max_lot")
+    if any(name in changes and changes[name] != getattr(instrument, name) for name in SPEC_FIELDS):
+        changes.update(spec_source=SpecSource.manual, spec_updated_at=datetime.now(UTC))
+    for name, value in changes.items():
         setattr(instrument, name, value)
     await session.commit()
     await session.refresh(instrument)
@@ -164,7 +199,9 @@ async def upsert_candles(
 ) -> int:
     """Insert or update 1m candles. Returns the number of rows written; the caller commits.
 
-    If the same ``ts`` appears more than once, the last occurrence wins.
+    If the same ``ts`` appears more than once, the last occurrence wins. ``spread`` and
+    ``source`` are only overwritten by a value, ``received_at`` (default: now) keeps the
+    earliest arrival.
     """
     by_ts = {c.ts: c for c in candles}
     rows = [by_ts[ts] for ts in sorted(by_ts)]
@@ -182,6 +219,9 @@ async def upsert_candles(
                 "close": [c.close for c in chunk],
                 "volume": [c.volume for c in chunk],
                 "trades": [c.trades for c in chunk],
+                "spread": [c.spread for c in chunk],
+                "source": [c.source for c in chunk],
+                "received_at": [c.received_at for c in chunk],
             },
         )
         written += result.rowcount
@@ -203,9 +243,9 @@ async def get_candles(
     """
     limit = max(1, min(limit, MAX_CANDLES_LIMIT))
     rel = _RELATIONS[timeframe]
-    query = select(
-        rel.c.ts, rel.c.open, rel.c.high, rel.c.low, rel.c.close, rel.c.volume, rel.c.trades
-    ).where(rel.c.instrument_id == instrument_id)
+    columns = [rel.c.ts, rel.c.open, rel.c.high, rel.c.low, rel.c.close, rel.c.volume]
+    columns += [rel.c.trades, *([rel.c.spread] if "spread" in rel.c else [])]
+    query = select(*columns).where(rel.c.instrument_id == instrument_id)
     if start is not None:
         query = query.where(rel.c.ts >= start)
     if end is not None:

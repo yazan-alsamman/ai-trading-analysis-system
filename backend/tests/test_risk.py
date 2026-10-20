@@ -18,9 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.models.candle import Timeframe
+from app.models.instrument import MarketType
 from app.models.risk import RiskProfile, SignalPlan
 from app.models.user import UserRole
 from app.realtime.topics import signals_topic, user_topic
+from app.schemas.market import CandleIn
 from app.schemas.risk import RiskProfileUpdate
 from app.services import (
     backtest_service,
@@ -273,10 +275,10 @@ async def test_override_wins_and_a_failing_plan_blocks_nothing(
     await add_closes(session, btc.id, T0, DIP)
     original = risk_service.plan_dict
 
-    def flaky(df, side, config, size, **kw):
+    def flaky(df, side, config, size, *args, **kw):
         if config.get("stop") is None or config["stop"]["type"] == "atr":  # Bob's default
             raise RuntimeError("boom")
-        return original(df, side, config, size, **kw)
+        return original(df, side, config, size, *args, **kw)
 
     monkeypatch.setattr(risk_service, "plan_dict", flaky)
     result = await signal_engine.evaluate(
@@ -620,3 +622,155 @@ async def test_tick_resolves_custom_setups_in_one_batch(
     )
     assert calls == [[shared.key]] and result.setups == 2 and result.errors == []
     json.dumps(by_job[(btc.id, Timeframe.m1)])  # travels as a Celery argument
+
+
+# --- lots on instruments with contract specs (B4) -------------------------------------------------
+
+GOLD_SPECS = {
+    "contract_size": 100.0,
+    "tick_size": 0.01,
+    "lot_step": 0.01,
+    "min_lot": 0.01,
+    "max_lot": 100.0,
+    "quote_currency": "USD",
+}
+FX_SPECS = {**GOLD_SPECS, "contract_size": 100_000.0}
+# 1 % risk without fees and with room for leverage, as in the hand-computed examples
+RISK_1PCT = {"sizing": {"mode": "risk", "risk_pct": 1, "max_position_pct": 1000}, "fee_bps": 0}
+
+
+async def _flat_market(session: AsyncSession, symbol: str, source: str, price: float, **kw):
+    quote = symbol.partition("/")[2]
+    instrument = await make_instrument(
+        session, symbol, source, MarketType.forex, **{"quote_currency": quote, **kw}
+    )
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
+    bars = [
+        CandleIn(
+            ts=now - timedelta(minutes=m), open=price, high=price, low=price, close=price, volume=1
+        )
+        for m in range(5)
+    ]
+    await market_service.upsert_candles(session, instrument.id, bars)
+    await session.commit()
+    return instrument
+
+
+def _size(instrument, entry: float, stop: float, account_size: float) -> dict:
+    return {
+        "instrument_id": str(instrument.id),
+        "timeframe": "1m",
+        "side": "buy",
+        "entry": entry,
+        "stop": stop,
+        "account_size": account_size,
+        "config": RISK_1PCT,
+    }
+
+
+async def _plan(client: AsyncClient, headers, body: dict) -> dict:
+    res = await client.post(SIZE, json=body, headers=headers)
+    assert res.status_code == 200, res.text
+    return res.json()["plan"]
+
+
+async def test_position_size_lots_hand_computed(
+    client: AsyncClient, session: AsyncSession, alice
+) -> None:
+    user, headers = alice
+    await _set_profile(session, user, quote_currency="USD")
+    gold = await _flat_market(session, "XAU/USD", "fxpro", 2400.0, **GOLD_SPECS)
+    jpy = await _flat_market(
+        session, "USD/JPY", "twelvedata", 150.0, **{**FX_SPECS, "quote_currency": "JPY"}
+    )
+    eur = await _flat_market(session, "EUR/USD", "twelvedata", 1.085, **FX_SPECS)
+
+    # XAU/USD: 1 % of 2,000 USD = 20 USD; 5.00 x 100 oz = 500 USD per lot -> 0.04 lots
+    plan = await _plan(client, headers, _size(gold, 2400, 2395, 2_000))
+    assert (plan["quantity"], plan["lots"], plan["lots_feasible"]) == (4.0, 0.04, True)
+    assert (plan["risk_amount"], plan["lots_risk_amount"], plan["conversion_rate"]) == (
+        20.0,
+        20.0,
+        1.0,
+    )
+    assert plan["sizing_warnings"] == []
+
+    # USD/JPY: 1 % of 10,000 USD = 100 USD; 0.5 x 100,000 / 150 = 333.33 USD per lot -> 0.30
+    plan = await _plan(client, headers, _size(jpy, 150, 149.5, 10_000))
+    assert plan["quantity"] == pytest.approx(30_000)  # 200 before the fix (150x too small)
+    assert (plan["lots"], plan["lots_feasible"]) == (0.3, True)
+    assert plan["conversion_rate"] == pytest.approx(1 / 150)
+    assert plan["risk_amount"] == pytest.approx(100) and plan["risk_pct"] == pytest.approx(1)
+
+    # EUR/USD: 1 % of 10,000 = 100 USD; 0.002 x 100,000 = 200 USD per lot -> 0.50
+    plan = await _plan(client, headers, _size(eur, 1.085, 1.083, 10_000))
+    assert (plan["lots"], plan["lots_feasible"]) == (0.5, True)
+
+    # min lot: 1 % of 100 USD = 1 USD, but 0.01 lot of gold already risks 5 USD
+    plan = await _plan(client, headers, _size(gold, 2400, 2395, 100))
+    assert (plan["lots"], plan["lots_feasible"]) == (0.0, False)
+    assert plan["sizing_warnings"] == ["below the minimum of 0.01 lots"]
+    assert plan["quantity"] == pytest.approx(0.2)  # the old field is still there
+
+
+async def test_position_size_currency_conversion(
+    client: AsyncClient, session: AsyncSession, alice
+) -> None:
+    user, headers = alice
+    gold = await _flat_market(session, "XAU/USD", "fxpro", 2400.0, **GOLD_SPECS)
+
+    # the default profile is in USDT: counted as USD, and the plan says so
+    plan = await _plan(client, headers, _size(gold, 2400, 2395, 2_000))
+    assert (plan["lots"], plan["conversion_rate"]) == (0.04, 1.0)
+    assert plan["sizing_warnings"] == ["USD, USDT and USDC treated as the same dollar (1:1)"]
+
+    # a EUR account converts with the latest EUR/USD close: 1 USD = 1 / 1.08 EUR
+    await _set_profile(session, user, quote_currency="EUR")
+    await _flat_market(session, "EUR/USD", "twelvedata", 1.08)
+    plan = await _plan(client, headers, _size(gold, 2400, 2395, 2_000))
+    assert plan["conversion_rate"] == pytest.approx(1 / 1.08)
+    # 20 EUR at risk, 500 USD = 462.96 EUR per lot -> 0.0432 -> 0.04
+    assert (plan["lots"], plan["sizing_warnings"]) == (0.04, [])
+    assert plan["risk_amount"] == pytest.approx(20)
+
+    # no GBP market: never assumed 1
+    await _set_profile(session, user, quote_currency="GBP")
+    plan = await _plan(client, headers, _size(gold, 2400, 2395, 2_000))
+    assert (plan["lots"], plan["lots_feasible"], plan["conversion_rate"]) == (0.0, False, None)
+    assert "no conversion rate from USD" in plan["sizing_warnings"][0]
+
+    # instruments without specs keep the old plan (lots null)
+    plain = await _flat_market(session, "XAG/USD", "twelvedata", 30.0)
+    plan = await _plan(client, headers, _size(plain, 30, 29, 2_000))
+    assert (plan["lots"], plan["lots_feasible"], plan["sizing_warnings"]) == (None, None, [])
+
+
+async def test_live_plans_have_lots(
+    session: AsyncSession, session_factory, redis_client: Redis, alice, bob
+) -> None:
+    a, _ = alice
+    b, _ = bob
+    pair = await make_instrument(
+        session, "USD/JPY", "twelvedata", MarketType.forex, **{**FX_SPECS, "quote_currency": "JPY"}
+    )
+    await _set_profile(session, a, config=PERCENT_RULES, account_size=5_000, quote_currency="USD")
+    await _set_profile(session, b, config=PERCENT_RULES, account_size=5_000, quote_currency="GBP")
+    await activate(session, a, pair, params=RSI1)
+    await activate(session, b, pair, params=RSI1)
+    await add_closes(session, pair.id, T0, DIP)
+
+    result = await signal_engine.evaluate(
+        session_factory, redis_client, Job(pair.id, Timeframe.m1, BAR)
+    )
+    assert (result.inserted, result.plans, result.errors) == (1, 2, [])
+    plans = {p.user_id: p.plan for p in await _plans(session)}
+    pa, pb = plans[a.id], plans[b.id]
+    # entry 9.0 (USD/JPY at 9 in this test): 1 USD = 9 JPY, so 1 % of 5,000 USD = 450 JPY
+    per_unit = 0.18 + (9.0 + 8.82) * 0.001
+    assert pa["conversion_rate"] == pytest.approx(1 / 9)
+    assert pa["quantity"] == pytest.approx(450 / per_unit, rel=1e-9)
+    assert pa["risk_amount"] == pytest.approx(50) and pa["risk_pct"] == pytest.approx(1)
+    assert (pa["lots"], pa["lots_feasible"]) == (0.02, True)  # 2,275 USD / 100,000
+    # GBP account: no rate, flagged; the quantity is the unconverted one
+    assert (pb["lots"], pb["lots_feasible"]) == (0.0, False)
+    assert "no conversion rate" in pb["sizing_warnings"][0]

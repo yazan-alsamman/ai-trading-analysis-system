@@ -101,7 +101,7 @@ A key for external programs: ``tk_<prefix>_<secret>``. Only the SHA-256 of the f
 
 ### `instruments`
 
-A market (symbol on a data source) with its price and quantity precision.
+A market (symbol on a data source) with its price and quantity precision and, when known, its contract specs (lot size and limits, tick, margin, price basis, trading sessions).
 
 | Column | Type | Null | Default | Keys |
 |---|---|---|---|---|
@@ -114,14 +114,33 @@ A market (symbol on a data source) with its price and quantity precision.
 | `price_precision` | integer | yes |  |  |
 | `quantity_precision` | integer | yes |  |  |
 | `is_active` | boolean | no | `true` |  |
+| `contract_size` | double precision | yes |  |  |
+| `tick_size` | double precision | yes |  |  |
+| `lot_step` | double precision | yes |  |  |
+| `min_lot` | double precision | yes |  |  |
+| `max_lot` | double precision | yes |  |  |
+| `quote_currency` | varchar(16) | yes |  |  |
+| `margin_rate` | double precision | yes |  |  |
+| `price_basis` | varchar(8) | yes |  |  |
+| `session_calendar` | jsonb | yes |  |  |
+| `spec_source` | varchar(32) | yes |  |  |
+| `spec_updated_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `now()` |  |
 | `updated_at` | timestamp with time zone | no | `now()` |  |
 
 **Constraints**
 
 - PK `pk` (id)
+- CHECK `ck_instruments_contract_size`: `contract_size IS NULL OR contract_size > 0`
+- CHECK `ck_instruments_lot_range`: `min_lot IS NULL OR max_lot IS NULL OR min_lot <= max_lot`
+- CHECK `ck_instruments_lot_step`: `lot_step IS NULL OR lot_step > 0`
+- CHECK `ck_instruments_margin_rate`: `margin_rate IS NULL OR (margin_rate > 0 AND margin_rate <= 1)`
+- CHECK `ck_instruments_max_lot`: `max_lot IS NULL OR max_lot > 0`
+- CHECK `ck_instruments_min_lot`: `min_lot IS NULL OR min_lot > 0`
+- CHECK `ck_instruments_price_basis`: `price_basis IS NULL OR price_basis IN ('bid', 'mid', 'last')`
 - CHECK `ck_instruments_source_lower`: `source = lower(source)`
 - CHECK `ck_instruments_symbol_upper`: `symbol = upper(symbol)`
+- CHECK `ck_instruments_tick_size`: `tick_size IS NULL OR tick_size > 0`
 - UNIQUE `uq_instruments_source_symbol` (source, symbol)
 
 ### `candles_1m`
@@ -138,6 +157,9 @@ A 1-minute candle (TimescaleDB hypertable). ``ts`` is the UTC start of the minut
 | `close` | double precision | no |  |  |
 | `volume` | double precision | no |  |  |
 | `trades` | integer | yes |  |  |
+| `spread` | double precision | yes |  |  |
+| `source` | varchar(32) | yes |  |  |
+| `received_at` | timestamp with time zone | yes |  |  |
 
 **Constraints**
 

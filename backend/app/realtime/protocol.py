@@ -78,6 +78,7 @@ INACTIVE_INSTRUMENT = "inactive_instrument"
 FORBIDDEN = "forbidden"
 TOO_MANY_SUBSCRIPTIONS = "too_many_subscriptions"
 TOKEN_EXPIRED = "token_expired"
+AUTH_REVOKED = "auth_revoked"  # API key revoked/expired/lost "stream", user deactivated
 UNAVAILABLE = "unavailable"
 
 
@@ -89,8 +90,13 @@ def subscribed(topic: str) -> str:
     return dump({"type": "subscribed", "topic": topic})
 
 
-def unsubscribed(topic: str) -> str:
-    return dump({"type": "unsubscribed", "topic": topic})
+def unsubscribed(topic: str, reason: str | None = None) -> str:
+    """``reason`` ("forbidden") when the server drops a topic the connection may no longer
+    receive (a role or API key scope change)."""
+    message = {"type": "unsubscribed", "topic": topic}
+    if reason is not None:
+        message["reason"] = reason
+    return dump(message)
 
 
 def snapshot(topic: str, candle: dict[str, Any] | None) -> str:

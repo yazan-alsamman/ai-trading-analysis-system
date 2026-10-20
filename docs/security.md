@@ -30,6 +30,29 @@ Each item names where it lives in the code.
   subscribers), conversations (participants only) and shared workspaces are enforced in the
   services, and the WebSocket hub checks them again on subscribe.
 - **Entitlements** (paid features): one function (`app/payments/entitlements.py`).
+- **Signal visibility** (B12): a signal whose `strategy_key` is `custom:<uuid>` is visible to a
+  user only if they may use that strategy (`strategy_resolver.can_use`: their own, or public).
+  Signals of global strategies are visible to everyone; a deleted custom strategy's signals to
+  nobody but admins. The experts feed (`GET /experts/{id}/signals`, `signals_feed` perk) is
+  unchanged: the public strategies the expert runs. **Admins see every signal**, for
+  moderation. The rule is one SQL condition (`strategy_resolver.visible_signal`) applied in the
+  query, so pages and `total` only count visible rows, on:
+  - `GET /signals` (including `strategy_key=` and `mine=true`);
+  - `GET /me/signal-plans` (your plans of a strategy made private are hidden too);
+  - the notification inbox and unread count (`signal` notifications);
+  - post and chat attachments of type `signal`: you can only attach one you may see, and readers
+    who may not see it get `available: false` without its content. A live chat message
+    resolves attachments as every user would see them; history resolves them per reader.
+
+  Workspace overlays and strategy previews (markers) already went through
+  `strategy_resolver.get` (404 for a private strategy). Backtests and their CSV exports are
+  owner-only. Alerts never carry signals.
+- **Live signals** (WebSocket): a private strategy's signal is never put on
+  `signals:{instrument_id}`. The engine publishes it once to the owner's
+  `signals:{instrument_id}:user:{owner}` and once to `signals:{instrument_id}:admins`, and the
+  hub subscribes each `signals:{instrument_id}` subscriber to the private topic that matches
+  them. Delivery is decided by Redis channels, with no per-message filtering in the fan-out.
+  Public signals are still published once for everyone ([websocket.md](websocket.md)).
 
 ## 3. API keys
 
@@ -41,6 +64,19 @@ Each item names where it lives in the code.
   `/users/me*` or `/admin/*`. `news:write` can only be granted by an admin and stops working if
   the owner is no longer an admin. Keys can expire, be revoked, and have their own lower rate
   limit; `last_used_at` and daily usage are recorded.
+- **Open WebSockets are re-authorised** (B12). Every heartbeat (25 s), each socket re-reads its
+  user, and its API key if it has one: one primary-key query, run one at a time per API process
+  (about 3.5 ms each; 200 sockets make about 8 checks per second). It closes the socket if the
+  user is gone or inactive, or the key is revoked, expired or without `stream`. It also drops
+  the topics the role or scopes no longer allow (a demoted admin's chats, `news` without
+  `news:read`, the admins' private-signal topic). Revoking a key, changing its scopes,
+  deactivating a user or changing a role also publishes an event on the Redis channel
+  `ws-auth` after the commit. Every API process (both uvicorn workers) wakes the matching
+  sockets, so they are checked at once. The heartbeat check stays as the safety net if the
+  event is lost. A closed socket gets `{"type":"error","code":"auth_revoked"}` and close code
+  **4401** with the reason, and its per-identity connection slot is released. A database error
+  during a check keeps the socket until the next heartbeat. Access-token expiry is still
+  checked as before (`token_expired`, 4401) (`app/api/ws.py`, `app/realtime/auth_events.py`).
 
 ## 4. Rate limits
 

@@ -636,7 +636,8 @@ FOLDERS: list[Folder] = [
                 "/market/instruments/:instrument_id/candles",
                 "Candles ascending by time. With `start`: the first `limit` candles from "
                 "`start`; otherwise the latest `limit` candles (up to `end` if given). "
-                "`limit` max 5,000.",
+                "`limit` max 5,000. 1m candles also carry `spread` (price units) when the "
+                "feed sent one.",
                 query=[
                     ("timeframe", "{{timeframe}}", "1m | 5m | 15m | 1h | 4h | 1d"),
                     ("limit", "200", "1–5000"),
@@ -800,7 +801,10 @@ FOLDERS: list[Folder] = [
                 "List signals",
                 "GET",
                 "/signals",
-                "Signals, newest bar first. `mine=true`: only signals of my active strategies. "
+                "Signals you may see, newest bar first: global strategies and custom strategies "
+                "you may use (your own or public ones). A private custom strategy's signals are "
+                "left out of the page and of `total`; admins see every signal. `mine=true`: only "
+                "signals of my active strategies. "
                 "`time` is `bar_time` in unix seconds; a signal is actionable at the open of the "
                 "next bar.",
                 query=[("limit", "20", "1–100"), ("offset", "0", "")],
@@ -889,7 +893,9 @@ FOLDERS: list[Folder] = [
                 "A trade plan on the **last closed bar**: stop, targets, quantity, notional, "
                 "money at risk and R:R. Omitted `entry` / `stop` come from that bar (its close and "
                 "the stop rule); omitted `config` / `account_size` from your risk profile. A "
-                "`stop` price replaces the stop rule.",
+                "`stop` price replaces the stop rule. On an instrument with contract specs the "
+                "plan is sized in the account currency and adds `lots`, `lots_feasible`, "
+                "`lots_risk_amount`, `conversion_rate` and `sizing_warnings`.",
                 body={
                     "instrument_id": "{{instrument_id}}",
                     "timeframe": "{{timeframe}}",
@@ -928,7 +934,8 @@ FOLDERS: list[Folder] = [
                 "The trade plans of your live signals (one per signal and activation), newest "
                 "bar first, each with its `signal`. A plan with `invalid_reason` set (e.g. "
                 "`stop_unavailable`) should not be traded. Each plan carries `risk_source` "
-                "(`override`, `profile` or `default`) and the exact `risk_config` used.",
+                "(`override`, `profile` or `default`) and the exact `risk_config` used. Plans of "
+                "a strategy you may no longer use (made private by its author) are left out.",
                 query=[("limit", "20", "1–100"), ("offset", "0", "")],
                 optional_query=[
                     ("instrument_id", "{{instrument_id}}", ""),
@@ -1650,7 +1657,8 @@ FOLDERS: list[Folder] = [
                 "Revoke API key",
                 "DELETE",
                 "/me/api-keys/:key_id",
-                "Immediate and permanent. Requests with the key answer 401 afterwards.",
+                "Immediate and permanent. Requests with the key answer 401 afterwards, and open "
+                "WebSocket connections using it get `auth_revoked` and are closed with 4401.",
                 path_vars={"key_id": ("{{api_key_id}}", "API key UUID")},
                 expect=[204],
             ),
@@ -2923,7 +2931,14 @@ FOLDERS: list[Folder] = [
                         "POST",
                         "/admin/instruments",
                         "`symbol` + `source` are unique. `BASE/QUOTE` symbols derive "
-                        "`base_asset` / `quote_asset`; other symbols must send both.",
+                        "`base_asset` / `quote_asset`; other symbols must send both.\n\n"
+                        "Contract specs are optional (null = unknown): `contract_size` (units "
+                        "per lot), `tick_size`, `lot_step`, `min_lot`, `max_lot`, "
+                        "`quote_currency` (P&L currency, default `quote_asset`), `margin_rate` "
+                        "(0–1, 0.01 = 1:100), `price_basis` (`bid` | `mid` | `last`) and "
+                        "`session_calendar` (IANA `tz`, `week_open` / `week_close`, "
+                        "`daily_breaks`, `holidays`). Specs sent here get `spec_source` = "
+                        "`manual`.",
                         auth="admin",
                         body={
                             "symbol": "PM{{$timestamp}}/USDT",
@@ -2932,6 +2947,17 @@ FOLDERS: list[Folder] = [
                             "price_precision": 2,
                             "quantity_precision": 6,
                             "is_active": True,
+                            "contract_size": 1.0,
+                            "tick_size": 0.01,
+                            "lot_step": 0.000001,
+                            "min_lot": 0.000001,
+                            "max_lot": 1000.0,
+                            "price_basis": "last",
+                            "session_calendar": {
+                                "tz": "UTC",
+                                "daily_breaks": [{"start": "23:55", "end": "00:05"}],
+                                "holidays": [{"name": "Maintenance", "date": "2026-12-25"}],
+                            },
                         },
                         expect=[201],
                         captures={"admin_instrument_id": "id"},
@@ -2944,7 +2970,18 @@ FOLDERS: list[Folder] = [
                                     "source": "nasdaq",
                                     "market": "stock",
                                 },
-                            )
+                            ),
+                            Variant(
+                                "422 min_lot above max_lot",
+                                422,
+                                body={
+                                    "symbol": "PM{{$timestamp}}/USDT",
+                                    "source": "postman",
+                                    "market": "crypto",
+                                    "min_lot": 10,
+                                    "max_lot": 1,
+                                },
+                            ),
                         ],
                     ),
                     Req(
@@ -2952,8 +2989,10 @@ FOLDERS: list[Folder] = [
                         "Update instrument",
                         "PATCH",
                         "/admin/instruments/:instrument_id",
-                        "Precisions, assets and `is_active`. Here: deactivates the instrument "
-                        "created above (it disappears from charts and live feeds).",
+                        "Precisions, assets, `is_active` and the contract specs (see Create). "
+                        "Changing any spec sets `spec_source` to `manual`; send null to clear a "
+                        "spec. Here: sets a margin rate and deactivates the instrument created "
+                        "above (it disappears from charts and live feeds).",
                         auth="admin",
                         path_vars={
                             "instrument_id": (
@@ -2961,7 +3000,7 @@ FOLDERS: list[Folder] = [
                                 "Instrument UUID",
                             )
                         },
-                        body={"price_precision": 4, "is_active": False},
+                        body={"price_precision": 4, "margin_rate": 0.5, "is_active": False},
                     ),
                     Req(
                         "admin_candles_upsert",
@@ -2971,7 +3010,9 @@ FOLDERS: list[Folder] = [
                         "Bulk upsert of **1m** candles (max 5,000 per request). `ts` (alias "
                         "`time`) is the UTC minute start, ISO 8601 or unix seconds. Old batches "
                         "also refresh the higher-timeframe aggregates; recent candles are pushed "
-                        "to WebSocket subscribers.",
+                        "to WebSocket subscribers. Optional per candle: `spread` (price units), "
+                        "`source` (e.g. `fxpro_ctrader`, `binance`) and `received_at` (default: "
+                        "now).",
                         auth="admin",
                         path_vars={
                             "instrument_id": (
@@ -2989,6 +3030,8 @@ FOLDERS: list[Folder] = [
                                     "close": 101.2,
                                     "volume": 12.5,
                                     "trades": 41,
+                                    "spread": 0.02,
+                                    "source": "postman",
                                 },
                                 {
                                     "ts": "{{candle_ts_1}}",
@@ -3055,7 +3098,8 @@ FOLDERS: list[Folder] = [
                         "Revoke any API key",
                         "DELETE",
                         "/admin/api-keys/:key_id",
-                        "Revokes another user's key (e.g. a leaked one). Points at `api_key_id` "
+                        "Revokes another user's key (e.g. a leaked one); its open WebSocket "
+                        "connections are closed at once. Points at `api_key_id` "
                         "(the key created in **API Keys**, already revoked there), so running the "
                         "collection never revokes someone else's key by accident.",
                         auth="admin",
@@ -3319,7 +3363,10 @@ and use the URL and messages below. Full protocol: `docs/websocket.md`.
 ```
 
 Invalid/expired credentials: the server accepts, then closes with **4401**. Refresh the token \
-and reconnect.
+and reconnect. Open sockets are re-checked on every heartbeat and at once when the API key is \
+revoked (or loses `stream`) or the user is deactivated: `error` `auth_revoked` (message = the \
+reason), then **4401**. A topic the role or key scopes no longer allow is dropped with \
+`unsubscribed` + `reason: "forbidden"`.
 
 ### Client → server (JSON text frames, max 4 KB)
 
@@ -3339,8 +3386,9 @@ and reconnect.
 ```json
 {"type": "subscribed", "topic": "candles:<uuid>:1m"}
 {"type": "unsubscribed", "topic": "candles:<uuid>:1m"}
-{"type": "snapshot",   "topic": "candles:<uuid>:1m", "candle": {"time": 1760000000, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}}
-{"type": "candle",     "topic": "candles:<uuid>:1m", "instrument_id": "<uuid>", "timeframe": "1m", "candle": {"time": 1760000040, "open": 1.0, "high": 1.2, "low": 0.9, "close": 1.1, "volume": 3.5}, "sent_at": 1760000041234}
+{"type": "unsubscribed", "topic": "chat:<uuid>", "reason": "forbidden"}   # dropped by the server
+{"type": "snapshot",   "topic": "candles:<uuid>:1m", "candle": {"time": 1760000000, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0, "spread": 0.02}}
+{"type": "candle",     "topic": "candles:<uuid>:1m", "instrument_id": "<uuid>", "timeframe": "1m", "candle": {"time": 1760000040, "open": 1.0, "high": 1.2, "low": 0.9, "close": 1.1, "volume": 3.5, "spread": 0.02}, "sent_at": 1760000041234}
 {"type": "signal",     "topic": "signals:<uuid>", "signal": {"strategy_key": "rsi_reversal", "side": "buy", "time": 1760000000, "price": 61234.5, "...": "..."}}
 {"type": "news",       "topic": "news", "article": {"id": "<uuid>", "source": {"key": "coindesk_rss", "name": "CoinDesk"}, "title": "…", "url": "…", "sentiment": {"label": "positive", "score": 0.82}, "instruments": [{"instrument_id": "<uuid>", "symbol": "BTC/USDT", "relevance": 1.0}], "...": "..."}}
 {"type": "chat_message",         "topic": "chat:<uuid>", "conversation_id": "<uuid>", "message": {"id": "<uuid>", "sender_id": "<uuid>", "body": "…", "attachments": [], "client_id": "<uuid>", "edited_at": null, "deleted": false, "created_at": "…"}}
@@ -3350,7 +3398,13 @@ and reconnect.
 {"type": "pong"}
 {"type": "heartbeat"}
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
+{"type": "error", "code": "auth_revoked", "message": "API key revoked"}  # then close 4401
 ```
+
+A private custom strategy's signals reach only its owner and admins on `signals:<uuid>` (same \
+frame and topic); public and global strategies reach every subscriber.
+
+`spread` (price units) is only present on 1m candles that have one.
 
 Pushed to the user's own topic without subscribing: `notification` (every inbox item, see \
 the **Notifications** folder), `signal` (with `user_strategy_ids`, the user's trade `plan` and \
@@ -3374,7 +3428,7 @@ indicator after ~5 s without a new one.
 | Server heartbeat | every 25 s; send `{"op":"ping"}` every ~30 s |
 | Idle timeout | 75 s without a client frame → **1001** |
 | Slow consumer | > 256 undelivered messages → **1013** |
-| Bad / expired token or key | **4401** |
+| Bad / expired / revoked token or key, deactivated user | **4401** |
 | Connections | 5 per identity, 20 new per minute per IP → **4429** |
 
 Reconnect with exponential backoff (1 s → 30 s, with jitter) and send your `subscribe` ops \

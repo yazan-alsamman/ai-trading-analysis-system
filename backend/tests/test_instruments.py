@@ -164,3 +164,125 @@ async def test_get_instrument(client: AsyncClient, session: AsyncSession, trader
 async def test_public_market_endpoints_require_auth(client: AsyncClient) -> None:
     assert (await client.get(PUBLIC)).status_code == 401
     assert (await client.get(f"{PUBLIC}/{uuid.uuid4()}")).status_code == 401
+
+
+# --- contract specs (migration 0013) ----------------------------------------------------------
+
+GOLD_SPECS = {
+    "contract_size": 100,
+    "tick_size": 0.01,
+    "lot_step": 0.01,
+    "min_lot": 0.01,
+    "max_lot": 100,
+    "price_basis": "bid",
+    "margin_rate": 0.01,
+    "session_calendar": {
+        "tz": "America/New_York",
+        "week_open": {"day": "sun", "time": "18:00"},
+        "week_close": {"day": "fri", "time": "16:55"},
+        "daily_breaks": [{"start": "16:55", "end": "18:00"}],
+        "holidays": [{"name": "Christmas", "date": "2026-12-25"}],
+    },
+}
+
+
+async def test_specs_are_null_by_default(client: AsyncClient, admin_headers, trader_headers):
+    res = await client.post(
+        ADMIN,
+        json={"symbol": "ADA/USDT", "source": "binance", "market": "crypto"},
+        headers=admin_headers,
+    )
+    body = res.json()
+    assert body["quote_currency"] == "USDT"  # defaults to quote_asset
+    for name in ("contract_size", "lot_step", "session_calendar", "spec_source", "price_basis"):
+        assert body[name] is None
+    res = await client.get(f"{PUBLIC}/{body['id']}", headers=trader_headers)
+    assert res.json()["spec_updated_at"] is None
+
+
+async def test_create_with_specs_and_read(client: AsyncClient, admin_headers, trader_headers):
+    res = await client.post(
+        ADMIN,
+        json={"symbol": "XAU/USD", "source": "fxpro", "market": "commodity", **GOLD_SPECS},
+        headers=admin_headers,
+    )
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["spec_source"] == "manual" and body["spec_updated_at"]
+    res = await client.get(f"{PUBLIC}/{body['id']}", headers=trader_headers)
+    read = res.json()
+    for name, value in GOLD_SPECS.items():
+        if name != "session_calendar":
+            assert read[name] == value
+    assert read["session_calendar"]["holidays"] == [
+        {"name": "Christmas", "date": "2026-12-25", "start": None, "end": None}
+    ]
+    assert read["quote_currency"] == "USD"
+    listed = (await client.get(PUBLIC, params={"source": "fxpro"}, headers=trader_headers)).json()
+    assert listed["items"][0]["contract_size"] == 100
+
+
+async def test_admin_spec_edit_marks_manual(
+    client: AsyncClient, session: AsyncSession, admin_headers
+) -> None:
+    instrument = await make_instrument(
+        session,
+        "EUR/USD",
+        "twelvedata",
+        MarketType.forex,
+        contract_size=100_000.0,
+        lot_step=0.01,
+        min_lot=0.01,
+        max_lot=100.0,
+        spec_source="typical",
+    )
+    url = f"{ADMIN}/{instrument.id}"
+    # a non-spec change, and a spec "change" to the same value, keep the source
+    res = await client.patch(
+        url, json={"is_active": False, "lot_step": 0.01}, headers=admin_headers
+    )
+    assert res.json()["spec_source"] == "typical" and res.json()["spec_updated_at"] is None
+    res = await client.patch(url, json={"max_lot": 50}, headers=admin_headers)
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert (body["max_lot"], body["spec_source"]) == (50, "manual")
+    assert body["spec_updated_at"] is not None
+    # specs can be cleared
+    res = await client.patch(url, json={"max_lot": None}, headers=admin_headers)
+    assert res.json()["max_lot"] is None
+
+
+@pytest.mark.parametrize(
+    "specs",
+    [
+        {"contract_size": 0},
+        {"tick_size": -0.01},
+        {"lot_step": "inf"},
+        {"min_lot": 2, "max_lot": 1},
+        {"margin_rate": 0},
+        {"margin_rate": 1.5},
+        {"price_basis": "ask"},
+        {"quote_currency": ""},
+        {"session_calendar": {"tz": "Nowhere/City"}},
+        {"session_calendar": {"tz": "UTC", "week_open": {"day": "sun", "time": "18:00"}}},
+    ],
+)
+async def test_invalid_specs_422(
+    client: AsyncClient, session: AsyncSession, admin_headers, specs: dict
+) -> None:
+    payload = {"symbol": "XAU/USD", "source": "fxpro", "market": "commodity", **specs}
+    assert (await client.post(ADMIN, json=payload, headers=admin_headers)).status_code == 422
+    instrument = await make_instrument(session, "XAG/USD", "fxpro", MarketType.commodity)
+    res = await client.patch(f"{ADMIN}/{instrument.id}", json=specs, headers=admin_headers)
+    assert res.status_code == 422
+
+
+async def test_lot_range_checked_against_stored_values(
+    client: AsyncClient, session: AsyncSession, admin_headers
+) -> None:
+    instrument = await make_instrument(session, max_lot=10.0)
+    res = await client.patch(
+        f"{ADMIN}/{instrument.id}", json={"min_lot": 20}, headers=admin_headers
+    )
+    assert res.status_code == 422
+    assert "min_lot" in res.text
