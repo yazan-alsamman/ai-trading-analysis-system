@@ -46,7 +46,7 @@ collection or the committed file against the VPS.
 05 · Indicators                  Using an API key       19 · Admin
 06 · Strategies & Signals   12 · News                        Users · Market Data
 07 · Risk Management        13 · Community                   API Keys & Rate Limits
-                            14 · Price Alerts                News & Moderation
+                            14 · Price Alerts                AI Engine · News & Moderation
                                                              Subscriptions & Chat · Notifications
                                                         20 · Realtime (WebSocket)
 ```
@@ -71,7 +71,7 @@ through `--working-dir docs/postman`; in the Postman app, pick the file again in
 **Body → form-data** tab (or set Postman's working directory to this folder).
 
 On production, Register, Admin and the create requests write real data (the calendar import adds
-the sample's events): prefer Local for full runs.
+the sample's events, Activate AI model switches the active model): prefer Local for full runs.
 
 ## Updating after an API change
 
