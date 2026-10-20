@@ -144,7 +144,15 @@ async def _serve(
         receiver = asyncio.create_task(_receive_loop(client, hub, session_factory, auth))
         watchdog = asyncio.create_task(_watchdog(client, hub, auth, slot, session_factory))
         stop_wait = asyncio.create_task(client.stopped.wait())
-        await asyncio.wait({receiver, stop_wait}, return_when=asyncio.FIRST_COMPLETED)
+        await asyncio.wait({receiver, watchdog, stop_wait}, return_when=asyncio.FIRST_COMPLETED)
+        if watchdog.done() and not watchdog.cancelled() and watchdog.exception() is not None:
+            # without its watchdog a connection would never be re-checked, expire or time out
+            logger.error(
+                "WebSocket %s watchdog failed; closing",
+                client.id,
+                exc_info=watchdog.exception(),
+            )
+            client.close(1011, "internal error")
     except Exception:  # noqa: BLE001
         logger.exception("WebSocket connection %s failed", client.id)
         client.close(1011, "internal error")
@@ -280,26 +288,45 @@ async def _trim(
     if auth.scopes is not None and Scope.news_read.value not in auth.scopes:
         dropped += [t for t in client.topics if t == "news" or t.startswith("news:")]
     if is_admin != client.is_admin:
-        client.is_admin = is_admin
         chats = [t for t in client.topics if t.startswith("chat:")]
-        if chats and not is_admin:
-            async with session_factory() as session:
-                mine = set(
-                    await session.scalars(
-                        select(Conversation.id).where(
-                            or_(
-                                Conversation.user_id == client.user_id,
-                                Conversation.expert_id == client.user_id,
-                            )
-                        )
-                    )
-                )
-            dropped += [t for t in chats if uuid.UUID(t.split(":", 1)[1]) not in mine]
-        for topic in [t for t in client.topics if _is_signals(t)]:
-            await _sync_private_signals(client, hub, topic)
+        kept = await _own_chats(client, session_factory, chats) if chats and not is_admin else chats
+        if kept is not None:
+            dropped += [t for t in chats if t not in kept]
+            client.is_admin = is_admin
+            for topic in [t for t in client.topics if _is_signals(t)]:
+                await _sync_private_signals(client, hub, topic)
+        # kept is None: the database failed; is_admin stays as it was, so the next check (the
+        # heartbeat) applies the role change again
     for topic in dropped:
         await hub.unsubscribe(client, topic)
         client.send(protocol.unsubscribed(topic, reason="forbidden"))
+
+
+async def _own_chats(
+    client: Client, session_factory: async_sessionmaker[AsyncSession], chats: list[str]
+) -> list[str] | None:
+    """The chat topics of conversations the user takes part in; None on a database error
+    (logged, like a failed re-check: the connection stays and the next check retries)."""
+    try:
+        async with session_factory() as session:
+            mine = set(
+                await session.scalars(
+                    select(Conversation.id).where(
+                        or_(
+                            Conversation.user_id == client.user_id,
+                            Conversation.expert_id == client.user_id,
+                        )
+                    )
+                )
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Re-checking the chats of WebSocket %s failed (%s); next try at the heartbeat",
+            client.id,
+            type(exc).__name__,
+        )
+        return None
+    return [t for t in chats if uuid.UUID(t.split(":", 1)[1]) in mine]
 
 
 def _is_signals(topic: str) -> bool:
