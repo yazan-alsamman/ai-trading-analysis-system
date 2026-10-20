@@ -1,0 +1,998 @@
+openapi: 3.1.0
+info:
+  title: ai-service (stateless trading engine)
+  version: 0.1.0-draft
+  description: "The stateless trading engine (ai-service, owned by Fadi). The backend owns the data,\n\
+    the schedule, the storage and the delivery; ai-service decides setups and their states.\n\n**Draft**:\
+    \ this contract is not final until Fadi approves it. The open points are listed in\ndocs/ai-contract.md.\
+    \ Generated from backend/app/ai/contract.py by\nbackend/scripts/ai_contract.py (do not edit by hand).\n\
+    \n- Every timestamp is UTC, ISO-8601 with `Z`. Every bar is closed; `ts` is its open time.\n- `request_id`\
+    \ is deterministic (`{instrument lower}-{profile}-{bar_close_ts}`): the same\n  request gives the\
+    \ same result, and a retry always sends the same body.\n- `setup_id` is deterministic and chosen by\
+    \ ai-service; `open_setups` echoes setups exactly as\n  last returned.\n- Responses may carry fields\
+    \ this document does not list (the backend ignores them).\n- 422: the request does not match the contract\
+    \ (never retried). 5xx, timeouts and connection\n  errors are retried by the backend with the same\
+    \ body.\n"
+servers:
+- url: http://ai-service:8001
+  description: inside the compose network
+paths:
+  /v1/evaluate:
+    post:
+      operationId: evaluate
+      summary: 'Evaluate the bar that just closed: new setups, transitions, abstentions'
+      parameters:
+      - &id001
+        name: X-Request-ID
+        in: header
+        required: false
+        description: 'evaluate: the request_id; size/explain: the setup_id (for logs)'
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateRequest'
+            examples:
+              intraday:
+                value:
+                  request_id: xauusd-intraday-2026-10-19T14:15:00Z
+                  instrument: XAUUSD
+                  profile: intraday
+                  bar_close_ts: '2026-10-19T14:15:00Z'
+                  bars:
+                    15m:
+                    - ts: '2026-10-19T13:30:00Z'
+                      o: 2397.1
+                      h: 2399.4
+                      l: 2396.2
+                      c: 2398.9
+                      spread: 0.25
+                    - ts: '2026-10-19T13:45:00Z'
+                      o: 2398.9
+                      h: 2400.8
+                      l: 2398.1
+                      c: 2400.3
+                      spread: 0.24
+                    - ts: '2026-10-19T14:00:00Z'
+                      o: 2400.3
+                      h: 2401.6
+                      l: 2399.7
+                      c: 2400.95
+                      spread: 0.26
+                    1h:
+                    - ts: '2026-10-19T12:00:00Z'
+                      o: 2392.4
+                      h: 2397.8
+                      l: 2391.6
+                      c: 2397.3
+                      spread: 0.25
+                    - ts: '2026-10-19T13:00:00Z'
+                      o: 2397.3
+                      h: 2400.8
+                      l: 2395.9
+                      c: 2400.3
+                      spread: 0.25
+                    4h:
+                    - ts: '2026-10-19T04:00:00Z'
+                      o: 2381.2
+                      h: 2389.7
+                      l: 2379.4
+                      c: 2388.6
+                      spread: 0.27
+                    - ts: '2026-10-19T08:00:00Z'
+                      o: 2388.6
+                      h: 2394.1
+                      l: 2386.3
+                      c: 2392.4
+                      spread: null
+                  open_setups:
+                  - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                    state: ACTIVE
+                    direction: buy
+                    entry: 2390.0
+                    sl: 2386.0
+                    tp: 2398.0
+                    r_multiple: 2.0
+                    probability: 0.55
+                    ev_r: 0.65
+                    ev_r_lower: 0.2
+                    grade: B
+                    valid_until: '2026-10-19T10:30:00Z'
+                    horizon_until: '2026-10-19T17:30:00Z'
+                    evidence:
+                      trend_4h: up
+                      pullback_to: ema50_1h
+                    features:
+                      atr_15m: 2.1
+                      rsi_15m: 41.3
+                  calendar:
+                  - ts: '2026-10-19T17:00:00Z'
+                    currency: USD
+                    impact: high
+                    title: Fed Chair Powell Speaks
+                  - ts: '2026-10-19T18:30:00Z'
+                    currency: USD
+                    impact: medium
+                    title: FOMC Member Waller Speaks
+                  instrument_spec:
+                    contract_size: 100
+                    tick_size: 0.01
+                    lot_step: 0.01
+                    min_lot: 0.01
+                    max_lot: 100
+                    price_basis: bid
+                    session_calendar:
+                      tz: America/New_York
+                      week_open:
+                        day: sun
+                        time: '18:00'
+                      week_close:
+                        day: fri
+                        time: '16:55'
+                      daily_breaks:
+                      - start: '16:55'
+                        end: '18:00'
+                      holidays: []
+                    quote_currency: USD
+                    margin_rate: null
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluateResponse'
+              examples:
+                ok:
+                  value:
+                    request_id: xauusd-intraday-2026-10-19T14:15:00Z
+                    status: ok
+                    versions:
+                      strategy: xau-intraday-1.0.0
+                      model: lgbm-2026-10-01
+                      features: f-3
+                    new_setups:
+                    - setup_id: xauusd-intraday-2026-10-19T14:15:00Z-buy
+                      state: ARMED
+                      direction: buy
+                      entry: 2400.0
+                      sl: 2395.0
+                      tp: 2410.0
+                      r_multiple: 2.0
+                      probability: 0.58
+                      ev_r: 0.74
+                      ev_r_lower: 0.31
+                      grade: B
+                      valid_until: '2026-10-19T15:15:00Z'
+                      horizon_until: '2026-10-19T20:15:00Z'
+                      evidence:
+                        trend_4h: up
+                        breakout: range_high_1h
+                        news_clear_minutes: 165
+                      features:
+                        atr_15m: 2.4
+                        rsi_15m: 58.2
+                        spread_pts: 26
+                    transitions:
+                    - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                      from: ACTIVE
+                      to: CLOSED
+                      at: '2026-10-19T14:07:00Z'
+                      reason: tp_hit
+                      realized_r: 2.0
+                    abstentions:
+                    - reason: weak_edge
+                      detail: 'sell side: ev_r_lower -0.12 below 0'
+                model_unavailable:
+                  value:
+                    request_id: xauusd-intraday-2026-10-19T14:15:00Z
+                    status: model_unavailable
+                    versions:
+                      strategy: xau-intraday-1.0.0
+                      model: null
+                      features: f-3
+                    new_setups: []
+                    transitions: []
+                    abstentions:
+                    - reason: model_unavailable
+                      detail: no model is loaded
+        '422': &id002
+          description: The request does not match the contract (FastAPI style; never retried)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        5XX: &id003
+          description: 'Server error: the backend retries with the same body'
+  /v1/size:
+    post:
+      operationId: size
+      summary: Position size of a setup for one account
+      parameters:
+      - *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SizeRequest'
+            examples:
+              xauusd:
+                value:
+                  setup:
+                    setup_id: xauusd-intraday-2026-10-19T14:15:00Z-buy
+                    state: ARMED
+                    direction: buy
+                    entry: 2400.0
+                    sl: 2395.0
+                    tp: 2410.0
+                    r_multiple: 2.0
+                    probability: 0.58
+                    ev_r: 0.74
+                    ev_r_lower: 0.31
+                    grade: B
+                    valid_until: '2026-10-19T15:15:00Z'
+                    horizon_until: '2026-10-19T20:15:00Z'
+                    evidence:
+                      trend_4h: up
+                      breakout: range_high_1h
+                      news_clear_minutes: 165
+                    features:
+                      atr_15m: 2.4
+                      rsi_15m: 58.2
+                      spread_pts: 26
+                  instrument_spec:
+                    contract_size: 100
+                    tick_size: 0.01
+                    lot_step: 0.01
+                    min_lot: 0.01
+                    max_lot: 100
+                    price_basis: bid
+                    session_calendar: null
+                    quote_currency: USD
+                    margin_rate: null
+                  account:
+                    balance: 2000.0
+                    currency: USD
+                    leverage: 100
+                  risk:
+                    risk_per_trade_pct: 1.0
+                    daily_loss_limit_pct: 3.0
+                    max_drawdown_pct: 10.0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SizeResponse'
+              examples:
+                xauusd:
+                  value:
+                    lots: 0.04
+                    risk_usd: 20.0
+                    margin_required: 96.0
+                    feasible: true
+                    warnings: []
+        '422': *id002
+        5XX: *id003
+  /v1/explain:
+    post:
+      operationId: explain
+      summary: Explain a setup in Arabic or English
+      parameters:
+      - *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExplainRequest'
+            examples:
+              arabic:
+                value:
+                  setup:
+                    setup_id: xauusd-intraday-2026-10-19T14:15:00Z-buy
+                    state: ARMED
+                    direction: buy
+                    entry: 2400.0
+                    sl: 2395.0
+                    tp: 2410.0
+                    r_multiple: 2.0
+                    probability: 0.58
+                    ev_r: 0.74
+                    ev_r_lower: 0.31
+                    grade: B
+                    valid_until: '2026-10-19T15:15:00Z'
+                    horizon_until: '2026-10-19T20:15:00Z'
+                    evidence:
+                      trend_4h: up
+                      breakout: range_high_1h
+                      news_clear_minutes: 165
+                    features:
+                      atr_15m: 2.4
+                      rsi_15m: 58.2
+                      spread_pts: 26
+                  lang: ar
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplainResponse'
+              examples:
+                arabic:
+                  value:
+                    text: 'إعداد شراء على الذهب (XAU/USD) بتقييم B: الدخول عند 2400.00، وقف الخسارة 2395.00،
+                      والهدف 2410.00 (عائد 2R). الاتجاه على فريم 4 ساعات صاعد والسعر اخترق أعلى نطاق الساعة.
+                      احتمال بلوغ الهدف أولاً 58% والقيمة المتوقعة 0.74R. الإعداد صالح حتى 15:15 بتوقيت
+                      UTC، ولا أخبار عالية التأثير قبل 17:00.'
+                    verified: true
+                    template_used: false
+        '422': *id002
+        5XX: *id003
+  /health:
+    get:
+      operationId: health
+      summary: Liveness, with the loaded versions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  schemas:
+    Abstention:
+      properties:
+        reason:
+          examples:
+          - high_impact_event
+          maxLength: 64
+          title: Reason
+          type: string
+        detail:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          title: Detail
+      required:
+      - reason
+      title: Abstention
+      type: object
+    Account:
+      additionalProperties: false
+      properties:
+        balance:
+          exclusiveMinimum: 0
+          title: Balance
+          type: number
+        currency:
+          examples:
+          - USD
+          pattern: ^[A-Z0-9]{2,16}$
+          title: Currency
+          type: string
+        leverage:
+          exclusiveMinimum: 0
+          maximum: 10000
+          title: Leverage
+          type: number
+      required:
+      - balance
+      - currency
+      - leverage
+      title: Account
+      type: object
+    Bar:
+      additionalProperties: false
+      description: One **closed** bar. ``ts`` is the bar's open time (UTC); it closes at ``ts`` + timeframe.
+      properties:
+        ts:
+          format: date-time
+          title: Ts
+          type: string
+        o:
+          exclusiveMinimum: 0
+          title: O
+          type: number
+        h:
+          exclusiveMinimum: 0
+          title: H
+          type: number
+        l:
+          exclusiveMinimum: 0
+          title: L
+          type: number
+        c:
+          exclusiveMinimum: 0
+          title: C
+          type: number
+        spread:
+          anyOf:
+          - minimum: 0
+            type: number
+          - type: 'null'
+          default: null
+          description: average spread over the bar, in price units (XAU/USD 0.25)
+          title: Spread
+      required:
+      - ts
+      - o
+      - h
+      - l
+      - c
+      title: Bar
+      type: object
+    CalendarEvent:
+      additionalProperties: false
+      description: An economic-calendar event (B6 ``for_evaluate``).
+      properties:
+        ts:
+          format: date-time
+          title: Ts
+          type: string
+        currency:
+          examples:
+          - USD
+          pattern: ^[A-Z]{2,8}$
+          title: Currency
+          type: string
+        impact:
+          enum:
+          - high
+          - medium
+          - low
+          - holiday
+          title: Impact
+          type: string
+        title:
+          maxLength: 255
+          minLength: 1
+          title: Title
+          type: string
+      required:
+      - ts
+      - currency
+      - impact
+      - title
+      title: CalendarEvent
+      type: object
+    Direction:
+      enum:
+      - buy
+      - sell
+      title: Direction
+      type: string
+    ErrorItem:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          title: Loc
+          type: array
+        msg:
+          title: Msg
+          type: string
+        type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Type
+      required:
+      - msg
+      title: ErrorItem
+      type: object
+    ErrorResponse:
+      description: 422 (FastAPI style).
+      properties:
+        detail:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ErrorItem'
+            type: array
+          - type: string
+          title: Detail
+      required:
+      - detail
+      title: ErrorResponse
+      type: object
+    EvaluateRequest:
+      additionalProperties: false
+      description: 'Evaluate the bar that closed at ``bar_close_ts``. Every bar is closed; the smallest
+
+        timeframe ends exactly at ``bar_close_ts`` (its last bar is the one just closed).'
+      properties:
+        request_id:
+          description: 'deterministic: {instrument lower}-{profile}-{bar_close_ts}'
+          examples:
+          - xauusd-intraday-2026-10-19T14:15:00Z
+          maxLength: 160
+          title: Request Id
+          type: string
+        instrument:
+          examples:
+          - XAUUSD
+          pattern: ^[A-Z0-9]{3,16}$
+          title: Instrument
+          type: string
+        profile:
+          examples:
+          - intraday
+          pattern: ^[a-z0-9_]{1,32}$
+          title: Profile
+          type: string
+        bar_close_ts:
+          format: date-time
+          title: Bar Close Ts
+          type: string
+        bars:
+          additionalProperties:
+            items:
+              $ref: '#/components/schemas/Bar'
+            maxItems: 5000
+            minItems: 1
+            type: array
+          description: 'timeframe -> bars, oldest first (defaults: 500 x 15m, 500 x 1h, 300 x 4h)'
+          propertyNames:
+            enum:
+            - 1m
+            - 5m
+            - 15m
+            - 30m
+            - 1h
+            - 4h
+            - 1d
+          title: Bars
+          type: object
+        open_setups:
+          description: every non-final setup of this instrument and profile, exactly as last returned
+          items:
+            $ref: '#/components/schemas/Setup'
+          maxItems: 200
+          title: Open Setups
+          type: array
+        calendar:
+          items:
+            $ref: '#/components/schemas/CalendarEvent'
+          maxItems: 500
+          title: Calendar
+          type: array
+        instrument_spec:
+          $ref: '#/components/schemas/InstrumentSpec'
+      required:
+      - request_id
+      - instrument
+      - profile
+      - bar_close_ts
+      - bars
+      - instrument_spec
+      title: EvaluateRequest
+      type: object
+    EvaluateResponse:
+      properties:
+        request_id:
+          title: Request Id
+          type: string
+        status:
+          $ref: '#/components/schemas/EvaluateStatus'
+        versions:
+          $ref: '#/components/schemas/Versions'
+        new_setups:
+          items:
+            $ref: '#/components/schemas/Setup'
+          title: New Setups
+          type: array
+        transitions:
+          items:
+            $ref: '#/components/schemas/Transition'
+          title: Transitions
+          type: array
+        abstentions:
+          items:
+            $ref: '#/components/schemas/Abstention'
+          title: Abstentions
+          type: array
+      required:
+      - request_id
+      - status
+      - versions
+      title: EvaluateResponse
+      type: object
+    EvaluateStatus:
+      enum:
+      - ok
+      - data_quality_failed
+      - model_unavailable
+      title: EvaluateStatus
+      type: string
+    ExplainRequest:
+      additionalProperties: false
+      properties:
+        setup:
+          $ref: '#/components/schemas/Setup'
+        lang:
+          enum:
+          - ar
+          - en
+          title: Lang
+          type: string
+      required:
+      - setup
+      - lang
+      title: ExplainRequest
+      type: object
+    ExplainResponse:
+      properties:
+        text:
+          minLength: 1
+          title: Text
+          type: string
+        verified:
+          description: the text was checked against the setup's numbers
+          title: Verified
+          type: boolean
+        template_used:
+          description: 'proposal: true when a fixed template was used'
+          title: Template Used
+          type: boolean
+      required:
+      - text
+      - verified
+      - template_used
+      title: ExplainResponse
+      type: object
+    Grade:
+      description: 'Proposal (to agree with Fadi): A best .. D worst.'
+      enum:
+      - A
+      - B
+      - C
+      - D
+      title: Grade
+      type: string
+    Health:
+      properties:
+        status:
+          const: ok
+          title: Status
+          type: string
+        versions:
+          anyOf:
+          - $ref: '#/components/schemas/Versions'
+          - type: 'null'
+          default: null
+      required:
+      - status
+      title: Health
+      type: object
+    InstrumentSpec:
+      additionalProperties: false
+      description: 'Contract specs (B4, docs/instruments.md). Proposal: sent with every evaluate so prices
+
+        can be rounded to ``tick_size``, and with every size request.'
+      properties:
+        contract_size:
+          description: 'units per 1.0 lot (XAU/USD: 100 oz)'
+          exclusiveMinimum: 0
+          title: Contract Size
+          type: number
+        tick_size:
+          description: 'minimum price increment (XAU/USD: 0.01)'
+          exclusiveMinimum: 0
+          title: Tick Size
+          type: number
+        lot_step:
+          exclusiveMinimum: 0
+          title: Lot Step
+          type: number
+        min_lot:
+          exclusiveMinimum: 0
+          title: Min Lot
+          type: number
+        max_lot:
+          exclusiveMinimum: 0
+          title: Max Lot
+          type: number
+        price_basis:
+          description: the price the bars use
+          enum:
+          - bid
+          - mid
+          - last
+          title: Price Basis
+          type: string
+        session_calendar:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: 'when the market trades (docs/instruments.md#session-calendar); null: 24/7'
+          title: Session Calendar
+        quote_currency:
+          anyOf:
+          - pattern: ^[A-Z0-9]{2,16}$
+            type: string
+          - type: 'null'
+          default: null
+          description: 'proposal: currency of the P&L per price unit (XAU/USD: USD)'
+          title: Quote Currency
+        margin_rate:
+          anyOf:
+          - exclusiveMinimum: 0
+            maximum: 1
+            type: number
+          - type: 'null'
+          default: null
+          description: 'proposal: margin fraction of notional at 1:1; null = leverage'
+          title: Margin Rate
+      required:
+      - contract_size
+      - tick_size
+      - lot_step
+      - min_lot
+      - max_lot
+      - price_basis
+      title: InstrumentSpec
+      type: object
+    RiskSettings:
+      additionalProperties: false
+      properties:
+        risk_per_trade_pct:
+          exclusiveMinimum: 0
+          maximum: 100
+          title: Risk Per Trade Pct
+          type: number
+        daily_loss_limit_pct:
+          exclusiveMinimum: 0
+          maximum: 100
+          title: Daily Loss Limit Pct
+          type: number
+        max_drawdown_pct:
+          exclusiveMinimum: 0
+          maximum: 100
+          title: Max Drawdown Pct
+          type: number
+      required:
+      - risk_per_trade_pct
+      - daily_loss_limit_pct
+      - max_drawdown_pct
+      title: RiskSettings
+      type: object
+    Setup:
+      additionalProperties: true
+      description: 'A trade setup as ai-service returns it. ``setup_id`` is deterministic (ai-service).
+
+
+        Unknown fields are kept, and a setup parsed from JSON serialises back to that exact JSON,
+
+        so ``open_setups`` echoes it unchanged. In ``ARMED`` and ``ACTIVE``, ``entry``, ``sl`` and
+
+        ``tp`` are required and on the right side: buy ``sl < entry < tp``, sell ``tp < entry < sl``.'
+      properties:
+        setup_id:
+          maxLength: 128
+          minLength: 1
+          title: Setup Id
+          type: string
+        state:
+          $ref: '#/components/schemas/SetupState'
+        direction:
+          $ref: '#/components/schemas/Direction'
+        entry:
+          anyOf:
+          - exclusiveMinimum: 0
+            type: number
+          - type: 'null'
+          default: null
+          title: Entry
+        sl:
+          anyOf:
+          - exclusiveMinimum: 0
+            type: number
+          - type: 'null'
+          default: null
+          title: Sl
+        tp:
+          anyOf:
+          - exclusiveMinimum: 0
+            type: number
+          - type: 'null'
+          default: null
+          title: Tp
+        r_multiple:
+          anyOf:
+          - type: number
+          - type: 'null'
+          default: null
+          description: reward / risk at entry
+          title: R Multiple
+        probability:
+          anyOf:
+          - maximum: 1
+            minimum: 0
+            type: number
+          - type: 'null'
+          default: null
+          description: of reaching tp first
+          title: Probability
+        ev_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          default: null
+          description: expected value in R
+          title: Ev R
+        ev_r_lower:
+          anyOf:
+          - type: number
+          - type: 'null'
+          default: null
+          description: lower bound of ev_r
+          title: Ev R Lower
+        grade:
+          anyOf:
+          - $ref: '#/components/schemas/Grade'
+          - type: 'null'
+          default: null
+        valid_until:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          default: null
+          description: entry no longer valid
+          title: Valid Until
+        horizon_until:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          default: null
+          description: trade horizon end
+          title: Horizon Until
+        evidence:
+          additionalProperties: true
+          title: Evidence
+          type: object
+        features:
+          additionalProperties: true
+          title: Features
+          type: object
+      required:
+      - setup_id
+      - state
+      - direction
+      title: Setup
+      type: object
+    SetupState:
+      enum:
+      - DEVELOPING
+      - ARMED
+      - ACTIVE
+      - CLOSED
+      - EXPIRED
+      - INVALIDATED
+      title: SetupState
+      type: string
+    SizeRequest:
+      additionalProperties: false
+      properties:
+        setup:
+          $ref: '#/components/schemas/Setup'
+        instrument_spec:
+          $ref: '#/components/schemas/InstrumentSpec'
+        account:
+          $ref: '#/components/schemas/Account'
+        risk:
+          $ref: '#/components/schemas/RiskSettings'
+      required:
+      - setup
+      - instrument_spec
+      - account
+      - risk
+      title: SizeRequest
+      type: object
+    SizeResponse:
+      properties:
+        lots:
+          minimum: 0
+          title: Lots
+          type: number
+        risk_usd:
+          minimum: 0
+          title: Risk Usd
+          type: number
+        margin_required:
+          anyOf:
+          - minimum: 0
+            type: number
+          - type: 'null'
+          default: null
+          title: Margin Required
+        feasible:
+          title: Feasible
+          type: boolean
+        warnings:
+          items:
+            type: string
+          title: Warnings
+          type: array
+      required:
+      - lots
+      - risk_usd
+      - feasible
+      title: SizeResponse
+      type: object
+    Transition:
+      description: A state change of an existing setup, decided by ai-service.
+      properties:
+        setup_id:
+          maxLength: 128
+          minLength: 1
+          title: Setup Id
+          type: string
+        from:
+          $ref: '#/components/schemas/SetupState'
+        to:
+          $ref: '#/components/schemas/SetupState'
+        at:
+          format: date-time
+          title: At
+          type: string
+        reason:
+          anyOf:
+          - maxLength: 255
+            type: string
+          - type: 'null'
+          default: null
+          title: Reason
+        realized_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          default: null
+          description: set when it closes
+          title: Realized R
+      required:
+      - setup_id
+      - from
+      - to
+      - at
+      title: Transition
+      type: object
+    Versions:
+      properties:
+        strategy:
+          maxLength: 64
+          title: Strategy
+          type: string
+        model:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          default: null
+          description: 'null: no model loaded'
+          title: Model
+        features:
+          maxLength: 64
+          title: Features
+          type: string
+      required:
+      - strategy
+      - features
+      title: Versions
+      type: object

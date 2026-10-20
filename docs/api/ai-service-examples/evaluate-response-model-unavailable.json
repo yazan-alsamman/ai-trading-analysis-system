@@ -1,0 +1,10 @@
+{
+  "request_id": "xauusd-intraday-2026-10-19T14:15:00Z",
+  "status": "model_unavailable",
+  "versions": {"strategy": "xau-intraday-1.0.0", "model": null, "features": "f-3"},
+  "new_setups": [],
+  "transitions": [],
+  "abstentions": [
+    {"reason": "model_unavailable", "detail": "no model is loaded"}
+  ]
+}

@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     first_admin_email: str | None = None
     first_admin_password: str | None = None
     ai_service_url: str = "http://localhost:8001"
+    # ai-service client (B7, docs/ai-contract.md): per-attempt timeouts, retries on timeouts,
+    # connection errors and 5xx (same body and request_id), bars sent per timeframe
+    ai_evaluate_timeout_seconds: float = 10.0
+    ai_size_timeout_seconds: float = 5.0
+    ai_explain_timeout_seconds: float = 30.0
+    ai_max_retries: int = 2
+    ai_bars_15m: int = 500
+    ai_bars_1h: int = 500
+    ai_bars_4h: int = 300
     # WebSocket hub (/ws/market)
     ws_heartbeat_seconds: float = 25
     ws_idle_timeout_seconds: float = 75
@@ -208,6 +217,11 @@ class Settings(BaseSettings):
                 if pair not in out:
                     out.append(pair)
         return out
+
+    @property
+    def ai_bar_counts(self) -> dict[str, int]:
+        """Bars per timeframe in an evaluate request, oldest first."""
+        return {"15m": self.ai_bars_15m, "1h": self.ai_bars_1h, "4h": self.ai_bars_4h}
 
     @property
     def calendar_currency_list(self) -> list[str]:

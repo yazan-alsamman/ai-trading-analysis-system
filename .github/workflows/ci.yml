@@ -176,6 +176,16 @@ jobs:
           java-version: "17"
       - name: Validate the AsyncAPI document
         run: npx -y @asyncapi/cli@2.16.0 validate docs/api/asyncapi.yaml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ai-service contract (draft) is up to date and parses
+        # app/ai/contract.py needs only pydantic; the examples are embedded in the document
+        run: |
+          pip install "pydantic>=2.11" pyyaml
+          python backend/scripts/ai_contract.py --check
+          npx -y openapi-typescript@7.4.4 docs/api/ai-service.openapi.yaml -o /tmp/ts/ai-service.d.ts
+          wc -l /tmp/ts/ai-service.d.ts
       - name: TypeScript client (openapi-typescript)
         run: |
           npx -y openapi-typescript@7.4.4 docs/api/openapi.json -o /tmp/ts/schema.d.ts
