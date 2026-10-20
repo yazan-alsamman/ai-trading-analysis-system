@@ -5,6 +5,7 @@ from app.models.backtest import Backtest, BacktestStatus, BacktestTrade
 from app.models.candle import Candle, Timeframe
 from app.models.chat import Conversation, ConversationStatus, Message
 from app.models.custom_strategy import CustomStrategy, CustomStrategyKind, Visibility
+from app.models.economic_event import EconomicEvent, EventImpact, EventSource
 from app.models.expert import (
     CheckoutSession,
     CheckoutStatus,
@@ -108,6 +109,9 @@ __all__ = [
     "Candle",
     "CustomStrategy",
     "CustomStrategyKind",
+    "EconomicEvent",
+    "EventImpact",
+    "EventSource",
     "Instrument",
     "MarketType",
     "RefreshToken",

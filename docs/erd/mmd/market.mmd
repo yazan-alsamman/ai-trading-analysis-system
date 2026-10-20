@@ -68,6 +68,25 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    economic_events {
+        uuid id PK
+        varchar event_key
+        varchar source
+        varchar currency
+        varchar title
+        varchar impact
+        timestamptz scheduled_at
+        date scheduled_date
+        varchar time_label
+        varchar actual
+        varchar forecast
+        varchar previous
+        double actual_value
+        double forecast_value
+        double previous_value
+        timestamptz fetched_at
+        varchar content_hash
+    }
     users
     candles_1m }o--|| instruments : "instrument_id"
     price_alerts }o--|| instruments : "instrument_id"

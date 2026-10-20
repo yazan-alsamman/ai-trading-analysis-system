@@ -30,6 +30,8 @@ os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["RATE_LIMIT_KEY_PREFIX"] = "test-rl"
 # The seeded public RSS feeds are never fetched in tests (fixture feeds are used instead).
 os.environ["NEWS_RSS_ENABLED"] = "false"
+# Nor the ForexFactory calendar (tests enable it with a mock transport).
+os.environ["CALENDAR_ENABLED"] = "false"
 
 import asyncpg  # noqa: E402
 import pytest  # noqa: E402

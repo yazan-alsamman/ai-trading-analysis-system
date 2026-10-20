@@ -57,7 +57,7 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
     (
         "market",
         "Market data, signals and price alerts",
-        ["instruments", "candles_1m", "signals", "price_alerts"],
+        ["instruments", "candles_1m", "signals", "price_alerts", "economic_events"],
     ),
     (
         "strategies",

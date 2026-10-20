@@ -237,6 +237,44 @@ A user's alert on an instrument's price, checked on every closed 1m bar.
 - `ix_price_alerts_active_instrument` (price_alerts.instrument_id) WHERE `is_active`
 - `ix_price_alerts_user_created` (price_alerts.user_id, created_at DESC)
 
+### `economic_events`
+
+A version of an economic-calendar event as it was known at ``fetched_at``. Revisions (time moved, actual released, impact changed) are new rows with the same ``event_key``; the newest row with ``fetched_at <= T`` is what was known at T (point in time).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` | PK |
+| `event_key` | varchar(64) | no |  |  |
+| `source` | varchar(32) | no |  |  |
+| `currency` | varchar(8) | no |  |  |
+| `title` | varchar(255) | no |  |  |
+| `impact` | varchar(8) | no |  |  |
+| `scheduled_at` | timestamp with time zone | yes |  |  |
+| `scheduled_date` | date | no |  |  |
+| `time_label` | varchar(32) | yes |  |  |
+| `actual` | varchar(32) | yes |  |  |
+| `forecast` | varchar(32) | yes |  |  |
+| `previous` | varchar(32) | yes |  |  |
+| `actual_value` | double precision | yes |  |  |
+| `forecast_value` | double precision | yes |  |  |
+| `previous_value` | double precision | yes |  |  |
+| `fetched_at` | timestamp with time zone | no |  |  |
+| `content_hash` | varchar(64) | no |  |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- CHECK `ck_economic_events_currency`: `currency = upper(currency)`
+- CHECK `ck_economic_events_impact`: `impact IN ('high', 'medium', 'low', 'holiday')`
+- CHECK `ck_economic_events_source`: `source IN ('forexfactory_live', 'forexfactory_kaggle', 'manual')`
+- UNIQUE `uq_economic_events_key_hash` (event_key, content_hash)
+
+**Indexes**
+
+- `ix_economic_events_currency_impact` (economic_events.currency, economic_events.impact, economic_events.scheduled_at)
+- `ix_economic_events_key_fetched` (economic_events.event_key, fetched_at DESC)
+- `ix_economic_events_scheduled` (economic_events.scheduled_at)
+
 ## Strategies, backtests and risk
 
 ### `user_strategies`
