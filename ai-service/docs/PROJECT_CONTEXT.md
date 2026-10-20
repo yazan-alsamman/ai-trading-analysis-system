@@ -432,9 +432,8 @@ Still open:
 8. ~~**Phase 3 sample size (443 labels vs about 1,000):**~~ Answered on 2026-10-19: proceed with
    low-capacity models and a documented power limit.
 9. ~~**Approve Phase 3 protocol v1?**~~ Approved on 2026-10-20 and run once; the gate failed.
-10. **After the negative Phase 3 result:** write it up as the project's finding and build the
-    product honestly around it (the signal layer abstains: NO TRADE, `ev_insufficient`), or try a
-    new, logged research direction?
+10. ~~**After the negative Phase 3 result?**~~ Answered on 2026-10-20 (decision 10): adopt the
+    finding, abstain by default, continue Phase 4 without claiming an edge.
 
 ## Experiments log
 
@@ -672,6 +671,47 @@ not met.** Report: [phase3/walkforward.md](phase3/walkforward.md).
   - Low-capacity models on 21 setup and context features cannot find a profitable subset.
   - With 443 labels, only a large effect could have been detected.
 - **Open decision (Fadi):** what next. See Open questions.
+
+**Robustness checks, 2026-10-20** ([phase3/robustness.md](phase3/robustness.md); run after the
+walk-forward, changes no result). Fadi asked for three conditions before the conclusion is
+written:
+- **Time dependence:**
+  - Only 1.6% of the 252 out-of-sample trades overlap another in time.
+  - A cluster bootstrap that resamples whole weeks (187) or months (77) gives the rules' mean net
+    R a CI of −0.45 to −0.12 for both, as with the per-trade bootstrap (−0.45 to −0.11).
+  - The models' Brier-skill and EV-filter CIs still span zero.
+- **Leakage:**
+  - In all 7 windows, every training row closed at least a day before the window opened.
+  - The EV decision uses the probability, the planned R and the cost in R. All are fixed at the
+    CHoCH close.
+- **Costs:**
+  - `CostParams` defaults throughout, and net R = realized R − round-trip cost for every row.
+  - The 2× stress doubles the round-trip cost but not the $0.10 stop slippage.
+- **Correction to the figures quoted in the decision text:** AUC was 0.59 (logistic) and 0.60
+  (GBM), not 0.51–0.55.
+
+**Decision 10, 2026-10-20 (Fadi): the negative result is adopted; no trading edge is claimed.**
+- **Research finding, as written:**
+  > On XAUUSD 5m, the Sweep → CHoCH → FVG rules showed no provable trading edge after costs in
+  > a walk-forward evaluation over 2018 to mid-2024. Mean net return was negative, and neither
+  > the probability models nor the EV filter showed a reliable improvement. Signals for this
+  > setup are therefore off by default, the results are kept as a research record, no
+  > profitability is claimed, and the lockbox is not opened. Any change of strategy or timeframe
+  > is a new research experiment that needs its own evaluation.
+- **Scope of the claim:**
+  - It holds for these rules, this market, this timeframe, this period and these costs.
+  - It does not show that every SMC strategy loses.
+- **What follows:**
+
+  | Component | Decision |
+  | --- | --- |
+  | Research finding | Recorded as is, with the 7 rule attempts and the earlier reviews |
+  | Signals by default | Abstain: `NO TRADE`, reason `ev_insufficient` |
+  | Historical statistics | Shown as this setup's history, not as an estimate of future profit |
+  | Phase 4 | Serving, assistant and risk engine go ahead, with no claim of an unproven edge |
+  | Next research | A new, independent track with its own evaluation; 2018 → 2024-06 is no longer unseen data for it |
+
+- **The lockbox stays closed.** It is not used to choose or improve any setup after the fact.
 
 ### 2026-10-19 — Phase 2, first rules-only run (Sweep → CHoCH → FVG, initial parameters)
 

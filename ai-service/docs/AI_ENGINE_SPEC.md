@@ -284,6 +284,14 @@ Otherwise the result is **NO TRADE** with a reason code: `rules_not_met`, `ev_in
 **Before the model exists** (the rules-only stage), signals show the strategy's historical statistics instead,
 labelled "strategy history, not an estimate for this setup".
 
+**Amended 2026-10-20 (decision 10, after Phase 3):**
+- The Phase 3 walk-forward found no edge for `FROZEN_V4` after costs: rules alone −0.28 R per trade, 95% CI
+  −0.45 to −0.11, and no model beat the base rate.
+- v1 therefore abstains by default for this setup. Every detected setup returns **NO TRADE** with reason
+  `ev_insufficient`.
+- Its historical statistics are shown as "this setup's history, not an estimate of future profit".
+- A setup can arm only after a new research track passes its own evaluation.
+
 ## Machine learning
 
 The model answers one question per rule-qualified setup: will TP be hit before SL within the horizon? It never

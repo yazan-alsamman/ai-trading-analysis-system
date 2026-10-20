@@ -1,0 +1,96 @@
+{
+  "setups": 252,
+  "overlap_share": 0.015873015873015872,
+  "clusters": {
+    "week": 187,
+    "month": 77
+  },
+  "rules_mean_net_r": -0.28242107871049815,
+  "rules_mean_net_r_ci95": {
+    "week": [
+      -0.4455376435082142,
+      -0.11779618048911564
+    ],
+    "month": [
+      -0.4449340927542068,
+      -0.12270845960866035
+    ]
+  },
+  "models": {
+    "logistic": {
+      "brier_skill_ci95": {
+        "week": [
+          -0.10216458017551391,
+          0.06052944332514163
+        ],
+        "month": [
+          -0.09099933696876275,
+          0.052794922017168074
+        ]
+      },
+      "difference_ci95": {
+        "week": [
+          -0.5368396931176013,
+          0.2466123527299473
+        ],
+        "month": [
+          -0.5648190043805528,
+          0.25356880645564334
+        ]
+      }
+    },
+    "gbm": {
+      "brier_skill_ci95": {
+        "week": [
+          -0.08510975806508221,
+          0.06949225024268584
+        ],
+        "month": [
+          -0.0799738828402192,
+          0.06373450838039858
+        ]
+      },
+      "difference_ci95": {
+        "week": [
+          -0.4500462306623979,
+          0.4463926878845701
+        ],
+        "month": [
+          -0.43573631013114794,
+          0.4583048901324622
+        ]
+      }
+    }
+  },
+  "leakage": {
+    "2018-01": {
+      "training_rows": 191,
+      "latest_exit_plus_embargo_before_start": true
+    },
+    "2019-01": {
+      "training_rows": 236,
+      "latest_exit_plus_embargo_before_start": true
+    },
+    "2020-01": {
+      "training_rows": 274,
+      "latest_exit_plus_embargo_before_start": true
+    },
+    "2021-01": {
+      "training_rows": 306,
+      "latest_exit_plus_embargo_before_start": true
+    },
+    "2022-01": {
+      "training_rows": 355,
+      "latest_exit_plus_embargo_before_start": true
+    },
+    "2023-01": {
+      "training_rows": 393,
+      "latest_exit_plus_embargo_before_start": true
+    },
+    "2024-01": {
+      "training_rows": 426,
+      "latest_exit_plus_embargo_before_start": true
+    }
+  },
+  "costs_consistent": true
+}
