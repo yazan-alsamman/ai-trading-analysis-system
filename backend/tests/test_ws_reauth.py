@@ -11,8 +11,9 @@ import pytest
 from httpx import AsyncClient
 from httpx_ws import WebSocketDisconnect
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api import ws as ws_api
 from app.core import rate_limit
 from app.core.security import create_access_token
 from app.models.chat import Conversation
@@ -29,6 +30,17 @@ from tests.ws_utils import recv_until, wait_for, ws_connect
 
 SLOW = HubConfig(heartbeat_seconds=60, idle_timeout_seconds=120)  # only the event can be fast
 FAST = HubConfig(heartbeat_seconds=0.3, idle_timeout_seconds=30)
+
+
+@pytest.fixture
+def session_factory(
+    committed_session_factory: async_sessionmaker[AsyncSession],
+) -> async_sessionmaker[AsyncSession]:
+    """Real sessions on their own pool (``committed_session_factory``), for the test, its API
+    requests and the server's WebSocket code alike. One auth event wakes the re-checks of
+    several sockets at once, while the request that sent it still uses its session. On the
+    shared savepoint-wrapped test connection those sessions overlapped and broke each other."""
+    return committed_session_factory
 
 
 @pytest.fixture
@@ -215,6 +227,63 @@ async def test_key_scope_change_applies_to_open_sockets(
         4401,
         "API key lacks the 'stream' scope",
     )
+
+
+# --- failures of the re-check itself ------------------------------------------------------------
+
+
+class _BrokenSession:
+    async def __aenter__(self):
+        raise ConnectionError("database unreachable")
+
+    async def __aexit__(self, *_exc) -> None:
+        return None
+
+
+@pytest.mark.parametrize("hub_config", [FAST])
+async def test_a_failing_watchdog_closes_the_socket(
+    client: AsyncClient, hub: WebSocketHub, alice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without its watchdog a socket would never be re-checked, expire or time out: it is
+    closed (1011) instead of staying open unchecked."""
+    a, _ = alice
+
+    async def explode(*_args) -> bool:
+        raise RuntimeError("bug in a re-check")
+
+    async with ws_connect(create_access_token(a)) as ws:
+        await assert_open(ws)
+        monkeypatch.setattr(ws_api, "_recheck", explode)
+        with pytest.raises(WebSocketDisconnect) as closed:
+            while True:
+                await ws.receive_text(timeout=3)
+    assert (closed.value.code, closed.value.reason) == (1011, "internal error")
+
+
+async def test_a_database_error_in_the_chat_recheck_keeps_the_socket(
+    hub: WebSocketHub, session_factory: async_sessionmaker[AsyncSession], alice
+) -> None:
+    """A demoted admin's chats are read again: if that read fails, the topics and the role stay
+    as they were (the next check applies the change), and nothing is raised."""
+    a, _ = alice
+    client_ = hub.new_client(FakeWebSocket(), a.id)
+    client_.is_admin = True
+    await hub.register(client_)
+    topic = chat_topic(uuid.uuid4())  # a conversation the user does not take part in
+    await hub.subscribe(client_, topic)
+    auth = ws_api._Auth(user=a, expires_at=float("inf"), identity=f"user:{a.id}", credential="x")
+
+    await ws_api._trim(client_, hub, lambda: _BrokenSession(), auth, is_admin=False)
+    assert topic in client_.topics and client_.is_admin  # unchanged: retried next time
+
+    await ws_api._trim(client_, hub, session_factory, auth, is_admin=False)
+    assert topic not in client_.topics and not client_.is_admin
+    await wait_for(lambda: client_.websocket.sent)
+    assert client_.websocket.sent[-1] == {
+        "type": "unsubscribed",
+        "topic": topic,
+        "reason": "forbidden",
+    }
 
 
 # --- across API processes ----------------------------------------------------------------------
