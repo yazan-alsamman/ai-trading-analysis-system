@@ -32,7 +32,7 @@
 - المنفذ العام الوحيد لمشروعنا هو `8080` (حاوية nginx). قاعدة البيانات مربوطة على `127.0.0.1:5435` فقط، وRedis والـ backend بلا منافذ على المضيف.
 - الشبكة المستخدمة `172.30.57.0/24`: العناوين الديناميكية من `172.30.57.128/25` فقط (`DOCKER_IP_RANGE`)، وعنوان Nginx
   الثابت `172.30.57.10` خارجها. منافذ المشاريع الأخرى المحجوزة هي 80، 443، 3000-3005، 5000، 5432-5434، 6380، 9000، 9001، 27017.
-- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3040MiB (≈2.97GiB)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
+- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3296MiB (≈3.22GiB من 7.8GB على السيرفر المشترك بلا swap)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
 - `cpus:` سقف وليس حجزاً (مجموع سقوفنا 6.5 على سيرفر بـ 2 vCPU)، لذلك لكل خدماتنا `cpu_shares: 512` (الافتراضي 1024):
   عند انشغال السيرفر تأخذ المشاريع الأخرى ضعف وزننا من المعالج، وعندما يكون هادئاً نستطيع استخدام سقوفنا.
 
@@ -143,6 +143,23 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/calendar/refresh
   curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/system/status | python3 -c 'import sys,json;print(json.load(sys.stdin)["calendar"])'
   curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/calendar/events?min_impact=medium"
+  ```
+
+## عقد ai-service وجداول الذكاء الاصطناعي (B7 + B8)
+- لا خدمات جديدة ولا أسرار، ولا شيء يستدعي ai-service بشكل مجدول بعد (هذا B9). العقد مسودة حتى يوافق فادي:
+  [ai-contract.md](ai-contract.md).
+- Migration `0015` تنشئ خمسة جداول جديدة فقط (`ai_setups`، `ai_setup_events`، `ai_model_versions`،
+  `ai_setup_sizes`، `ai_setup_explanations`) ولا تلمس أي جدول آخر.
+- متغيرات جديدة بقيم افتراضية آمنة: `AI_EVALUATE_TIMEOUT_SECONDS=10`، `AI_SIZE_TIMEOUT_SECONDS=5`،
+  `AI_EXPLAIN_TIMEOUT_SECONDS=30`، `AI_MAX_RETRIES=2`، `AI_BARS_15M=500`، `AI_BARS_1H=500`، `AI_BARS_4H=300`.
+- حد ذاكرة `ai-service` من 256m إلى **512m** (بموافقة يزن)، والمعالج كما هو (0.5). مجموع حدود ذاكرة مشروعنا
+  من 3040MiB إلى **3296MiB** (≈3.22GiB)، أي نحو 41% من 7.8GB على سيرفر مشترك بلا swap: db 768،
+  redis 192، backend 544، worker 384، worker-backtest 512، beat 192، telegram-bot 128، ai-service 512،
+  nginx 64. هذه سقوف وليست استهلاكاً فعلياً.
+- فحص بعد النشر (حساب مدير):
+  ```bash
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/ai/models
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" "http://187.127.76.76:8080/api/v1/admin/ai/setups?limit=5"
   ```
 
 ## توزيع المهام على الـ workers (T05/T07 + hardening)
