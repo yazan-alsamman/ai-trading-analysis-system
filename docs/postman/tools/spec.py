@@ -421,8 +421,26 @@ FOLDERS: list[Folder] = [
                 "/health/ready",
                 "Checks PostgreSQL/TimescaleDB and Redis. `status` is `ok` or `degraded`; the "
                 "per-dependency result is in `checks`. Always answers 200 so dashboards can read "
-                "the body.",
+                "the body. `data` is the worst stored data-quality status (`ok`, `closed`, "
+                "`degraded`, `no_data`, `unknown` or `disabled`; see **Data health**), for "
+                "information only: it never changes `status` or the HTTP code.",
                 auth="none",
+            ),
+            Req(
+                "health_data",
+                "Data health (market data quality)",
+                "GET",
+                "/health/data",
+                "Data quality of every monitored instrument (`DATA_QUALITY_INSTRUMENTS`, default "
+                "`fxpro:XAU/USD`): the latest report of the `data_quality.check` task, which runs "
+                "every minute (computed now if there is none). Each instrument has `status` "
+                "(`ok`, `closed`, `degraded` or `no_data`), `last_closed_bar`, `lag_seconds`, "
+                "`next_open` and the `failed_checks` (lag, missing bars, spikes…). **503** when "
+                "any instrument is `degraded` or `no_data`, 200 when all are `ok` or `closed`; "
+                "the top-level `status` is the worst one (`disabled` when nothing is monitored). "
+                "Public and read-only; `/health/ready` does not depend on it.",
+                auth="none",
+                expect=[200, 503],
             ),
         ],
     ),
@@ -637,7 +655,12 @@ FOLDERS: list[Folder] = [
                 "Candles ascending by time. With `start`: the first `limit` candles from "
                 "`start`; otherwise the latest `limit` candles (up to `end` if given). "
                 "`limit` max 5,000. 1m candles also carry `spread` (price units) when the "
-                "feed sent one.",
+                "feed sent one.\n\n"
+                "`closed_only=true` returns only bars that have ended (`time + timeframe` <= the "
+                "end of the last closed 1m bar) and adds `last_closed_bar` (unix seconds). At "
+                "10:07 with 1m data up to 10:06, the 15m bar of 10:00 is still forming and 09:45 "
+                "is the last closed one. Strategies and analysis should use it; charts keep the "
+                "default.",
                 query=[
                     ("timeframe", "{{timeframe}}", "1m | 5m | 15m | 1h | 4h | 1d"),
                     ("limit", "200", "1–5000"),
@@ -645,9 +668,22 @@ FOLDERS: list[Folder] = [
                 optional_query=[
                     ("start", "2026-10-01T00:00:00Z", "ISO 8601, inclusive"),
                     ("end", "2026-10-15T00:00:00Z", "ISO 8601, inclusive"),
+                    (
+                        "closed_only",
+                        "true",
+                        "Only bars that have ended (default false includes the forming bar); "
+                        "adds `last_closed_bar`",
+                    ),
                 ],
                 path_vars={"instrument_id": ("{{instrument_id}}", "Instrument UUID")},
-                variants=[Variant("422 Invalid timeframe", 422, query={"timeframe": "2h"})],
+                variants=[
+                    Variant(
+                        "200 Closed bars only",
+                        200,
+                        query={"timeframe": "15m", "limit": "3", "closed_only": "true"},
+                    ),
+                    Variant("422 Invalid timeframe", 422, query={"timeframe": "2h"}),
+                ],
             ),
         ],
     ),
@@ -1592,6 +1628,7 @@ FOLDERS: list[Folder] = [
                         optional_query=[
                             ("start", "2026-10-01T00:00:00Z", "ISO 8601, inclusive"),
                             ("end", "2026-10-15T00:00:00Z", "ISO 8601, inclusive"),
+                            ("closed_only", "true", "Only bars that have ended"),
                         ],
                     ),
                     Req(
@@ -3140,7 +3177,9 @@ FOLDERS: list[Folder] = [
                         "The operations view in one call: version and uptime, database (size, "
                         "connections, migration, slowest queries when `pg_stat_statements` is "
                         "installed), Redis, Celery (queue lengths, live workers, last run of each "
-                        "scheduled task), market data freshness per active instrument, WebSocket "
+                        "scheduled task), market data freshness per active instrument, the "
+                        "data-quality report of every monitored instrument (`data_quality`), "
+                        "WebSocket "
                         "clients summed over every API process (each reports every 30 s), "
                         "notification channels, unhandled errors in "
                         "the last hour and the last daily summary.",
