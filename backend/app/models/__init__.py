@@ -1,5 +1,12 @@
 # استورد النماذج هنا حتى يراها Alembic
 from app.db.base import Base
+from app.models.ai import (
+    AIModelVersion,
+    AISetup,
+    AISetupEvent,
+    AISetupExplanation,
+    AISetupSize,
+)
 from app.models.api_key import ApiKey, Scope
 from app.models.backtest import Backtest, BacktestStatus, BacktestTrade
 from app.models.candle import Candle, Timeframe
@@ -59,6 +66,11 @@ from app.models.user import User, UserRole
 from app.models.workspace import Workspace
 
 __all__ = [
+    "AIModelVersion",
+    "AISetup",
+    "AISetupEvent",
+    "AISetupExplanation",
+    "AISetupSize",
     "CheckoutSession",
     "CheckoutStatus",
     "Conversation",

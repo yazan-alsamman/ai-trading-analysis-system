@@ -23,6 +23,14 @@ flowchart LR
         risk_profiles[risk_profiles]
         signal_plans[signal_plans]
     end
+    subgraph domain_ai["AI engine (ai-service setups and models)"]
+        direction TB
+        ai_setups[ai_setups]
+        ai_setup_events[ai_setup_events]
+        ai_model_versions[ai_model_versions]
+        ai_setup_sizes[ai_setup_sizes]
+        ai_setup_explanations[ai_setup_explanations]
+    end
     subgraph domain_workspaces["Workspaces"]
         direction TB
         workspaces[workspaces]
@@ -57,6 +65,11 @@ flowchart LR
         conversations[conversations]
         messages[messages]
     end
+    ai_setup_events --> ai_setups
+    ai_setup_explanations --> ai_setups
+    ai_setup_sizes --> ai_setups
+    ai_setup_sizes -.-> users
+    ai_setups --> instruments
     api_keys -.-> users
     backtest_trades --> backtests
     backtests --> instruments

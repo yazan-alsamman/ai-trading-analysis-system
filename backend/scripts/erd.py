@@ -71,6 +71,17 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "signal_plans",
         ],
     ),
+    (
+        "ai",
+        "AI engine (ai-service setups and models)",
+        [
+            "ai_setups",
+            "ai_setup_events",
+            "ai_model_versions",
+            "ai_setup_sizes",
+            "ai_setup_explanations",
+        ],
+    ),
     ("workspaces", "Workspaces", ["workspaces"]),
     (
         "notifications",
