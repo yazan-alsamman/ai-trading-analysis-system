@@ -27,6 +27,7 @@ celery_app = Celery(
         "app.tasks.news",
         "app.tasks.subscriptions",
         "app.tasks.ops",
+        "app.tasks.data_quality",
     ],
 )
 celery_app.conf.update(
@@ -70,6 +71,13 @@ celery_app.conf.update(
         "notifications-cleanup": {
             "task": "notifications.cleanup",
             "schedule": crontab(hour=3, minute=30),
+        },
+        # data-quality reports (B5), ~15 s after the boundary when the 1m bar has arrived;
+        # a run that has not started within the minute is dropped (the next one replaces it)
+        "data-quality-check": {
+            "task": "data_quality.check",
+            "schedule": crontab(minute="*"),
+            "options": {"countdown": 15, "expires": 55},
         },
         # price alerts on the 1m bar that just closed (evaluated ~10 s after the boundary)
         "alerts-tick": {"task": "alerts.tick", "schedule": crontab(minute="*")},

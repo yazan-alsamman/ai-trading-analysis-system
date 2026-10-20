@@ -217,3 +217,8 @@ class CandleSeries(BaseModel):
     instrument_id: uuid.UUID
     timeframe: Timeframe
     candles: list[CandleOut]
+    last_closed_bar: int | None = Field(
+        default=None,
+        description="with closed_only=true: unix seconds of the newest closed bar (absent "
+        "when there is none)",
+    )

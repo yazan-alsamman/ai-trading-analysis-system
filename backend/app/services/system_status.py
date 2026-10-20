@@ -21,6 +21,7 @@ from app.core import ops
 from app.core.config import get_settings
 from app.notifications import breaker
 from app.notifications.channels import enabled_channels
+from app.services import data_health
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ BEAT_TASKS = (
     "notifications.digests",
     "subscriptions.renew",
     "ops.daily_summary",
+    "data_quality.check",
 )
 
 
@@ -137,6 +139,11 @@ async def _market(session: AsyncSession, now: float) -> list[dict[str, Any]]:
     ]
 
 
+async def _data_quality(session: AsyncSession, redis: Redis) -> list[dict[str, Any]]:
+    """The data-quality report of every monitored instrument (B5, docs/data-quality.md)."""
+    return [r.model_dump(mode="json") for r in await data_health.current(session, redis)]
+
+
 async def _notifications(redis: Redis) -> dict[str, Any]:
     server = enabled_channels()
     return {
@@ -189,6 +196,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
         "redis": lambda: _redis(redis),
         "celery": lambda: _celery(redis, now),
         "market_data": lambda: _market(session, now),
+        "data_quality": lambda: _data_quality(session, redis),
         "notifications": lambda: _notifications(redis),
         "errors_last_hour": lambda: ops.errors_last_hour(redis),
     }

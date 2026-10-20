@@ -129,6 +129,12 @@ class Settings(BaseSettings):
     db_pool_timeout: float = 10
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
+    # Data-quality gate (B5, docs/data-quality.md): checked every minute for these instruments
+    data_quality_enabled: bool = True
+    data_quality_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
+    data_quality_max_lag_seconds: int = 120  # watermark lag allowed while the market is open
+    data_quality_max_missing_pct: float = 1.0  # missing 1m bars over the lookback window
+    data_quality_spike_pct: float = 2.0  # largest 1m close-to-close move on the evaluated bar
 
     @field_validator("api_docs_enabled", mode="before")
     @classmethod
@@ -180,6 +186,19 @@ class Settings(BaseSettings):
 
     def price_alert_limit(self, role: str) -> int:
         return getattr(self, f"price_alert_limit_{role}")
+
+    @property
+    def data_quality_instrument_list(self) -> list[tuple[str, str]]:
+        """``(source, symbol)`` of DATA_QUALITY_INSTRUMENTS (entries without ``:`` are
+        ignored), normalised like stored instruments."""
+        out = []
+        for item in self.data_quality_instruments.split(","):
+            source, sep, symbol = item.strip().partition(":")
+            if sep and source.strip() and symbol.strip():
+                pair = (source.strip().lower(), symbol.strip().upper())
+                if pair not in out:
+                    out.append(pair)
+        return out
 
     @property
     def post_role_set(self) -> frozenset[str]:

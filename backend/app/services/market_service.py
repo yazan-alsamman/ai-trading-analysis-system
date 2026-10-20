@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.models.candle import AGGREGATE_TIMEFRAMES, Timeframe
 from app.models.instrument import SPEC_FIELDS, Instrument, MarketType, SpecSource
 from app.schemas.market import CandleIn, InstrumentCreate, InstrumentUpdate
+from app.services import sessions
 
 UPSERT_CHUNK_SIZE = 5000
 MAX_CANDLES_LIMIT = 5000
@@ -298,6 +299,87 @@ async def get_latest_candle(
 ) -> CandleRow | None:
     rows = await get_candles(session, instrument_id, timeframe, limit=1)
     return rows[0] if rows else None
+
+
+# --- closed bars ----------------------------------------------------------------------------
+
+MINUTE = timedelta(minutes=1)
+
+
+def watermark_from(
+    last_1m_ts: datetime | None, now: datetime, calendar: dict | None = None
+) -> datetime | None:
+    """End of the last closed 1m bar, from the newest 1m candle (pure; see closed_watermark).
+
+    ``min(floor_to_minute(now), last_1m_ts + 1 minute)``: the minute that is still running is
+    never closed, even when a source already wrote it (``simulate-live``, ``seed-demo-candles``
+    and the admin upsert do). If the market closed right after the last bar, the watermark
+    moves on to ``now`` (the bars of the closure will never come), so a bucket that ends
+    during a break or a weekend counts as closed once its wall-clock end has passed.
+    """
+    if last_1m_ts is None:
+        return None
+    cutoff = floor_to_bucket(now.astimezone(UTC), MINUTE)
+    following = last_1m_ts.astimezone(UTC) + MINUTE
+    if calendar is not None:
+        following = sessions.next_open(calendar, following)
+    return min(cutoff, following)
+
+
+async def closed_watermark(
+    session: AsyncSession, instrument: Instrument, now: datetime | None = None
+) -> datetime | None:
+    """End of the last **closed** 1m bar of ``instrument`` (None without 1m data): a bar of
+    any timeframe is closed when ``ts + interval <= watermark``. One index lookup."""
+    now = now or datetime.now(UTC)
+    cutoff = floor_to_bucket(now.astimezone(UTC), MINUTE)
+    last = await session.scalar(
+        select(func.max(_RELATIONS[Timeframe.m1].c.ts)).where(
+            _RELATIONS[Timeframe.m1].c.instrument_id == instrument.id,
+            _RELATIONS[Timeframe.m1].c.ts <= cutoff,  # rows dated in the future are ignored
+        )
+    )
+    return watermark_from(last, now, instrument.session_calendar)
+
+
+@dataclass(frozen=True, slots=True)
+class ClosedCandles:
+    candles: list[CandleRow]
+    watermark: datetime | None
+    last_closed_bar_ts: datetime | None  # start of the newest closed bar that has a candle
+
+
+async def get_closed_candles(
+    session: AsyncSession,
+    instrument_id: uuid.UUID,
+    timeframe: Timeframe,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    limit: int = 500,
+    now: datetime | None = None,
+) -> ClosedCandles:
+    """Like :func:`get_candles`, but only buckets with ``ts + interval <= watermark``: the
+    still-forming bucket of every aggregate (``materialized_only = false``) is left out.
+
+    At 10:07:20 with 1m data up to 10:06, the 15m bucket 10:00 is forming; 09:45 is the last
+    closed bar."""
+    instrument = await get_instrument_or_404(session, instrument_id)
+    watermark = await closed_watermark(session, instrument, now)
+    if watermark is None:
+        return ClosedCandles([], None, None)
+    limit = max(1, min(limit, MAX_CANDLES_LIMIT))
+    cut = watermark - timeframe.interval  # the newest start that is closed
+    bound = cut if end is None else min(end, cut)
+    candles: list[CandleRow] = []
+    if start is None or start <= bound:
+        candles = await get_candles(session, instrument_id, timeframe, start, bound, limit)
+    reaches_cut = bound == cut and (start is None or (start <= bound and len(candles) < limit))
+    if reaches_cut:  # the page ends at the newest closed bar (or there is none)
+        last = candles[-1].ts if candles else None
+    else:
+        newest = await get_candles(session, instrument_id, timeframe, end=cut, limit=1)
+        last = newest[0].ts if newest else None
+    return ClosedCandles(candles, watermark, last)
 
 
 def needs_aggregate_refresh(candles: Sequence[CandleIn], now: datetime | None = None) -> bool:
