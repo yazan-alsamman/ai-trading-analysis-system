@@ -1,0 +1,31 @@
+Date,Time,Currency,Impact,Event,Actual,Forecast,Previous
+2017-12-08,8:30am,USD,High Impact Expected,Non-Farm Employment Change,228K,200K,244K
+2017-12-13,2:00pm,USD,High Impact Expected,Federal Funds Rate,<1.50%,<1.50%,<1.25%
+2018-01-01,All Day,USD,Non-Economic,Bank Holiday,,,
+2018-01-03,2:00pm,USD,High Impact Expected,FOMC Meeting Minutes,,,
+2018-01-04,8:15am,USD,High Impact Expected,ADP Non-Farm Employment Change,250K,190K,185K
+2018-01-05,8:30am,USD,High Impact Expected,Non-Farm Employment Change,148K,191K,252K
+2018-01-05,8:30am,USD,High Impact Expected,Unemployment Rate,4.1%,4.1%,4.1%
+2018-01-05,8:30am,USD,High Impact Expected,Average Hourly Earnings m/m,0.3%,0.3%,0.1%
+2018-01-05,8:30am,USD,Low Impact Expected,Trade Balance,-50.5B,-49.9B,-48.9B
+2018-01-09,10:00am,USD,Low Impact Expected,IBD/TIPP Economic Optimism,53.1,53.9,52.1
+2018-01-11,8:30am,USD,Medium Impact Expected,Unemployment Claims,261K,245K,250K
+2018-01-12,8:30am,USD,High Impact Expected,CPI m/m,0.1%,0.1%,0.4%
+2018-01-12,8:30am,USD,High Impact Expected,Core CPI m/m,0.3%,0.2%,0.1%
+2018-01-15,All Day,USD,Non-Economic,Bank Holiday,,,
+2018-01-25,7:45am,EUR,High Impact Expected,Main Refinancing Rate,0.00%,0.00%,0.00%
+2018-01-31,2:00pm,USD,High Impact Expected,FOMC Statement,,,
+2018-01-31,2:00pm,USD,High Impact Expected,Federal Funds Rate,<1.50%,<1.50%,<1.50%
+2018-02-08,7:00am,GBP,High Impact Expected,Official Bank Rate,0.50%,0.50%,0.50%
+2018-02-16,8:30am,USD,Medium Impact Expected,Building Permits,1.40M,1.30M,1.30M
+2018-03-21,Tentative,USD,Medium Impact Expected,FOMC Member Speaks,,,
+2018-01-19,8:30am,USD,High Impact Expected
+2018-01-19,10:00am,USD,Extreme,Unknown Impact Row,,,
+19/31/2018,10:00am,USD,High Impact Expected,Bad Date Row,,,
+2018-01-22,10:00am,USD,High Impact Expected,,,,
+2024-07-05,8:30am,USD,High Impact Expected,Non-Farm Employment Change,206K,191K,218K
+2024-07-11,8:30am,USD,High Impact Expected,CPI m/m,-0.1%,0.1%,0.0%
+2024-07-31,2:00pm,USD,High Impact Expected,FOMC Statement,,,
+2024-11-07,2:00pm,USD,High Impact Expected,FOMC Statement,,,
+2024-12-18,2:00pm,USD,High Impact Expected,Federal Funds Rate,4.50%,4.50%,4.75%
+2024-12-20,8:30am,USD,High Impact Expected,Core PCE Price Index m/m,,0.2%,0.3%

@@ -47,6 +47,7 @@ class Req:
     headers: list[tuple[str, str, str]] = field(default_factory=list)
     body: Any = None
     form: list[tuple[str, str, str]] | None = None  # x-www-form-urlencoded
+    files: list[tuple[str, str, str]] | None = None  # multipart: key, file under docs/postman, desc
     expect: list[int] = field(default_factory=lambda: [200])
     captures: dict[str, str] = field(default_factory=dict)
     pre: str = ""  # extra pre-request JS
@@ -350,6 +351,9 @@ if (!pm.variables.get("expert_id")) pm.execution.skipRequest();"""
 SKIP_NO_PLAN = """// The expert has no active plan: nothing to buy.
 if (!pm.variables.get("plan_id")) pm.execution.skipRequest();"""
 
+SKIP_NO_CALENDAR_EVENT = """// No calendar event in the listed range yet (import the sample CSV in Admin): nothing to show.
+if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
+
 SKIP_NO_CHECKOUT = """// No checkout was opened (no expert with an active plan yet): nothing to pay.
 if (!pm.variables.get("checkout_id")) pm.execution.skipRequest();"""
 
@@ -611,7 +615,8 @@ FOLDERS: list[Folder] = [
         "* JWT, or an API key with the `market:read` scope.\n"
         "* Candle `time` is the bucket start in **unix seconds (UTC)**: the format Lightweight "
         "Charts expects (`series.setData(candles)`).\n"
-        "* Naive datetimes in queries are taken as UTC.",
+        "* Naive datetimes in queries are taken as UTC.\n"
+        "* The **economic calendar** (`/calendar/*`) uses the same access.",
         [
             Req(
                 "market_instruments",
@@ -683,6 +688,56 @@ FOLDERS: list[Folder] = [
                         query={"timeframe": "15m", "limit": "3", "closed_only": "true"},
                     ),
                     Variant("422 Invalid timeframe", 422, query={"timeframe": "2h"}),
+                ],
+            ),
+            Req(
+                "calendar_events",
+                "Economic calendar events",
+                "GET",
+                "/calendar/events",
+                "Economic events (ForexFactory: CPI, NFP, FOMC…) scheduled between `start` and "
+                "`end` (at most 31 days; default today 00:00 UTC + 7 days), sorted by time. "
+                "Point in time: per event the newest version known at `as_of` (default now; "
+                "`as_of` is honoured for admins only). `currencies` is a comma list (default "
+                "`USD`; `ALL` = every currency); `min_impact` is `holiday` < `low` < `medium` < "
+                "`high`. Events without a time (All Day, Tentative) have `scheduled_at: null` "
+                "and are placed by their New York `scheduled_date`. `actual_value` / "
+                "`forecast_value` / `previous_value` are parsed numbers (% stripped, K/M/B "
+                "multiplied).\n\n"
+                "Here: a past week of the sample history imported in **Admin → Market Data**.",
+                query=[
+                    ("start", "2024-12-16T00:00:00Z", "ISO 8601 (default today 00:00 UTC)"),
+                    ("end", "2024-12-23T00:00:00Z", "ISO 8601 (default start + 7 days)"),
+                    ("currencies", "USD", "comma list, or ALL"),
+                    ("min_impact", "low", "holiday | low | medium | high"),
+                ],
+                optional_query=[
+                    ("as_of", "2024-12-18T12:00:00Z", "admins only: what was known then"),
+                ],
+                captures={"calendar_event_key": "events.0.event_key"},
+                variants=[
+                    Variant(
+                        "422 More than 31 days",
+                        422,
+                        query={"start": "2024-01-01T00:00:00Z", "end": "2024-03-01T00:00:00Z"},
+                    )
+                ],
+            ),
+            Req(
+                "calendar_event_history",
+                "Economic event history",
+                "GET",
+                "/calendar/events/:event_key/history",
+                "Every stored version of one event, oldest first: the time moved, the actual was "
+                "released, the impact changed. `event_key` comes from the list.",
+                path_vars={"event_key": ("{{calendar_event_key}}", "From the events list")},
+                pre=SKIP_NO_CALENDAR_EVENT,
+                variants=[
+                    Variant(
+                        "404 Event not found",
+                        404,
+                        path_vars={"event_key": "unknown-event"},
+                    )
                 ],
             ),
         ],
@@ -2960,7 +3015,8 @@ FOLDERS: list[Folder] = [
             ),
             Folder(
                 "Market Data",
-                "Instrument catalogue and candle ingestion (backfill scripts, collectors).",
+                "Instrument catalogue, candle ingestion (backfill scripts, collectors) and the "
+                "economic calendar (live refresh, CSV history import).",
                 [
                     Req(
                         "admin_instrument_create",
@@ -3110,6 +3166,65 @@ FOLDERS: list[Folder] = [
                             )
                         ],
                     ),
+                    Req(
+                        "admin_calendar_refresh",
+                        "Refresh economic calendar now",
+                        "POST",
+                        "/admin/calendar/refresh",
+                        "Fetches the ForexFactory week now (one request), whatever the interval "
+                        "(`CALENDAR_FETCH_INTERVAL_MINUTES`, default 240), and stores the new "
+                        "versions. `status`: `ok`, `not_modified`, `blocked` (429/403, starts a "
+                        "back-off), `backoff` (still backing off, with `until`), `error`, "
+                        "`locked` (a fetch is already running) or `disabled`. The last success, "
+                        "error and back-off are in **System status** → `calendar`.",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_calendar_import",
+                        "Import economic calendar CSV",
+                        "POST",
+                        "/admin/calendar/import",
+                        "Loads calendar history from a CSV sent as the multipart field `file` "
+                        "(UTF-8, header row first, at most 50 MB; 413 above). Same import as "
+                        "`scripts/load_calendar_csv.py`: idempotent (a second upload inserts "
+                        "nothing), read in batches, never held in memory.\n\n"
+                        "* `tz`: timezone of the CSV times (required unless the times carry "
+                        "offsets). The Kaggle ForexFactory export is `America/New_York`.\n"
+                        "* `from`: skip rows before this date (default 2018-01-01).\n"
+                        "* `source`: `forexfactory_kaggle` (default) or `manual`.\n"
+                        "* `map`: column mapping `field=Column,…` (e.g. `title=Name`); "
+                        "`date_format` for unusual dates.\n"
+                        "* `dry_run=true` parses and reports without writing.\n\n"
+                        "The response counts rows read, versions inserted / unchanged, skipped "
+                        "rows by reason (with examples) and shows the first parsed rows. The "
+                        "file is `docs/postman/samples/calendar_history_sample.csv`: run Newman "
+                        "with `--working-dir docs/postman`, or pick the file in Postman.",
+                        auth="admin",
+                        query=[
+                            ("tz", "America/New_York", "IANA timezone of the CSV times"),
+                            ("from", "2018-01-01", "skip rows before this date"),
+                            ("dry_run", "false", "true: parse and report only"),
+                        ],
+                        optional_query=[
+                            ("source", "forexfactory_kaggle", "forexfactory_kaggle | manual"),
+                            ("map", "title=Event", "field=Column,…"),
+                            ("date_format", "%Y-%m-%d", "strptime format of the date column"),
+                        ],
+                        files=[
+                            (
+                                "file",
+                                "samples/calendar_history_sample.csv",
+                                "the CSV (UTF-8, header row first)",
+                            )
+                        ],
+                        variants=[
+                            Variant(
+                                "422 Unknown time zone",
+                                422,
+                                query={"tz": "Mars/Olympus_Mons"},
+                            )
+                        ],
+                    ),
                 ],
             ),
             Folder(
@@ -3179,6 +3294,8 @@ FOLDERS: list[Folder] = [
                         "installed), Redis, Celery (queue lengths, live workers, last run of each "
                         "scheduled task), market data freshness per active instrument, the "
                         "data-quality report of every monitored instrument (`data_quality`), "
+                        "the economic-calendar refresh (`calendar`: last success, last error, "
+                        "back-off, stored rows), "
                         "WebSocket "
                         "clients summed over every API process (each reports every 30 s), "
                         "notification channels, unhandled errors in "

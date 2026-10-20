@@ -268,6 +268,13 @@ def url_object(
 
 
 def body_object(req: Req, body: Any = None) -> dict[str, Any] | None:
+    if req.files is not None:
+        return {
+            "mode": "formdata",
+            "formdata": [
+                {"key": k, "type": "file", "src": src, "description": d} for k, src, d in req.files
+            ],
+        }
     if req.form is not None:
         return {
             "mode": "urlencoded",
@@ -371,7 +378,11 @@ def example_objects(req: Req, examples: list[dict[str, Any]]) -> list[dict[str, 
     for i, ex in enumerate(examples):
         variant = by_name.get(ex["variant"]) if ex["variant"] else None
         if variant is not None:
-            body = body_object(req, variant.body) if req.body is not None or variant.body else None
+            body = (
+                body_object(req, variant.body)
+                if req.body is not None or req.files is not None or variant.body
+                else None
+            )
             url = url_object(
                 req,
                 path=variant.path,
