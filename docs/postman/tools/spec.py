@@ -3701,6 +3701,7 @@ indicator after ~5 s without a new one.
 | Slow consumer | > 256 undelivered messages → **1013** |
 | Bad / expired / revoked token or key, deactivated user | **4401** |
 | Connections | 5 per identity, 20 new per minute per IP → **4429** |
+| Server error on the connection (also when its periodic re-check stops) | **1011** |
 
 Reconnect with exponential backoff (1 s → 30 s, with jitter) and send your `subscribe` ops \
 again after every reconnect."""
