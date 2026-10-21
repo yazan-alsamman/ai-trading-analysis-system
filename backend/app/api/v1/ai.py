@@ -2,13 +2,22 @@
 account, "I took this trade", and your taken trades. AI setups are global: whoever may read
 signals may use them (``strategy_resolver.may_read_ai_setup``)."""
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 
-from app.ai import sizing, takes
+from app.ai import follows, sizing, takes
 from app.api.deps import CurrentUser, SessionDep, SignalsReader
-from app.schemas.ai import AISizeInputs, AISizeRead, AITradeRead, TakeIn, TakeRead
+from app.schemas.ai import (
+    AISizeInputs,
+    AISizeRead,
+    AITradeRead,
+    FollowIn,
+    FollowRead,
+    TakeIn,
+    TakeRead,
+)
 from app.schemas.common import Page
 from app.services import risk_service
 
@@ -83,6 +92,38 @@ async def take_setup(
 async def untake_setup(setup_id: SetupId, user: CurrentUser, session: SessionDep):
     """Undo it, while the setup has not ended (409 after; 404 when not taken)."""
     await takes.untake(session, user, setup_id)
+
+
+@router.get("/me/ai/follows", response_model=list[FollowRead])
+async def my_ai_follows(user: CurrentUser, session: SessionDep):
+    """The instruments and profiles whose ARMED setups you are alerted about."""
+    return await follows.list_follows(session, user)
+
+
+@router.put("/me/ai/follows/{instrument_id}/{profile}", response_model=FollowRead)
+async def follow_ai_setups(
+    instrument_id: uuid.UUID,
+    profile: Annotated[str, Path(max_length=32)],
+    user: CurrentUser,
+    session: SessionDep,
+    data: FollowIn | None = None,
+):
+    """Alert me when a setup of this instrument and profile becomes ARMED (optionally only
+    from ``min_grade``). Idempotent: calling it again only changes ``min_grade``. 404 unknown
+    instrument, 422 unknown profile. After ARMED you hear about a setup only if you took it."""
+    data = data or FollowIn()
+    return await follows.follow(session, user, instrument_id, profile, data.min_grade)
+
+
+@router.delete("/me/ai/follows/{instrument_id}/{profile}", status_code=status.HTTP_204_NO_CONTENT)
+async def unfollow_ai_setups(
+    instrument_id: uuid.UUID,
+    profile: Annotated[str, Path(max_length=32)],
+    user: CurrentUser,
+    session: SessionDep,
+):
+    """Stop the ARMED alerts of this instrument and profile (404 when not followed)."""
+    await follows.unfollow(session, user, instrument_id, profile)
 
 
 @router.get("/me/ai/trades", response_model=Page[AITradeRead])

@@ -122,8 +122,8 @@ def build() -> dict[str, Any]:
             protocol.SubscribeMessage,
             "Subscribe to a topic. candles: instrument_id + timeframe; signals: instrument_id; "
             "user: user_id (your own; automatic anyway); news: optional instrument_id; chat: "
-            "conversation_id (participants and admins only). Answer: subscribed (+ snapshot "
-            "for candles) or error.",
+            "conversation_id (participants and admins only); ai_setups: instrument_id (AI "
+            "setup state changes). Answer: subscribed (+ snapshot for candles) or error.",
         ),
         "Unsubscribe": (protocol.UnsubscribeMessage, "Same fields as subscribe."),
         "Ping": (protocol.PingMessage, "Keep-alive; answered with pong."),
@@ -263,6 +263,33 @@ def build() -> dict[str, Any]:
             ["action"],
             "One of your workspaces changed on another device.",
         ),
+        "AISetup": typed(
+            "ai_setup",
+            {
+                "setup": {
+                    "type": "object",
+                    "description": "the setup as ai-service last returned it (state updated)",
+                },
+                "transition": {
+                    "type": "object",
+                    "properties": {
+                        "setup_id": {"type": "string"},
+                        "from": {"type": ["string", "null"], "description": "null: new setup"},
+                        "to": {
+                            "type": "string",
+                            "enum": ["ARMED", "ACTIVE", "CLOSED", "EXPIRED", "INVALIDATED"],
+                        },
+                        "at": {"type": "string", "format": "date-time"},
+                        "reason": {"type": ["string", "null"]},
+                        "realized_r": {"type": ["number", "null"]},
+                    },
+                    "required": ["setup_id", "from", "to", "at"],
+                },
+            },
+            ["setup", "transition"],
+            "An AI setup changed state (B11; DEVELOPING is never published). Sent once per "
+            "change, after it is stored.",
+        ),
         "PriceAlert": typed(
             "price_alert",
             {
@@ -397,6 +424,12 @@ def build() -> dict[str, Any]:
             "parameters": {"instrument_id": param("instrument id")},
             "messages": refs("News"),
         },
+        "aiSetups": {
+            "address": "ai:setups:{instrument_id}",
+            "title": "AI setups topic (state changes of one instrument)",
+            "parameters": {"instrument_id": param("instrument id")},
+            "messages": refs("AISetup"),
+        },
         "chat": {
             "address": "chat:{conversation_id}",
             "title": "chat topic (participants and admins)",
@@ -441,6 +474,9 @@ def build() -> dict[str, Any]:
             "Your own events",
         ),
         "receiveNews": op("receive", "news", ["News"], "New articles"),
+        "receiveAISetups": op(
+            "receive", "aiSetups", ["AISetup"], "AI setup state changes of an instrument"
+        ),
         "receiveNewsInstrument": op(
             "receive", "newsInstrument", ["News"], "New articles of one instrument"
         ),

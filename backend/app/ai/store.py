@@ -8,6 +8,8 @@ ai-service decides setups and their states; the backend only records them:
 - Final states (CLOSED, EXPIRED, INVALIDATED) never change again. A transition that is not in
   ``ALLOWED``, that starts from another state than the stored one, or that names an unknown
   setup is rejected and logged; the rest of the response is still applied.
+- Every state change except to DEVELOPING is also written to ``ai_setup_outbox`` in the same
+  transaction (B11): the alerts survive a crash and are sent by ``ai_alerts.dispatch``.
 - ``open_setups`` gives the next request's ``open_setups``: the last payload of every
   non-final setup, in a stable order.
 """
@@ -16,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -34,7 +37,7 @@ from app.ai.contract import (
     Transition,
     Versions,
 )
-from app.models.ai import AIModelVersion, AISetup, AISetupEvent, AISetupTake
+from app.models.ai import AIModelVersion, AISetup, AISetupEvent, AISetupOutbox, AISetupTake
 from app.models.instrument import Instrument
 
 logger = logging.getLogger(__name__)
@@ -183,6 +186,32 @@ async def _close_takes(
     )
 
 
+async def enqueue_alerts(session: AsyncSession, changes: Sequence[StateChange]) -> int:
+    """The outbox rows of the alerts (B11), in the caller's transaction: one per state change,
+    never for DEVELOPING; a change already enqueued (same setup and state) adds nothing."""
+    rows = [
+        {
+            "setup_id": c.setup_id,
+            "from_state": c.from_state,
+            "to_state": c.to_state,
+            "at": c.at,
+            "reason": (c.reason or None) and c.reason[:255],
+            "realized_r": c.realized_r,
+        }
+        for c in changes
+        if c.to_state != SetupState.DEVELOPING.value
+    ]
+    if not rows:
+        return 0
+    inserted = await session.scalars(
+        insert(AISetupOutbox)
+        .values(rows)
+        .on_conflict_do_nothing(index_elements=["setup_id", "to_state"])
+        .returning(AISetupOutbox.id)
+    )
+    return len(list(inserted))
+
+
 def _reject(result: ApplyResult, setup_id: str, reason: str) -> None:
     result.rejected.append(Rejection(setup_id, reason))
     logger.warning(
@@ -228,6 +257,7 @@ async def apply_evaluation(
         await _apply_setup(session, result, instrument, req, setup, rows, versions, now)
     for transition in sorted(resp.transitions, key=lambda t: t.at):
         await _apply_transition(session, result, instrument, req, transition, rows, known, now)
+    await enqueue_alerts(session, result.state_changes)
     await session.commit()
     logger.info(
         "ai-service %s applied: inserted=%d updated=%d unchanged=%d transitions=%d "

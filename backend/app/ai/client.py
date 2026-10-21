@@ -112,13 +112,16 @@ class AIServiceClient:
             get_settings().ai_size_timeout_seconds,
         )
 
-    async def explain(self, req: ExplainRequest) -> ExplainResponse:
+    async def explain(
+        self, req: ExplainRequest, *, timeout: float | None = None
+    ) -> ExplainResponse:
+        """``timeout``: shorter than ``AI_EXPLAIN_TIMEOUT_SECONDS`` where waiting costs (alerts)."""
         return await self._call(
             "/v1/explain",
             req,
             ExplainResponse,
             req.setup.setup_id,
-            get_settings().ai_explain_timeout_seconds,
+            timeout if timeout is not None else get_settings().ai_explain_timeout_seconds,
         )
 
     async def _call(

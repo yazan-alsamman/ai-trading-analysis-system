@@ -48,6 +48,12 @@ def chat_topic(conversation_id: uuid.UUID | str) -> str:
     return f"chat:{conversation_id}"
 
 
+def ai_setups_topic(instrument_id: uuid.UUID | str) -> str:
+    """AI setup state changes of one instrument (B11): public, gated by
+    ``strategy_resolver.may_read_ai_setup``."""
+    return f"ai:setups:{instrument_id}"
+
+
 def channel_for(topic: str) -> str:
     return CHANNEL_PREFIX + topic
 

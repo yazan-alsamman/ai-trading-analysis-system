@@ -31,6 +31,8 @@ flowchart LR
         ai_setup_sizes[ai_setup_sizes]
         ai_setup_takes[ai_setup_takes]
         ai_setup_explanations[ai_setup_explanations]
+        ai_setup_outbox[ai_setup_outbox]
+        ai_alert_follows[ai_alert_follows]
     end
     subgraph domain_workspaces["Workspaces"]
         direction TB
@@ -66,8 +68,11 @@ flowchart LR
         conversations[conversations]
         messages[messages]
     end
+    ai_alert_follows --> instruments
+    ai_alert_follows -.-> users
     ai_setup_events --> ai_setups
     ai_setup_explanations --> ai_setups
+    ai_setup_outbox --> ai_setups
     ai_setup_sizes --> ai_setups
     ai_setup_sizes -.-> users
     ai_setup_takes --> ai_setups

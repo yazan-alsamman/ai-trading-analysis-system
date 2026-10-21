@@ -634,6 +634,61 @@ A setup explained by ai-service ``/v1/explain`` in one language (filled by B9/B1
 - FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
 - CHECK `ck_ai_setup_explanations_lang`: `lang IN ('ar', 'en')`
 
+### `ai_setup_outbox`
+
+A setup state change to notify (B11): written by ``apply_evaluation`` in its own transaction, so no alert is lost on a crash; sent by the ``ai_alerts.dispatch`` task. Unique ``(setup_id, to_state)``: a replayed evaluation never enqueues twice. DEVELOPING is never written.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | bigint | no | `Identity()` | PK |
+| `setup_id` | varchar(128) | no |  | FK |
+| `from_state` | varchar(16) | yes |  |  |
+| `to_state` | varchar(16) | no |  |  |
+| `at` | timestamp with time zone | no |  |  |
+| `reason` | varchar(255) | yes |  |  |
+| `realized_r` | double precision | yes |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `status` | varchar(16) | no | `pending` |  |
+| `attempts` | integer | no | `0` |  |
+| `next_attempt_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `last_error` | varchar(500) | yes |  |  |
+| `processed_at` | timestamp with time zone | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- CHECK `ck_ai_setup_outbox_status`: `status IN ('pending', 'done', 'skipped', 'failed')`
+- CHECK `ck_ai_setup_outbox_to`: `to_state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
+- UNIQUE `uq_ai_setup_outbox_setup_state` (setup_id, to_state)
+
+**Indexes**
+
+- `ix_ai_setup_outbox_due` (ai_setup_outbox.next_attempt_at) WHERE `status = 'pending'`
+
+### `ai_alert_follows`
+
+A user wants ARMED alerts of an instrument and profile (B11), optionally only from a grade (``min_grade``: A best; null: any grade). No automatic follow.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `user_id` | uuid | no |  | PK, FK |
+| `instrument_id` | uuid | no |  | PK, FK |
+| `profile` | varchar(32) | no |  | PK |
+| `min_grade` | varchar(1) | yes |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (user_id, instrument_id, profile)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
+- FK (user_id) → users (id) ON DELETE CASCADE
+- CHECK `ck_ai_alert_follows_grade`: `min_grade IS NULL OR min_grade IN ('A', 'B', 'C', 'D')`
+
+**Indexes**
+
+- `ix_ai_alert_follows_market` (ai_alert_follows.instrument_id, ai_alert_follows.profile)
+
 ## Workspaces
 
 ### `workspaces`
@@ -680,7 +735,7 @@ One event for one user: the inbox row and the source of every external delivery.
 |---|---|---|---|---|
 | `id` | uuid | no | `gen_random_uuid()` | PK |
 | `user_id` | uuid | no |  | FK |
-| `type` | enum notification_type (signal, backtest_completed, backtest_failed, security, system, new_post, comment_reply, post_liked, content_hidden, price_alert, chat_message, subscription_started, subscription_renewed, subscription_payment_failed, subscription_canceled, new_subscriber) | no |  |  |
+| `type` | enum notification_type (signal, backtest_completed, backtest_failed, security, system, new_post, comment_reply, post_liked, content_hidden, price_alert, chat_message, subscription_started, subscription_renewed, subscription_payment_failed, subscription_canceled, new_subscriber, ai_setup) | no |  |  |
 | `title` | varchar(200) | no |  |  |
 | `body` | text | no |  |  |
 | `data` | jsonb | no |  |  |
@@ -718,6 +773,7 @@ One notification on one channel to one target (chat id, email, device id; never 
 | `release_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
 | `sent_at` | timestamp with time zone | yes |  |  |
+| `next_attempt_at` | timestamp with time zone | yes |  |  |
 
 **Constraints**
 
@@ -729,6 +785,7 @@ One notification on one channel to one target (chat id, email, device id; never 
 
 - `ix_notification_deliveries_created` (notification_deliveries.created_at)
 - `ix_notification_deliveries_due` (notification_deliveries.release_at) WHERE `status = 'pending' AND hold IS NOT NULL`
+- `ix_notification_deliveries_unsent` (coalesce(next_attempt_at, created_at)) WHERE `status = 'pending' AND hold IS NULL`
 
 ### `notification_preferences`
 

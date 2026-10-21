@@ -119,6 +119,15 @@ channels:
     messages:
       News:
         $ref: '#/components/messages/News'
+  aiSetups:
+    address: ai:setups:{instrument_id}
+    title: AI setups topic (state changes of one instrument)
+    parameters:
+      instrument_id:
+        description: instrument id
+    messages:
+      AISetup:
+        $ref: '#/components/messages/AISetup'
   chat:
     address: chat:{conversation_id}
     title: chat topic (participants and admins)
@@ -209,6 +218,13 @@ operations:
     summary: New articles
     messages:
     - $ref: '#/channels/news/messages/News'
+  receiveAISetups:
+    action: receive
+    channel:
+      $ref: '#/channels/aiSetups'
+    summary: AI setup state changes of an instrument
+    messages:
+    - $ref: '#/channels/aiSetups/messages/AISetup'
   receiveNewsInstrument:
     action: receive
     channel:
@@ -233,7 +249,8 @@ components:
       title: Subscribe
       summary: 'Subscribe to a topic. candles: instrument_id + timeframe; signals: instrument_id; user:
         user_id (your own; automatic anyway); news: optional instrument_id; chat: conversation_id (participants
-        and admins only). Answer: subscribed (+ snapshot for candles) or error.'
+        and admins only); ai_setups: instrument_id (AI setup state changes). Answer: subscribed (+ snapshot
+        for candles) or error.'
       contentType: application/json
       payload:
         additionalProperties: false
@@ -245,6 +262,7 @@ components:
             - user
             - news
             - chat
+            - ai_setups
             title: Topic
             type: string
           instrument_id:
@@ -297,6 +315,7 @@ components:
             - user
             - news
             - chat
+            - ai_setups
             title: Topic
             type: string
           instrument_id:
@@ -818,6 +837,61 @@ components:
             - reordered
             - shared
             - unshared
+    AISetup:
+      name: AISetup
+      title: AISetup
+      summary: An AI setup changed state (B11; DEVELOPING is never published). Sent once per change, after
+        it is stored.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+        - type
+        - setup
+        - transition
+        properties:
+          type:
+            const: ai_setup
+          topic:
+            type: string
+          sent_at: *id001
+          setup:
+            type: object
+            description: the setup as ai-service last returned it (state updated)
+          transition:
+            type: object
+            properties:
+              setup_id:
+                type: string
+              from:
+                type:
+                - string
+                - 'null'
+                description: 'null: new setup'
+              to:
+                type: string
+                enum:
+                - ARMED
+                - ACTIVE
+                - CLOSED
+                - EXPIRED
+                - INVALIDATED
+              at:
+                type: string
+                format: date-time
+              reason:
+                type:
+                - string
+                - 'null'
+              realized_r:
+                type:
+                - number
+                - 'null'
+            required:
+            - setup_id
+            - from
+            - to
+            - at
     PriceAlert:
       name: PriceAlert
       title: PriceAlert
@@ -1088,6 +1162,7 @@ components:
       - subscription_payment_failed
       - subscription_canceled
       - new_subscriber
+      - ai_setup
       title: NotificationType
       type: string
     Severity:

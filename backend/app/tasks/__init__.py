@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import (
@@ -29,6 +31,7 @@ celery_app = Celery(
         "app.tasks.ops",
         "app.tasks.data_quality",
         "app.tasks.calendar",
+        "app.tasks.ai_alerts",
     ],
 )
 celery_app.conf.update(
@@ -50,6 +53,7 @@ celery_app.conf.update(
         "notifications.cleanup": {"queue": "maintenance"},
         "backtests.*": {"queue": "backtests"},
         "notifications.*": {"queue": "notifications"},
+        "ai_alerts.*": {"queue": "notifications"},
         "news.*": {"queue": "maintenance"},
         "housekeeping.*": {"queue": "maintenance"},
         "subscriptions.*": {"queue": "maintenance"},
@@ -68,6 +72,14 @@ celery_app.conf.update(
         },
         # digests of held notifications (quiet hours, hourly cap) and circuit-held retries
         "notifications-digests": {"task": "notifications.digests", "schedule": crontab(minute="*")},
+        # pending deliveries whose send task was lost (B11)
+        "notifications-sweep": {"task": "notifications.sweep", "schedule": crontab(minute="*")},
+        # AI setup alerts from the outbox (B11), every 30 s
+        "ai-alerts-dispatch": {
+            "task": "ai_alerts.dispatch",
+            "schedule": timedelta(seconds=30),
+            "options": {"expires": 25},
+        },
         # inbox retention: read > 90 days, unread > 180 days
         "notifications-cleanup": {
             "task": "notifications.cleanup",

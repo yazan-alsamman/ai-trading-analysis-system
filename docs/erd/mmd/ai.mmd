@@ -81,10 +81,35 @@ erDiagram
         bool template_used
         timestamptz created_at
     }
+    ai_setup_outbox {
+        bigint id PK
+        varchar setup_id FK
+        varchar from_state
+        varchar to_state
+        timestamptz at
+        varchar reason
+        double realized_r
+        timestamptz created_at
+        varchar status
+        int attempts
+        timestamptz next_attempt_at
+        varchar last_error
+        timestamptz processed_at
+    }
+    ai_alert_follows {
+        uuid user_id PK, FK
+        uuid instrument_id PK, FK
+        varchar profile PK
+        varchar min_grade
+        timestamptz created_at
+    }
     instruments
     users
+    ai_alert_follows }o--|| instruments : "instrument_id"
+    ai_alert_follows }o--|| users : "user_id"
     ai_setup_events }o--|| ai_setups : "setup_id"
     ai_setup_explanations }o--|| ai_setups : "setup_id"
+    ai_setup_outbox }o--|| ai_setups : "setup_id"
     ai_setup_sizes }o--|| ai_setups : "setup_id"
     ai_setup_sizes }o--|| users : "user_id"
     ai_setup_takes }o--|| ai_setups : "setup_id"
