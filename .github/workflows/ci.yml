@@ -223,7 +223,8 @@ jobs:
         run: python -m pytest tests_e2e -v -p no:cacheprovider
       - name: Host-proxy entry 8090 (real client IP from the proxy only; 80 ignores it)
         # Linux Docker with docker-proxy, as on the VPS: a connection to the loopback-published
-        # 127.0.0.1:8090 reaches nginx from the compose network's gateway (docs/https.md)
+        # 127.0.0.1:8090 reaches nginx from the compose network's gateway, inside DOCKER_SUBNET
+        # (Docker takes it from DOCKER_IP_RANGE: 172.30.57.128; docs/https.md)
         run: |
           net="$(docker network ls -q --filter label=com.docker.compose.network=default \
             --filter label=com.docker.compose.project=ai-trading-analysis-system)"
@@ -235,7 +236,7 @@ jobs:
           curl -sS -o /dev/null -H 'X-Forwarded-For: 198.51.100.9' http://localhost/api/v1/proxy-check
           sleep 1
           docker compose logs nginx | grep -E 'health/ready|proxy-check' | tail -4
-          docker compose logs nginx | grep -q '203.0.113.7 via=172.30.57.1 .* proto=https'
+          docker compose logs nginx | grep -q '203.0.113.7 via=172\.30\.57\.[0-9]* .* proto=https'
           docker compose logs backend | grep 'proxy-check' | tail -2
           docker compose logs backend | grep -q 'client=203.0.113.7'
           if docker compose logs backend | grep -q 'client=198.51.100.9'; then
