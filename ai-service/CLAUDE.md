@@ -98,8 +98,9 @@ One TP in v1 (TP1/TP2 after v1). Custom user strategies: after v1.
 10. P10 Thesis, evaluation report, model card, demo, reproducibility.
 
 **Status (2026-10-21):** design locked; phase 0 reset done (`docs/AUDIT-2026-10-21.md`): all
-pre-v0.2 work removed. P1 in progress: tasks 1 (layout) and 2 (lockbox sealed,
-`docs/lockbox/MANIFEST-2026-10-21.json`) done; next task 3 (importer).
+pre-v0.2 work removed. P1 in progress: tasks 1 (layout), 2 (lockbox sealed,
+`docs/lockbox/MANIFEST-2026-10-21.json`) and 3 (importer: `python -m app import`, store in
+`data/processed/<SYMBOL>/{m1,5m,15m,1h,4h,D1}.parquet`, untracked) done; next task 4 (quality report).
 
 Layout: `app/main.py` (service), `app/config/` (instruments + D23 splits, TOML), `app/cli.py`
 (`python -m app <command>`), `app/lockbox.py`, and one package per layer: `data` (L1), `smc` (L2),
@@ -109,7 +110,7 @@ Layout: `app/main.py` (service), `app/config/` (instruments + D23 splits, TOML),
 
 1. New ai-service layout (package, config, CLI), keeping `/health` and the placeholder working.
 2. Lockbox sealing script: hash the 2026 export files (SHA-256), write a dated manifest, never parse contents.
-3. FxPro MT5 importer → UTC → research store (Parquet), with timeframes 15m/1h/4h/D1 from M5.
+3. FxPro MT5 importer → UTC → research store (Parquet), with timeframes 5m/15m/1h/4h/D1 from M1.
 4. Data-quality report (gaps vs expected weekend/daily break, OHLC consistency, jumps, spread stats per year/hour).
 5. Dukascopy cross-check of a sample (return correlation per year).
 

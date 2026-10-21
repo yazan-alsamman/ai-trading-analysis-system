@@ -2,6 +2,7 @@
 
     python -m app config                 # print the resolved configuration
     python -m app lockbox seal|verify    # seal or check the 2026 lockbox
+    python -m app import --raw-dir PATH  # MT5 history -> research store (Parquet)
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -14,6 +15,7 @@ import sys
 COMMANDS = {
     "config": "app.config",
     "lockbox": "app.lockbox",
+    "import": "app.data.importer",
 }
 
 

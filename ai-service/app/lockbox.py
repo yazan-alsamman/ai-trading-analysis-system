@@ -37,8 +37,11 @@ def sha256_file(path: Path) -> str:
 
 
 def scan(root: Path) -> list[dict]:
-    """Every file under ``root``, sorted by relative path, with its size and SHA-256."""
-    files = sorted(p for p in root.rglob("*") if p.is_file())
+    """Every file under ``root``, sorted by relative path (code point order on every OS), with its
+    size and SHA-256."""
+    files = sorted(
+        (p for p in root.rglob("*") if p.is_file()), key=lambda p: p.relative_to(root).as_posix()
+    )
     return [
         {
             "path": p.relative_to(root).as_posix(),
