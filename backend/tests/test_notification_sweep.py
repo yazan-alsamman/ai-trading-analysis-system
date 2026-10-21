@@ -62,7 +62,7 @@ async def test_stuck_deliveries_are_sent_exactly_once(
         await session.commit()
         assert len(prepared.send_ids) == 3 and notification_queue == []
         ids = prepared.send_ids
-        assert await service.sweep_stuck(factory) == []  # too young: its task may still come
+        assert (await service.sweep_stuck(factory)).requeued == []  # too young: its task may come
         await session.execute(
             update(NotificationDelivery)
             .where(NotificationDelivery.id.in_(ids))
@@ -70,7 +70,7 @@ async def test_stuck_deliveries_are_sent_exactly_once(
         )
         await session.commit()
 
-    swept = await service.sweep_stuck(factory)
+    swept = (await service.sweep_stuck(factory)).requeued
     assert sorted(swept) == sorted(ids)
     assert sorted(notification_queue[-1][0]) == sorted(ids)  # enqueued with the normal path
     # the swept task and a late original task, at the same time
@@ -81,7 +81,7 @@ async def test_stuck_deliveries_are_sent_exactly_once(
     assert len(telegram.sent()) == 3  # each delivery exactly once
     async with factory() as session:
         assert {d.status for d in await _deliveries(session, user)} == {DeliveryStatus.sent}
-    assert await service.sweep_stuck(factory) == []
+    assert (await service.sweep_stuck(factory)).requeued == []
 
 
 async def test_what_the_sweeper_leaves_alone(
@@ -120,7 +120,8 @@ async def test_what_the_sweeper_leaves_alone(
         .values(status=DeliveryStatus.sent)
     )
     await session.commit()
-    assert await service.sweep_stuck(session_factory) == [retry_lost]
+    swept = await service.sweep_stuck(session_factory)
+    assert (swept.requeued, swept.expired) == ([retry_lost], 0)
 
 
 async def test_a_retry_records_when_it_is_due(
@@ -139,7 +140,81 @@ async def test_a_retry_records_when_it_is_due(
     assert delivery.next_attempt_at >= before + timedelta(seconds=2)
 
 
-def test_the_task_logs_the_count(caplog) -> None:
+async def _age(session: AsyncSession, delivery_id, **delta) -> None:
+    await session.execute(
+        update(NotificationDelivery)
+        .where(NotificationDelivery.id == delivery_id)
+        .values(created_at=datetime.now(UTC) - timedelta(**delta))
+    )
+
+
+async def test_too_old_deliveries_expire_instead_of_being_sent(
+    session: AsyncSession, session_factory, make_user, redis_client: Redis, telegram,
+    notification_queue,
+) -> None:  # fmt: skip
+    user = await make_user("old@example.com")
+    session.add(TelegramLink(user_id=user.id, chat_id=5004, username="u"))
+    await session.commit()
+    prepared = await service.prepare(session, redis_client, [item(user.id) for _ in range(3)])
+    await session.commit()
+    stale, recent, held = prepared.send_ids
+    await _age(session, stale, days=2)  # stuck since before the deploy
+    await _age(session, recent, minutes=5)
+    await _age(session, held, days=2)
+    await session.execute(  # quiet hours: the digest path handles it
+        update(NotificationDelivery)
+        .where(NotificationDelivery.id == held)
+        .values(hold="quiet_hours", release_at=datetime.now(UTC) + timedelta(hours=1))
+    )
+    await session.commit()
+
+    swept = await service.sweep_stuck(session_factory)
+    assert (swept.requeued, swept.expired) == ([recent], 1)
+    assert notification_queue[-1][0] == [recent]
+    await service.send_deliveries(session_factory, redis_client, [stale, recent, held])
+    by_id = {d.id: d for d in await _deliveries(session, user)}
+    assert (by_id[stale].status, by_id[stale].last_error) == (
+        DeliveryStatus.skipped,
+        "expired: not sent within NOTIFICATION_SWEEP_MAX_AGE_SECONDS",
+    )
+    assert by_id[stale].attempts == 0  # never sent
+    assert by_id[recent].status == DeliveryStatus.sent
+    assert (by_id[held].status, by_id[held].hold) == (DeliveryStatus.pending, "quiet_hours")
+    assert len(telegram.sent()) == 1  # only the recent one, once
+    swept = await service.sweep_stuck(session_factory)
+    assert (swept.requeued, swept.expired) == ([], 0)
+
+
+async def test_a_delivery_being_sent_is_not_expired(
+    committed_session_factory, redis_client: Redis, telegram
+) -> None:
+    """Real row locks: a send holds the row (FOR UPDATE) while the sweeper runs."""
+    factory = committed_session_factory
+    async with factory() as session:
+        user = await _user(session, "busy@example.com", 5005)
+        prepared = await service.prepare(session, redis_client, [item(user.id)])
+        await session.commit()
+        [delivery_id] = prepared.send_ids
+        await _age(session, delivery_id, days=2)
+        await session.commit()
+    async with factory() as sender:  # a send in progress holds the row lock
+        await sender.scalar(
+            select(NotificationDelivery)
+            .where(NotificationDelivery.id == delivery_id)
+            .with_for_update()
+        )
+        swept = await service.sweep_stuck(factory)
+        assert (swept.expired, swept.requeued) == (0, [])  # left alone, and never re-sent
+        await sender.rollback()
+    async with factory() as session:
+        [delivery] = await _deliveries(session, user)
+        assert (delivery.status, delivery.last_error) == (DeliveryStatus.pending, None)
+    swept = await service.sweep_stuck(factory)  # once the send let go, it expires
+    assert swept.expired == 1
+
+
+def test_the_task_logs_the_counts(caplog) -> None:
     caplog.set_level(logging.INFO, logger="app.tasks.notifications")
-    assert notification_tasks.sweep() == 0  # nothing stuck in the committed test database
-    assert "notifications.sweep requeued=0" in caplog.text
+    # nothing stuck in the committed test database
+    assert notification_tasks.sweep() == {"requeued": 0, "expired": 0}
+    assert "notifications.sweep requeued=0 expired=0" in caplog.text

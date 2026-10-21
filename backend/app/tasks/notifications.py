@@ -51,12 +51,13 @@ def digests() -> dict:
 
 
 @celery_app.task(name="notifications.sweep", ignore_result=True)
-def sweep() -> int:
+def sweep() -> dict:
     """Pending deliveries no task will send (a crash after the producer's commit, a lost retry):
-    enqueued again; the send claim makes a duplicate a no-op."""
+    enqueued again (the send claim makes a duplicate a no-op), or skipped when older than
+    ``NOTIFICATION_SWEEP_MAX_AGE_SECONDS``."""
     swept = run_async(lambda factory, _redis: service.sweep_stuck(factory))
-    logger.info("notifications.sweep requeued=%d", len(swept))
-    return len(swept)
+    logger.info("notifications.sweep requeued=%d expired=%d", len(swept.requeued), swept.expired)
+    return {"requeued": len(swept.requeued), "expired": swept.expired}
 
 
 @celery_app.task(name="notifications.cleanup")

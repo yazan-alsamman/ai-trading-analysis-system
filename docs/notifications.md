@@ -395,16 +395,25 @@ There is **no automatic follow**: a user gets ARMED alerts only after following.
 or a scheduled retry task is lost, deliveries stay `pending` and nobody sends them. This
 affects every type, not only AI alerts.
 
-**The rule.** The beat task `notifications.sweep` (every minute) re-enqueues deliveries that
-are:
-- `pending`, with no `hold` (quiet hours, hourly cap and open circuits are left to the
-  digests);
-- due: `release_at` is null or past;
-- overdue by more than `NOTIFICATION_SWEEP_AFTER_SECONDS` (120): `next_attempt_at` for a
-  scheduled retry, otherwise `created_at`.
+**The rule.** The beat task `notifications.sweep` (every minute) does two things, each for
+at most `NOTIFICATION_SWEEP_BATCH` (500) rows:
 
-At most `NOTIFICATION_SWEEP_BATCH` (500) per run, oldest first, with one INFO line:
-`notifications.sweep requeued=N`. A partial index makes the idle query cheap.
+1. **Expires** deliveries too old to be useful. A delivery that is `pending`, has no `hold`, and
+   was created more than `NOTIFICATION_SWEEP_MAX_AGE_SECONDS` (86400, one day) ago becomes
+   `skipped`, with `last_error` = `expired: not sent within NOTIFICATION_SWEEP_MAX_AGE_SECONDS`.
+   It is never sent: a day-old signal or price alert is worse than none, for example on the
+   first run after a deploy.
+   - It is one UPDATE, claimed with `FOR UPDATE SKIP LOCKED`, so a delivery being sent right
+     now is left alone.
+2. **Re-enqueues** the younger ones that are:
+   - `pending`, with no `hold`;
+   - due: `release_at` is null or past;
+   - overdue by more than `NOTIFICATION_SWEEP_AFTER_SECONDS` (120): `next_attempt_at` for a
+     scheduled retry, otherwise `created_at`.
+
+Held deliveries (quiet hours, hourly cap, open circuit) are never touched; the digests and the
+circuit release send them as before. Each run logs one INFO line:
+`notifications.sweep requeued=N expired=M`. A partial index makes the idle query cheap.
 
 **Why it cannot double-send.** It only enqueues; it never sends. A send claims the delivery
 with `FOR UPDATE SKIP LOCKED`, and only while it is `pending` without a hold. So a delivery

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Deliveries a lost send task left pending are sent again after this (notifications.sweep)
     notification_sweep_after_seconds: int = 120
     notification_sweep_batch: int = 500
+    # older unsent deliveries are not sent any more (skipped, "expired"): a day-old signal or
+    # price alert is worse than none
+    notification_sweep_max_age_seconds: int = 86400
     # WebSocket hub (/ws/market)
     ws_heartbeat_seconds: float = 25
     ws_idle_timeout_seconds: float = 75

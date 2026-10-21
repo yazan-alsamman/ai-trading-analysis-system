@@ -180,9 +180,10 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
 - لا خدمات جديدة ولا أسرار. Migration `0017` إضافية: قيمة `ai_setup` لنوع الإشعار، وجدولا `ai_setup_outbox` و`ai_alert_follows`،
   وعمود `next_attempt_at` (فارغ للصفوف الموجودة) وفهرس جزئي على `notification_deliveries`.
 - مهمتان جديدتان على طابور `notifications` (خدمة `worker`): `ai_alerts.dispatch` كل 30 ثانية (استعلام مفهرس واحد حين لا يوجد شيء)،
-  و`notifications.sweep` كل دقيقة (يعيد إرسال الإشعارات التي ضاعت مهمة إرسالها، ويكتب سطراً واحداً `requeued=N`).
+  و`notifications.sweep` كل دقيقة (يعيد إرسال الإشعارات التي ضاعت مهمة إرسالها، ويعلّم ما هو أقدم من يوم `skipped` بدل
+  إرساله، ويكتب سطراً واحداً `requeued=N expired=M`).
 - متغيرات جديدة بقيم افتراضية آمنة: `AI_ALERTS_ENABLED=true`، `AI_ALERTS_BATCH=50`، `AI_ALERTS_MAX_ATTEMPTS=8`،
-  `AI_ALERTS_MAX_AGE_SECONDS=900`، `AI_EXPLAIN_LANGS=ar,en`، `NOTIFICATION_SWEEP_AFTER_SECONDS=120`، `NOTIFICATION_SWEEP_BATCH=500`.
+  `AI_ALERTS_MAX_AGE_SECONDS=900`، `AI_EXPLAIN_LANGS=ar,en`، `NOTIFICATION_SWEEP_AFTER_SECONDS=120`، `NOTIFICATION_SWEEP_BATCH=500`، `NOTIFICATION_SWEEP_MAX_AGE_SECONDS=86400`.
   التفاصيل في [notifications.md](notifications.md#ai-setup-alerts-b11).
 - فحص بعد النشر (حساب مدير):
   ```bash
