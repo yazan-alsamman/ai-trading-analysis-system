@@ -81,6 +81,8 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "ai_setup_sizes",
             "ai_setup_takes",
             "ai_setup_explanations",
+            "ai_setup_outbox",
+            "ai_alert_follows",
         ],
     ),
     ("workspaces", "Workspaces", ["workspaces"]),

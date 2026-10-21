@@ -19,7 +19,9 @@ async def _labels(session: AsyncSession, type_name: str) -> list[str]:
 async def test_enum_values(session: AsyncSession) -> None:
     assert (await _labels(session, "post_visibility"))[-1] == "subscribers"
     assert (await _labels(session, "report_target"))[-1] == "message"
-    assert (await _labels(session, "notification_type"))[-6:] == [
+    labels = await _labels(session, "notification_type")
+    start = labels.index("chat_message")  # later migrations append after them (0017: ai_setup)
+    assert labels[start : start + 6] == [
         "chat_message",
         "subscription_started",
         "subscription_renewed",

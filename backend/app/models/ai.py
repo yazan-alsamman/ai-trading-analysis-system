@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -189,6 +190,73 @@ class AISetupTake(Base):
     realized_r: Mapped[float | None] = mapped_column(Double)
     pnl: Mapped[float | None] = mapped_column(Double)
     close_reason: Mapped[str | None] = mapped_column(String(64))
+
+
+class AISetupOutbox(Base):
+    """A setup state change to notify (B11): written by ``apply_evaluation`` in its own
+    transaction, so no alert is lost on a crash; sent by the ``ai_alerts.dispatch`` task.
+    Unique ``(setup_id, to_state)``: a replayed evaluation never enqueues twice. DEVELOPING is
+    never written."""
+
+    __tablename__ = "ai_setup_outbox"
+    __table_args__ = (
+        UniqueConstraint("setup_id", "to_state", name="uq_ai_setup_outbox_setup_state"),
+        CheckConstraint(
+            "status IN ('pending', 'done', 'skipped', 'failed')", name="ck_ai_setup_outbox_status"
+        ),
+        CheckConstraint(f"to_state IN ({STATES})", name="ck_ai_setup_outbox_to"),
+        Index(
+            "ix_ai_setup_outbox_due",
+            "next_attempt_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    setup_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("ai_setups.setup_id", ondelete="CASCADE")
+    )
+    from_state: Mapped[str | None] = mapped_column(String(16))
+    to_state: Mapped[str] = mapped_column(String(16))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reason: Mapped[str | None] = mapped_column(String(255))
+    realized_r: Mapped[float | None] = mapped_column(Double)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    status: Mapped[str] = mapped_column(String(16), server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    last_error: Mapped[str | None] = mapped_column(String(500))
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AIAlertFollow(Base):
+    """A user wants ARMED alerts of an instrument and profile (B11), optionally only from a
+    grade (``min_grade``: A best; null: any grade). No automatic follow."""
+
+    __tablename__ = "ai_alert_follows"
+    __table_args__ = (
+        CheckConstraint(
+            "min_grade IS NULL OR min_grade IN ('A', 'B', 'C', 'D')",
+            name="ck_ai_alert_follows_grade",
+        ),
+        Index("ix_ai_alert_follows_market", "instrument_id", "profile"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("instruments.id", ondelete="CASCADE"), primary_key=True
+    )
+    profile: Mapped[str] = mapped_column(String(32), primary_key=True)
+    min_grade: Mapped[str | None] = mapped_column(String(1))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
 
 
 class AISetupExplanation(Base):

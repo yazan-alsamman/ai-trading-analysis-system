@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     ai_default_risk_pct: float = 1.0
     ai_default_daily_loss_pct: float = 3.0
     ai_default_max_drawdown_pct: float = 10.0
+    # AI setup alerts (B11, docs/notifications.md#ai-setup-alerts): the outbox dispatcher
+    ai_alerts_enabled: bool = True
+    ai_alerts_batch: int = 50  # outbox rows per dispatcher run
+    ai_alerts_max_attempts: int = 8  # then the row is failed (admin retry)
+    ai_alerts_max_age_seconds: int = 900  # an older ARMED alert is skipped (stale)
+    ai_explain_langs: str = "ar,en"  # explanations asked of ai-service on ARMED
+    # Deliveries a lost send task left pending are sent again after this (notifications.sweep)
+    notification_sweep_after_seconds: int = 120
+    notification_sweep_batch: int = 500
     # WebSocket hub (/ws/market)
     ws_heartbeat_seconds: float = 25
     ws_idle_timeout_seconds: float = 75
@@ -225,6 +234,10 @@ class Settings(BaseSettings):
                 if pair not in out:
                     out.append(pair)
         return out
+
+    @property
+    def ai_explain_lang_list(self) -> list[str]:
+        return [x.strip() for x in self.ai_explain_langs.split(",") if x.strip() in ("ar", "en")]
 
     @property
     def ai_bar_counts(self) -> dict[str, int]:

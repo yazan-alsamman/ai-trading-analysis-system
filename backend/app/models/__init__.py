@@ -1,10 +1,12 @@
 # استورد النماذج هنا حتى يراها Alembic
 from app.db.base import Base
 from app.models.ai import (
+    AIAlertFollow,
     AIModelVersion,
     AISetup,
     AISetupEvent,
     AISetupExplanation,
+    AISetupOutbox,
     AISetupSize,
     AISetupTake,
 )
@@ -67,6 +69,8 @@ from app.models.user import User, UserRole
 from app.models.workspace import Workspace
 
 __all__ = [
+    "AIAlertFollow",
+    "AISetupOutbox",
     "AIModelVersion",
     "AISetup",
     "AISetupEvent",
