@@ -1436,7 +1436,9 @@ paths:
       tags:
       - admin
       summary: Get Setup
-      description: A setup with its last payload and every state event (oldest first).
+      description: 'A setup with its last payload, every state event (oldest first), the stored per-user
+
+        sizes and how many users took it.'
       operationId: admin_get_setup
       parameters:
       - name: setup_id
@@ -1609,6 +1611,268 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/ai/setups/{setup_id}/size:
+    get:
+      tags:
+      - ai
+      summary: Setup Size
+      description: 'The setup sized for your account: by ai-service ``/v1/size`` or, when it is not
+
+        available, by the backend (``source``). The daily-loss and drawdown guards of your taken
+
+        trades apply first. Stored, and reused while the inputs are the same. 404 unknown setup,
+
+        409 when it has no prices (not ARMED or ACTIVE) or its instrument no specs, 422 when your
+
+        risk profile cannot be used, 502 when ai-service answers outside the contract, 503 when it
+
+        is unavailable and no fallback is allowed (``AI_SIZE_MODE=remote``).'
+      operationId: ai_setup_size
+      parameters:
+      - name: setup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          title: Setup Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISizeRead'
+        '409':
+          description: the setup has no prices (not ARMED or ACTIVE), or no specs
+        '502':
+          description: ai-service answered outside the contract (no fallback)
+        '503':
+          description: ai-service unavailable and AI_SIZE_MODE=remote
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+      - ApiKey: []
+  /api/v1/ai/setups/{setup_id}/take:
+    post:
+      tags:
+      - ai
+      summary: Take Setup
+      description: 'I took this trade: only while the setup is ARMED or ACTIVE (409 otherwise). ``lots``
+
+        defaults to your stored size. 201 the first time, 200 with the same take afterwards. The
+
+        result (``realized_r``, ``pnl``) is filled when the setup ends.'
+      operationId: ai_take_setup
+      parameters:
+      - name: setup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          title: Setup Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/TakeIn'
+              - type: 'null'
+              title: Data
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TakeRead'
+        '200':
+          description: already taken (unchanged)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TakeRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with the current state (version, duplicate, already done)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+    delete:
+      tags:
+      - ai
+      summary: Untake Setup
+      description: Undo it, while the setup has not ended (409 after; 404 when not taken).
+      operationId: ai_untake_setup
+      parameters:
+      - name: setup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          title: Setup Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with the current state (version, duplicate, already done)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/me/ai/trades:
+    get:
+      tags:
+      - ai
+      summary: My Ai Trades
+      description: Your taken AI setups, newest first, with the setup's state and your result.
+      operationId: ai_my_ai_trades
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_AITradeRead_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
           content:
             application/json:
               schema:
@@ -4519,7 +4783,9 @@ paths:
       tags:
       - risk
       summary: Get Risk Profile
-      description: Created with the ``balanced`` template and 10,000 USDT on first read.
+      description: 'Created with the ``balanced`` template, 10,000 USDT and leverage 100 on first read.
+
+        ``ai_risk``: the values AI setups are sized with, and where each one comes from.'
       operationId: risk_get_risk_profile
       responses:
         '200':
@@ -4552,9 +4818,12 @@ paths:
       tags:
       - risk
       summary: Put Risk Profile
-      description: '``{account_size, quote_currency, config}`` or ``{template}``; 422 lists every config
+      description: '``{account_size, quote_currency, leverage, config}`` or ``{template}``; 422 lists
+        every
 
-        error with its path (e.g. ``stop.multiplier``).'
+        config error with its path (e.g. ``stop.multiplier``). A new ``account_size`` restarts the
+
+        drawdown guard of AI setups. ``ai_risk`` (read-only) is what AI setups are sized with.'
       operationId: risk_put_risk_profile
       requestBody:
         content:
@@ -9393,6 +9662,59 @@ components:
       - is_active
       - notes
       title: AIModelRead
+    AIRiskRead:
+      properties:
+        balance:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Balance
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+        leverage:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Leverage
+        risk_per_trade_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Risk Per Trade Pct
+        daily_loss_limit_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Daily Loss Limit Pct
+        max_drawdown_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Max Drawdown Pct
+        sources:
+          additionalProperties:
+            type: string
+          type: object
+          title: Sources
+          description: 'per field: profile (a profile column), config (the risk config) or default (a
+            server setting)'
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+          description: why the profile cannot be used
+      type: object
+      title: AIRiskRead
+      description: The risk values AI setups are sized with (read-only; docs/risk-management.md).
     AISetupDetail:
       properties:
         setup_id:
@@ -9515,6 +9837,16 @@ components:
           type: array
           title: Events
           description: oldest first
+        sizes:
+          items:
+            $ref: '#/components/schemas/AISetupSizeBrief'
+          type: array
+          title: Sizes
+          description: the stored per-user sizes (B10)
+        takes_count:
+          type: integer
+          title: Takes Count
+          description: users who said they took it
       type: object
       required:
       - setup_id
@@ -9544,6 +9876,8 @@ components:
       - features
       - last_payload
       - events
+      - sizes
+      - takes_count
       title: AISetupDetail
     AISetupEventRead:
       properties:
@@ -9714,6 +10048,216 @@ components:
       - created_at
       - updated_at
       title: AISetupRead
+    AISetupSizeBrief:
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          title: User Id
+        lots:
+          type: number
+          title: Lots
+        feasible:
+          type: boolean
+          title: Feasible
+        source:
+          type: string
+          title: Source
+        computed_at:
+          type: string
+          format: date-time
+          title: Computed At
+      type: object
+      required:
+      - user_id
+      - lots
+      - feasible
+      - source
+      - computed_at
+      title: AISetupSizeBrief
+    AISizeInputs:
+      properties:
+        balance:
+          type: number
+          title: Balance
+        currency:
+          type: string
+          title: Currency
+        leverage:
+          type: number
+          title: Leverage
+        risk_per_trade_pct:
+          type: number
+          title: Risk Per Trade Pct
+        daily_loss_limit_pct:
+          type: number
+          title: Daily Loss Limit Pct
+        max_drawdown_pct:
+          type: number
+          title: Max Drawdown Pct
+        sources:
+          additionalProperties:
+            type: string
+          type: object
+          title: Sources
+          description: 'per field: profile, config or default'
+      type: object
+      required:
+      - balance
+      - currency
+      - leverage
+      - risk_per_trade_pct
+      - daily_loss_limit_pct
+      - max_drawdown_pct
+      - sources
+      title: AISizeInputs
+    AISizeRead:
+      properties:
+        setup_id:
+          type: string
+          title: Setup Id
+        lots:
+          type: number
+          title: Lots
+        risk_amount:
+          type: number
+          title: Risk Amount
+          description: money at risk at the stop, in the account currency
+        margin_required:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Margin Required
+          description: 'account currency; null: no rate'
+        feasible:
+          type: boolean
+          title: Feasible
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+        source:
+          type: string
+          title: Source
+          description: ai-service, or local (the backend's B4 lot sizing)
+        computed_at:
+          type: string
+          format: date-time
+          title: Computed At
+        inputs:
+          $ref: '#/components/schemas/AISizeInputs'
+        taken:
+          type: boolean
+          title: Taken
+          description: you said you took this setup
+      type: object
+      required:
+      - setup_id
+      - lots
+      - risk_amount
+      - margin_required
+      - feasible
+      - warnings
+      - source
+      - computed_at
+      - inputs
+      - taken
+      title: AISizeRead
+    AITradeRead:
+      properties:
+        setup_id:
+          type: string
+          title: Setup Id
+        taken_at:
+          type: string
+          format: date-time
+          title: Taken At
+        lots:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lots
+        risk_amount:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Risk Amount
+          description: account currency, at the setup's stop
+        entry_price:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Entry Price
+        closed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Closed At
+        realized_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Realized R
+        pnl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Pnl
+          description: realized_r x risk_amount
+        close_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Close Reason
+        instrument_id:
+          type: string
+          format: uuid
+          title: Instrument Id
+        profile:
+          type: string
+          title: Profile
+        direction:
+          type: string
+          title: Direction
+        state:
+          $ref: '#/components/schemas/SetupState'
+          description: the setup's state now
+        entry:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Entry
+        sl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sl
+        tp:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Tp
+      type: object
+      required:
+      - setup_id
+      - taken_at
+      - lots
+      - risk_amount
+      - entry_price
+      - closed_at
+      - realized_r
+      - pnl
+      - close_reason
+      - instrument_id
+      - profile
+      - direction
+      - state
+      - entry
+      - sl
+      - tp
+      title: AITradeRead
     AdminApiKeyRead:
       properties:
         id:
@@ -13445,6 +13989,29 @@ components:
       - subscription_canceled
       - new_subscriber
       title: NotificationType
+    Page_AITradeRead_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AITradeRead'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: Page[AITradeRead]
     Page_AdminApiKeyRead_:
       properties:
         items:
@@ -15331,6 +15898,10 @@ components:
         quote_currency:
           type: string
           title: Quote Currency
+        leverage:
+          type: number
+          title: Leverage
+          description: account leverage, for the margin of AI setups
         config:
           additionalProperties: true
           type: object
@@ -15346,13 +15917,17 @@ components:
           type: string
           format: date-time
           title: Updated At
+        ai_risk:
+          $ref: '#/components/schemas/AIRiskRead'
       type: object
       required:
       - account_size
       - quote_currency
+      - leverage
       - config
       - template
       - updated_at
+      - ai_risk
       title: RiskProfileRead
     RiskProfileUpdate:
       properties:
@@ -15371,6 +15946,13 @@ components:
             pattern: ^[A-Z0-9]+$
           - type: 'null'
           title: Quote Currency
+        leverage:
+          anyOf:
+          - type: number
+            maximum: 10000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Leverage
         config:
           anyOf:
           - additionalProperties: true
@@ -16188,6 +16770,84 @@ components:
       - symbol
       - relevance
       title: TagRead
+    TakeIn:
+      properties:
+        lots:
+          anyOf:
+          - type: number
+            maximum: 1000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Lots
+          description: 'default: your stored size'
+        entry_price:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Entry Price
+      additionalProperties: false
+      type: object
+      title: TakeIn
+    TakeRead:
+      properties:
+        setup_id:
+          type: string
+          title: Setup Id
+        taken_at:
+          type: string
+          format: date-time
+          title: Taken At
+        lots:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lots
+        risk_amount:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Risk Amount
+          description: account currency, at the setup's stop
+        entry_price:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Entry Price
+        closed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Closed At
+        realized_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Realized R
+        pnl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Pnl
+          description: realized_r x risk_amount
+        close_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Close Reason
+      type: object
+      required:
+      - setup_id
+      - taken_at
+      - lots
+      - risk_amount
+      - entry_price
+      - closed_at
+      - realized_r
+      - pnl
+      - close_reason
+      title: TakeRead
     TelegramLinkRead:
       properties:
         code:
@@ -17121,6 +17781,8 @@ tags:
   description: Checkout, subscriptions, invoices (demo payments) and admin tools.
 - name: payments-demo
   description: The demo provider's hosted payment pages and the payment webhook (no login; no real money).
+- name: ai
+  description: 'AI setups for users: their size for your account (signals:read), taken trades.'
 - name: calendar
   description: 'Economic calendar: point-in-time events (market:read); history import and live refresh
     (admin).'

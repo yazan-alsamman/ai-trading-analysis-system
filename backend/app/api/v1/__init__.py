@@ -8,6 +8,7 @@ from app.api.v1 import (
     admin_market,
     admin_realtime,
     admin_system,
+    ai,
     api_keys,
     auth,
     backtests,
@@ -40,6 +41,7 @@ limited_router.include_router(admin_market.router)
 limited_router.include_router(admin_realtime.router)
 limited_router.include_router(admin_system.router)
 limited_router.include_router(admin_ai.router)
+limited_router.include_router(ai.router)
 limited_router.include_router(admin_api_keys.router)
 limited_router.include_router(indicators.router)
 limited_router.include_router(strategies.router)

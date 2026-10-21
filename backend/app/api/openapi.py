@@ -84,6 +84,7 @@ TAG_DESCRIPTIONS = {
     "subscriptions": "Checkout, subscriptions, invoices (demo payments) and admin tools.",
     "payments-demo": "The demo provider's hosted payment pages and the payment webhook "
     "(no login; no real money).",
+    "ai": "AI setups for users: their size for your account (signals:read), taken trades.",
     "calendar": "Economic calendar: point-in-time events (market:read); history import "
     "and live refresh (admin).",
     "chat": "Expert chat (REST; live delivery on the WebSocket, see asyncapi.yaml).",
