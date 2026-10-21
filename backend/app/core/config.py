@@ -137,6 +137,8 @@ class Settings(BaseSettings):
     payment_demo_tools: bool = False  # admin fast-forward in production (always on elsewhere)
     payment_return_url: str = ""  # where the demo page sends the browser after paying
     public_base_url: str = ""  # e.g. http://187.127.76.76:8080; empty: from the request (Host)
+    # the public HTTPS name (docs/https.md); for docs and links only, nothing depends on it
+    public_hostname: str = ""
     platform_fee_pct: float = 20.0  # kept from every paid invoice (expert earnings view)
     subscription_grace_days: int = 3  # past_due keeps access this long, then expired
     checkout_ttl_minutes: int = 30

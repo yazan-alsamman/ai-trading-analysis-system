@@ -217,6 +217,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
     out: dict[str, Any] = {
         "version": settings.app_version,
         "environment": settings.environment,
+        "public_hostname": settings.public_hostname or None,
         "time": datetime.now(UTC).isoformat(),
         "uptime_seconds": round(now - ops.STARTED_AT),
     }
