@@ -48,6 +48,21 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    # healthy once migrations ran and the API answers: `docker compose up --wait` (CI e2e)
+    # and the workers below wait for it (python is in the image; no extra package)
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, sys, urllib.request;
+          r = urllib.request.urlopen("http://localhost:8000/api/v1/health/ready", timeout=4);
+          sys.exit(0 if json.load(r).get("status") == "ok" else 1)
+      start_period: 60s  # alembic upgrade head runs first
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   worker:
     build:
@@ -58,8 +73,12 @@ services:
     # the default queue (signal engine) and notifications (Telegram / email / push sends)
     command: celery -A app.tasks worker -Q celery,notifications --loglevel=info
     depends_on:
-      - redis
-      - db
+      redis:
+        condition: service_started
+      db:
+        condition: service_started
+      backend:  # never query the database before the backend has migrated it
+        condition: service_healthy
 
   worker-backtest:  # backtests on their own queue, so they never delay the live signal engine
     build:
@@ -71,8 +90,12 @@ services:
       celery -A app.tasks worker -Q backtests,maintenance --concurrency 2 --hostname backtests@%h
       --loglevel=info
     depends_on:
-      - redis
-      - db
+      redis:
+        condition: service_started
+      db:
+        condition: service_started
+      backend:  # never query the database before the backend has migrated it
+        condition: service_healthy
 
   # Telegram long polling for /start (linking), /stop and /status; idles without a token
   telegram-bot:
@@ -102,7 +125,10 @@ services:
     environment: *dev-smtp
     command: celery -A app.tasks beat --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      backend:  # tasks start after the database is migrated
+        condition: service_healthy
 
   ai-service:
     build: ./ai-service
