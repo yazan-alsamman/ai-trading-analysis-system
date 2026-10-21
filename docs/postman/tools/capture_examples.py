@@ -59,6 +59,7 @@ EXPERT_PASSWORD = "Expert12345"
 BACKEND = Path(__file__).resolve().parents[3] / "backend"
 
 
+AI_SETUP_ID = "xauusd-intraday-2026-10-19T14:15:00Z-buy"  # new_setups[0] of the example
 SEED_AI_SETUP = """
 import asyncio, json
 from datetime import timedelta
@@ -413,6 +414,8 @@ class Runner:
             [sys.executable, "-c", SEED_AI_SETUP], cwd=BACKEND, capture_output=True, text=True
         )
         print(f"   ai setup: {(out.stdout or out.stderr).strip()[-200:]}")
+        # the user's AI requests (Risk Management) run before Admin → AI Engine stores the id
+        self.vars["ai_setup_id"] = AI_SETUP_ID
 
     def wait_backtest(self, var: str) -> None:
         for _ in range(60):
