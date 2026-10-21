@@ -16,7 +16,7 @@ class _ClientMessage(BaseModel):
 
 
 class _TopicRef(_ClientMessage):
-    topic: Literal["candles", "signals", "user", "news", "chat"]
+    topic: Literal["candles", "signals", "user", "news", "chat", "ai_setups"]
     instrument_id: uuid.UUID | None = None
     timeframe: Timeframe | None = None
     user_id: uuid.UUID | None = None
@@ -36,6 +36,7 @@ class _TopicRef(_ClientMessage):
         required = {
             "candles": {"instrument_id", "timeframe"},
             "signals": {"instrument_id"},
+            "ai_setups": {"instrument_id"},
             "user": {"user_id"},
             "chat": {"conversation_id"},
         }[self.topic]

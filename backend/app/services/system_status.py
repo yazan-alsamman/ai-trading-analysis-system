@@ -37,6 +37,8 @@ BEAT_TASKS = (
     "ops.daily_summary",
     "data_quality.check",
     "calendar.refresh",
+    "ai_alerts.dispatch",
+    "notifications.sweep",
 )
 
 
@@ -151,6 +153,26 @@ async def _calendar(session: AsyncSession, redis: Redis) -> dict[str, Any]:
     return {**await calendar_service.state(redis), **await calendar_service.table_stats(session)}
 
 
+async def _ai_alerts(session: AsyncSession) -> dict[str, Any]:
+    """The AI setup alert outbox (B11): rows by status, and how long the oldest pending one has
+    waited."""
+    rows = await session.execute(
+        text("SELECT status, count(*) FROM ai_setup_outbox GROUP BY status")
+    )
+    oldest = await session.scalar(
+        text(
+            "SELECT extract(epoch FROM clock_timestamp() - min(created_at)) "
+            "FROM ai_setup_outbox "
+            "WHERE status = 'pending'"
+        )
+    )
+    counts = {"pending": 0, "done": 0, "skipped": 0, "failed": 0, **dict(rows.all())}
+    return {
+        "outbox": counts,
+        "oldest_pending_seconds": round(float(oldest), 1) if oldest is not None else None,
+    }
+
+
 async def _notifications(redis: Redis) -> dict[str, Any]:
     server = enabled_channels()
     return {
@@ -205,6 +227,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
         "market_data": lambda: _market(session, now),
         "data_quality": lambda: _data_quality(session, redis),
         "calendar": lambda: _calendar(session, redis),
+        "ai_alerts": lambda: _ai_alerts(session),
         "notifications": lambda: _notifications(redis),
         "errors_last_hour": lambda: ops.errors_last_hour(redis),
     }

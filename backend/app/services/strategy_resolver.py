@@ -77,10 +77,10 @@ def sees_all_signals(user: User) -> bool:
     return user.role == UserRole.admin
 
 
-def may_read_ai_setup(user: User, setup: object) -> bool:
-    """Who may read (and size, and take) an AI setup. AI setups are global, not a custom
-    strategy: everyone who may read signals may use them. The one place B12's isolation rules
-    would change."""
+def may_read_ai_setup(user: User, setup: object | None) -> bool:
+    """Who may read (and size, take, be alerted about) an AI setup; ``setup=None``: the live
+    ``ai:setups:{instrument_id}`` topic. AI setups are global, not a custom strategy: everyone
+    who may read signals may use them. The one place B12's isolation rules would change."""
     return True
 
 

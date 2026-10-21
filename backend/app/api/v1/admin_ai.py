@@ -2,15 +2,23 @@
 responses with their events, and the model registry. User-facing reads come with B9/B11."""
 
 import uuid
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
 from sqlalchemy import func, select
 
-from app.ai import store
+from app.ai import alerts, store
 from app.ai.contract import SetupState
 from app.api.deps import AdminUser, SessionDep
-from app.models.ai import AIModelVersion, AISetup, AISetupEvent, AISetupSize, AISetupTake
+from app.models.ai import (
+    AIModelVersion,
+    AISetup,
+    AISetupEvent,
+    AISetupOutbox,
+    AISetupSize,
+    AISetupTake,
+)
 from app.schemas.ai import (
     AIModelIn,
     AIModelRead,
@@ -18,7 +26,9 @@ from app.schemas.ai import (
     AISetupEventRead,
     AISetupRead,
     AISetupSizeBrief,
+    OutboxRead,
 )
+from app.schemas.common import Page
 
 router = APIRouter(prefix="/admin/ai", tags=["admin"])
 
@@ -45,7 +55,7 @@ async def get_setup(
     setup_id: Annotated[str, Path(max_length=128)], _: AdminUser, session: SessionDep
 ):
     """A setup with its last payload, every state event (oldest first), the stored per-user
-    sizes and how many users took it."""
+    sizes, how many users took it, and its alerts (outbox)."""
     row = await session.get(AISetup, setup_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Setup not found")
@@ -62,6 +72,9 @@ async def get_setup(
     takes_count = await session.scalar(
         select(func.count()).select_from(AISetupTake).where(AISetupTake.setup_id == setup_id)
     )
+    outbox = await session.scalars(
+        select(AISetupOutbox).where(AISetupOutbox.setup_id == setup_id).order_by(AISetupOutbox.id)
+    )
     return AISetupDetail.model_validate(
         {
             **AISetupRead.model_validate(row).model_dump(),
@@ -71,8 +84,52 @@ async def get_setup(
             "events": [AISetupEventRead.model_validate(e) for e in events],
             "sizes": [AISetupSizeBrief.model_validate(r) for r in sizes],
             "takes_count": takes_count,
+            "outbox": [OutboxRead.model_validate(r) for r in outbox],
         }
     )
+
+
+@router.get("/outbox", response_model=Page[OutboxRead])
+async def list_outbox(
+    _: AdminUser,
+    session: SessionDep,
+    status_: Annotated[
+        Literal["pending", "done", "skipped", "failed"] | None, Query(alias="status")
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    """The AI setup alerts (B11), newest first, with attempts and errors."""
+    filters = [AISetupOutbox.status == status_] if status_ else []
+    total = await session.scalar(select(func.count()).select_from(AISetupOutbox).where(*filters))
+    rows = await session.scalars(
+        select(AISetupOutbox)
+        .where(*filters)
+        .order_by(AISetupOutbox.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return Page[OutboxRead](
+        items=[OutboxRead.model_validate(r) for r in rows],
+        total=total or 0,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post("/outbox/{row_id}/retry", response_model=OutboxRead)
+async def retry_outbox(row_id: int, _: AdminUser, session: SessionDep):
+    """A ``failed`` alert back to ``pending``, due now (``attempts`` kept). 409 otherwise."""
+    row = await session.get(AISetupOutbox, row_id, with_for_update=True)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Outbox row not found")
+    if row.status != "failed":
+        raise HTTPException(status.HTTP_409_CONFLICT, f"the row is {row.status}, not failed")
+    row.status, row.next_attempt_at = "pending", datetime.now(UTC)
+    await session.commit()
+    await session.refresh(row)
+    alerts.kick()
+    return row
 
 
 @router.get("/models", response_model=list[AIModelRead])

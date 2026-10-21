@@ -35,6 +35,7 @@ from app.realtime.hub import (
 )
 from app.realtime.protocol import SubscribeMessage, TypingMessage, UnsubscribeMessage
 from app.realtime.topics import (
+    ai_setups_topic,
     candles_topic,
     chat_topic,
     is_private_signals,
@@ -44,7 +45,7 @@ from app.realtime.topics import (
     user_topic,
 )
 from app.schemas.market import CandleOut
-from app.services import api_key_service, market_service
+from app.services import api_key_service, market_service, strategy_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -426,6 +427,13 @@ async def _subscribe(
     if msg.topic == "chat":
         await _subscribe_chat(client, hub, session_factory, msg)
         return
+    if (
+        msg.topic == "ai_setups"
+        and auth is not None
+        and not strategy_resolver.may_read_ai_setup(auth.user, None)
+    ):
+        client.send(protocol.error(protocol.FORBIDDEN, "AI setups are not available to you"))
+        return
     topic = _market_topic(msg)
     if (
         topic not in client.topics
@@ -459,8 +467,8 @@ async def _subscribe(
             client.send(protocol.error(protocol.UNAVAILABLE, "live updates are unavailable"))
             return
         client.send(protocol.subscribed(topic))
-        if msg.topic in ("signals", "news"):
-            return  # no snapshot: GET /api/v1/signals and /news list the past ones
+        if msg.topic in ("signals", "news", "ai_setups"):
+            return  # no snapshot: the REST API lists the past ones
         latest = await market_service.get_latest_candle(session, msg.instrument_id, msg.timeframe)
     candle = (
         CandleOut.from_candle(latest).model_dump(exclude_none=True) if latest is not None else None
@@ -550,6 +558,8 @@ def _market_topic(msg: SubscribeMessage | UnsubscribeMessage) -> str:
         return news_topic(msg.instrument_id)
     if msg.topic == "signals":
         return signals_topic(msg.instrument_id)
+    if msg.topic == "ai_setups":
+        return ai_setups_topic(msg.instrument_id)
     return candles_topic(msg.instrument_id, msg.timeframe)
 
 

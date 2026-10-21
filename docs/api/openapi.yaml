@@ -1438,7 +1438,7 @@ paths:
       summary: Get Setup
       description: 'A setup with its last payload, every state event (oldest first), the stored per-user
 
-        sizes and how many users took it.'
+        sizes, how many users took it, and its alerts (outbox).'
       operationId: admin_get_setup
       parameters:
       - name: setup_id
@@ -1475,6 +1475,136 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/ai/outbox:
+    get:
+      tags:
+      - admin
+      summary: List Outbox
+      description: The AI setup alerts (B11), newest first, with attempts and errors.
+      operationId: admin_list_outbox
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - pending
+            - done
+            - skipped
+            - failed
+            type: string
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_OutboxRead_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/ai/outbox/{row_id}/retry:
+    post:
+      tags:
+      - admin
+      summary: Retry Outbox
+      description: A ``failed`` alert back to ``pending``, due now (``attempts`` kept). 409 otherwise.
+      operationId: admin_retry_outbox
+      parameters:
+      - name: row_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Row Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with the current state (version, duplicate, already done)
           content:
             application/json:
               schema:
@@ -1815,6 +1945,174 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: Conflict with the current state (version, duplicate, already done)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/me/ai/follows:
+    get:
+      tags:
+      - ai
+      summary: My Ai Follows
+      description: The instruments and profiles whose ARMED setups you are alerted about.
+      operationId: ai_my_ai_follows
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/app__schemas__ai__FollowRead'
+                type: array
+                title: Response My Ai Follows Api V1 Me Ai Follows Get
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/me/ai/follows/{instrument_id}/{profile}:
+    put:
+      tags:
+      - ai
+      summary: Follow Ai Setups
+      description: 'Alert me when a setup of this instrument and profile becomes ARMED (optionally only
+
+        from ``min_grade``). Idempotent: calling it again only changes ``min_grade``. 404 unknown
+
+        instrument, 422 unknown profile. After ARMED you hear about a setup only if you took it.'
+      operationId: ai_follow_ai_setups
+      parameters:
+      - name: instrument_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Instrument Id
+      - name: profile
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 32
+          title: Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/FollowIn'
+              - type: 'null'
+              title: Data
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/app__schemas__ai__FollowRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+    delete:
+      tags:
+      - ai
+      summary: Unfollow Ai Setups
+      description: Stop the ARMED alerts of this instrument and profile (404 when not followed).
+      operationId: ai_unfollow_ai_setups
+      parameters:
+      - name: instrument_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Instrument Id
+      - name: profile
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 32
+          title: Profile
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
           content:
             application/json:
               schema:
@@ -9847,6 +10145,12 @@ components:
           type: integer
           title: Takes Count
           description: users who said they took it
+        outbox:
+          items:
+            $ref: '#/components/schemas/OutboxRead'
+          type: array
+          title: Outbox
+          description: its alerts (B11), oldest first
       type: object
       required:
       - setup_id
@@ -9878,6 +10182,7 @@ components:
       - events
       - sizes
       - takes_count
+      - outbox
       title: AISetupDetail
     AISetupEventRead:
       properties:
@@ -12763,19 +13068,22 @@ components:
       - outcome
       - subscription
       title: FastForwardResult
-    FollowRead:
+    FollowIn:
       properties:
-        user:
-          $ref: '#/components/schemas/AuthorRead'
-        since:
-          type: string
-          format: date-time
-          title: Since
+        min_grade:
+          anyOf:
+          - type: string
+            enum:
+            - A
+            - B
+            - C
+            - D
+          - type: 'null'
+          title: Min Grade
+          description: 'only setups of this grade or better (A best); null: all'
+      additionalProperties: false
       type: object
-      required:
-      - user
-      - since
-      title: FollowRead
+      title: FollowIn
     FollowState:
       properties:
         following:
@@ -13988,7 +14296,84 @@ components:
       - subscription_payment_failed
       - subscription_canceled
       - new_subscriber
+      - ai_setup
       title: NotificationType
+    OutboxRead:
+      properties:
+        id:
+          type: integer
+          title: Id
+        setup_id:
+          type: string
+          title: Setup Id
+        from_state:
+          anyOf:
+          - $ref: '#/components/schemas/SetupState'
+          - type: 'null'
+        to_state:
+          $ref: '#/components/schemas/SetupState'
+        at:
+          type: string
+          format: date-time
+          title: At
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        realized_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Realized R
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        status:
+          type: string
+          enum:
+          - pending
+          - done
+          - skipped
+          - failed
+          title: Status
+        attempts:
+          type: integer
+          title: Attempts
+        next_attempt_at:
+          type: string
+          format: date-time
+          title: Next Attempt At
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+          description: the last failure, or why it was skipped
+        processed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Processed At
+      type: object
+      required:
+      - id
+      - setup_id
+      - from_state
+      - to_state
+      - at
+      - reason
+      - realized_r
+      - created_at
+      - status
+      - attempts
+      - next_attempt_at
+      - last_error
+      - processed_at
+      title: OutboxRead
+      description: 'An alert to send (B11): one per setup state change, DEVELOPING excepted.'
     Page_AITradeRead_:
       properties:
         items:
@@ -14200,7 +14585,7 @@ components:
       properties:
         items:
           items:
-            $ref: '#/components/schemas/FollowRead'
+            $ref: '#/components/schemas/app__schemas__posts__FollowRead'
           type: array
           title: Items
         total:
@@ -14265,6 +14650,29 @@ components:
       - limit
       - offset
       title: Page[NotificationRead]
+    Page_OutboxRead_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/OutboxRead'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: Page[OutboxRead]
     Page_PostRead_:
       properties:
         items:
@@ -17666,6 +18074,31 @@ components:
       additionalProperties: false
       type: object
       title: WorkspaceUpdate
+    app__schemas__ai__FollowRead:
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+          title: Instrument Id
+        profile:
+          type: string
+          title: Profile
+        min_grade:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Min Grade
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - instrument_id
+      - profile
+      - min_grade
+      - created_at
+      title: FollowRead
     app__schemas__backtests__InstrumentRef:
       properties:
         id:
@@ -17684,6 +18117,19 @@ components:
       - symbol
       - source
       title: InstrumentRef
+    app__schemas__posts__FollowRead:
+      properties:
+        user:
+          $ref: '#/components/schemas/AuthorRead'
+        since:
+          type: string
+          format: date-time
+          title: Since
+      type: object
+      required:
+      - user
+      - since
+      title: FollowRead
     app__schemas__posts__InstrumentRef:
       properties:
         id:

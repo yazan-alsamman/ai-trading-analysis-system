@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,6 +57,26 @@ class AISetupSizeBrief(BaseModel):
     computed_at: datetime
 
 
+class OutboxRead(BaseModel):
+    """An alert to send (B11): one per setup state change, DEVELOPING excepted."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    setup_id: str
+    from_state: SetupState | None
+    to_state: SetupState
+    at: datetime
+    reason: str | None
+    realized_r: float | None
+    created_at: datetime
+    status: Literal["pending", "done", "skipped", "failed"]
+    attempts: int
+    next_attempt_at: datetime
+    last_error: str | None = Field(description="the last failure, or why it was skipped")
+    processed_at: datetime | None
+
+
 class AISetupDetail(AISetupRead):
     evidence: dict[str, Any]
     features: dict[str, Any]
@@ -64,9 +84,27 @@ class AISetupDetail(AISetupRead):
     events: list[AISetupEventRead] = Field(description="oldest first")
     sizes: list[AISetupSizeBrief] = Field(description="the stored per-user sizes (B10)")
     takes_count: int = Field(description="users who said they took it")
+    outbox: list[OutboxRead] = Field(description="its alerts (B11), oldest first")
 
 
 # --- users (B10) ---------------------------------------------------------------------------------
+
+
+class FollowIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    min_grade: Literal["A", "B", "C", "D"] | None = Field(
+        default=None, description="only setups of this grade or better (A best); null: all"
+    )
+
+
+class FollowRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    instrument_id: uuid.UUID
+    profile: str
+    min_grade: str | None
+    created_at: datetime
 
 
 class TakeIn(BaseModel):
