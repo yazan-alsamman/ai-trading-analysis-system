@@ -293,7 +293,7 @@ or `default`) and `risk_config`, the exact rules used.
 |---|---|---|---|
 | GET | `/risk/schema` | JWT / `strategies:read` | JSON Schema of the risk config, the normalised templates |
 | GET | `/me/risk-profile` | JWT | created with defaults on first read |
-| PUT | `/me/risk-profile` | JWT | `{account_size, quote_currency, config}` or `{template}`; 422 with paths |
+| PUT | `/me/risk-profile` | JWT | `{account_size, quote_currency, leverage, config}` or `{template}`; 422 with paths. GET and PUT also return `leverage` and `ai_risk` (AI setups, below) |
 | POST | `/risk/position-size` | JWT / `strategies:read` | calculator (below) |
 | GET | `/me/signal-plans` | JWT | your plans with their signal, `Page`; filters `instrument_id`, `timeframe`, `strategy_key`, `since` |
 | PATCH | `/me/strategies/{id}` | JWT | also `risk_override` (null clears) |
@@ -313,6 +313,135 @@ it was computed on and the rules used:
           "quantity": 0.1365835236, "notional": 4986.9704, "risk_amount": 100.0,
           "risk_pct": 1.0, "rr": 1.0, "invalid_reason": null, …}}
 ```
+
+## AI setups (B10)
+
+AI setups come from ai-service (docs/ai-contract.md). B10 adds four things: the per-user risk
+values they are sized with, their size for each user, the user's "I took this trade", and two
+account guards. Code: `risk_service.ai_risk_inputs`, `app/ai/sizing.py`, `app/ai/takes.py`,
+`store.apply_evaluation` (close-out).
+
+### The five fields, mapped onto the profile
+
+There is no parallel model: the values come from the existing profile, and
+`ai_risk_inputs(profile)` is the one place that maps them.
+
+| Field (contract) | Comes from | Otherwise |
+|---|---|---|
+| `balance` | `account_size` | – |
+| `currency` | `quote_currency` | – |
+| `leverage` | `leverage` (new column, default 100, `0 < leverage <= 10000`) | – |
+| `risk_per_trade_pct` | `config.sizing.risk_pct` when `sizing.mode` is `risk` | `AI_DEFAULT_RISK_PCT` (1.0), with the warning `sizing mode is not risk-based; used 1%` |
+| `daily_loss_limit_pct` | `config.guards.max_daily_loss_pct` | `AI_DEFAULT_DAILY_LOSS_PCT` (3.0) |
+| `max_drawdown_pct` | `config.guards.max_drawdown_pct` | `AI_DEFAULT_MAX_DRAWDOWN_PCT` (10.0) |
+
+`GET /me/risk-profile` returns them read-only as `ai_risk`, with `sources` per field: `profile`
+(a profile column), `config` (the risk config) or `default` (a setting), plus the warnings.
+`PUT /me/risk-profile` takes `leverage` (optional, `> 0` and `<= 10000`).
+
+Templates: `conservative` 0.5 % (config) / 3 % (default) / 10 % (config); `balanced` 1 %
+(config) / 3 % / 10 % (defaults); `aggressive` 2 % (config) / 3 % / 10 % (defaults).
+
+### Size
+
+`GET /ai/setups/{setup_id}/size` (JWT or an API key with `signals:read`: AI setups are global,
+so everyone who may read signals may size them) sizes an `ARMED` or `ACTIVE` setup for your
+account. Other states give 409, and so does an instrument without specs.
+
+1. **Guards** (below): if one is reached, the answer is `feasible: false`, `lots: 0` and the
+   guard in `warnings`. ai-service is not called.
+2. **ai-service `/v1/size`**, with the setup exactly as last returned, the instrument's B4
+   specs, the account and the risk.
+3. **`AI_SIZE_MODE`** decides what happens when ai-service cannot answer:
+   - `auto` (default): ai-service first. When it is unavailable (timeouts, connection errors,
+     5xx after the client's retries) or has no `/v1/size` yet (404), the backend sizes the
+     setup itself (`source: local`, with a warning).
+   - `remote`: never falls back; 503 when ai-service is unavailable.
+   - `local`: never calls ai-service.
+
+   Another 4xx, or a body outside the contract, is a **contract error**: 502, no fallback,
+   logged.
+4. **Local formula**, the B4 lot sizing of docs/instruments.md:
+   - risk amount = balance × `risk_per_trade_pct` / 100;
+   - lots = risk amount / (|entry − sl| × contract size × conversion rate), rounded **down** to
+     `lot_step`;
+   - below `min_lot`: 0 lots, `feasible: false` and a warning; above `max_lot`: capped, with a
+     warning;
+   - margin = entry × contract size × lots × conversion rate / leverage, in the account
+     currency. Without a conversion rate the size is not feasible and the margin is null, both
+     with a warning. USD, USDT and USDC count as one dollar when there is no exact market, with
+     a warning.
+5. **Stored** in `ai_setup_sizes`, one row per setup and user, with `source` (`ai-service` or
+   `local`) and `inputs`:
+   - `inputs` holds the account, the risk, a hash of the specs, a hash of the setup payload,
+     the guards reached and the mode;
+   - the same inputs give the stored result without a call;
+   - a new balance, risk or leverage, or a setup that moved (ARMED → ACTIVE, a new payload),
+     computes it again.
+
+The answer has `lots`, `risk_amount` (account currency; the contract calls it `risk_usd`),
+`margin_required`, `feasible`, `warnings`, `source`, `computed_at`, the `inputs` used with their
+sources, and `taken`.
+
+**The B4 example**: balance 2,000 USD, risk 1 % = 20 USD, XAU/USD buy at 2400.00 with the stop
+at 2395.00. One lot risks 5.00 × 100 = 500 USD, so the size is 20 / 500 = **0.04** lots,
+`risk_amount` 20 USD, and margin 2400 × 100 × 0.04 / 100 = 96 USD at leverage 100 (9,600 USD at
+leverage 1). Both paths give this result.
+
+`size_setup_for_users(session, setup, user_ids)` is the batch form for B9/B11, used when a
+setup becomes ARMED:
+- it loads the profiles in one query;
+- it runs at most `AI_SIZE_CONCURRENCY` (4) ai-service calls at once;
+- it returns one result or one error per user, so one broken profile does not stop the others.
+
+### Taken trades
+
+| Method | Path | |
+|---|---|---|
+| POST | `/ai/setups/{setup_id}/take` | body `{lots?, entry_price?}`; only while `ARMED` or `ACTIVE` (409 otherwise); 201 the first time, 200 with the same take afterwards |
+| DELETE | `/ai/setups/{setup_id}/take` | undo, while the setup has not ended (409 after) |
+| GET | `/me/ai/trades` | your takes, newest first (`Page`), with the setup's state, `realized_r` and `pnl` |
+
+A take records:
+- **`lots`:** your stored size by default.
+- **`risk_amount`:** the risk of those lots at the setup's stop, in your account currency. It
+  comes from the stored size, or from the specs when there is none.
+- **`entry_price`:** optional.
+
+When `apply_evaluation` records the end of the setup, in the same transaction:
+
+| The setup becomes | The take gets |
+|---|---|
+| `CLOSED` | `closed_at`, `realized_r`, `pnl = realized_r × risk_amount`, `close_reason` (the transition's reason) |
+| `EXPIRED`, `INVALIDATED` | `realized_r = 0`, `pnl = 0`, `close_reason` (`expired`, `invalidated` or the reason) |
+
+A take already closed is never changed again, so a replayed response changes nothing.
+
+### Guards (checked before every size)
+
+The balance is declared and we never read a real account, so the rules are simple on purpose.
+They use the `pnl` of your **closed takes**, and they apply even if ai-service checks the same
+limits.
+
+- **Daily loss.** Add up the `pnl` of the takes closed since 00:00 UTC today. If the loss is at
+  least `daily_loss_limit_pct` of the balance: `daily_loss_limit_reached`.
+- **Drawdown.** Run a total of `pnl` over the takes closed since the balance was last set
+  (`risk_profiles.balance_set_at`, set by every PUT that changes `account_size`; null means all
+  takes count). The drawdown is the fall from the highest point of that total (0 at the start)
+  to now, as a % of the balance. At `max_drawdown_pct` or more: `max_drawdown_reached`.
+
+Worked examples, on 2,000 USD with 1 % risk (1R = 20 USD):
+
+- **Daily loss, 3 % limit (60 USD).**
+  - A −2R take today: −40 USD (2 %). Still feasible.
+  - A second −2R today: −80 USD (4 %). `daily_loss_limit_reached`, and ai-service is not
+    called.
+  - Takes closed yesterday do not count.
+- **Drawdown, 5 % limit (100 USD).** Three takes on earlier days: +1R, −3R, −3R.
+  - After the first, the total is +20 and the highest point is 20.
+  - After the second, the total is −40: 60 USD (3 %) below the highest point, still feasible.
+  - After the third, the total is −100: 120 USD (6 %) below it, so `max_drawdown_reached`.
+  - A new balance starts the window again.
 
 ## Backtests
 

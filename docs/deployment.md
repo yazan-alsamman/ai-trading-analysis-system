@@ -162,6 +162,20 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s -H "Authorization: Bearer $ADMIN_TOKEN" "http://187.127.76.76:8080/api/v1/admin/ai/setups?limit=5"
   ```
 
+## إعدادات مخاطرة AI والصفقات المأخوذة (B10)
+- لا خدمات جديدة ولا أسرار. Migration `0016` إضافية: `risk_profiles.leverage` (افتراضي 100 لكل الملفات الموجودة)
+  و`risk_profiles.balance_set_at` (فارغ)، و`source` و`computed_at` في `ai_setup_sizes`، وجدول جديد `ai_setup_takes`.
+- متغيرات جديدة بقيم افتراضية آمنة: `AI_SIZE_MODE=auto`، `AI_SIZE_CONCURRENCY=4`، `AI_DEFAULT_RISK_PCT=1.0`،
+  `AI_DEFAULT_DAILY_LOSS_PCT=3.0`، `AI_DEFAULT_MAX_DRAWDOWN_PCT=10.0`. التفاصيل في
+  [risk-management.md](risk-management.md#ai-setups-b10).
+- لا توجد إعدادات AI في الإنتاج بعد، لذلك `/ai/setups/{id}/size` و`/take` تعيد 404 وهذا متوقع.
+- فحص بعد النشر:
+  ```bash
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/risk-profile   # leverage 100 و ai_risk
+  curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/ai/setups/x/size  # 404
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/ai/trades   # {"items":[],"total":0,...}
+  ```
+
 ## توزيع المهام على الـ workers (T05/T07 + hardening)
 - `worker` (`-Q celery,notifications`): المسار الحي فقط: محرك الإشارات (`signals.*`)، تنبيهات الأسعار
   (`alerts.*`)، وإرسال الإشعارات والملخصات، وفحص جودة البيانات (`data_quality.check`)، وجلب التقويم
