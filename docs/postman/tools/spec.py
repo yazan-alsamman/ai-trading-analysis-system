@@ -357,6 +357,9 @@ if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
 SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
 if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
 
+SKIP_NO_OUTBOX_ROW = """// No AI alert in the outbox yet (send Admin → AI Engine → List AI alert outbox first): skip.
+if (!pm.variables.get("ai_outbox_id")) pm.execution.skipRequest();"""
+
 SKIP_NO_CHECKOUT = """// No checkout was opened (no expert with an active plan yet): nothing to pay.
 if (!pm.variables.get("checkout_id")) pm.execution.skipRequest();"""
 
@@ -930,7 +933,8 @@ FOLDERS: list[Folder] = [
         "* Schema and position-size calculator: JWT or API key `strategies:read`.\n"
         "* Templates: `conservative`, `balanced` (default), `aggressive`.\n"
         "* **AI setups** (`docs/risk-management.md#ai-setups`): the size of an AI setup for your "
-        'account, "I took this trade" and your taken trades. The setup id comes from '
+        'account, "I took this trade", your taken trades and the instruments whose ARMED '
+        "setups you are alerted about (follows). The setup id comes from "
         "**Admin → AI Engine → List AI setups** (`ai_setup_id`); the size also accepts an API "
         "key with `signals:read`.",
         [
@@ -1086,6 +1090,57 @@ FOLDERS: list[Folder] = [
                 expect=[201, 200],
                 pre=SKIP_NO_AI_SETUP,
                 variants=[Variant("200 Already taken (unchanged)", 200)],
+            ),
+            Req(
+                "ai_follow",
+                "Follow AI setups",
+                "PUT",
+                "/me/ai/follows/:instrument_id/:profile",
+                "Alert me when a setup of this instrument and profile becomes **ARMED** (an "
+                "`ai_setup` notification and, live, the `ai_setups` WebSocket topic), optionally "
+                "only from `min_grade` (`A` best … `D`; null: all). Nobody follows anything until "
+                "they ask. Idempotent: calling it again only changes `min_grade`. After ARMED "
+                "you hear about a setup (ACTIVE, CLOSED, EXPIRED, INVALIDATED) only if you took "
+                "it. 404 unknown instrument, 422 unknown profile (today: `intraday`).",
+                path_vars={
+                    "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
+                    "profile": ("intraday", "The ai-service profile"),
+                },
+                body={"min_grade": "B"},
+                variants=[
+                    Variant(
+                        "422 Unknown profile",
+                        422,
+                        path_vars={"profile": "scalping"},
+                    ),
+                    Variant(
+                        "404 Instrument not found",
+                        404,
+                        path_vars={"instrument_id": "00000000-0000-0000-0000-000000000000"},
+                    ),
+                ],
+            ),
+            Req(
+                "ai_follows",
+                "My AI setup follows",
+                "GET",
+                "/me/ai/follows",
+                "The instruments and profiles whose ARMED setups you are alerted about, with "
+                "their `min_grade`.",
+            ),
+            Req(
+                "ai_unfollow",
+                "Unfollow AI setups",
+                "DELETE",
+                "/me/ai/follows/:instrument_id/:profile",
+                "Stop the ARMED alerts of this instrument and profile (404 when not followed). "
+                "Alerts of setups you took keep coming.",
+                path_vars={
+                    "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
+                    "profile": ("intraday", "The ai-service profile"),
+                },
+                expect=[204],
+                variants=[Variant("404 Not followed", 404)],
             ),
             Req(
                 "ai_trades",
@@ -2788,7 +2843,9 @@ FOLDERS: list[Folder] = [
         "| `price_alert` | one of your price alerts fired |\n"
         "| `chat_message` | a chat message while you are not looking at the conversation (one external notification per conversation per 5 min) |\n"
         "| `subscription_started` / `_renewed` / `_payment_failed` / `_canceled` | your subscription to an expert |\n"
-        "| `new_subscriber` | someone subscribed to your plan (experts) |\n\n"
+        "| `new_subscriber` | someone subscribed to your plan (experts) |\n"
+        "| `ai_setup` | an AI setup became ARMED on an instrument you follow, or one you took "
+        "changed state (carries your size) |\n\n"
         "Every event is stored in the inbox and pushed on the WebSocket as `notification`. "
         "Telegram, email and push follow your preferences: event on for the channel → signal "
         "filters → quiet hours → hourly cap (held deliveries go out later as one digest). A "
@@ -3367,7 +3424,8 @@ FOLDERS: list[Folder] = [
                         "scheduled task), market data freshness per active instrument, the "
                         "data-quality report of every monitored instrument (`data_quality`), "
                         "the economic-calendar refresh (`calendar`: last success, last error, "
-                        "back-off, stored rows), "
+                        "back-off, stored rows), the AI alert outbox (`ai_alerts`: rows per "
+                        "status, oldest pending in seconds), "
                         "WebSocket "
                         "clients summed over every API process (each reports every 30 s), "
                         "notification channels, unhandled errors in "
@@ -3421,7 +3479,8 @@ FOLDERS: list[Folder] = [
                         "ai-service last returned it (`last_payload`), every state event, "
                         "oldest first (`from_state` null: the setup appeared; `reason` and "
                         "`realized_r` on the move that closed it), the stored per-user sizes "
-                        "(`sizes`) and how many users took it (`takes_count`).",
+                        "(`sizes`), how many users took it (`takes_count`) and its alerts "
+                        "(`outbox`, oldest first).",
                         auth="admin",
                         path_vars={"setup_id": ("{{ai_setup_id}}", "From the setups list")},
                         pre=SKIP_NO_AI_SETUP,
@@ -3430,6 +3489,51 @@ FOLDERS: list[Folder] = [
                                 "404 Setup not found",
                                 404,
                                 path_vars={"setup_id": "unknown-setup"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_outbox",
+                        "List AI alert outbox",
+                        "GET",
+                        "/admin/ai/outbox",
+                        "The AI setup alerts, newest first: one row per setup state change "
+                        "(DEVELOPING excepted), written with the change and sent by the "
+                        "`ai_alerts.dispatch` task to followers (ARMED) and takers (later "
+                        "states), plus the `ai_setups` WebSocket topic. `status`: `pending` "
+                        "(due at `next_attempt_at`), `done`, `skipped` (`last_error` says why, "
+                        "e.g. an ARMED alert older than `AI_ALERTS_MAX_AGE_SECONDS`) or "
+                        "`failed` after `AI_ALERTS_MAX_ATTEMPTS`. The first row is stored as "
+                        "`ai_outbox_id`.",
+                        auth="admin",
+                        query=[("limit", "50", "1–200"), ("offset", "0", "")],
+                        optional_query=[("status", "failed", "pending | done | skipped | failed")],
+                        captures={"ai_outbox_id": "items.0.id"},
+                        variants=[
+                            Variant(
+                                "422 Unknown status",
+                                422,
+                                query={"limit": "50", "offset": "0", "status": "sent"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_outbox_retry",
+                        "Retry AI alert",
+                        "POST",
+                        "/admin/ai/outbox/:row_id/retry",
+                        "Puts a `failed` alert back to `pending`, due now (`attempts` kept), and "
+                        "starts a dispatch. 409 when the row is not `failed` (sending it twice "
+                        "gives 409 the second time).",
+                        auth="admin",
+                        path_vars={"row_id": ("{{ai_outbox_id}}", "From the outbox list")},
+                        expect=[200, 409],
+                        pre=SKIP_NO_OUTBOX_ROW,
+                        variants=[
+                            Variant(
+                                "404 Outbox row not found",
+                                404,
+                                path_vars={"row_id": "999999999"},
                             )
                         ],
                     ),
@@ -3718,6 +3822,7 @@ reason), then **4401**. A topic the role or key scopes no longer allow is droppe
 {"op": "subscribe",   "topic": "news"}                                    # every new article
 {"op": "subscribe",   "topic": "news", "instrument_id": "{{instrument_id}}"}  # articles tagged with it
 {"op": "subscribe",   "topic": "chat", "conversation_id": "{{conversation_id}}"}  # participants and admins
+{"op": "subscribe",   "topic": "ai_setups", "instrument_id": "{{instrument_id}}"}  # AI setup state changes
 {"op": "typing",      "conversation_id": "{{conversation_id}}"}               # while the user types, ≤ 1 per 3 s
 {"op": "ping"}
 ```
@@ -3736,11 +3841,15 @@ reason), then **4401**. A topic the role or key scopes no longer allow is droppe
 {"type": "chat_message_updated", "topic": "chat:<uuid>", "conversation_id": "<uuid>", "message": {"...": "edited, or a tombstone with deleted: true"}}
 {"type": "chat_read",            "topic": "chat:<uuid>", "conversation_id": "<uuid>", "user_id": "<uuid>", "read_at": "…"}
 {"type": "chat_typing",          "topic": "chat:<uuid>", "conversation_id": "<uuid>", "user_id": "<uuid>"}
+{"type": "ai_setup",   "topic": "ai:setups:<uuid>", "setup": {"setup_id": "xauusd-intraday-2026-10-19T14:15:00Z-buy", "state": "ARMED", "direction": "buy", "entry": 2400.0, "sl": 2395.0, "tp": 2410.0, "grade": "B", "...": "..."}, "transition": {"setup_id": "…", "from": null, "to": "ARMED", "at": "2026-10-19T14:15:00Z", "reason": null, "realized_r": null}}
 {"type": "pong"}
 {"type": "heartbeat"}
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
 {"type": "error", "code": "auth_revoked", "message": "API key revoked"}  # then close 4401
 ```
+
+`ai_setups` is open to whoever may read signals (otherwise `error` `forbidden`); no snapshot, \
+the REST API lists past setups.
 
 A private custom strategy's signals reach only its owner and admins on `signals:<uuid>` (same \
 frame and topic); public and global strategies reach every subscriber.
@@ -3765,7 +3874,7 @@ indicator after ~5 s without a new one.
 
 | | |
 |---|---|
-| Subscriptions per connection | 50 (candles, signals, news and chat topics) |
+| Subscriptions per connection | 50 (candles, signals, news, chat and ai_setups topics) |
 | Server heartbeat | every 25 s; send `{"op":"ping"}` every ~30 s |
 | Idle timeout | 75 s without a client frame → **1001** |
 | Slow consumer | > 256 undelivered messages → **1013** |
