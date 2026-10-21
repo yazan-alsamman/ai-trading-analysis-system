@@ -135,10 +135,14 @@ class AIModelVersion(Base):
 
 
 class AISetupSize(Base):
-    """A setup sized for one user by ai-service ``/v1/size`` (filled by B10). ``inputs`` is the
-    account and risk that were sent."""
+    """A setup sized for one user (B10, ``app/ai/sizing.py``): by ai-service ``/v1/size`` or,
+    when it is unavailable, by the backend's B4 lot sizing (``source``). ``inputs`` is what the
+    size depends on (account, risk, spec and setup hashes, guard): the same inputs reuse it."""
 
     __tablename__ = "ai_setup_sizes"
+    __table_args__ = (
+        CheckConstraint("source IN ('ai-service', 'local')", name="ck_ai_setup_sizes_source"),
+    )
 
     setup_id: Mapped[str] = mapped_column(
         String(128), ForeignKey("ai_setups.setup_id", ondelete="CASCADE"), primary_key=True
@@ -147,14 +151,44 @@ class AISetupSize(Base):
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     lots: Mapped[float] = mapped_column(Double)
-    risk_usd: Mapped[float] = mapped_column(Double)
+    risk_usd: Mapped[float] = mapped_column(Double)  # in the account currency (contract name)
     margin_required: Mapped[float | None] = mapped_column(Double)
     feasible: Mapped[bool] = mapped_column(Boolean)
     warnings: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     inputs: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    source: Mapped[str] = mapped_column(String(16), server_default="local")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp()
     )
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+
+
+class AISetupTake(Base):
+    """A user says they took a setup (B10). ``lots`` / ``risk_amount`` default to their stored
+    size; when the setup ends, ``apply_evaluation`` fills ``closed_at``, ``realized_r``,
+    ``pnl = realized_r * risk_amount`` and ``close_reason`` (EXPIRED / INVALIDATED: 0)."""
+
+    __tablename__ = "ai_setup_takes"
+    __table_args__ = (Index("ix_ai_setup_takes_user", "user_id", text("taken_at DESC")),)
+
+    setup_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("ai_setups.setup_id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    taken_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    lots: Mapped[float | None] = mapped_column(Double)
+    risk_amount: Mapped[float | None] = mapped_column(Double)
+    entry_price: Mapped[float | None] = mapped_column(Double)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    realized_r: Mapped[float | None] = mapped_column(Double)
+    pnl: Mapped[float | None] = mapped_column(Double)
+    close_reason: Mapped[str | None] = mapped_column(String(64))
 
 
 class AISetupExplanation(Base):

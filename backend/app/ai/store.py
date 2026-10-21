@@ -34,7 +34,7 @@ from app.ai.contract import (
     Transition,
     Versions,
 )
-from app.models.ai import AIModelVersion, AISetup, AISetupEvent
+from app.models.ai import AIModelVersion, AISetup, AISetupEvent, AISetupTake
 from app.models.instrument import Instrument
 
 logger = logging.getLogger(__name__)
@@ -153,6 +153,34 @@ async def _event(
         .returning(AISetupEvent.id)
     )
     return inserted is not None
+
+
+async def _close_takes(
+    session: AsyncSession,
+    setup_id: str,
+    to_state: str,
+    at: datetime,
+    realized_r: float | None,
+    reason: str | None,
+) -> None:
+    """The setup ended: close its open takes (B10). CLOSED: ``realized_r`` and
+    ``pnl = realized_r * risk_amount``; EXPIRED / INVALIDATED: 0. A take already closed is
+    left as it is, so a replayed transition changes nothing."""
+    if to_state not in FINAL:
+        return
+    if to_state == SetupState.CLOSED.value:
+        r = realized_r
+        values = {
+            "realized_r": r,
+            "pnl": (AISetupTake.risk_amount * r) if r is not None else None,
+        }
+    else:
+        values = {"realized_r": 0.0, "pnl": 0.0}
+    await session.execute(
+        update(AISetupTake)
+        .where(AISetupTake.setup_id == setup_id, AISetupTake.closed_at.is_(None))
+        .values(closed_at=at, close_reason=(reason or to_state.lower())[:64], **values)
+    )
 
 
 def _reject(result: ApplyResult, setup_id: str, reason: str) -> None:
@@ -281,6 +309,9 @@ async def _apply_setup(
                         row.setup_id, row.state, setup.state.value, req.bar_close_ts, "new_setups"
                     )
                 )
+                await _close_takes(
+                    session, row.setup_id, setup.state.value, req.bar_close_ts, None, "new_setups"
+                )
             row.state = setup.state.value
         else:
             logger.info(
@@ -342,6 +373,7 @@ async def _apply_transition(
         realized_r=t.realized_r,
     )
     known.add((t.setup_id, t.to.value, t.at))
+    await _close_takes(session, t.setup_id, t.to.value, t.at, t.realized_r, t.reason)
     row.state = t.to.value
     if t.realized_r is not None:
         row.realized_r = t.realized_r

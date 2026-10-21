@@ -79,6 +79,7 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "ai_setup_events",
             "ai_model_versions",
             "ai_setup_sizes",
+            "ai_setup_takes",
             "ai_setup_explanations",
         ],
     ),

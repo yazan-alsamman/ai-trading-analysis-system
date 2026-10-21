@@ -267,6 +267,9 @@ The production memory cap of `ai-service` is now 512m (it was 256m).
 14. **`Abstention.detail`.** We accept a string or an object. Which one?
 15. **`risk.daily_loss_limit_pct` and `max_drawdown_pct`** are required in `SizeRequest`. Does
     `/v1/size` use them, or does the backend enforce them (B10)?
+    *Note (B10):* the backend applies both guards itself before calling `/v1/size`, from the
+    user's closed taken trades. A reached guard gives `feasible: false` without a call
+    (docs/risk-management.md#ai-setups-b10). ai-service may apply them too.
 16. **Determinism.** Given the same `request_id` and body, must the result be byte-identical, or
     only the same setups and transitions? Our store tolerates both.
 17. **Versioning.** Our proposal: `/v1` stays backwards compatible (only added fields), and

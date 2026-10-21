@@ -5,13 +5,20 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.ai import store
 from app.ai.contract import SetupState
 from app.api.deps import AdminUser, SessionDep
-from app.models.ai import AIModelVersion, AISetup, AISetupEvent
-from app.schemas.ai import AIModelIn, AIModelRead, AISetupDetail, AISetupEventRead, AISetupRead
+from app.models.ai import AIModelVersion, AISetup, AISetupEvent, AISetupSize, AISetupTake
+from app.schemas.ai import (
+    AIModelIn,
+    AIModelRead,
+    AISetupDetail,
+    AISetupEventRead,
+    AISetupRead,
+    AISetupSizeBrief,
+)
 
 router = APIRouter(prefix="/admin/ai", tags=["admin"])
 
@@ -37,7 +44,8 @@ async def list_setups(
 async def get_setup(
     setup_id: Annotated[str, Path(max_length=128)], _: AdminUser, session: SessionDep
 ):
-    """A setup with its last payload and every state event (oldest first)."""
+    """A setup with its last payload, every state event (oldest first), the stored per-user
+    sizes and how many users took it."""
     row = await session.get(AISetup, setup_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Setup not found")
@@ -46,6 +54,14 @@ async def get_setup(
         .where(AISetupEvent.setup_id == setup_id)
         .order_by(AISetupEvent.at, AISetupEvent.id)
     )
+    sizes = await session.scalars(
+        select(AISetupSize)
+        .where(AISetupSize.setup_id == setup_id)
+        .order_by(AISetupSize.computed_at.desc(), AISetupSize.user_id)
+    )
+    takes_count = await session.scalar(
+        select(func.count()).select_from(AISetupTake).where(AISetupTake.setup_id == setup_id)
+    )
     return AISetupDetail.model_validate(
         {
             **AISetupRead.model_validate(row).model_dump(),
@@ -53,6 +69,8 @@ async def get_setup(
             "features": row.features,
             "last_payload": row.last_payload,
             "events": [AISetupEventRead.model_validate(e) for e in events],
+            "sizes": [AISetupSizeBrief.model_validate(r) for r in sizes],
+            "takes_count": takes_count,
         }
     )
 

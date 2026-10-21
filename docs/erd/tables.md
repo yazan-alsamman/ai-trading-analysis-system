@@ -430,6 +430,8 @@ A user's risk rules and declared account size (one per user, created on first re
 | `user_id` | uuid | no |  | PK, FK |
 | `account_size` | double precision | no | `10000` |  |
 | `quote_currency` | varchar(10) | no | `USDT` |  |
+| `leverage` | double precision | no | `100` |  |
+| `balance_set_at` | timestamp with time zone | yes |  |  |
 | `config` | jsonb | no |  |  |
 | `template` | varchar(20) | yes |  |  |
 | `updated_at` | timestamp with time zone | no | `clock_timestamp()` |  |
@@ -439,6 +441,7 @@ A user's risk rules and declared account size (one per user, created on first re
 - PK `pk` (user_id)
 - FK (user_id) → users (id) ON DELETE CASCADE
 - CHECK `ck_risk_profiles_account_size_positive`: `account_size > 0`
+- CHECK `ck_risk_profiles_leverage`: `leverage > 0 AND leverage <= 10000`
 
 ### `signal_plans`
 
@@ -562,7 +565,7 @@ The model registry. At most one row is active (partial unique index). Versions t
 
 ### `ai_setup_sizes`
 
-A setup sized for one user by ai-service ``/v1/size`` (filled by B10). ``inputs`` is the account and risk that were sent.
+A setup sized for one user (B10, ``app/ai/sizing.py``): by ai-service ``/v1/size`` or, when it is unavailable, by the backend's B4 lot sizing (``source``). ``inputs`` is what the size depends on (account, risk, spec and setup hashes, guard): the same inputs reuse it.
 
 | Column | Type | Null | Default | Keys |
 |---|---|---|---|---|
@@ -574,13 +577,43 @@ A setup sized for one user by ai-service ``/v1/size`` (filled by B10). ``inputs`
 | `feasible` | boolean | no |  |  |
 | `warnings` | jsonb | no | `'[]'::jsonb` |  |
 | `inputs` | jsonb | no |  |  |
+| `source` | varchar(16) | no | `local` |  |
 | `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `computed_at` | timestamp with time zone | no | `clock_timestamp()` |  |
 
 **Constraints**
 
 - PK `pk` (setup_id, user_id)
 - FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
 - FK (user_id) → users (id) ON DELETE CASCADE
+- CHECK `ck_ai_setup_sizes_source`: `source IN ('ai-service', 'local')`
+
+### `ai_setup_takes`
+
+A user says they took a setup (B10). ``lots`` / ``risk_amount`` default to their stored size; when the setup ends, ``apply_evaluation`` fills ``closed_at``, ``realized_r``, ``pnl = realized_r * risk_amount`` and ``close_reason`` (EXPIRED / INVALIDATED: 0).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `setup_id` | varchar(128) | no |  | PK, FK |
+| `user_id` | uuid | no |  | PK, FK |
+| `taken_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `lots` | double precision | yes |  |  |
+| `risk_amount` | double precision | yes |  |  |
+| `entry_price` | double precision | yes |  |  |
+| `closed_at` | timestamp with time zone | yes |  |  |
+| `realized_r` | double precision | yes |  |  |
+| `pnl` | double precision | yes |  |  |
+| `close_reason` | varchar(64) | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (setup_id, user_id)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- FK (user_id) → users (id) ON DELETE CASCADE
+
+**Indexes**
+
+- `ix_ai_setup_takes_user` (ai_setup_takes.user_id, taken_at DESC)
 
 ### `ai_setup_explanations`
 

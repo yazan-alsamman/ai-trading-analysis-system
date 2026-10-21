@@ -47,11 +47,82 @@ class AISetupEventRead(BaseModel):
     created_at: datetime
 
 
+class AISetupSizeBrief(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: uuid.UUID
+    lots: float
+    feasible: bool
+    source: str
+    computed_at: datetime
+
+
 class AISetupDetail(AISetupRead):
     evidence: dict[str, Any]
     features: dict[str, Any]
     last_payload: dict[str, Any] = Field(description="the setup exactly as last returned")
     events: list[AISetupEventRead] = Field(description="oldest first")
+    sizes: list[AISetupSizeBrief] = Field(description="the stored per-user sizes (B10)")
+    takes_count: int = Field(description="users who said they took it")
+
+
+# --- users (B10) ---------------------------------------------------------------------------------
+
+
+class TakeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lots: float | None = Field(
+        default=None, gt=0, le=1e6, allow_inf_nan=False, description="default: your stored size"
+    )
+    entry_price: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+
+
+class TakeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    setup_id: str
+    taken_at: datetime
+    lots: float | None
+    risk_amount: float | None = Field(description="account currency, at the setup's stop")
+    entry_price: float | None
+    closed_at: datetime | None
+    realized_r: float | None
+    pnl: float | None = Field(description="realized_r x risk_amount")
+    close_reason: str | None
+
+
+class AITradeRead(TakeRead):
+    instrument_id: uuid.UUID
+    profile: str
+    direction: str
+    state: SetupState = Field(description="the setup's state now")
+    entry: float | None
+    sl: float | None
+    tp: float | None
+
+
+class AISizeInputs(BaseModel):
+    balance: float
+    currency: str
+    leverage: float
+    risk_per_trade_pct: float
+    daily_loss_limit_pct: float
+    max_drawdown_pct: float
+    sources: dict[str, str] = Field(description="per field: profile, config or default")
+
+
+class AISizeRead(BaseModel):
+    setup_id: str
+    lots: float
+    risk_amount: float = Field(description="money at risk at the stop, in the account currency")
+    margin_required: float | None = Field(description="account currency; null: no rate")
+    feasible: bool
+    warnings: list[str]
+    source: str = Field(description="ai-service, or local (the backend's B4 lot sizing)")
+    computed_at: datetime
+    inputs: AISizeInputs
+    taken: bool = Field(description="you said you took this setup")
 
 
 class AIModelIn(BaseModel):

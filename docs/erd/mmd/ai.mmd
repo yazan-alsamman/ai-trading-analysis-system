@@ -57,7 +57,21 @@ erDiagram
         bool feasible
         jsonb warnings
         jsonb inputs
+        varchar source
         timestamptz created_at
+        timestamptz computed_at
+    }
+    ai_setup_takes {
+        varchar setup_id PK, FK
+        uuid user_id PK, FK
+        timestamptz taken_at
+        double lots
+        double risk_amount
+        double entry_price
+        timestamptz closed_at
+        double realized_r
+        double pnl
+        varchar close_reason
     }
     ai_setup_explanations {
         varchar setup_id PK, FK
@@ -73,4 +87,6 @@ erDiagram
     ai_setup_explanations }o--|| ai_setups : "setup_id"
     ai_setup_sizes }o--|| ai_setups : "setup_id"
     ai_setup_sizes }o--|| users : "user_id"
+    ai_setup_takes }o--|| ai_setups : "setup_id"
+    ai_setup_takes }o--|| users : "user_id"
     ai_setups }o--|| instruments : "instrument_id"

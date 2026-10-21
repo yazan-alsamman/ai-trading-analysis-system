@@ -29,6 +29,7 @@ flowchart LR
         ai_setup_events[ai_setup_events]
         ai_model_versions[ai_model_versions]
         ai_setup_sizes[ai_setup_sizes]
+        ai_setup_takes[ai_setup_takes]
         ai_setup_explanations[ai_setup_explanations]
     end
     subgraph domain_workspaces["Workspaces"]
@@ -69,6 +70,8 @@ flowchart LR
     ai_setup_explanations --> ai_setups
     ai_setup_sizes --> ai_setups
     ai_setup_sizes -.-> users
+    ai_setup_takes --> ai_setups
+    ai_setup_takes -.-> users
     ai_setups --> instruments
     api_keys -.-> users
     backtest_trades --> backtests
