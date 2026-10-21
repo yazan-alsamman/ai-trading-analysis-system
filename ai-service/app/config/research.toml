@@ -1,0 +1,15 @@
+# Research protocol (D23). Periods are [start, end) dates in UTC.
+
+[clock]
+server_tz = "Europe/Athens"   # FxPro MT5 server time: convert to UTC with this zone before any use
+
+[splits]
+development = ["2012-01-01", "2018-01-01"]
+walk_forward = ["2018-01-01", "2024-07-01"]     # expanding train, 6-month test windows
+walk_forward_test_months = 6
+secondary_holdout = ["2024-07-01", "2026-01-10"]  # prior exposure disclosed
+# Primary lockbox: from this date to the export date, sealed by docs/lockbox/MANIFEST-*.json.
+# History readers stop at the first bar on or after this date on the server clock, which is
+# 2026-01-09 22:00 UTC, after the Friday close, so no trading bar of the holdout is lost.
+lockbox_start = "2026-01-10"
+embargo_days = 1

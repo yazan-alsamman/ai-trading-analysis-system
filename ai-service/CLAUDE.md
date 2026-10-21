@@ -44,7 +44,10 @@ setups on XAU/USD compared with the rules alone?
 
 ## Data rules (do not break these)
 
-- Source: FxPro MT5 exports (M5, bid OHLC + spread in points, 1 point = $0.01 on XAU/USD).
+- Source: FxPro MT5 exports (M1 since 2026-10-21, bid OHLC + spread in points, 1 point = $0.01
+  on XAU/USD). The XAUUSD, EURUSD and GBPUSD history exports run past 2026-01-09: read history
+  only through `app.data.raw.HistoryExport`, which stops at the first bar on or after the lockbox
+  start (server date) without decoding it. Never read an export file any other way.
 - Server time follows **Europe/Athens** (EU DST). Convert to UTC with Europe/Athens before any use.
 - Closed bars only; higher timeframes built from closed lower bars and used only after they close.
 - Split (D23): dev 2012–2017 · walk-forward 2018 → 2024-06 (expanding train, 6-month tests) ·
@@ -95,8 +98,12 @@ One TP in v1 (TP1/TP2 after v1). Custom user strategies: after v1.
 10. P10 Thesis, evaluation report, model card, demo, reproducibility.
 
 **Status (2026-10-21):** design locked; phase 0 reset done (`docs/AUDIT-2026-10-21.md`): all
-pre-v0.2 work removed, ai-service is back to the skeleton (`/health`, placeholder `/v1/signal`);
-P1 not started.
+pre-v0.2 work removed. P1 in progress: tasks 1 (layout) and 2 (lockbox sealed,
+`docs/lockbox/MANIFEST-2026-10-21.json`) done; next task 3 (importer).
+
+Layout: `app/main.py` (service), `app/config/` (instruments + D23 splits, TOML), `app/cli.py`
+(`python -m app <command>`), `app/lockbox.py`, and one package per layer: `data` (L1), `smc` (L2),
+`setups` (L3), `features` (L4), `scoring` (L5–L8), `agent` (L9), `research`.
 
 ## First tasks (P1)
 

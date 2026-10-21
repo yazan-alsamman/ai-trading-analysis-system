@@ -1,7 +1,7 @@
 """Seal the primary lockbox (D23): hash the 2026 export files without parsing them.
 
-    python -m app.lockbox seal LOCKBOX_DIR --export-date 2026-10-21 [--out docs/lockbox]
-    python -m app.lockbox verify docs/lockbox/MANIFEST-2026-10-21.json LOCKBOX_DIR
+    python -m app lockbox seal LOCKBOX_DIR --export-date 2026-10-21 [--out docs/lockbox]
+    python -m app lockbox verify docs/lockbox/MANIFEST-2026-10-21.json LOCKBOX_DIR
 
 ``seal`` writes a dated manifest with each file's name, size and SHA-256. Bytes are only fed to the
 hash: no line is decoded, parsed, counted or summarised, so nothing about the market data can leak
@@ -14,15 +14,14 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+from app.data.exports import name_fields
+
 MANIFEST_VERSION = 1
 CHUNK = 1 << 20
-# MT5 "Export Bars" file name: SYMBOL_TIMEFRAME_YYYYMMDDHHMM_YYYYMMDDHHMM.csv (server time).
-EXPORT_NAME = re.compile(r"^([A-Z0-9]+)_([A-Z]+[0-9]+)_(\d{12})_(\d{12})\.csv$")
 RULE = (
     "Primary lockbox (D23): 2026-01-10 to the export date. Never opened, plotted, loaded or "
     "summarised before P9; opened once, with --open-lockbox and the frozen versions logged."
@@ -37,21 +36,6 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def _name_fields(name: str) -> dict:
-    """What the file name itself says (MT5 server-time range), or nothing for other names."""
-    m = EXPORT_NAME.match(name)
-    if not m:
-        return {}
-    symbol, timeframe, first, last = m.groups()
-    fmt = "%Y%m%d%H%M"
-    return {
-        "symbol": symbol,
-        "timeframe": timeframe,
-        "name_first_server": datetime.strptime(first, fmt).strftime("%Y-%m-%d %H:%M"),
-        "name_last_server": datetime.strptime(last, fmt).strftime("%Y-%m-%d %H:%M"),
-    }
-
-
 def scan(root: Path) -> list[dict]:
     """Every file under ``root``, sorted by relative path, with its size and SHA-256."""
     files = sorted(p for p in root.rglob("*") if p.is_file())
@@ -60,7 +44,7 @@ def scan(root: Path) -> list[dict]:
             "path": p.relative_to(root).as_posix(),
             "bytes": p.stat().st_size,
             "sha256": sha256_file(p),
-            **_name_fields(p.name),
+            **name_fields(p.name),
         }
         for p in files
     ]

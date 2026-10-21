@@ -1,0 +1,53 @@
+# Per-instrument specs (FxPro). Code is instrument-agnostic and reads everything from here.
+# Session times are New York wall-clock: the week opens Sunday `week_open` and closes Friday
+# `week_close`; `daily_break` (when set) closes the market every day between the two times.
+# Session hours are initial values; the P1 data-quality report checks them against the exports.
+
+[XAUUSD]
+point = 0.01            # price value of one MT5 point
+price_decimals = 2
+contract_size = 100     # troy ounces per lot
+quote_currency = "USD"
+week_open = "18:00"
+week_close = "17:00"
+daily_break = ["17:00", "18:00"]
+
+[EURUSD]
+point = 0.00001
+price_decimals = 5
+contract_size = 100000
+quote_currency = "USD"
+week_open = "17:00"
+week_close = "17:00"
+
+[GBPUSD]
+point = 0.00001
+price_decimals = 5
+contract_size = 100000
+quote_currency = "USD"
+week_open = "17:00"
+week_close = "17:00"
+
+[USDJPY]
+point = 0.001
+price_decimals = 3
+contract_size = 100000
+quote_currency = "JPY"
+week_open = "17:00"
+week_close = "17:00"
+
+[AUDUSD]
+point = 0.00001
+price_decimals = 5
+contract_size = 100000
+quote_currency = "USD"
+week_open = "17:00"
+week_close = "17:00"
+
+[USDCAD]
+point = 0.00001
+price_decimals = 5
+contract_size = 100000
+quote_currency = "CAD"
+week_open = "17:00"
+week_close = "17:00"
