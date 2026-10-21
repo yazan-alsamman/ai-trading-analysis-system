@@ -110,7 +110,11 @@ jobs:
         run: |
           ssh vps 'mkdir -p /opt/trading/nginx /opt/trading/backups'
           scp infra/deploy/docker-compose.prod.yml vps:/opt/trading/docker-compose.yml
-          scp infra/nginx/default.conf vps:/opt/trading/nginx/default.conf
+          scp infra/nginx/default.conf infra/nginx/trading-site.inc vps:/opt/trading/nginx/
+          # the host nginx site for HTTPS: only copied, never applied (Yazan installs it by hand,
+          # docs/https.md)
+          ssh vps 'mkdir -p /opt/trading/host-nginx'
+          scp infra/host-nginx/* vps:/opt/trading/host-nginx/
           scp .env.example infra/deploy/remote-deploy.sh infra/deploy/backup.sh vps:/opt/trading/
       - name: Pull images and restart the trading stack
         run: |
