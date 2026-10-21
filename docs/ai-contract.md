@@ -219,6 +219,13 @@ into the next request's `open_setups`, and it includes `DEVELOPING` setups.
 
 User-facing reads come with B9 and B11.
 
+**B11 and `/v1/explain`.**
+- The alerts call `/v1/explain` only when a setup becomes ARMED, once per language the
+  recipients use, with an 8 s timeout and one attempt.
+- The answer is stored in `ai_setup_explanations` and reused.
+- If ai-service is unavailable or answers 404, the alert is sent with the template text only.
+- `verified: false` answers are never sent.
+
 ## 6. Settings
 
 | Setting | Default |

@@ -31,6 +31,7 @@ the Celery queue `notifications`. Nothing calls a channel directly.
 | `subscription_started`, `subscription_renewed`, `subscription_payment_failed` (warning), `subscription_canceled` (Y19) | your subscription to an expert ([subscriptions.md](subscriptions.md)) | `info` / `warning` | `subscription_id`, `expert_id`, `expert_name`, `plan_name`, `price`, `currency`, `interval`, `status`, `period_end`, plus `invoice_number`, `amount`, `reason`, `grace_end`, `trial` |
 | `new_subscriber` (Y19) | to the expert | `info` | the same, with `subscriber_name`, `trial_days` |
 | `price_alert` (Y18) | one of your price alerts fired ([price-alerts.md](price-alerts.md)) | `warning` | `alert_id`, `instrument`, `condition`, `value`, `price`, `bar_time`, `note`, ... |
+| `ai_setup` (B11) | an AI setup you follow became ARMED, or one you took changed state (below) | `warning` (ARMED) / `info` | `setup_id`, `state`, `transition`, `instrument`, prices, scores, `size` (ARMED), `explanation`, `pnl` (end) |
 
 - There is **one notification per (event, user)**: `dedup_key` (unique per user) makes
   producing idempotent. Examples: `signal:<signal_id>` (several activations of the same user on
@@ -259,6 +260,8 @@ Authorization: Bearer <access token>
 - **Retries**: up to 5 attempts with exponential backoff and jitter (2, 4, 8, 16 s, +≤50 %).
   A provider `retry_after` (Telegram 429, FCM `Retry-After`) is honoured and does not count as
   a provider failure.
+  Each retry records when it is due (`next_attempt_at`); a lost send or retry task is picked
+  up by the sweeper ([Stuck deliveries](#stuck-deliveries-sweeper)).
 - **Permanent errors** fail at once:
   - a blocked bot also unlinks the chat;
   - an invalid push token also deletes the device;
@@ -274,6 +277,139 @@ Authorization: Bearer <access token>
 - **Big signals**: for 500 users, the engine stores the inbox rows and deliveries in its own
   transaction (≈ 0.9 s) and enqueues one fan-out task. A worker splits that into send tasks of
   50 deliveries.
+
+## AI setup alerts (B11)
+
+AI setups come from ai-service (docs/ai-contract.md); their states are DEVELOPING, ARMED,
+ACTIVE, CLOSED, EXPIRED and INVALIDATED. B11 tells users about the state changes. Code:
+`app/ai/alerts.py`, `store.enqueue_alerts`, the task `ai_alerts.dispatch`.
+
+### The outbox: no alert lost on a crash
+
+- **Written with the evaluation.** `store.apply_evaluation` writes one `ai_setup_outbox` row
+  per state change, in the **same transaction** as the setup change: both are stored, or
+  neither is.
+  - DEVELOPING is never written, not even for a setup born DEVELOPING.
+  - Unique `(setup_id, to_state)`: a replayed evaluation adds nothing.
+- **Sent by `ai_alerts.dispatch`**, on the `notifications` queue. Beat runs it every 30 s, and
+  the caller of `apply_evaluation` (B9) calls `app.ai.alerts.kick()` after its commit to send at
+  once.
+  - Up to `AI_ALERTS_BATCH` due `pending` rows are taken per run, oldest first, each claimed
+    with `FOR UPDATE SKIP LOCKED`, so two workers never handle the same row.
+  - Each row is handled in one transaction: its inbox and delivery rows
+    (`notifications.prepare`) and its new status (`done`, or `skipped` with a reason) commit
+    together. The sends are enqueued and the live frame published only after that commit.
+- **Failures** (an exception while handling a row) count an `attempt`, record `last_error`, and
+  retry with the delivery backoff (2, 4, 8 … 300 s, plus jitter).
+  - After `AI_ALERTS_MAX_ATTEMPTS` (8) the row is `failed`: an ERROR log and a `system`
+    notification to the admins.
+  - `POST /api/v1/admin/ai/outbox/{id}/retry` puts it back.
+- **No duplicates.** The inbox `dedup_key` is `ai:{setup_id}:{to_state}`. If a row is handled
+  again (a crash after the commit of the inbox but before the row is marked done, or an admin
+  retry), it creates no second inbox row and no second delivery.
+
+### Who gets what
+
+`alerts.recipients(session, setup, to_state)` is the one rule:
+
+| State | Recipients |
+|---|---|
+| `ARMED` (also a setup born ARMED) | active users who **follow** the setup's instrument and profile, whose `min_grade` the setup meets (A best; a follow without `min_grade` takes every grade), and who may read it (`may_read_ai_setup`) |
+| `ACTIVE`, `CLOSED`, `EXPIRED`, `INVALIDATED` | only the users who **took** the setup (`POST /ai/setups/{id}/take`) |
+| `DEVELOPING` | nobody, never |
+
+A follower who did not take a setup hears nothing after ARMED.
+
+### No late alerts
+
+- **An ARMED row is `skipped`** (`last_error` = `stale: …`) in three cases:
+  - the setup is no longer ARMED when the row is handled;
+  - its `valid_until` has passed;
+  - the row is older than `AI_ALERTS_MAX_AGE_SECONDS` (900).
+- **The outcome is always sent** (`ACTIVE`, `CLOSED`, `EXPIRED`, `INVALIDATED` for takers). An
+  older one carries `late: true`, and the text says "(late notice)".
+
+### Content (`type: ai_setup`)
+
+- **Severity:** `warning` for ARMED, `info` for the others.
+- **Default channels:** Telegram and push, not email. Preferences, quiet hours (digests) and
+  the hourly cap apply as for every event.
+- **`data`:**
+  - always: `setup_id`, `state`, `transition {from, to, at, reason, realized_r}`, `direction`,
+    `instrument {id, symbol, source, price_precision, quantity_precision}`, `profile`, `entry`,
+    `sl`, `tp`, `r_multiple`, `probability`, `ev_r`, `grade`, `valid_until`, `reason`,
+    `realized_r` and `late`;
+  - **on ARMED**: the user's own `size {lots, risk_amount, currency, margin_required, feasible,
+    warnings, source}`, from the B10 sizing of every recipient, done once per alert. A failed
+    size gives `size: {error}`, and an infeasible one shows its warning; neither ever blocks
+    the alert. Also `explanation`, when there is one (below);
+  - **on CLOSED, EXPIRED and INVALIDATED**: the user's `take {lots, risk_amount, pnl,
+    realized_r}` and `pnl`.
+- **Texts** (`messages.py`, ar and en): one title per state (e.g. "BUY setup XAU/USD: entry
+  2,400.00", "Setup closed: BUY XAU/USD +1.50R"), with prices at the instrument's precision.
+- **Push:** `data.screen = "ai_setup"`, with `setup_id`, `state` and `instrument_id`.
+
+**Explanation (ARMED only):**
+- ai-service `/v1/explain` is asked once per language the recipients use (`AI_EXPLAIN_LANGS`:
+  `ar`, `en`), with an 8 s timeout and one attempt.
+- The answer is stored in `ai_setup_explanations` and reused.
+- If ai-service is unavailable or answers 404, the alert goes out with the template text only.
+  The explanation is not retried, and the rest of that run stops asking.
+- An answer with `verified: false` is stored and logged, but never sent.
+
+### Live view
+
+- **Topic:** `ai:setups:{instrument_id}`, public, gated by `may_read_ai_setup` (everyone today).
+- **Frame:** `{"type": "ai_setup", "setup": {...}, "transition": {setup_id, from, to, at,
+  reason, realized_r}}`, published once per state change after the row is done. It is never
+  published before the change is stored, and never for skipped rows or DEVELOPING.
+- **Subscribe:** `{"op": "subscribe", "topic": "ai_setups", "instrument_id": "…"}`.
+
+### Follows
+
+| Method | Path | |
+|---|---|---|
+| GET | `/me/ai/follows` | your follows |
+| PUT | `/me/ai/follows/{instrument_id}/{profile}` | body `{min_grade?}` (`A`–`D`); idempotent upsert, 200; 404 unknown instrument, 422 unknown profile (today: `intraday`) |
+| DELETE | `/me/ai/follows/{instrument_id}/{profile}` | 204; 404 when not followed |
+
+There is **no automatic follow**: a user gets ARMED alerts only after following.
+
+### For the apps (web and Flutter)
+
+- **Following:** on the AI setups screen of an instrument, offer a "Notify me of new setups"
+  switch.
+  - It calls `PUT /me/ai/follows/{instrument_id}/intraday`, and DELETE to turn it off.
+  - Offer an optional "only grade A / A–B" choice as `min_grade`, and read the state with
+    `GET /me/ai/follows`.
+- **After ARMED:** remind users that they hear about a setup only if they mark it taken
+  (`POST /ai/setups/{id}/take`).
+- **Live screen:** subscribe to `ai_setups` with the instrument.
+- **Inbox and push:** an `ai_setup` item carries everything listed under Content. Push opens
+  `screen = ai_setup` with `setup_id`. Show `size.lots` and `size.warnings`, `explanation`
+  when present, and `pnl` for closed takes.
+
+## Stuck deliveries (sweeper)
+
+`after_commit` enqueues the sends after the producer commits. If the process dies in between,
+or a scheduled retry task is lost, deliveries stay `pending` and nobody sends them. This
+affects every type, not only AI alerts.
+
+**The rule.** The beat task `notifications.sweep` (every minute) re-enqueues deliveries that
+are:
+- `pending`, with no `hold` (quiet hours, hourly cap and open circuits are left to the
+  digests);
+- due: `release_at` is null or past;
+- overdue by more than `NOTIFICATION_SWEEP_AFTER_SECONDS` (120): `next_attempt_at` for a
+  scheduled retry, otherwise `created_at`.
+
+At most `NOTIFICATION_SWEEP_BATCH` (500) per run, oldest first, with one INFO line:
+`notifications.sweep requeued=N`. A partial index makes the idle query cheap.
+
+**Why it cannot double-send.** It only enqueues; it never sends. A send claims the delivery
+with `FOR UPDATE SKIP LOCKED`, and only while it is `pending` without a hold. So a delivery
+being sent right now is skipped, and one already sent is a no-op. That claim is the single
+guarantee against double sends.
 
 ## Enabling the channels in production
 
