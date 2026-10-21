@@ -14,16 +14,19 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 import pandas as pd
 import trading_backtest as tb
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import and_, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.contract import Account, RiskSettings
+from app.core.config import get_settings
 from app.models.candle import Timeframe
 from app.models.instrument import Instrument
 from app.models.risk import RiskProfile, SignalPlan
@@ -102,9 +105,11 @@ def read(row: RiskProfile) -> dict[str, Any]:
     return {
         "account_size": row.account_size,
         "quote_currency": row.quote_currency,
+        "leverage": row.leverage,
         "config": row.config,
         "template": row.template,
         "updated_at": row.updated_at,
+        "ai_risk": ai_risk_view(row),
     }
 
 
@@ -118,9 +123,13 @@ async def update(session: AsyncSession, user: User, data: RiskProfileUpdate) -> 
         named = templates()
         row.template = next((n for n, c in named.items() if c == row.config), None)
     if data.account_size is not None:
+        if data.account_size != row.account_size:
+            row.balance_set_at = datetime.now(UTC)  # the drawdown guard starts again
         row.account_size = data.account_size
     if data.quote_currency is not None:
         row.quote_currency = data.quote_currency
+    if data.leverage is not None:
+        row.leverage = data.leverage
     try:
         await session.commit()
     except IntegrityError:  # pragma: no cover - the check constraint mirrors the schema
@@ -138,6 +147,81 @@ async def profiles_for(
         return {}
     rows = await session.scalars(select(RiskProfile).where(RiskProfile.user_id.in_(user_ids)))
     return {r.user_id: r for r in rows}
+
+
+# --- AI setups (B10) --------------------------------------------------------------------------
+
+
+class AIRiskInputs(NamedTuple):
+    """What ai-service ``/v1/size`` gets for one user, where each value came from (``profile``:
+    a column of the profile, ``config``: its risk config, ``default``: an AI_DEFAULT_* setting)
+    and the warnings of the mapping."""
+
+    account: Account
+    risk: RiskSettings
+    warnings: list[str]
+    sources: dict[str, str]
+
+
+def ai_risk_inputs(profile: RiskProfile) -> AIRiskInputs:
+    """The five AI risk fields mapped onto the existing profile (no parallel model):
+
+    - ``balance`` = ``account_size``, ``currency`` = ``quote_currency``, ``leverage``;
+    - ``risk_per_trade_pct`` = ``config.sizing.risk_pct`` when ``sizing.mode`` is ``risk``,
+      else ``AI_DEFAULT_RISK_PCT`` with a warning;
+    - ``daily_loss_limit_pct`` = ``config.guards.max_daily_loss_pct``, else
+      ``AI_DEFAULT_DAILY_LOSS_PCT``;
+    - ``max_drawdown_pct`` = ``config.guards.max_drawdown_pct``, else
+      ``AI_DEFAULT_MAX_DRAWDOWN_PCT``.
+
+    Raises ``pydantic.ValidationError`` when the profile cannot be expressed in the contract
+    (e.g. a one-letter currency)."""
+    settings = get_settings()
+    config = profile.config or {}
+    sizing, guards = config.get("sizing") or {}, config.get("guards") or {}
+    warnings: list[str] = []
+    sources = {"balance": "profile", "currency": "profile", "leverage": "profile"}
+    if sizing.get("mode") == "risk" and sizing.get("risk_pct"):
+        risk_pct, sources["risk_per_trade_pct"] = float(sizing["risk_pct"]), "config"
+    else:
+        risk_pct, sources["risk_per_trade_pct"] = settings.ai_default_risk_pct, "default"
+        warnings.append(f"sizing mode is not risk-based; used {risk_pct:g}%")
+    daily = guards.get("max_daily_loss_pct")
+    sources["daily_loss_limit_pct"] = "config" if daily else "default"
+    drawdown = guards.get("max_drawdown_pct")
+    sources["max_drawdown_pct"] = "config" if drawdown else "default"
+    account = Account(
+        balance=profile.account_size,
+        currency=profile.quote_currency,
+        leverage=profile.leverage if profile.leverage is not None else 100.0,
+    )
+    risk = RiskSettings(
+        risk_per_trade_pct=risk_pct,
+        daily_loss_limit_pct=float(daily) if daily else settings.ai_default_daily_loss_pct,
+        max_drawdown_pct=float(drawdown) if drawdown else settings.ai_default_max_drawdown_pct,
+    )
+    return AIRiskInputs(account, risk, warnings, sources)
+
+
+def ai_risk_problem(exc: ValidationError) -> str:
+    """Why a profile cannot be sent to ai-service, e.g. ``currency: String should match ...``."""
+    return "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors())[
+        :200
+    ]
+
+
+def ai_risk_view(profile: RiskProfile) -> dict[str, Any]:
+    """``ai_risk`` of GET /me/risk-profile (read-only)."""
+    try:
+        inputs = ai_risk_inputs(profile)
+    except ValidationError as exc:  # the profile cannot be sent as it is
+        return {"error": ai_risk_problem(exc)}
+    return {
+        **inputs.account.model_dump(),
+        **inputs.risk.model_dump(),
+        "sources": inputs.sources,
+        "warnings": inputs.warnings,
+    }
 
 
 def effective(

@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     ai_bars_15m: int = 500
     ai_bars_1h: int = 500
     ai_bars_4h: int = 300
+    # AI setup sizing (B10, docs/risk-management.md#ai-setups): auto = ai-service /v1/size, then
+    # the local B4 lot sizing if it is unavailable; remote = no fallback (503); local = never call
+    ai_size_mode: str = "auto"
+    ai_size_concurrency: int = 4  # ai-service calls at once when one setup is sized for many users
+    # used when the risk config does not give the value (sizing mode not "risk", guard unset)
+    ai_default_risk_pct: float = 1.0
+    ai_default_daily_loss_pct: float = 3.0
+    ai_default_max_drawdown_pct: float = 10.0
     # WebSocket hub (/ws/market)
     ws_heartbeat_seconds: float = 25
     ws_idle_timeout_seconds: float = 75

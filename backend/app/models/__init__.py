@@ -6,6 +6,7 @@ from app.models.ai import (
     AISetupEvent,
     AISetupExplanation,
     AISetupSize,
+    AISetupTake,
 )
 from app.models.api_key import ApiKey, Scope
 from app.models.backtest import Backtest, BacktestStatus, BacktestTrade
@@ -71,6 +72,7 @@ __all__ = [
     "AISetupEvent",
     "AISetupExplanation",
     "AISetupSize",
+    "AISetupTake",
     "CheckoutSession",
     "CheckoutStatus",
     "Conversation",
