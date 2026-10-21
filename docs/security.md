@@ -136,6 +136,13 @@ connections per IP (`app/core/rate_limit.py`).
   the API, 10 MB on the news ingestion.
 - **Forwarded headers** are trusted only from the Nginx container address
   (`--forwarded-allow-ips`), so clients cannot spoof their IP for the rate limiter.
+  - Nginx itself overwrites `X-Forwarded-For` with the connection's address on port 80
+    (`:8080`).
+  - On port 8090, published on `127.0.0.1` only for the host's HTTPS proxy, it trusts the proxy's
+    `X-Forwarded-For` and `X-Forwarded-Proto`, but only from our compose network
+    ([https.md](https.md)).
+  - The HTTPS site sends `Strict-Transport-Security: max-age=31536000`, without
+    `includeSubDomains`.
 - **CORS**: an explicit allow-list from `CORS_ORIGINS`; the app refuses to start with `*` (it
   allows credentials).
 - **API docs**: Swagger UI, ReDoc and `/openapi.json` are **disabled in production**; the public

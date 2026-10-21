@@ -12,6 +12,7 @@
 | جودة البيانات | http://187.127.76.76:8080/api/v1/health/data (503 إذا كانت أداة `degraded` أو `no_data`؛ لا يؤثر على النشر، انظر [data-quality.md](data-quality.md)) |
 | التقويم الاقتصادي | `GET /api/v1/calendar/events` (بتسجيل دخول)، والاستيراد التاريخي `POST /api/v1/admin/calendar/import`، انظر [economic-calendar.md](economic-calendar.md) |
 | WebSocket | `ws://187.127.76.76:8080/ws/market` |
+| HTTPS (بعد خطوات [https.md](https.md)) | `https://trading.yazanalsamman.com` و `wss://trading.yazanalsamman.com/ws/market` عبر nginx السيرفر إلى `127.0.0.1:8090` |
 
 لا يوجد دومين حالياً، ولذلك لا يوجد HTTPS. عند إضافة دومين نضع أمامه موقع nginx للسيرفر مع certbot.
 
@@ -191,6 +192,14 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/system/status | python3 -c 'import sys,json;print(json.load(sys.stdin)["ai_alerts"])'
   curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/ai/follows   # []
   ```
+
+## HTTPS على trading.yazanalsamman.com
+- حاوية nginx الخاصة بنا تستمع أيضاً على المنفذ 8090، منشوراً على `127.0.0.1:8090` فقط، و8080 لم يتغير. موقع واحد
+  جديد في nginx السيرفر يمرّر `https://trading.yazanalsamman.com` إليه.
+- القالب في `infra/host-nginx/`. النشر ينسخه إلى `/opt/trading/host-nginx/` ولا يطبّقه: الخطوات يدوية (root) في
+  [https.md](https.md).
+- النشر يفحص 8090 فحصاً إضافياً لا يُفشل النشر، فيكتب `Port 8090 (HTTPS proxy entry): ok` أو تحذيراً.
+- `CORS_ORIGINS` و`PUBLIC_BASE_URL` تُضبط يدوياً بعد نجاح HTTPS (https.md، الخطوة 8)، ولا يغيّرها النشر.
 
 ## توزيع المهام على الـ workers (T05/T07 + hardening)
 - `worker` (`-Q celery,notifications`): المسار الحي فقط: محرك الإشارات (`signals.*`)، تنبيهات الأسعار
