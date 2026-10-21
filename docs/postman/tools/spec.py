@@ -354,7 +354,7 @@ if (!pm.variables.get("plan_id")) pm.execution.skipRequest();"""
 SKIP_NO_CALENDAR_EVENT = """// No calendar event in the listed range yet (import the sample CSV in Admin): nothing to show.
 if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
 
-SKIP_NO_AI_SETUP = """// The AI engine has stored no setup yet (ai-service not connected): nothing to show.
+SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
 if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
 
 SKIP_NO_CHECKOUT = """// No checkout was opened (no expert with an active plan yet): nothing to pay.
@@ -928,7 +928,11 @@ FOLDERS: list[Folder] = [
         "attached to every live signal (entry, stop, targets, quantity, money at risk, R:R).\n\n"
         "* Risk profile and signal plans: JWT only.\n"
         "* Schema and position-size calculator: JWT or API key `strategies:read`.\n"
-        "* Templates: `conservative`, `balanced` (default), `aggressive`.",
+        "* Templates: `conservative`, `balanced` (default), `aggressive`.\n"
+        "* **AI setups** (`docs/risk-management.md#ai-setups`): the size of an AI setup for your "
+        'account, "I took this trade" and your taken trades. The setup id comes from '
+        "**Admin → AI Engine → List AI setups** (`ai_setup_id`); the size also accepts an API "
+        "key with `signals:read`.",
         [
             Req(
                 "risk_schema",
@@ -944,21 +948,27 @@ FOLDERS: list[Folder] = [
                 "Get my risk profile",
                 "GET",
                 "/me/risk-profile",
-                "Created on first read with the `balanced` template and 10,000 USDT. "
-                "`account_size` is what the user declares; the platform never connects to an "
-                "exchange. `template` is set while the config is unchanged from a template.",
+                "Created on first read with the `balanced` template, 10,000 USDT and leverage "
+                "100. `account_size` is what the user declares; the platform never connects to an "
+                "exchange. `template` is set while the config is unchanged from a template. "
+                "`ai_risk` (read-only) holds the values AI setups are sized with (balance, "
+                "currency, leverage, risk per trade, daily-loss limit, max drawdown) and where "
+                "each comes from (`sources`: `profile`, `config` or `default`), with `error` "
+                "set when the profile cannot be used.",
             ),
             Req(
                 "risk_profile_put",
                 "Update my risk profile",
                 "PUT",
                 "/me/risk-profile",
-                "`{account_size, quote_currency, config}` or `{template}` (not both; neither "
-                "changes only the account). The config is stored normalised. 422 lists every "
-                "config error with its `path` (e.g. `stop.multiplier`).",
+                "`{account_size, quote_currency, leverage, config}` or `{template}` (not both; "
+                "neither changes only the account). The config is stored normalised. 422 lists "
+                "every config error with its `path` (e.g. `stop.multiplier`). `leverage` (0–10,000) "
+                "sets the margin of AI setups; a new `account_size` restarts their drawdown guard.",
                 body={
                     "account_size": 25000,
                     "quote_currency": "USDT",
+                    "leverage": 100,
                     "config": RISK_CONFIG,
                 },
                 variants=[
@@ -1037,6 +1047,65 @@ FOLDERS: list[Folder] = [
                     ("strategy_key", "{{strategy_key}}", ""),
                     ("since", "2026-10-01T00:00:00Z", "bar_time >= since"),
                 ],
+            ),
+            Req(
+                "ai_setup_size",
+                "AI setup size for my account",
+                "GET",
+                "/ai/setups/:setup_id/size",
+                "The setup sized for your account: by ai-service `/v1/size` or, when it is not "
+                "available, by the backend (`source`: `ai-service` or `local`). The daily-loss "
+                "and drawdown guards of your taken trades apply first. Returns `lots`, "
+                "`risk_amount`, `margin_required`, `feasible`, `warnings`, the `inputs` used "
+                "(with their `sources`) and whether you `taken` it. Stored and reused while the "
+                "inputs are the same.\n\n"
+                "409: the setup has no prices (not ARMED or ACTIVE) or its instrument no specs. "
+                "422: your risk profile cannot be used. 502: ai-service answered outside the "
+                "contract. 503: ai-service unavailable and `AI_SIZE_MODE=remote`.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                pre=SKIP_NO_AI_SETUP,
+                variants=[
+                    Variant(
+                        "404 Setup not found",
+                        404,
+                        path_vars={"setup_id": "unknown-setup"},
+                    )
+                ],
+            ),
+            Req(
+                "ai_setup_take",
+                "I took this AI setup",
+                "POST",
+                "/ai/setups/:setup_id/take",
+                "Only while the setup is ARMED or ACTIVE (409 otherwise). The body is optional: "
+                "`lots` defaults to your stored size, `entry_price` to none. 201 the first time, "
+                "200 with the same take afterwards. `realized_r` and `pnl` (realized R × "
+                "`risk_amount`) are filled when the setup ends.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                body={"lots": 0.2, "entry_price": 2400.5},
+                expect=[201, 200],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[Variant("200 Already taken (unchanged)", 200)],
+            ),
+            Req(
+                "ai_trades",
+                "My AI trades",
+                "GET",
+                "/me/ai/trades",
+                "Your taken AI setups, newest first: the take (lots, risk, entry, result) with "
+                "the setup's current `state`, direction and prices.",
+                query=[("limit", "50", "1–100"), ("offset", "0", "")],
+            ),
+            Req(
+                "ai_setup_untake",
+                "Undo AI setup take",
+                "DELETE",
+                "/ai/setups/:setup_id/take",
+                "Undo it while the setup has not ended (409 after it ended; 404 when not taken).",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                expect=[204],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[Variant("404 Not taken", 404)],
             ),
         ],
     ),
@@ -3349,9 +3418,10 @@ FOLDERS: list[Folder] = [
                         "GET",
                         "/admin/ai/setups/:setup_id",
                         "A setup with its `evidence`, `features`, the payload exactly as "
-                        "ai-service last returned it (`last_payload`) and every state event, "
+                        "ai-service last returned it (`last_payload`), every state event, "
                         "oldest first (`from_state` null: the setup appeared; `reason` and "
-                        "`realized_r` on the move that closed it).",
+                        "`realized_r` on the move that closed it), the stored per-user sizes "
+                        "(`sizes`) and how many users took it (`takes_count`).",
                         auth="admin",
                         path_vars={"setup_id": ("{{ai_setup_id}}", "From the setups list")},
                         pre=SKIP_NO_AI_SETUP,
