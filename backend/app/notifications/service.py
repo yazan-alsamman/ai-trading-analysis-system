@@ -14,6 +14,8 @@ Sending (Celery, :func:`send_deliveries`): every delivery is claimed with ``FOR 
 LOCKED`` and only while ``pending``, so a duplicated task never sends twice. Retries use
 exponential backoff with jitter (max ``notification_max_attempts``), provider ``retry_after``
 is honoured, and a per-channel circuit breaker holds deliveries while a provider is down.
+A lost send task (a crash between the commit and the enqueue, a lost retry) is recovered by
+:func:`sweep_stuck` (``notifications.sweep``, every minute).
 """
 
 from __future__ import annotations
@@ -147,7 +149,7 @@ def _schedule(ids: Sequence[uuid.UUID], countdown: float | None = None) -> None:
         return
     try:
         enqueue(list(ids), countdown) if countdown else enqueue(list(ids))
-    except Exception:  # noqa: BLE001 - the rows stay pending; the pump re-dispatches them
+    except Exception:  # noqa: BLE001 - the rows stay pending; the sweeper re-sends them
         logger.exception("notifications: could not enqueue %d deliveries", len(ids))
 
 
@@ -466,6 +468,8 @@ async def _send_one(
             delivery.provider_message_id = (provider_id or "")[:255] or None
             delivery.last_error = None
             await breaker.success(redis, channel)
+        if retry is not None:  # the sweeper re-sends it if this retry's task is ever lost
+            delivery.next_attempt_at = datetime.now(UTC) + timedelta(seconds=retry)
         outcome = str(delivery.status) if retry is None else "retry"
         await session.commit()
     return outcome, retry
@@ -491,6 +495,49 @@ async def send_deliveries(
 
     await asyncio.gather(*(one(i) for i in ids))
     return dict(counts)
+
+
+# --- stuck deliveries ---------------------------------------------------------------------------
+
+
+async def sweep_stuck(
+    factory: async_sessionmaker[AsyncSession], now: datetime | None = None
+) -> list[uuid.UUID]:
+    """Re-enqueue deliveries whose send task was lost (the beat task ``notifications.sweep``).
+
+    :func:`after_commit` enqueues the sends after the producer commits: a crash in between, or
+    a lost retry task, leaves ``pending`` deliveries nobody sends. Swept: ``pending``, no hold,
+    due (``release_at`` null or past), and due for at least ``NOTIFICATION_SWEEP_AFTER_SECONDS``
+    (``next_attempt_at`` of a scheduled retry, else ``created_at``). At most
+    ``NOTIFICATION_SWEEP_BATCH``, oldest first.
+
+    It only enqueues: :func:`_send_one` claims a delivery with ``FOR UPDATE SKIP LOCKED`` and
+    only while ``pending`` without a hold, so a delivery being sent right now, or already sent
+    by its own task, is a no-op for the swept task. That remains the one guarantee against
+    double sends."""
+    settings = get_settings()
+    now = now or datetime.now(UTC)
+    due_since = func.coalesce(NotificationDelivery.next_attempt_at, NotificationDelivery.created_at)
+    cutoff = now - timedelta(seconds=settings.notification_sweep_after_seconds)
+    async with factory() as session:
+        ids = list(
+            await session.scalars(
+                select(NotificationDelivery.id)
+                .where(
+                    NotificationDelivery.status == DeliveryStatus.pending,
+                    NotificationDelivery.hold.is_(None),
+                    due_since < cutoff,
+                    or_(
+                        NotificationDelivery.release_at.is_(None),
+                        NotificationDelivery.release_at <= now,
+                    ),
+                )
+                .order_by(due_since)
+                .limit(max(1, settings.notification_sweep_batch))
+            )
+        )
+    _schedule(ids)
+    return ids
 
 
 # --- digests and held deliveries -----------------------------------------------------------------
