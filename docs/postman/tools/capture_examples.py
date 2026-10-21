@@ -64,7 +64,7 @@ SEED_AI_SETUP = """
 import asyncio, json
 from datetime import timedelta
 from pathlib import Path
-from sqlalchemy import select
+from sqlalchemy import select, text
 from app.ai import contract as c, store
 from app.db.session import SessionLocal
 from app.models.instrument import Instrument
@@ -100,6 +100,16 @@ async def main():
                 {**resp, "request_id": nxt.request_id, "new_setups": [], "transitions": [move]}
             )
         )
+        # one failed alert for Admin -> AI Engine -> Retry outbox alert (no dispatch ran)
+        await session.execute(
+            text(
+                "UPDATE ai_setup_outbox SET status = 'failed', attempts = 8, "
+                "last_error = 'telegram: 502 Bad Gateway' "
+                "WHERE setup_id = :id AND to_state = 'ACTIVE' AND status = 'pending'"
+            ),
+            {"id": setup_id},
+        )
+        await session.commit()
         print(first.inserted, second.transitions_applied)
 
 
@@ -409,7 +419,8 @@ class Runner:
 
     def seed_ai_setup(self) -> None:
         """An AI setup with two events for the Admin → AI examples: the contract's example
-        evaluate response, then the setup going ARMED → ACTIVE (in-process, like the worker)."""
+        evaluate response, then the setup going ARMED → ACTIVE (in-process, like the worker),
+        and its ACTIVE alert marked failed so the outbox retry has a row to retry."""
         out = subprocess.run(
             [sys.executable, "-c", SEED_AI_SETUP], cwd=BACKEND, capture_output=True, text=True
         )
