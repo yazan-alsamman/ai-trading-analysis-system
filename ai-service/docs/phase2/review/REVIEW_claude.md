@@ -30,10 +30,13 @@ judged**, and they share one cause (below).
    **Suggestion for P3:** the session of the sweep as a feature (planned in L4) and, if the
    development data support it, a session filter (London and New York only) decided on 2012-2017
    and then frozen.
-2. **Gold's daily break.** In #45 the CHoCH reference is a wick at 17:30 New York, inside the
-   configured 17:00-18:00 break (the data-quality report counts 939 such bars). **Suggestion:**
-   treat bars inside the configured daily break as a break in the data, as the FVG rule already
-   does for holes, so they cannot form a swing or a gap.
+2. **Gold's daily reopen.** In #45 the CHoCH reference is the low of the 18:00 New York bar, the
+   first bar after the 17:00-18:00 daily break (1225.28), and the sweep bar right after it spans
+   $3.5. Bars around the reopen are often spikes on thin liquidity (the data-quality report also
+   counts 939 bars inside the configured break). **Suggestion:** treat the daily break as a break
+   in the data, as the FVG rule already does for holes, and test on 2012-2017 whether the first
+   bars after the reopen should be allowed to form swings. (Corrected after checking the data:
+   the first version of this file read the reference as 17:30 from the chart.)
 3. **A one-bar spike.** #33 is a single 15-minute spike of about $4 and straight back in a holiday
    week; it is a valid sweep by the rules but hard to call a liquidity grab.
 
@@ -104,9 +107,31 @@ judged**, and they share one cause (below).
 | 42 | yes | Equal lows 1210.4 swept at 09:30, closed back next bar; clean CHoCH. |
 | 43 | yes | Low swept by 0.14 ATR at 09:00 after a sharp drop; recovery breaks 1243.2. |
 | 44 | borderline | Memorial Day, 00:15 New York: low swept by cents, whole move about $1.5; thin holiday market. |
-| 45 | borderline | 4h high swept at 18:15 (after the close); CHoCH reference is a wick at 17:30, inside gold's daily break. |
+| 45 | borderline | 4h high swept at 18:15, right after gold's daily reopen; the CHoCH reference is the 18:00 reopen bar's low (1225.28). |
 | 46 | yes | Jobs-report spike sweeps the high at 08:30 and fails; strong drop. |
 | 47 | yes | High 1288.1 swept at 15:00; gradual drop through 1285.6; small FVG. |
 | 48 | yes | 4h low swept at the London open on Monday after the weekend gap; CHoCH above 1274.9. |
 | 49 | borderline | Low 1260.5 taken at 20:30 New York, closed back next bar; range about $1.5, evening session. |
 | 50 | yes | High 1264.9 swept at 07:15; clean break of 1262.6. |
+
+## Appendix: the seven borderline cases checked against the data (2026-10-22)
+
+Every rule holds exactly for all seven: the sweep extreme is beyond the level and a close comes
+back on the same or the next bar; the CHoCH reference swing (k = 2) was confirmed by the time of
+the sweep; the CHoCH close is beyond it with no new extreme in between; the FVG is three
+consecutive bars with a real gap, between the extreme and the CHoCH. So *borderline* is about the
+significance of the pattern (thin sessions), not about the rules. Times New York.
+
+| # | Level | Sweep bar (extreme, close) | Settled | CHoCH reference | CHoCH close | FVG (bars, gap) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 12 sell | 1h 1582.14 | 03-11 19:00 (1582.40, 1581.91) | same bar | 16:45, 1580.95 | 20:30, 1580.90 | 19:45-20:15, 1581.52-1581.88 |
+| 17 sell | 4h 1254.82 | 01-13 15:30 (1254.99, 1254.88) | 15:45, 1254.80 | 15:15, 1252.36 | 18:00, 1251.66 | 15:45-16:15, 1253.57-1254.43 |
+| 28 sell | 1h 1184.80 | 04-30 21:30 (1185.13, 1184.86) | 21:45, 1183.32 | 20:30, 1182.86 | 22:00, 1182.81 | 21:30-22:00, 1183.72-1184.53 |
+| 33 sell | 1h 1074.19 | 12-29 05:00 (1075.17, 1075.00) | 05:15, 1070.69 | 04:45, 1069.23 | 06:45, 1069.21 | 05:00-05:30, 1070.72-1070.94 |
+| 44 buy | 1h 1265.68 | 05-29 00:15 (1265.32, 1265.60) | 00:30, 1265.87 | 05-28 23:30, 1266.75 | 02:30, 1267.13 | 01:45-02:15, 1266.06-1266.21 |
+| 45 sell | 4h 1228.76 | 07-05 18:15 (1229.09, 1228.73) | same bar | 18:00, 1225.28 | 20:00, 1225.15 | 19:30-20:00, 1226.56-1227.10 |
+| 49 buy | 1h 1260.46 | 12-18 20:30 (1260.11, 1260.31) | 20:45, 1260.50 | 20:00, 1261.30 | 21:45, 1261.41 | 21:15-21:45, 1260.61-1260.69 |
+
+Entries are not part of this review: the detector (P2) finds patterns; the entry (a limit at the
+FVG's near edge), the fill and the outcome are the setup builder's (P3), and the charts stop two
+bars after the CHoCH on purpose.
