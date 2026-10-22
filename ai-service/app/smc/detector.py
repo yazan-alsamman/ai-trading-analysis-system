@@ -101,6 +101,17 @@ def load_frames(symbol: str, end: pd.Timestamp, store: Path = STORE) -> dict[str
     return frames
 
 
+def development_frames(symbol: str, store: Path = STORE) -> dict[str, pd.DataFrame]:
+    """The frames of the development period (D23): bars that opened on or after its start and
+    closed by its end. Bar indices in the pattern table refer to the entry frame built here."""
+    start, end = splits().development
+    lo, hi = pd.Timestamp(start, tz="UTC"), pd.Timestamp(end, tz="UTC")
+    return {
+        k: v[v["ts_utc"] >= lo].reset_index(drop=True)
+        for k, v in load_frames(symbol, hi, store).items()
+    }
+
+
 def table(patterns: list[Pattern], entry: pd.DataFrame) -> pd.DataFrame:
     ts = entry["ts_utc"]
     rows = []
@@ -187,15 +198,15 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--symbol", default="XAUUSD")
     d.add_argument("--store", type=Path, default=STORE)
     d.add_argument("--out", type=Path, default=OUT_DIR)
+    if argv and argv[0] == "review":
+        from app.smc.review import main as review
+
+        return review(argv[1:])
     args = ap.parse_args(argv)
 
     p = strategy()
     start, end = splits().development
-    lo, hi = pd.Timestamp(start, tz="UTC"), pd.Timestamp(end, tz="UTC")
-    frames = {
-        k: v[v["ts_utc"] >= lo].reset_index(drop=True)
-        for k, v in load_frames(args.symbol, hi, args.store).items()
-    }
+    frames = development_frames(args.symbol, args.store)
     patterns = detect(frames, p)
     df = table(patterns, frames[p.entry_timeframe])
     if df.empty:

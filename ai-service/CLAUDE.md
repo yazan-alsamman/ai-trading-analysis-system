@@ -105,7 +105,8 @@ pre-v0.2 work removed. P1 in progress: tasks 1 (layout), 2 (lockbox sealed,
 dukascopy download|compare`, all instruments pass 2012-2025) done. P1 gate passed (Fadi, 2026-10-22).
 P2 in progress: tasks 1 (primitives: `app/smc/primitives.py`, parameters in
 `app/config/strategy.toml`), 2 (events: `app/smc/events.py`) and 3 (detector: `python -m app smc
-detect`, `docs/phase2/patterns_XAUUSD.md`) done; next: the ~50-pattern review. XAUUSD 2012-2017:
+detect`, `docs/phase2/patterns_XAUUSD.md`) and 4 (review tool: `python -m app smc review
+sample|score`) done; the 50-pattern review in `docs/phase2/review/REVIEW.md` waits for Fadi. XAUUSD 2012-2017:
 198 Sweep → CHoCH → FVG patterns (104 buy, 94 sell, 22-40 a year).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
