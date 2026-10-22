@@ -70,7 +70,7 @@ def sustained_open(ts: pd.Series, starts: np.ndarray) -> np.ndarray:
     """For each week, the first bar followed by trading (``OPEN_MIN_BARS`` bars within the next
     hour), so a few stray ticks before the real open do not count as the open. Falls back to the
     week's first bar when no bar of the week qualifies."""
-    t = ts.to_numpy().astype("datetime64[ns]").astype(np.int64)
+    t = pd.DatetimeIndex(ts).as_unit("ns").asi8
     ahead = np.searchsorted(t, t + pd.Timedelta(hours=1).value) - np.arange(len(t))
     # the next qualifying position at or after each position (len(t) when there is none)
     pos = np.where(ahead >= OPEN_MIN_BARS, np.arange(len(t)), len(t))

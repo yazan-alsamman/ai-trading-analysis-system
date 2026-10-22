@@ -1,0 +1,78 @@
+# P2 detector review: XAUUSD
+
+Sample: 50 of 198 patterns of the development period (2012-2017), spread evenly over years and
+directions, seed 20261022 (fixed before the charts were drawn). Each chart ends two bars after the
+CHoCH. Times are New York.
+
+A pattern is **valid** (`yes`) when all of these hold on the chart:
+
+1. **Liquidity.** The dashed line is a real resting level: a clear swing high/low on its timeframe
+   or the previous trading day's high/low, still untaken when it was swept.
+2. **Sweep.** Price trades through it and closes back on that bar or the next; the move looks like a
+   grab of the liquidity, not a breakout that happens to close back.
+3. **CHoCH.** The close (blue marker) breaks the swing (dotted line) that structurally matters for
+   the move into the sweep.
+4. **FVG.** The shaded gap is an imbalance left by the displacement away from the sweep.
+
+Write `yes` or `no` in **Valid**; for a `no`, say in **Notes** which point fails. The written
+conditions themselves are already checked by the tests; this review asks whether the result is a
+genuine trading pattern.
+
+**Reviewer: Claude (AI), approved by Fadi on 2026-10-22.** Fadi chose not to review the charts
+himself and adopted Claude's pre-review (`REVIEW_claude.md`) as the gate review, with the seven
+borderline cases counted as **no** (Fadi's decision). The verdicts come from a visual review of
+these images by the model that also wrote the detector; this is weaker evidence than an
+independent human review and must be stated as a limitation in the thesis.
+
+| # | Chart | Pattern | Sweep (NY) | Direction | Level | Valid | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | [01_buy_20120123_1400.png](01_buy_20120123_1400.png) | `buy:1h:low:201201230700:1666.57` | 2012-01-23 09:00 | buy | 1h 1666.57 | yes |  |
+| 2 | [02_buy_20120126_0815.png](02_buy_20120126_0815.png) | `buy:1h:low:201201260100:1705.73` | 2012-01-26 03:15 | buy | 1h 1705.73 | yes |  |
+| 3 | [03_buy_20120207_1215.png](03_buy_20120207_1215.png) | `buy:4h:low:201202061000:1711.68` | 2012-02-07 07:15 | buy | 4h 1711.68 | yes |  |
+| 4 | [04_sell_20120403_1315.png](04_sell_20120403_1315.png) | `sell:1h:high:201204030300:1680.56` | 2012-04-03 09:15 | sell | 1h 1680.56 | yes |  |
+| 5 | [05_sell_20120413_0700.png](05_sell_20120413_0700.png) | `sell:1h:high:201204130000:1676.79` | 2012-04-13 03:00 | sell | 1h 1676.79 | yes |  |
+| 6 | [06_sell_20120531_0930.png](06_sell_20120531_0930.png) | `sell:4h:high:201205301700:1569.28` | 2012-05-31 05:30 | sell | 4h 1569.28 | yes |  |
+| 7 | [07_buy_20120607_1030.png](07_buy_20120607_1030.png) | `buy:pd:low:201206052100:1615.31` | 2012-06-07 06:30 | buy | pd 1615.31 | yes |  |
+| 8 | [08_sell_20121022_1115.png](08_sell_20121022_1115.png) | `sell:1h:high:201210220400:1726.94` | 2012-10-22 07:15 | sell | 1h 1726.94 | yes |  |
+| 9 | [09_sell_20130118_1345.png](09_sell_20130118_1345.png) | `sell:1h:high:201301180700:1693.48` | 2013-01-18 08:45 | sell | 1h 1693.48 | yes |  |
+| 10 | [10_buy_20130207_1415.png](10_buy_20130207_1415.png) | `buy:4h:low:201302051400:1666.62` | 2013-02-07 09:15 | buy | 4h 1666.62 | yes |  |
+| 11 | [11_buy_20130226_1500.png](11_buy_20130226_1500.png) | `buy:1h:low:201302260700:1587.9` | 2013-02-26 10:00 | buy | 1h 1587.90 | yes |  |
+| 12 | [12_sell_20130311_2300.png](12_sell_20130311_2300.png) | `sell:1h:high:201303111300:1582.14` | 2013-03-11 19:00 | sell | 1h 1582.14 | no | Criterion 3: the CHoCH swing is noise; 19:00 New York, thin market, whole move about $1.5. |
+| 13 | [13_buy_20130419_0100.png](13_buy_20130419_0100.png) | `buy:1h:low:201304181900:1386.18` | 2013-04-18 21:00 | buy | 1h 1386.18 | yes |  |
+| 14 | [14_sell_20130808_0530.png](14_sell_20130808_0530.png) | `sell:1h:high:201308060900:1296.85` | 2013-08-08 01:30 | sell | 1h 1296.85 | yes |  |
+| 15 | [15_buy_20130816_0930.png](15_buy_20130816_0930.png) | `buy:1h:low:201308152300:1360.66` | 2013-08-16 05:30 | buy | 1h 1360.66 | yes |  |
+| 16 | [16_sell_20131016_0645.png](16_sell_20131016_0645.png) | `sell:pd:high:201310142100:1288.11` | 2013-10-16 02:45 | sell | pd 1288.11 | yes |  |
+| 17 | [17_sell_20140113_2030.png](17_sell_20140113_2030.png) | `sell:4h:high:201401122200:1254.82` | 2014-01-13 15:30 | sell | 4h 1254.82 | no | Criterion 3: the CHoCH swing (1252.36) is minor; 0.11 ATR sweep in a slow afternoon grind. |
+| 18 | [18_sell_20140114_1530.png](18_sell_20140114_1530.png) | `sell:4h:high:201401131800:1254.99` | 2014-01-14 10:30 | sell | 4h 1254.99 | yes |  |
+| 19 | [19_buy_20140425_0645.png](19_buy_20140425_0645.png) | `buy:1h:low:201404250000:1290.95` | 2014-04-25 02:45 | buy | 1h 1290.95 | yes |  |
+| 20 | [20_buy_20140521_1800.png](20_buy_20140521_1800.png) | `buy:4h:low:201405200900:1285.83` | 2014-05-21 14:00 | buy | 4h 1285.83 | yes |  |
+| 21 | [21_sell_20140709_1145.png](21_sell_20140709_1145.png) | `sell:1h:high:201407090600:1326.04` | 2014-07-09 07:45 | sell | 1h 1326.04 | yes |  |
+| 22 | [22_sell_20140711_1215.png](22_sell_20140711_1215.png) | `sell:1h:high:201407110100:1338.73` | 2014-07-11 08:15 | sell | 1h 1338.73 | yes |  |
+| 23 | [23_buy_20140820_1015.png](23_buy_20140820_1015.png) | `buy:4h:low:201408151300:1292.41` | 2014-08-20 06:15 | buy | 4h 1292.41 | yes |  |
+| 24 | [24_buy_20141204_1100.png](24_buy_20141204_1100.png) | `buy:1h:low:201412040700:1202.38` | 2014-12-04 06:00 | buy | 1h 1202.38 | yes |  |
+| 25 | [25_sell_20141230_0815.png](25_sell_20141230_0815.png) | `sell:1h:high:201412300400:1189.64` | 2014-12-30 03:15 | sell | 1h 1189.64 | yes |  |
+| 26 | [26_buy_20150217_1230.png](26_buy_20150217_1230.png) | `buy:4h:low:201502121800:1219.41` | 2015-02-17 07:30 | buy | 4h 1219.41 | yes |  |
+| 27 | [27_sell_20150305_1530.png](27_sell_20150305_1530.png) | `sell:pd:high:201503032200:1209.01` | 2015-03-05 10:30 | sell | pd 1209.01 | yes |  |
+| 28 | [28_sell_20150501_0130.png](28_sell_20150501_0130.png) | `sell:1h:high:201504301900:1184.8` | 2015-04-30 21:30 | sell | 1h 1184.80 | no | Criterion 3: 21:30 New York (after the close), tiny move; the structure broken is noise. |
+| 29 | [29_sell_20150626_0830.png](29_sell_20150626_0830.png) | `sell:4h:high:201506250100:1178.05` | 2015-06-26 04:30 | sell | 4h 1178.05 | yes |  |
+| 30 | [30_buy_20150828_1130.png](30_buy_20150828_1130.png) | `buy:1h:low:201508280100:1124.35` | 2015-08-28 07:30 | buy | 1h 1124.35 | yes |  |
+| 31 | [31_buy_20150915_1045.png](31_buy_20150915_1045.png) | `buy:4h:low:201509140900:1103.46` | 2015-09-15 06:45 | buy | 4h 1103.46 | yes |  |
+| 32 | [32_buy_20151013_1100.png](32_buy_20151013_1100.png) | `buy:1h:low:201510130200:1152.98` | 2015-10-13 07:00 | buy | 1h 1152.98 | yes |  |
+| 33 | [33_sell_20151229_1000.png](33_sell_20151229_1000.png) | `sell:1h:high:201512290600:1074.19` | 2015-12-29 05:00 | sell | 1h 1074.19 | no | Criterion 2: a one-bar $4 spike and straight back in the holiday week, not a clear liquidity grab. |
+| 34 | [34_sell_20160203_0600.png](34_sell_20160203_0600.png) | `sell:1h:high:201602030200:1128.97` | 2016-02-03 01:00 | sell | 1h 1128.97 | yes |  |
+| 35 | [35_buy_20160412_0500.png](35_buy_20160412_0500.png) | `buy:1h:low:201604120100:1253.13` | 2016-04-12 01:00 | buy | 1h 1253.13 | yes |  |
+| 36 | [36_sell_20160427_1245.png](36_sell_20160427_1245.png) | `sell:1h:high:201604220800:1250.66` | 2016-04-27 08:45 | sell | 1h 1250.66 | yes |  |
+| 37 | [37_buy_20160718_1130.png](37_buy_20160718_1130.png) | `buy:1h:low:201607180100:1323.59` | 2016-07-18 07:30 | buy | 1h 1323.59 | yes |  |
+| 38 | [38_buy_20160725_1330.png](38_buy_20160725_1330.png) | `buy:1h:low:201607250100:1313.46` | 2016-07-25 09:30 | buy | 1h 1313.46 | yes |  |
+| 39 | [39_sell_20160930_1245.png](39_sell_20160930_1245.png) | `sell:1h:high:201609271800:1327.77` | 2016-09-30 08:45 | sell | 1h 1327.77 | yes |  |
+| 40 | [40_buy_20161024_1145.png](40_buy_20161024_1145.png) | `buy:1h:low:201610240300:1262.54` | 2016-10-24 07:45 | buy | 1h 1262.54 | yes |  |
+| 41 | [41_sell_20161108_1530.png](41_sell_20161108_1530.png) | `sell:1h:high:201611071100:1288.93` | 2016-11-08 10:30 | sell | 1h 1288.93 | yes |  |
+| 42 | [42_buy_20170123_1430.png](42_buy_20170123_1430.png) | `buy:1h:low:201701230900:1210.4` | 2017-01-23 09:30 | buy | 1h 1210.40 | yes |  |
+| 43 | [43_buy_20170301_1400.png](43_buy_20170301_1400.png) | `buy:1h:low:201702231200:1237.11` | 2017-03-01 09:00 | buy | 1h 1237.11 | yes |  |
+| 44 | [44_buy_20170529_0415.png](44_buy_20170529_0415.png) | `buy:1h:low:201705262000:1265.68` | 2017-05-29 00:15 | buy | 1h 1265.68 | no | Criterion 3: Memorial Day, 00:15 New York; whole move about $1.5, the swing is noise. |
+| 45 | [45_sell_20170705_2215.png](45_sell_20170705_2215.png) | `sell:4h:high:201707050100:1228.76` | 2017-07-05 18:15 | sell | 4h 1228.76 | no | Criteria 2-3: right after gold's daily reopen; the CHoCH reference is the 18:00 reopen bar. |
+| 46 | [46_sell_20171103_1230.png](46_sell_20171103_1230.png) | `sell:1h:high:201711030100:1278.59` | 2017-11-03 08:30 | sell | 1h 1278.59 | yes |  |
+| 47 | [47_sell_20171109_2000.png](47_sell_20171109_2000.png) | `sell:1h:high:201711091100:1288.1` | 2017-11-09 15:00 | sell | 1h 1288.10 | yes |  |
+| 48 | [48_buy_20171204_0800.png](48_buy_20171204_0800.png) | `buy:4h:low:201712011400:1271.5` | 2017-12-04 03:00 | buy | 4h 1271.50 | yes |  |
+| 49 | [49_buy_20171219_0130.png](49_buy_20171219_0130.png) | `buy:1h:low:201712182000:1260.46` | 2017-12-18 20:30 | buy | 1h 1260.46 | no | Criterion 3: 20:30 New York, evening session; range about $1.5, the swing is noise. |
+| 50 | [50_sell_20171219_1215.png](50_sell_20171219_1215.png) | `sell:1h:high:201712190800:1264.89` | 2017-12-19 07:15 | sell | 1h 1264.89 | yes |  |

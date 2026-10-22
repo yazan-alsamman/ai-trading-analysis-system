@@ -72,6 +72,10 @@ Lifecycle: DEVELOPING → ARMED → ACTIVE → CLOSED / EXPIRED / INVALIDATED; d
 Strict vs loosened rules (CHoCH or BOS, FVG as a feature) is decided in P3 after counting samples.
 One TP in v1 (TP1/TP2 after v1). Custom user strategies: after v1.
 
+Exact v1 definitions and the variants registered for P3 (same-bar reclaim, prior-trend CHoCH, strict
+FVG linkage, rejection audit log): `docs/MARKET_STRUCTURE_DEFINITIONS.md`. v1 changes only by a new
+recorded version.
+
 ## Engineering rules
 
 - Python 3.12, ruff (line 100). Reuse `../libs/backtest`, `../libs/indicators`, `../libs/strategies`.
@@ -102,7 +106,17 @@ pre-v0.2 work removed. P1 in progress: tasks 1 (layout), 2 (lockbox sealed,
 `docs/lockbox/MANIFEST-2026-10-21.json`), 3 (importer: `python -m app import`, store in
 `data/processed/<SYMBOL>/{m1,5m,15m,1h,4h,D1}.parquet`, untracked) and 4 (quality report:
 `python -m app quality`, `docs/data_quality/`) and 5 (Dukascopy cross-check: `python -m app
-dukascopy download|compare`, all instruments pass 2012-2025) done. P1 gate: to be confirmed by Fadi.
+dukascopy download|compare`, all instruments pass 2012-2025) done. P1 gate passed (Fadi, 2026-10-22).
+P2 in progress: tasks 1 (primitives: `app/smc/primitives.py`, parameters in
+`app/config/strategy.toml`), 2 (events: `app/smc/events.py`) and 3 (detector: `python -m app smc
+detect`, `docs/phase2/patterns_XAUUSD.md`) and 4 (review tool: `python -m app smc review
+sample|score`) done. XAUUSD 2012-2017: 198 Sweep → CHoCH → FVG patterns (104 buy, 94 sell, 22-40 a year).
+**P2 gate not passed (v1)**: 43/50 = 86% (95% 74-93%) against 90%; review by Claude, adopted by Fadi,
+borderline cases counted as no (`docs/phase2/review/REVIEW.md`; state this in the thesis). Cause: thin
+sessions and gold's daily reopen. V5-S built (`--rules V5-S`):
+145 patterns. **P2 gate passed with V5-S** (Fadi's review, 46/50 = 92%, 95% 81-97%): V5-S is the
+rule set for P3. Its rejections point at the FVG link (V3-L) and CHoCH clarity (V2-T), both P3 variants.
+Next: P3 (setup builder, triple barrier, sample count, strictness decision, E0-E1).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

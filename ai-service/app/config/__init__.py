@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import tomllib
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date
 from functools import cache
 from pathlib import Path
@@ -38,6 +38,32 @@ class Splits:
     secondary_holdout: tuple[date, date]
     lockbox_start: date
     embargo_days: int
+
+
+@dataclass(frozen=True)
+class Strategy:
+    """Strategy v1 parameters (``strategy.toml``); bar counts are in entry-timeframe bars."""
+
+    context_timeframes: tuple[str, ...]
+    entry_timeframe: str
+    k_context: int
+    k_entry: int
+    max_age_days: int
+    previous_day: bool
+    atr_period: int
+    min_depth_atr: float
+    breakout_depth_atr: float
+    close_back_bars: int
+    choch_window_bars: int
+    fvg_min_size_atr: float
+    sl_buffer_atr: float
+    min_r: float
+    max_r: float
+    horizon_bars: int
+    rule_set: str = "v1"
+    break_is_gap: bool = False
+    sweep_session: tuple[str, str] | None = None
+    skip_us_holidays: bool = False
 
 
 def _load(name: str) -> dict:
@@ -84,8 +110,42 @@ def splits() -> Splits:
     return out
 
 
+@cache
+def strategy(rule_set: str = "v1") -> Strategy:
+    """v1, or a named variant from ``[variants.<name>]`` applied on top of it."""
+    raw = _load("strategy.toml")
+    base = Strategy(
+        context_timeframes=tuple(raw["timeframes"]["context"]),
+        entry_timeframe=raw["timeframes"]["entry"],
+        k_context=raw["swings"]["k_context"],
+        k_entry=raw["swings"]["k_entry"],
+        max_age_days=raw["liquidity"]["max_age_days"],
+        previous_day=raw["liquidity"]["previous_day"],
+        atr_period=raw["sweep"]["atr_period"],
+        min_depth_atr=raw["sweep"]["min_depth_atr"],
+        breakout_depth_atr=raw["sweep"]["breakout_depth_atr"],
+        close_back_bars=raw["sweep"]["close_back_bars"],
+        choch_window_bars=raw["choch"]["window_bars"],
+        fvg_min_size_atr=raw["fvg"]["min_size_atr"],
+        sl_buffer_atr=raw["trade"]["sl_buffer_atr"],
+        min_r=raw["trade"]["min_r"],
+        max_r=raw["trade"]["max_r"],
+        horizon_bars=raw["trade"]["horizon_bars"],
+    )
+    if rule_set == "v1":
+        return base
+    variants = raw.get("variants", {})
+    if rule_set not in variants:
+        raise KeyError(f"unknown rule set {rule_set!r}; known: v1, {', '.join(variants)}")
+    changes = dict(variants[rule_set])
+    if "sweep_session" in changes:
+        changes["sweep_session"] = tuple(changes["sweep_session"])
+    return replace(base, rule_set=rule_set, **changes)
+
+
 def main(argv: list[str] | None = None) -> int:
     summary = {"instruments": {k: asdict(v) for k, v in instruments().items()}}
     summary["splits"] = asdict(splits())
+    summary["strategy"] = asdict(strategy())
     print(json.dumps(summary, indent=2, default=str))
     return 0

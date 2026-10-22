@@ -1,0 +1,39 @@
+# Strategy v1: Sweep -> CHoCH -> FVG (CLAUDE.md, design v0.2). Initial values from the design; tuned on
+# the development period (2012-2017) only, then frozen. Bar counts are in bars of the named timeframe.
+
+[timeframes]
+context = ["1h", "4h"]   # liquidity from confirmed swings of these frames
+entry = "15m"
+
+[swings]
+k_context = 3            # a swing is a high (low) above (below) the k bars on each side
+k_entry = 2              # confirmed k bars later
+
+[liquidity]
+max_age_days = 5         # trading days (17:00-17:00 New York) a level stays active
+previous_day = true      # previous trading day high and low
+
+[sweep]
+atr_period = 14          # Wilder ATR on the entry timeframe
+min_depth_atr = 0.1      # trade beyond the level by at least this much
+breakout_depth_atr = 1.5 # deeper than this is a breakout, not a sweep
+close_back_bars = 1      # close back inside on the sweep bar or within this many bars after
+
+[choch]
+window_bars = 8          # bars after the sweep in which the CHoCH must close
+
+[fvg]
+min_size_atr = 0.1       # the first gap of at least this size in the displacement
+
+[trade]
+sl_buffer_atr = 0.1      # SL beyond the sweep extreme by this much, plus the spread
+min_r = 1.5
+max_r = 4.0
+horizon_bars = 48        # triple barrier: TP, SL, or this many bars after the fill
+
+# Named variants (docs/MARKET_STRUCTURE_DEFINITIONS.md §9): only the keys they change.
+[variants.V5-S]
+break_is_gap = true                  # entry frame: closed-hour bars removed, first bar after a gap
+                                     # is neither a swing nor a sweep bar
+sweep_session = ["02:00", "16:00"]   # New York; a sweep's first bar must open in this window
+skip_us_holidays = true              # and not on a US market holiday

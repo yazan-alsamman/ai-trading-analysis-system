@@ -5,6 +5,7 @@
     python -m app import --raw-dir PATH  # MT5 history -> research store (Parquet)
     python -m app quality                # data-quality report of the store
     python -m app dukascopy download|compare  # P1 cross-check sample and report
+    python -m app smc detect --symbol XAUUSD    # P2 patterns, development period
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -20,6 +21,7 @@ COMMANDS = {
     "import": "app.data.importer",
     "quality": "app.data.quality",
     "dukascopy": "app.data.dukascopy",
+    "smc": "app.smc.detector",
 }
 
 
