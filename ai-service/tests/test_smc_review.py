@@ -38,7 +38,9 @@ def test_small_cells_give_their_share_to_the_others() -> None:
 
 
 def test_score_counts_yes_and_no_and_reports_blanks(tmp_path) -> None:
-    header = review.CHECKLIST.format(symbol="X", n=3, total=9, years="2012-2017", seed=1)
+    header = review.CHECKLIST.format(
+        symbol="X", n=3, total=9, years="2012-2017", spread="cells", seed=1, fvg_note=""
+    )
     body = "\n".join(
         [
             "| 1 | [a](a) | `p1` | 2012-01-01 | buy | 1h 1.0 | yes |  |",
@@ -84,4 +86,45 @@ def test_a_chart_is_drawn(tmp_path) -> None:
         }
     )
     review.draw(row, entry, tmp_path / "x.png", 1)
+    assert (tmp_path / "x.png").stat().st_size > 10_000
+
+
+def test_sample_can_spread_over_other_cells() -> None:
+    rows = []
+    for sym in ("XAUUSD", "EURUSD"):
+        for has in (True, False):
+            for k in range(20):
+                t = pd.Timestamp("2016-03-01", tz="UTC") + pd.Timedelta(hours=k)
+                rows.append({"symbol": sym, "has_fvg": has, "sweep_utc": t, "year": 2016})
+    a = review.sample(pd.DataFrame(rows), n=20, seed=410733, by=("symbol", "has_fvg"))
+    assert a.groupby(["symbol", "has_fvg"]).size().tolist() == [5, 5, 5, 5]
+
+
+def test_a_chart_without_fvg_is_drawn(tmp_path) -> None:
+    ts = pd.date_range("2016-03-01 10:00", periods=80, freq="15min", tz="UTC")
+    close = 1.1 + np.cumsum(np.random.default_rng(0).normal(0, 1e-4, 80))
+    entry = pd.DataFrame(
+        {"ts_utc": ts, "open": close, "high": close + 2e-4, "low": close - 2e-4, "close": close}
+    )
+    row = pd.Series(
+        {
+            "symbol": "EURUSD",
+            "direction": "sell",
+            "level_source": "1h",
+            "level_price": close[45] + 1e-4,
+            "sweep_first_idx": 45,
+            "extreme_idx": 45,
+            "extreme": close[45] + 2e-4,
+            "choch_ref_idx": 40,
+            "choch_ref_price": close[40] - 2e-4,
+            "choch_idx": 50,
+            "fvg_idx": -1,
+            "fvg_low": np.nan,
+            "fvg_high": np.nan,
+            "sweep_utc": ts[45],
+            "depth_atr": 0.4,
+            "fvg_size_atr": np.nan,
+        }
+    )
+    review.draw(row, entry, tmp_path / "x.png", 1, decimals=5)
     assert (tmp_path / "x.png").stat().st_size > 10_000
