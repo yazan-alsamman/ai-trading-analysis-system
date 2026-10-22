@@ -27,6 +27,9 @@ class Instrument:
     week_open: str
     week_close: str
     daily_break: tuple[str, str] | None = None
+    cost_extra_frac: float | None = None  # costs are configured per instrument (XAUUSD so far)
+    cost_extra_min: float | None = None
+    sl_slippage: float | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,9 @@ class Strategy:
     min_r: float
     max_r: float
     horizon_bars: int
+    entry_window_bars: int
+    beyond_max_r: str
+    spread_stat: str
     rule_set: str = "v1"
     break_is_gap: bool = False
     sweep_session: tuple[str, str] | None = None
@@ -131,6 +137,9 @@ def strategy(rule_set: str = "v1") -> Strategy:
         min_r=raw["trade"]["min_r"],
         max_r=raw["trade"]["max_r"],
         horizon_bars=raw["trade"]["horizon_bars"],
+        entry_window_bars=raw["trade"]["entry_window_bars"],
+        beyond_max_r=raw["trade"]["beyond_max_r"],
+        spread_stat=raw["trade"]["spread_stat"],
     )
     if rule_set == "v1":
         return base

@@ -116,7 +116,11 @@ borderline cases counted as no (`docs/phase2/review/REVIEW.md`; state this in th
 sessions and gold's daily reopen. V5-S built (`--rules V5-S`):
 145 patterns. **P2 gate passed with V5-S** (Fadi's review, 46/50 = 92%, 95% 81-97%): V5-S is the
 rule set for P3. Its rejections point at the FVG link (V3-L) and CHoCH clarity (V2-T), both P3 variants.
-Next: P3 (setup builder, triple barrier, sample count, strictness decision, E0-E1).
+P3 in progress: task 1 (setup builder: `python -m app setups build --rules V5-S`,
+`docs/phase3/`) done. Trade choices (Fadi, 2026-10-22): limit entry waits 8 bars; nearest liquidity
+beyond 4R is rejected, not capped; spread = mean of the decision bar. XAUUSD V5-S 2012-2017: 104 armed
+setups (v1: 140), about 17 a year: far below the P3 gate of 1,000 labelled setups. Next: task 2
+(lifecycle and triple-barrier labels).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

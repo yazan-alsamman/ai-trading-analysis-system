@@ -6,6 +6,7 @@
     python -m app quality                # data-quality report of the store
     python -m app dukascopy download|compare  # P1 cross-check sample and report
     python -m app smc detect --symbol XAUUSD    # P2 patterns, development period
+    python -m app setups build --rules V5-S     # P3 setups, development period
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -22,6 +23,7 @@ COMMANDS = {
     "quality": "app.data.quality",
     "dukascopy": "app.data.dukascopy",
     "smc": "app.smc.detector",
+    "setups": "app.setups.builder",
 }
 
 

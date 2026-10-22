@@ -11,6 +11,11 @@ quote_currency = "USD"
 week_open = "18:00"
 week_close = "17:00"
 daily_break = ["17:00", "18:00"]
+# Costs (price units): spread + max(cost_extra_frac * spread, cost_extra_min); SL fills slip by
+# sl_slippage. $0.10 is the design's minimum; the SL slippage value is an initial assumption.
+cost_extra_frac = 0.5
+cost_extra_min = 0.10
+sl_slippage = 0.10
 
 [EURUSD]
 point = 0.00001
