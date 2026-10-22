@@ -17,12 +17,12 @@ LZMA-compressed records of 24 bytes (big-endian): seconds since 00:00 UTC, open,
 from __future__ import annotations
 
 import argparse
+import http.client
 import lzma
 import struct
 import sys
 import time
-import urllib.error
-import urllib.request
+import urllib.parse
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -93,43 +93,72 @@ def decode(raw: bytes, symbol: str, day: date) -> pd.DataFrame:
     )[cols]
 
 
-def _get(address: str, attempts: int = 4) -> bytes:
-    req = urllib.request.Request(address, headers={"User-Agent": "ai-service-research/1"})
-    for k in range(attempts):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                return resp.read()
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return b""
-            if k == attempts - 1:
-                raise
-        except (urllib.error.URLError, TimeoutError):
-            if k == attempts - 1:
-                raise
-        time.sleep(2 * (k + 1))
-    return b""
+class _Client:
+    """One kept-alive HTTPS connection: the TLS handshake can take ~20 s on some networks, a
+    request on an open connection well under a second. Reconnects after any error."""
+
+    def __init__(self) -> None:
+        self.conn: http.client.HTTPSConnection | None = None
+
+    def get(self, address: str, attempts: int = 6) -> bytes:
+        parts = urllib.parse.urlsplit(address)
+        for k in range(attempts):
+            try:
+                if self.conn is None:
+                    self.conn = http.client.HTTPSConnection(parts.netloc, timeout=60)
+                self.conn.request(
+                    "GET", parts.path, headers={"User-Agent": "ai-service-research/1"}
+                )
+                resp = self.conn.getresponse()
+                body = resp.read()
+                if resp.status == 404:
+                    return b""
+                if resp.status == 200:
+                    return body
+                raise OSError(f"HTTP {resp.status} for {address}")
+            except (OSError, http.client.HTTPException):
+                if self.conn is not None:
+                    self.conn.close()
+                self.conn = None
+                if k == attempts - 1:
+                    raise
+                time.sleep(2 * (k + 1))
+        return b""
+
+
+_client = _Client()
+
+
+def _get(address: str) -> bytes:
+    return _client.get(address)
 
 
 def path(symbol: str, day: date, cache: Path = CACHE) -> Path:
     return cache / symbol / f"{day.isoformat()}.bi5"
 
 
+def _bar(symbol: str, done: int, total: int, width: int = 30) -> str:
+    filled = width * done // total if total else width
+    return f"{symbol}  [{'#' * filled}{'.' * (width - filled)}] {done:4d}/{total}"
+
+
 def download(symbol: str, days: list[date], cache: Path = CACHE) -> dict:
     fetched = cached = 0
-    for day in days:
+    for n, day in enumerate(days, 1):
         target = path(symbol, day, cache)
         if target.exists():
             cached += 1
-            continue
-        raw = _get(url(symbol, day))
-        decode(raw, symbol, day)  # refuse a file that does not decode before keeping it
-        target.parent.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_name(target.name + ".tmp")
-        tmp.write_bytes(raw)
-        tmp.replace(target)
-        fetched += 1
-        time.sleep(1 / REQUESTS_PER_SECOND)
+        else:
+            raw = _get(url(symbol, day))
+            decode(raw, symbol, day)  # refuse a file that does not decode before keeping it
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_name(target.name + ".tmp")
+            tmp.write_bytes(raw)
+            tmp.replace(target)
+            fetched += 1
+            time.sleep(1 / REQUESTS_PER_SECOND)
+        if n % 20 == 0 or n == len(days):
+            print(_bar(symbol, n, len(days)), flush=True)
     return {"days": len(days), "fetched": fetched, "cached": cached}
 
 

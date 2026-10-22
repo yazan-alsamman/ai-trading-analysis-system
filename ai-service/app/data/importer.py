@@ -77,7 +77,7 @@ def import_symbol(symbol: str, export_path: Path, out_dir: Path = DEFAULT_OUT) -
     parsed = parse_export(export.raw_lines(), instruments()[symbol], M1, s.server_tz)
     if parsed.bars.empty:
         raise ValueError(f"{export_path.name} has no valid bars before the lockbox")
-    segments = clock.detect(parsed.bars["ts_utc"], instruments()[symbol], s.server_tz)
+    segments = clock.detect(parsed.bars, instruments()[symbol], s.server_tz)
     m1 = clock.apply(parsed.bars, segments)
     segments = clock.check_mismatch_weeks(m1, segments, s.server_tz)
     m1 = clock.apply_mismatch_weeks(m1, segments, s.server_tz)

@@ -189,5 +189,5 @@ Offset = hours by which the export's clock was ahead of `Europe/Athens` (from th
 
 | From (UTC) | To (UTC) | Offset (h) | Weeks | Weeks agreeing | Mismatch weeks: extra (h), 08:30 / 09:30 spike | Jobs-report peak at 08:30 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2010-01-10 23:05 | 2026-01-09 21:59 | +0 | 854 | 780 of 802 | +0, 2.98× / 1.94× (263 days) | 61% of 186 |
+| 2010-01-10 23:05 | 2026-01-09 21:59 | +0 | 854 | 779 of 802 | +0, 2.98× / 1.94× (263 days) | 61% of 186 |
 
