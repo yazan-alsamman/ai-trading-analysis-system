@@ -201,7 +201,7 @@ thin hours (after the New York close, early Asia, a US holiday) or gold's daily 
 V5-S with the FVG optional (Sweep -> CHoCH is enough; an FVG, if any, becomes a feature) and a
 market entry at the decision bar's close (no limit order, so no expiry), held 48 bars after it;
 SL and TP as in the setup builder. Registered on 2026-10-22 for the P3 sample count only
-(`[variants.L1]`); adopting it is Fadi's decision.
+(`[variants.L1]`); adopted by Fadi for P3 on 2026-10-22, pooled over the six instruments.
 
 ### How the variants are decided (fixed now, before any variant is run)
 
@@ -224,3 +224,4 @@ SL and TP as in the setup builder. Registered on 2026-10-22 for the P3 sample co
 | V5-S | 2026-10-22 | Built as a named rule set (`strategy("V5-S")`; v1 output unchanged, same SHA-256). XAUUSD 2012-2017: 145 patterns (all also v1 patterns); removes 5 of the 7 patterns rejected in the v1 review. Review sample drawn with seed 731205 (`docs/phase2/review_V5-S/`). |
 | V5-S | 2026-10-22 | **P2 gate passed**: Fadi's review 46/50 = 92% (Wilson 95% 81-97%). Of the 4 rejections, 3 question the FVG link to the displacement (V3-L) and 1 the clarity of the CHoCH (V2-T). V5-S is the rule set carried into P3; the second condition of §9 (enough setups for the P3 gate) is checked in P3. Agreement with Claude's v1 verdicts on the 15 shared patterns: 12/15. |
 | P3 count | 2026-10-22 | Labelled setups 2012-01-01 to 2026-01-09, six instruments (`docs/phase3/counts_*.md`, counts only): v1 543, V5-S 377, L1 1,634 (XAUUSD 134 / 88 / 387). Strict rules miss the P3 gate (1,000) even pooled. |
+| L1 | 2026-10-22 | **Adopted for P3 by Fadi: L1, pooled over the six instruments** (1,634 labelled setups). The research question stays on XAUUSD: the model may learn from all six, results are reported for XAUUSD (and per instrument). Open before training: a cost model for the five pairs; the P2 review covered XAUUSD with the FVG required, so L1 patterns without an FVG and the FX pairs have not been reviewed by eye. |

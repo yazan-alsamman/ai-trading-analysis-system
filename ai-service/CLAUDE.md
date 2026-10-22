@@ -124,7 +124,10 @@ V5-S 42 labelled setups in 2012-2017 (v1: 59), about 7 a year; 19% TP before SL,
 (2x costs -0.31). The P3 gate (1,000 labelled setups) is out of reach for strict rules on gold alone.
 Task 3 counts (`python -m app setups count`, counts only, 2012 to 2026-01-09, six instruments):
 v1 543, V5-S 377, L1 (FVG optional, market entry) 1,634 labelled setups (gold 134 / 88 / 387). Only
-L1 pooled over the six instruments passes 1,000. Waiting for Fadi's strictness decision.
+L1 pooled over the six instruments passes 1,000. **Decision (Fadi, 2026-10-22): L1, pooled over the six
+instruments.** The research question stays on XAUUSD (train on all six, report XAUUSD and per
+instrument). Open: a cost model for the five pairs; the FX pairs and FVG-less L1 patterns are not
+reviewed by eye yet. Next: task 4 (E0 random entries vs E1 rules only, development period).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
