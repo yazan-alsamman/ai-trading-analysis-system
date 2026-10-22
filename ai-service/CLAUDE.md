@@ -110,8 +110,11 @@ dukascopy download|compare`, all instruments pass 2012-2025) done. P1 gate passe
 P2 in progress: tasks 1 (primitives: `app/smc/primitives.py`, parameters in
 `app/config/strategy.toml`), 2 (events: `app/smc/events.py`) and 3 (detector: `python -m app smc
 detect`, `docs/phase2/patterns_XAUUSD.md`) and 4 (review tool: `python -m app smc review
-sample|score`) done; the 50-pattern review in `docs/phase2/review/REVIEW.md` waits for Fadi. XAUUSD 2012-2017:
-198 Sweep → CHoCH → FVG patterns (104 buy, 94 sell, 22-40 a year).
+sample|score`) done. XAUUSD 2012-2017: 198 Sweep → CHoCH → FVG patterns (104 buy, 94 sell, 22-40 a year).
+**P2 gate not passed (v1)**: 43/50 = 86% (95% 74-93%) against 90%; review by Claude, adopted by Fadi,
+borderline cases counted as no (`docs/phase2/review/REVIEW.md`; state this in the thesis). Cause: thin
+sessions and gold's daily reopen. Next: variant V5-S (`docs/MARKET_STRUCTURE_DEFINITIONS.md` §9), then a
+new 50-pattern review.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
