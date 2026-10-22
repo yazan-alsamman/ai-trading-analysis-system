@@ -100,6 +100,13 @@ def test_clock_check_sees_the_jobs_report_in_a_dst_mismatch_week(report: dict) -
     assert (c["dst_mismatch_days"], c["dst_mismatch_peak_at_0830"]) == (1, 1)
 
 
+def test_clock_check_works_on_a_slice() -> None:
+    m1 = session_bars("2023-10-29 18:00", "2023-11-10 17:00")
+    m1.loc[m1["ts_utc"] == _ny("2023-11-03 08:30"), "high"] += 5.0
+    part = m1[m1["ts_utc"] >= _ny("2023-11-01 00:00")]  # an index that does not start at 0
+    assert quality.clock_check(part)["peak_at_0830_share"] == 1.0
+
+
 def test_spread_by_year(report: dict) -> None:
     y = report["spread"]["by_year"]["2023"]
     assert (y["median"], y["zero_share"], y["missing_share"]) == (0.25, 0.0, 0.0)

@@ -227,6 +227,7 @@ def _dst_mismatch(ts: pd.DatetimeIndex) -> np.ndarray:
 
 def clock_check(m1: pd.DataFrame) -> dict:
     """Where the largest one-minute range of each first Friday 07:30-09:30 New York falls."""
+    m1 = m1.reset_index(drop=True)  # also called on a slice (one clock segment)
     ny = _ny(m1["ts_utc"])
     wall = ny.dt.tz_localize(None)
     day = wall.dt.normalize()
@@ -249,6 +250,28 @@ def clock_check(m1: pd.DataFrame) -> dict:
         "dst_mismatch_peak_at_0830": int(aligned[mismatch].sum()),
         "peak_time_counts": {k: int(v) for k, v in when.value_counts().head(5).items()},
     }
+
+
+def clock_segments(m1: pd.DataFrame, segments: list[dict]) -> list[dict]:
+    """The importer's clock segments, each confirmed by the jobs-report check on its corrected
+    bars."""
+    out = []
+    for seg in segments:
+        shift = pd.Timedelta(hours=seg["offset_hours"])
+        lo = pd.Timestamp(seg["from_utc_as_parsed"]) - shift
+        hi = pd.Timestamp(seg["to_utc_as_parsed"]) - shift
+        part = m1[(m1["ts_utc"] >= lo) & (m1["ts_utc"] <= hi)]
+        check = clock_check(part) if len(part) else {"days": 0}
+        out.append(
+            seg
+            | {
+                "from_utc": _stamp(lo),
+                "to_utc": _stamp(hi),
+                "jobs_report_days": check["days"],
+                "peak_at_0830_share": check.get("peak_at_0830_share"),
+            }
+        )
+    return out
 
 
 def build(symbol: str, store: Path = STORE) -> dict:
@@ -276,7 +299,17 @@ def build(symbol: str, store: Path = STORE) -> dict:
         "jumps": jumps(m1),
         "spread": spread(m1, instrument),
         "clock_check": clock_check(m1),
+        "clock_segments": clock_segments(m1, imported.get("clock_segments", [])),
     }
+
+
+def _mismatch_cell(m: dict) -> str:
+    if "range_0830_x_median" not in m:
+        return f"too few weekdays ({m.get('weekdays', 0)})"
+    return (
+        f"{m['extra_offset_hours']:+d}, {m['range_0830_x_median']}× / {m['range_0930_x_median']}×"
+        f" ({m['weekdays']} days)"
+    )
 
 
 def _table(head: list[str], rows: list[list]) -> list[str]:
@@ -439,6 +472,40 @@ def render(r: dict) -> str:
         " 08:30). Most common peak times: "
         + ", ".join(f"{k} ({v})" for k, v in clk.get("peak_time_counts", {}).items())
         + ".",
+        "",
+        "## Clock segments (corrected at import)",
+        "",
+        "Offset = hours by which the export's clock was ahead of `Europe/Athens` (from the weekly"
+        " open, `app.data.clock`); the bars were moved back by it. Mismatch weeks = the weeks when"
+        " US and EU daylight saving disagree: the extra hour they were moved by, from the 08:30 New"
+        " York release spike (range at 08:30 / 09:30 as a multiple of the median 07:00-10:00"
+        " range). The jobs-report check is run on the corrected bars of each segment.",
+        "",
+        *_table(
+            [
+                "From (UTC)",
+                "To (UTC)",
+                "Offset (h)",
+                "Weeks",
+                "Weeks agreeing",
+                "Mismatch weeks: extra (h), 08:30 / 09:30 spike",
+                "Jobs-report peak at 08:30",
+            ],
+            [
+                [
+                    s["from_utc"],
+                    s["to_utc"],
+                    f"{s['offset_hours']:+d}",
+                    s["weeks"],
+                    f"{s['weeks_agreeing']} of {s['weeks_with_evidence']}",
+                    _mismatch_cell(s.get("mismatch_weeks", {})),
+                    "n/a"
+                    if s["peak_at_0830_share"] is None
+                    else f"{s['peak_at_0830_share']:.0%} of {s['jobs_report_days']}",
+                ]
+                for s in r["clock_segments"]
+            ],
+        ),
         "",
     ]
     return "\n".join(lines)

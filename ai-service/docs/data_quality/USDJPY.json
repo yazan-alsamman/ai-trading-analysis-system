@@ -9,7 +9,7 @@
     "stopped_at_lockbox": false
   },
   "import_rejects": {},
-  "m1_content_sha256": "95d30fd31a9b02ce8526e7051a18c7e639cedff86864fe1167664c9df1fa4389",
+  "m1_content_sha256": "2c35a853ecab89e2763f0737d93db95f3384da653fc56062eb64d1e434205ec2",
   "session_config": {
     "week_open_ny": "Sun 17:00",
     "week_close_ny": "Fri 17:00",
@@ -17,7 +17,7 @@
   },
   "coverage": {
     "range_utc": [
-      "2016-01-10T23:01:00+00:00",
+      "2016-01-10T22:01:00+00:00",
       "2026-01-09T21:54:00+00:00"
     ],
     "bars": 3678461,
@@ -36,72 +36,72 @@
     }
   },
   "gaps": {
-    "expected_minutes": 3758334,
-    "missing_minutes": 82015,
+    "expected_minutes": 3758394,
+    "missing_minutes": 79934,
     "by_class": {
       "holiday": {
-        "runs": 849,
-        "minutes": 26379
+        "runs": 862,
+        "minutes": 26822
       },
       "mid_session": {
-        "runs": 6834,
-        "minutes": 13735
+        "runs": 6970,
+        "minutes": 13988
       },
       "session_edge": {
-        "runs": 826,
-        "minutes": 41901
+        "runs": 786,
+        "minutes": 39124
       }
     },
     "by_year": {
       "2016": {
-        "holiday": 689,
+        "holiday": 629,
         "mid_session": 418,
-        "session_edge": 6085
+        "session_edge": 6205
       },
       "2017": {
-        "holiday": 3683,
-        "mid_session": 1539,
+        "holiday": 3626,
+        "mid_session": 1536,
         "session_edge": 6362
       },
       "2018": {
-        "holiday": 4023,
+        "holiday": 4143,
         "mid_session": 108,
-        "session_edge": 6409
+        "session_edge": 6289
       },
       "2019": {
-        "holiday": 4036,
+        "holiday": 4216,
         "mid_session": 74,
-        "session_edge": 6386
+        "session_edge": 6206
       },
       "2020": {
-        "holiday": 3396,
+        "holiday": 3696,
         "mid_session": 103,
-        "session_edge": 6261
+        "session_edge": 6021
       },
       "2021": {
-        "holiday": 658,
-        "mid_session": 4222,
+        "holiday": 657,
+        "mid_session": 4223,
         "session_edge": 6237
       },
       "2022": {
-        "holiday": 707,
-        "mid_session": 2131,
-        "session_edge": 2918
+        "holiday": 663,
+        "mid_session": 2384,
+        "session_edge": 1210
       },
       "2023": {
         "holiday": 3238,
-        "mid_session": 2992,
-        "session_edge": 450
+        "mid_session": 2994,
+        "session_edge": 276
       },
       "2024": {
-        "holiday": 2971,
+        "holiday": 2976,
         "mid_session": 855,
-        "session_edge": 306
+        "session_edge": 66
       },
       "2025": {
         "holiday": 2954,
         "mid_session": 1264,
-        "session_edge": 485
+        "session_edge": 250
       },
       "2026": {
         "holiday": 24,
@@ -111,59 +111,59 @@
     },
     "longest_mid_session": [
       {
-        "start_utc": "2016-10-13 13:42",
-        "start_ny": "2016-10-13 09:42",
+        "start_utc": "2016-10-13 12:42",
+        "start_ny": "2016-10-13 08:42",
         "minutes": 130
       },
       {
-        "start_utc": "2021-10-13 08:21",
-        "start_ny": "2021-10-13 04:21",
+        "start_utc": "2021-10-13 07:21",
+        "start_ny": "2021-10-13 03:21",
         "minutes": 62
       },
       {
-        "start_utc": "2017-09-11 21:02",
-        "start_ny": "2017-09-11 17:02",
+        "start_utc": "2017-09-11 20:02",
+        "start_ny": "2017-09-11 16:02",
         "minutes": 59
       },
       {
-        "start_utc": "2021-08-11 16:14",
-        "start_ny": "2021-08-11 12:14",
+        "start_utc": "2021-08-11 15:14",
+        "start_ny": "2021-08-11 11:14",
         "minutes": 40
       },
       {
-        "start_utc": "2017-08-09 21:46",
-        "start_ny": "2017-08-09 17:46",
+        "start_utc": "2017-08-09 20:46",
+        "start_ny": "2017-08-09 16:46",
         "minutes": 32
       },
       {
-        "start_utc": "2017-08-29 21:45",
-        "start_ny": "2017-08-29 17:45",
+        "start_utc": "2017-08-29 20:45",
+        "start_ny": "2017-08-29 16:45",
         "minutes": 32
       },
       {
-        "start_utc": "2017-08-30 21:45",
-        "start_ny": "2017-08-30 17:45",
+        "start_utc": "2017-08-30 20:45",
+        "start_ny": "2017-08-30 16:45",
         "minutes": 31
       },
       {
-        "start_utc": "2017-07-25 21:46",
-        "start_ny": "2017-07-25 17:46",
+        "start_utc": "2017-07-25 20:46",
+        "start_ny": "2017-07-25 16:46",
         "minutes": 30
       },
       {
-        "start_utc": "2017-08-15 21:46",
-        "start_ny": "2017-08-15 17:46",
+        "start_utc": "2017-08-15 20:46",
+        "start_ny": "2017-08-15 16:46",
         "minutes": 30
       },
       {
-        "start_utc": "2017-08-24 21:45",
-        "start_ny": "2017-08-24 17:45",
+        "start_utc": "2017-08-24 20:45",
+        "start_ny": "2017-08-24 16:45",
         "minutes": 30
       }
     ]
   },
   "closed_hour_bars": {
-    "bars": 2142,
+    "bars": 1,
     "by_year": {
       "2016": 0,
       "2017": 0,
@@ -171,40 +171,38 @@
       "2019": 0,
       "2020": 0,
       "2021": 0,
-      "2022": 1500,
-      "2023": 172,
-      "2024": 235,
-      "2025": 235,
+      "2022": 1,
+      "2023": 0,
+      "2024": 0,
+      "2025": 0,
       "2026": 0
     },
     "top_ny_slots": {
-      "Sun 16:00": 1499,
-      "Fri 17:00": 642,
       "Sat 10:00": 1
     }
   },
   "week_boundaries": {
     "first_bar_ny": {
-      "2016": "Sun 18:00",
-      "2017": "Sun 18:01",
-      "2018": "Sun 18:00",
-      "2019": "Sun 18:02",
-      "2020": "Sun 18:02",
-      "2021": "Sun 18:03",
-      "2022": "Sun 16:03",
+      "2016": "Sun 17:00",
+      "2017": "Sun 17:01",
+      "2018": "Sun 17:00",
+      "2019": "Sun 17:02",
+      "2020": "Sun 17:02",
+      "2021": "Sun 17:03",
+      "2022": "Sun 17:03",
       "2023": "Sun 17:03",
       "2024": "Sun 17:00",
       "2025": "Sun 17:02",
       "2026": "Sun 17:02"
     },
     "last_bar_ny": {
-      "2016": "Fri 15:54",
-      "2017": "Fri 15:54",
-      "2018": "Fri 15:54",
-      "2019": "Fri 15:54",
-      "2020": "Fri 15:54",
-      "2021": "Fri 15:54",
-      "2022": "Fri 15:54",
+      "2016": "Fri 14:54",
+      "2017": "Fri 14:54",
+      "2018": "Fri 14:54",
+      "2019": "Fri 14:54",
+      "2020": "Fri 14:54",
+      "2021": "Fri 14:54",
+      "2022": "Fri 16:54",
       "2023": "Fri 16:54",
       "2024": "Fri 16:59",
       "2025": "Fri 16:54",
@@ -244,8 +242,8 @@
       },
       "top": [
         {
-          "ts_utc": "2022-08-10 11:30",
-          "ts_ny": "2022-08-10 07:30",
+          "ts_utc": "2022-08-10 12:30",
+          "ts_ny": "2022-08-10 08:30",
           "times_mean": 190.3
         },
         {
@@ -254,8 +252,8 @@
           "times_mean": 179.4
         },
         {
-          "ts_utc": "2016-04-28 04:01",
-          "ts_ny": "2016-04-28 00:01",
+          "ts_utc": "2016-04-28 03:01",
+          "ts_ny": "2016-04-27 23:01",
           "times_mean": 171.4
         },
         {
@@ -264,13 +262,13 @@
           "times_mean": 130.3
         },
         {
-          "ts_utc": "2016-06-24 00:17",
-          "ts_ny": "2016-06-23 20:17",
+          "ts_utc": "2016-06-23 23:17",
+          "ts_ny": "2016-06-23 19:17",
           "times_mean": 128.4
         },
         {
-          "ts_utc": "2016-01-29 04:38",
-          "ts_ny": "2016-01-28 23:38",
+          "ts_utc": "2016-01-29 03:38",
+          "ts_ny": "2016-01-28 22:38",
           "times_mean": 126.5
         },
         {
@@ -279,13 +277,13 @@
           "times_mean": 115.3
         },
         {
-          "ts_utc": "2017-03-15 19:00",
-          "ts_ny": "2017-03-15 15:00",
+          "ts_utc": "2017-03-15 18:00",
+          "ts_ny": "2017-03-15 14:00",
           "times_mean": 111.9
         },
         {
-          "ts_utc": "2019-01-02 23:35",
-          "ts_ny": "2019-01-02 18:35",
+          "ts_utc": "2019-01-02 22:35",
+          "ts_ny": "2019-01-02 17:35",
           "times_mean": 110.4
         },
         {
@@ -316,8 +314,8 @@
           "times_mean": 195.9
         },
         {
-          "ts_utc": "2016-04-28 04:01",
-          "ts_ny": "2016-04-28 00:01",
+          "ts_utc": "2016-04-28 03:01",
+          "ts_ny": "2016-04-27 23:01",
           "times_mean": 105.5
         },
         {
@@ -326,8 +324,8 @@
           "times_mean": 102.1
         },
         {
-          "ts_utc": "2022-08-10 11:30",
-          "ts_ny": "2022-08-10 07:30",
+          "ts_utc": "2022-08-10 12:30",
+          "ts_ny": "2022-08-10 08:30",
           "times_mean": 100.8
         },
         {
@@ -336,8 +334,8 @@
           "times_mean": 99.5
         },
         {
-          "ts_utc": "2016-01-29 04:38",
-          "ts_ny": "2016-01-28 23:38",
+          "ts_utc": "2016-01-29 03:38",
+          "ts_ny": "2016-01-28 22:38",
           "times_mean": 96.2
         },
         {
@@ -346,13 +344,13 @@
           "times_mean": 81.6
         },
         {
-          "ts_utc": "2016-06-24 00:17",
-          "ts_ny": "2016-06-23 20:17",
+          "ts_utc": "2016-06-23 23:17",
+          "ts_ny": "2016-06-23 19:17",
           "times_mean": 78.0
         },
         {
-          "ts_utc": "2016-07-29 04:44",
-          "ts_ny": "2016-07-29 00:44",
+          "ts_utc": "2016-07-29 03:44",
+          "ts_ny": "2016-07-28 23:44",
           "times_mean": 73.3
         },
         {
@@ -462,11 +460,11 @@
         "12": 0.009,
         "13": 0.009,
         "14": 0.009,
-        "15": 0.009,
+        "15": 0.01,
         "16": 0.011,
-        "17": 0.011,
-        "18": 0.014,
-        "19": 0.011,
+        "17": 0.021,
+        "18": 0.011,
+        "19": 0.009,
         "20": 0.009,
         "21": 0.009,
         "22": 0.009,
@@ -490,7 +488,7 @@
         "14": 0.013,
         "15": 0.013,
         "16": 0.014,
-        "17": 0.08,
+        "17": 0.087,
         "18": 0.014,
         "19": 0.014,
         "20": 0.013,
@@ -502,15 +500,93 @@
   },
   "clock_check": {
     "days": 119,
-    "peak_at_0830_share": 0.277,
+    "peak_at_0830_share": 0.815,
     "dst_mismatch_days": 8,
-    "dst_mismatch_peak_at_0830": 1,
+    "dst_mismatch_peak_at_0830": 8,
     "peak_time_counts": {
-      "09:30": 62,
-      "08:30": 33,
-      "07:30": 5,
-      "09:00": 3,
-      "09:29": 2
+      "08:30": 97,
+      "08:29": 2,
+      "09:30": 1,
+      "08:34": 1,
+      "07:55": 1
     }
-  }
+  },
+  "clock_segments": [
+    {
+      "from_utc_as_parsed": "2016-01-10T23:01:00+00:00",
+      "to_utc_as_parsed": "2021-10-29T19:54:00+00:00",
+      "offset_hours": 1,
+      "weeks": 307,
+      "weeks_with_evidence": 295,
+      "weeks_agreeing": 295,
+      "mismatch_weeks": {
+        "weekdays": 95,
+        "extra_offset_hours": 0,
+        "range_0730_x_median": 1.08,
+        "range_0830_x_median": 3.39,
+        "range_0930_x_median": 2.48
+      },
+      "from_utc": "2016-01-10 22:01",
+      "to_utc": "2021-10-29 18:54",
+      "jobs_report_days": 68,
+      "peak_at_0830_share": 0.824
+    },
+    {
+      "from_utc_as_parsed": "2021-10-31T22:16:00+00:00",
+      "to_utc_as_parsed": "2022-03-11T20:54:00+00:00",
+      "offset_hours": 0,
+      "weeks": 19,
+      "weeks_with_evidence": 19,
+      "weeks_agreeing": 19,
+      "mismatch_weeks": {
+        "weekdays": 5,
+        "extra_offset_hours": 1,
+        "range_0730_x_median": 0.6,
+        "range_0830_x_median": 1.0,
+        "range_0930_x_median": 4.13
+      },
+      "from_utc": "2021-10-31 22:16",
+      "to_utc": "2022-03-11 20:54",
+      "jobs_report_days": 5,
+      "peak_at_0830_share": 1.0
+    },
+    {
+      "from_utc_as_parsed": "2022-03-13T21:03:00+00:00",
+      "to_utc_as_parsed": "2022-11-04T20:54:00+00:00",
+      "offset_hours": -1,
+      "weeks": 34,
+      "weeks_with_evidence": 34,
+      "weeks_agreeing": 34,
+      "mismatch_weeks": {
+        "weekdays": 15,
+        "extra_offset_hours": 1,
+        "range_0730_x_median": 1.23,
+        "range_0830_x_median": 1.0,
+        "range_0930_x_median": 3.02
+      },
+      "from_utc": "2022-03-13 22:03",
+      "to_utc": "2022-11-04 21:54",
+      "jobs_report_days": 8,
+      "peak_at_0830_share": 0.75
+    },
+    {
+      "from_utc_as_parsed": "2022-11-06T22:00:00+00:00",
+      "to_utc_as_parsed": "2026-01-09T21:54:00+00:00",
+      "offset_hours": 0,
+      "weeks": 168,
+      "weeks_with_evidence": 164,
+      "weeks_agreeing": 164,
+      "mismatch_weeks": {
+        "weekdays": 55,
+        "extra_offset_hours": 1,
+        "range_0730_x_median": 1.27,
+        "range_0830_x_median": 1.33,
+        "range_0930_x_median": 6.63
+      },
+      "from_utc": "2022-11-06 22:00",
+      "to_utc": "2026-01-09 21:54",
+      "jobs_report_days": 38,
+      "peak_at_0830_share": 0.789
+    }
+  ]
 }

@@ -7,7 +7,9 @@ For each instrument: the M1 bars and the 5m, 15m, 1h, 4h and D1 bars built from 
 ``<out>/<SYMBOL>/<timeframe>.parquet``, plus ``import.json`` with the input (the bytes read before
 the lockbox and their SHA-256), the parse counts and a content hash per frame. The store is
 research data and is not tracked by git; re-running on the same input rewrites the same values.
-Every export is read through ``HistoryExport``, so nothing on or after the lockbox start is read."""
+Every export is read through ``HistoryExport``, so nothing on or after the lockbox start is read.
+Periods stamped on a clock a whole number of hours off ``Europe/Athens`` are detected from the
+weekly open and corrected (``app.data.clock``); the segments go into ``import.json``."""
 
 from __future__ import annotations
 
@@ -23,12 +25,13 @@ import numpy as np
 import pandas as pd
 
 from app.config import instruments, splits
+from app.data import clock
 from app.data.aggregate import TIMEFRAMES, aggregate
 from app.data.exports import name_fields
 from app.data.mt5 import parse_export
 from app.data.raw import HistoryExport
 
-IMPORT_VERSION = 1
+IMPORT_VERSION = 2  # 2: clock correction
 M1 = pd.Timedelta(minutes=1)
 DEFAULT_OUT = Path(__file__).resolve().parents[2] / "data" / "processed"
 
@@ -72,9 +75,12 @@ def import_symbol(symbol: str, export_path: Path, out_dir: Path = DEFAULT_OUT) -
     s = splits()
     export = HistoryExport(export_path)
     parsed = parse_export(export.raw_lines(), instruments()[symbol], M1, s.server_tz)
-    m1 = parsed.bars
-    if m1.empty:
+    if parsed.bars.empty:
         raise ValueError(f"{export_path.name} has no valid bars before the lockbox")
+    segments = clock.detect(parsed.bars["ts_utc"], instruments()[symbol], s.server_tz)
+    m1 = clock.apply(parsed.bars, segments)
+    segments = clock.check_mismatch_weeks(m1, segments, s.server_tz)
+    m1 = clock.apply_mismatch_weeks(m1, segments, s.server_tz)
     frames = {"m1": m1} | {tf: aggregate(m1, tf, M1) for tf in TIMEFRAMES}
 
     record = {
@@ -89,6 +95,7 @@ def import_symbol(symbol: str, export_path: Path, out_dir: Path = DEFAULT_OUT) -
         },
         "server_tz": s.server_tz,
         "parse": parsed.stats,
+        "clock_segments": segments,
         "range_utc": [m1["ts_utc"].iloc[0].isoformat(), m1["ts_utc"].iloc[-1].isoformat()],
         "frames": {
             tf: {"rows": len(df), "content_sha256": content_hash(df)} for tf, df in frames.items()

@@ -10,7 +10,7 @@ from app.config import Instrument
 MARKET_TZ = "America/New_York"
 
 
-def _minutes(hhmm: str) -> int:
+def hhmm_minutes(hhmm: str) -> int:
     h, m = hhmm.split(":")
     return int(h) * 60 + int(m)
 
@@ -20,10 +20,10 @@ def is_open(ts_utc: pd.DatetimeIndex | pd.Series, instrument: Instrument) -> np.
     ny = pd.DatetimeIndex(ts_utc).tz_convert(MARKET_TZ)
     dow = ny.dayofweek.to_numpy()  # Monday = 0
     mins = (ny.hour * 60 + ny.minute).to_numpy()
-    week_open, week_close = _minutes(instrument.week_open), _minutes(instrument.week_close)
+    week_open, week_close = hhmm_minutes(instrument.week_open), hhmm_minutes(instrument.week_close)
     closed = (dow == 5) | ((dow == 4) & (mins >= week_close)) | ((dow == 6) & (mins < week_open))
     if instrument.daily_break is not None:
-        b0, b1 = (_minutes(t) for t in instrument.daily_break)
+        b0, b1 = (hhmm_minutes(t) for t in instrument.daily_break)
         closed |= (mins >= b0) & (mins < b1)
     return ~closed
 

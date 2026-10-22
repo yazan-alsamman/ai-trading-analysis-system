@@ -502,5 +502,26 @@
       "08:40": 2,
       "08:46": 2
     }
-  }
+  },
+  "clock_segments": [
+    {
+      "from_utc_as_parsed": "2016-01-10T22:01:00+00:00",
+      "to_utc_as_parsed": "2026-01-09T21:59:00+00:00",
+      "offset_hours": 0,
+      "weeks": 530,
+      "weeks_with_evidence": 510,
+      "weeks_agreeing": 510,
+      "mismatch_weeks": {
+        "weekdays": 170,
+        "extra_offset_hours": 0,
+        "range_0730_x_median": 1.03,
+        "range_0830_x_median": 3.35,
+        "range_0930_x_median": 1.49
+      },
+      "from_utc": "2016-01-10 22:01",
+      "to_utc": "2026-01-09 21:59",
+      "jobs_report_days": 119,
+      "peak_at_0830_share": 0.706
+    }
+  ]
 }

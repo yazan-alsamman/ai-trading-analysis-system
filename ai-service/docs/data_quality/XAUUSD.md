@@ -183,3 +183,11 @@ Median by New York hour:
 
 Largest one-minute range on first Fridays, 07:30-09:30 New York (the US jobs report is at 08:30). Most common peak times: 08:30 (114), 07:30 (6), 08:31 (6), 08:32 (5), 08:33 (4).
 
+## Clock segments (corrected at import)
+
+Offset = hours by which the export's clock was ahead of `Europe/Athens` (from the weekly open, `app.data.clock`); the bars were moved back by it. Mismatch weeks = the weeks when US and EU daylight saving disagree: the extra hour they were moved by, from the 08:30 New York release spike (range at 08:30 / 09:30 as a multiple of the median 07:00-10:00 range). The jobs-report check is run on the corrected bars of each segment.
+
+| From (UTC) | To (UTC) | Offset (h) | Weeks | Weeks agreeing | Mismatch weeks: extra (h), 08:30 / 09:30 spike | Jobs-report peak at 08:30 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2010-01-10 23:05 | 2026-01-09 21:59 | +0 | 854 | 780 of 802 | +0, 2.98× / 1.94× (263 days) | 61% of 186 |
+
