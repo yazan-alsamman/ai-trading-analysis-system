@@ -186,6 +186,12 @@ thin hours (after the New York close, early Asia, a US holiday) or gold's daily 
   02:00-16:00 New York, Monday to Friday, and not on a US market holiday (`market_holidays`).
 - **Session hours are a parameter of the variant**, fixed before it is run; any other window is a
   new variant.
+- **Scope of (a)**: the entry frame (15m), where swings for the CHoCH, sweeps, CHoCHs and FVGs are
+  found; bars whose open lies in the configured closed hours are removed from it, and the first bar
+  after any gap in it (reopen, weekend, hole) can be neither an entry-frame swing nor a sweep bar.
+  Context levels (1h, 4h, previous day) are unchanged.
+- **Review**: a new 50-chart sample with seed **731205**, fixed on 2026-10-22 before V5-S was run
+  or any of its charts drawn, same tool and criteria as the v1 review.
 - **Expected effect on the P2 sample** (descriptive only): rule (b) removes five of the seven
   rejected patterns (#12, #28, #44, #45, #49); #17 (15:30 New York) and #33 (05:00 New York, holiday
   week) are inside the window.
