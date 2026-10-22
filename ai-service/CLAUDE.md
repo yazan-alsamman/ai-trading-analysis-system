@@ -114,7 +114,9 @@ sample|score`) done. XAUUSD 2012-2017: 198 Sweep → CHoCH → FVG patterns (104
 **P2 gate not passed (v1)**: 43/50 = 86% (95% 74-93%) against 90%; review by Claude, adopted by Fadi,
 borderline cases counted as no (`docs/phase2/review/REVIEW.md`; state this in the thesis). Cause: thin
 sessions and gold's daily reopen. V5-S built (`--rules V5-S`):
-145 patterns; its 50-chart review (`docs/phase2/review_V5-S/REVIEW.md`, seed 731205) is next.
+145 patterns. **P2 gate passed with V5-S** (Fadi's review, 46/50 = 92%, 95% 81-97%): V5-S is the
+rule set for P3. Its rejections point at the FVG link (V3-L) and CHoCH clarity (V2-T), both P3 variants.
+Next: P3 (setup builder, triple barrier, sample count, strictness decision, E0-E1).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
