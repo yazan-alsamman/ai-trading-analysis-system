@@ -202,6 +202,12 @@ V5-S with the FVG optional (Sweep -> CHoCH is enough; an FVG, if any, becomes a 
 market entry at the decision bar's close (no limit order, so no expiry), held 48 bars after it;
 SL and TP as in the setup builder. Registered on 2026-10-22 for the P3 sample count only
 (`[variants.L1]`); adopted by Fadi for P3 on 2026-10-22, pooled over the six instruments.
+- **Review of L1** (requested by Fadi before P3 task 4; fixed on 2026-10-22 before any L1 chart was
+  drawn): 50 patterns of the development period only (bars that closed before 2018-01-01), drawn
+  with seed **410733**, spread evenly over ten cells: five instruments (XAUUSD, EURUSD, GBPUSD,
+  USDJPY, USDCAD) x pattern with / without an FVG, five per cell where possible (the rest by
+  largest remainder). AUDUSD has no bar before 2018 and is not covered. Same tool, same charts
+  (ending two bars after the CHoCH), same criteria, with criterion 4 only when an FVG is shaded.
 
 ### How the variants are decided (fixed now, before any variant is run)
 
