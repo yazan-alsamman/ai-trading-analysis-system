@@ -68,7 +68,7 @@ def gaps(ts: pd.Series, instrument: Instrument) -> dict:
     """Expected trading minutes without a bar, as runs of consecutive minutes."""
     grid = pd.date_range(ts.iloc[0], ts.iloc[-1], freq="1min")
     expected = grid[is_open(grid, instrument)].asi8
-    present = ts.to_numpy().astype("datetime64[ns]").astype(np.int64)
+    present = pd.DatetimeIndex(ts).as_unit("ns").asi8
     pos = np.clip(np.searchsorted(present, expected), 0, len(present) - 1)
     missing = expected[present[pos] != expected]
     out = {"expected_minutes": int(len(expected)), "missing_minutes": int(len(missing))}
