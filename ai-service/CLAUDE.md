@@ -122,7 +122,9 @@ beyond 4R is rejected, not capped; spread = mean of the decision bar. XAUUSD V5-
 setups (v1: 140). Task 2 (lifecycle and triple-barrier labels: `python -m app setups label`) done:
 V5-S 42 labelled setups in 2012-2017 (v1: 59), about 7 a year; 19% TP before SL, mean net R -0.14
 (2x costs -0.31). The P3 gate (1,000 labelled setups) is out of reach for strict rules on gold alone.
-Next: task 3 (sample counts and the strictness decision).
+Task 3 counts (`python -m app setups count`, counts only, 2012 to 2026-01-09, six instruments):
+v1 543, V5-S 377, L1 (FVG optional, market entry) 1,634 labelled setups (gold 134 / 88 / 387). Only
+L1 pooled over the six instruments passes 1,000. Waiting for Fadi's strictness decision.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

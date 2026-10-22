@@ -196,6 +196,13 @@ thin hours (after the New York close, early Asia, a US holiday) or gold's daily 
   rejected patterns (#12, #28, #44, #45, #49); #17 (15:30 New York) and #33 (05:00 New York, holiday
   week) are inside the window.
 
+### L1: the design's loosened version (counted, not adopted)
+
+V5-S with the FVG optional (Sweep -> CHoCH is enough; an FVG, if any, becomes a feature) and a
+market entry at the decision bar's close (no limit order, so no expiry), held 48 bars after it;
+SL and TP as in the setup builder. Registered on 2026-10-22 for the P3 sample count only
+(`[variants.L1]`); adopting it is Fadi's decision.
+
 ### How the variants are decided (fixed now, before any variant is run)
 
 1. Every variant runs on **2012-2017 only** with the same code path and data; the walk-forward,
@@ -216,3 +223,4 @@ thin hours (after the New York close, early Asia, a US holiday) or gold's daily 
 | v1 | 2026-10-22 | **P2 gate not passed**: detection precision 43/50 = 86% (Wilson 95% 74-93%) against 90%. Review by Claude, adopted by Fadi, borderline cases counted as no (`docs/phase2/review/REVIEW.md`, `score.json`). V5-S registered. |
 | V5-S | 2026-10-22 | Built as a named rule set (`strategy("V5-S")`; v1 output unchanged, same SHA-256). XAUUSD 2012-2017: 145 patterns (all also v1 patterns); removes 5 of the 7 patterns rejected in the v1 review. Review sample drawn with seed 731205 (`docs/phase2/review_V5-S/`). |
 | V5-S | 2026-10-22 | **P2 gate passed**: Fadi's review 46/50 = 92% (Wilson 95% 81-97%). Of the 4 rejections, 3 question the FVG link to the displacement (V3-L) and 1 the clarity of the CHoCH (V2-T). V5-S is the rule set carried into P3; the second condition of §9 (enough setups for the P3 gate) is checked in P3. Agreement with Claude's v1 verdicts on the 15 shared patterns: 12/15. |
+| P3 count | 2026-10-22 | Labelled setups 2012-01-01 to 2026-01-09, six instruments (`docs/phase3/counts_*.md`, counts only): v1 543, V5-S 377, L1 1,634 (XAUUSD 134 / 88 / 387). Strict rules miss the P3 gate (1,000) even pooled. |

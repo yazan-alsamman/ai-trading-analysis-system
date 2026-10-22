@@ -135,3 +135,16 @@ def test_labels_never_change_when_bars_are_appended() -> None:
         ref = whole.set_index("setup_id").loc[got.index]
         done = got["state"] != "PENDING"
         pd.testing.assert_frame_equal(got[done], ref[done])
+
+
+def test_market_entry_at_the_decision_close_is_held_48_bars_after_it() -> None:
+    from dataclasses import replace
+
+    l1 = replace(P, entry_mode="close")
+    plan = Plan("ARMED", "", entry=101.0, sl=98.0, tp=107.0, risk=3.0, r_multiple=2.0, target=None)
+    rows = [(101.0, 101.8, 100.2, 101.2)] * 47 + [(101.2, 102.0, 101.0, 101.9)]
+    lab = resolve(buy_bars(rows), 0, plan, SPREAD, l1, XAU)
+    assert (lab.reason, lab.fill_idx, lab.exit_idx) == ("timeout", 0, 48)
+    assert lab.gross_r == pytest.approx(0.9 / 3.0)
+    tp = resolve(buy_bars([(101.0, 107.5, 100.5, 107.2)]), 0, plan, SPREAD, l1, XAU)
+    assert (tp.reason, tp.exit_idx) == ("tp", 1)

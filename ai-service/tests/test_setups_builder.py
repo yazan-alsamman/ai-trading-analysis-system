@@ -91,3 +91,10 @@ def test_setups_never_change_when_bars_are_appended() -> None:
         part = {k: v[v["close_utc"] <= cut].reset_index(drop=True) for k, v in full.items()}
         got = build(part, detector.detect(part, v1), v1)
         assert got == [s for s in whole if s.decision_idx < n]
+
+
+def test_market_entry_plans_from_the_decision_close_without_an_fvg() -> None:
+    l1 = strategy("L1")
+    pl = plan("buy", 99.4, 2.0, 0.3, None, None, 102.0, [lv(108.0, "high")], l1)
+    assert (pl.state, pl.entry, pl.sl) == ("ARMED", 102.0, pytest.approx(98.9))
+    assert pl.r_multiple == pytest.approx(6.0 / 3.1)

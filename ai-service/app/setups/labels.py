@@ -85,22 +85,32 @@ def resolve(bars: Bars, d: int, pl: Plan, spread: float, p: Strategy, inst: Inst
     s = bars.sign
     entry, sl, tp = s * pl.entry, s * pl.sl, s * pl.tp
     n = len(bars.close)
-    fill = None
-    for j in range(d + 1, d + p.entry_window_bars + 1):
-        if j >= n:
-            return Label("PENDING", "waiting_for_fill")
-        if bars.open[j] <= sl:
-            return Label("INVALIDATED", "gap_through_sl")
-        if bars.low[j] <= entry:
-            fill = j
-            break
-        if bars.high[j] >= tp:
-            return Label("INVALIDATED", "tp_before_fill")
-    if fill is None:
-        return Label("EXPIRED", "no_fill")
+    if p.entry_mode == "close":
+        # Market entry at the decision bar's close: nothing of that bar is left to trade, so the
+        # trade starts on the next bar and is held for horizon_bars bars after the decision bar.
+        fill, fill_bar_counts, last = d, False, d + p.horizon_bars
+    else:
+        fill = None
+        for j in range(d + 1, d + p.entry_window_bars + 1):
+            if j >= n:
+                return Label("PENDING", "waiting_for_fill")
+            if bars.open[j] <= sl:
+                return Label("INVALIDATED", "gap_through_sl")
+            if bars.low[j] <= entry:
+                fill = j
+                break
+            if bars.high[j] >= tp:
+                return Label("INVALIDATED", "tp_before_fill")
+        if fill is None:
+            return Label("EXPIRED", "no_fill")
+        fill_bar_counts, last = True, fill + p.horizon_bars - 1
 
     def close(j: int, raw_exit: float, outcome: str, slip: bool) -> Label:
         gross = (raw_exit - entry) / pl.risk
+        if inst.cost_extra_frac is None:  # no cost model for this instrument yet: no net R
+            return Label(
+                "CLOSED", outcome, fill, j, s * raw_exit, int(outcome == "tp"), round(gross, 6)
+            )
         cost = round_trip(spread, inst) / pl.risk
         slip_r = inst.sl_slippage / pl.risk if slip else 0.0
         return Label(
@@ -115,9 +125,8 @@ def resolve(bars: Bars, d: int, pl: Plan, spread: float, p: Strategy, inst: Inst
             round(gross - 2 * slip_r - 2 * cost, 6),
         )
 
-    if bars.low[fill] <= sl:
+    if fill_bar_counts and bars.low[fill] <= sl:
         return close(fill, sl, "sl", True)
-    last = fill + p.horizon_bars - 1
     for j in range(fill + 1, last + 1):
         if j >= n:
             return Label("PENDING", "active", fill)

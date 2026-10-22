@@ -2,3 +2,5 @@
 data/processed/
 # Dukascopy cross-check sample (`python -m app dukascopy download`), never committed.
 data/dukascopy/
+# Local archives (e.g. a zipped review folder), never committed.
+*.zip

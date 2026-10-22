@@ -70,6 +70,8 @@ class Strategy:
     break_is_gap: bool = False
     sweep_session: tuple[str, str] | None = None
     skip_us_holidays: bool = False
+    fvg_required: bool = True
+    entry_mode: str = "fvg_limit"  # or "close": market entry at the decision bar's close
 
 
 def _load(name: str) -> dict:

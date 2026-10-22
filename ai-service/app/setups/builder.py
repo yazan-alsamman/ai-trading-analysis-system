@@ -57,8 +57,8 @@ def plan(
     extreme: float,
     atr: float,
     spread: float,
-    fvg_low: float,
-    fvg_high: float,
+    fvg_low: float | None,
+    fvg_high: float | None,
     close: float,
     targets: list[Level],
     p: Strategy,
@@ -66,12 +66,13 @@ def plan(
     """The trade plan of one pattern at its decision bar. ``targets`` are the active levels on the
     opposite side (``high`` levels for a buy, ``low`` for a sell)."""
     sign = 1.0 if direction == "buy" else -1.0
-    entry = fvg_high if sign > 0 else fvg_low
+    at_close = p.entry_mode == "close"
+    entry = close if at_close else (fvg_high if sign > 0 else fvg_low)
     sl = extreme - sign * (p.sl_buffer_atr * atr + spread)
     risk = sign * (entry - sl)
     if not risk > 0:
         return Plan("REJECTED", "REJECT_NON_POSITIVE_RISK", entry, sl, None, risk, None, None)
-    if not sign * (close - entry) > 0:
+    if not at_close and not sign * (close - entry) > 0:
         return Plan("REJECTED", "REJECT_PRICE_AT_ENTRY", entry, sl, None, risk, None, None)
     side = "high" if sign > 0 else "low"
     beyond = sorted(
@@ -120,8 +121,8 @@ def build(frames: dict[str, pd.DataFrame], patterns: list[Pattern], p: Strategy)
                 pt.sweep.extreme,
                 pt.sweep.atr,
                 float(spread[j]),
-                pt.fvg.low,
-                pt.fvg.high,
+                pt.fvg.low if pt.fvg else None,
+                pt.fvg.high if pt.fvg else None,
                 float(close[j]),
                 list(opposite),
                 p,
@@ -216,6 +217,10 @@ def main(argv: list[str] | None = None) -> int:
         from app.setups.labels import main as label
 
         return label(argv[1:])
+    if argv and argv[0] == "count":
+        from app.setups.counts import main as count
+
+        return count(argv[1:])
     args = ap.parse_args(argv)
 
     p = strategy(args.rules)
