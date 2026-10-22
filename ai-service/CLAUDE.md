@@ -101,11 +101,13 @@ One TP in v1 (TP1/TP2 after v1). Custom user strategies: after v1.
 pre-v0.2 work removed. P1 in progress: tasks 1 (layout), 2 (lockbox sealed,
 `docs/lockbox/MANIFEST-2026-10-21.json`), 3 (importer: `python -m app import`, store in
 `data/processed/<SYMBOL>/{m1,5m,15m,1h,4h,D1}.parquet`, untracked) and 4 (quality report:
-`python -m app quality`, `docs/data_quality/`) done; next task 5 (Dukascopy cross-check).
+`python -m app quality`, `docs/data_quality/`) and 5 (Dukascopy cross-check: `python -m app
+dukascopy download|compare`, all instruments pass 2012-2025) done. P1 gate: to be confirmed by Fadi.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
-XAUUSD and EURUSD need no correction.
+XAUUSD and EURUSD need no correction. XAUUSD before 2011-08 is 1 h off and not corrected: never
+use it (it is before the development period anyway).
 
 Layout: `app/main.py` (service), `app/config/` (instruments + D23 splits, TOML), `app/cli.py`
 (`python -m app <command>`), `app/lockbox.py`, and one package per layer: `data` (L1), `smc` (L2),

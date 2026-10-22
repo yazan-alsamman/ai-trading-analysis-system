@@ -4,6 +4,7 @@
     python -m app lockbox seal|verify    # seal or check the 2026 lockbox
     python -m app import --raw-dir PATH  # MT5 history -> research store (Parquet)
     python -m app quality                # data-quality report of the store
+    python -m app dukascopy download|compare  # P1 cross-check sample and report
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -18,6 +19,7 @@ COMMANDS = {
     "lockbox": "app.lockbox",
     "import": "app.data.importer",
     "quality": "app.data.quality",
+    "dukascopy": "app.data.dukascopy",
 }
 
 

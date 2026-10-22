@@ -9,7 +9,7 @@
     "stopped_at_lockbox": false
   },
   "import_rejects": {},
-  "m1_content_sha256": "8a94067785a4b5782a48752ebbe7020fb6e1b0a8224802a5dff9be7d85947793",
+  "m1_content_sha256": "c5bda4cba7ac3818355ed35d159201c66ec5c3bee4d7a0c2537a8d485abdaa23",
   "session_config": {
     "week_open_ny": "Sun 17:00",
     "week_close_ny": "Fri 17:00",
@@ -35,19 +35,19 @@
   },
   "gaps": {
     "expected_minutes": 3006775,
-    "missing_minutes": 64064,
+    "missing_minutes": 64149,
     "by_class": {
       "holiday": {
         "runs": 1057,
         "minutes": 23398
       },
       "mid_session": {
-        "runs": 7932,
-        "minutes": 14366
+        "runs": 7911,
+        "minutes": 14337
       },
       "session_edge": {
-        "runs": 619,
-        "minutes": 26300
+        "runs": 617,
+        "minutes": 26414
       }
     },
     "by_year": {
@@ -73,8 +73,8 @@
       },
       "2022": {
         "holiday": 1131,
-        "mid_session": 2539,
-        "session_edge": 1078
+        "mid_session": 2510,
+        "session_edge": 1192
       },
       "2023": {
         "holiday": 3301,
@@ -151,19 +151,20 @@
     ]
   },
   "closed_hour_bars": {
-    "bars": 1,
+    "bars": 86,
     "by_year": {
       "2018": 0,
       "2019": 0,
       "2020": 0,
       "2021": 0,
-      "2022": 1,
+      "2022": 86,
       "2023": 0,
       "2024": 0,
       "2025": 0,
       "2026": 0
     },
     "top_ny_slots": {
+      "Sun 16:00": 85,
       "Sat 10:00": 1
     }
   },
@@ -476,76 +477,256 @@
   "clock_segments": [
     {
       "from_utc_as_parsed": "2018-01-09T22:00:00+00:00",
-      "to_utc_as_parsed": "2021-10-29T19:54:00+00:00",
+      "to_utc_as_parsed": "2021-11-05T20:54:00+00:00",
       "offset_hours": 1,
-      "weeks": 203,
-      "weeks_with_evidence": 193,
+      "weeks": 204,
+      "weeks_with_evidence": 194,
       "weeks_agreeing": 193,
+      "weeks_moved_by_release_spike": 4,
       "mismatch_weeks": {
-        "weekdays": 65,
+        "weekdays": 70,
         "extra_offset_hours": 0,
         "range_0730_x_median": 1.25,
-        "range_0830_x_median": 2.54,
-        "range_0930_x_median": 1.87
+        "range_0830_x_median": 2.58,
+        "range_0930_x_median": 1.88,
+        "weeks": [
+          {
+            "first_bar_utc": "2018-03-11T22:00:00+00:00",
+            "last_bar_utc": "2018-03-16T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2018-03-18T22:00:00+00:00",
+            "last_bar_utc": "2018-03-23T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2018-10-28T22:00:00+00:00",
+            "last_bar_utc": "2018-11-02T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2019-03-10T22:00:00+00:00",
+            "last_bar_utc": "2019-03-15T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2019-03-17T22:00:00+00:00",
+            "last_bar_utc": "2019-03-22T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2019-03-24T22:00:00+00:00",
+            "last_bar_utc": "2019-03-29T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2019-10-27T22:00:00+00:00",
+            "last_bar_utc": "2019-11-01T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2020-03-08T22:00:00+00:00",
+            "last_bar_utc": "2020-03-13T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2020-03-15T22:00:00+00:00",
+            "last_bar_utc": "2020-03-20T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2020-03-22T22:00:00+00:00",
+            "last_bar_utc": "2020-03-27T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2020-10-25T22:05:00+00:00",
+            "last_bar_utc": "2020-10-30T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2021-03-14T22:00:00+00:00",
+            "last_bar_utc": "2021-03-19T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2021-03-21T22:00:00+00:00",
+            "last_bar_utc": "2021-03-26T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2021-10-31T21:17:00+00:00",
+            "last_bar_utc": "2021-11-05T19:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          }
+        ]
       },
       "from_utc": "2018-01-09 21:00",
-      "to_utc": "2021-10-29 18:54",
-      "jobs_report_days": 44,
-      "peak_at_0830_share": 0.659
+      "to_utc": "2021-11-05 19:54",
+      "jobs_report_days": 45,
+      "peak_at_0830_share": 0.644
     },
     {
-      "from_utc_as_parsed": "2021-10-31T22:17:00+00:00",
-      "to_utc_as_parsed": "2022-03-11T20:54:00+00:00",
+      "from_utc_as_parsed": "2021-11-07T22:06:00+00:00",
+      "to_utc_as_parsed": "2022-03-25T20:54:00+00:00",
       "offset_hours": 0,
-      "weeks": 19,
-      "weeks_with_evidence": 19,
-      "weeks_agreeing": 19,
+      "weeks": 20,
+      "weeks_with_evidence": 20,
+      "weeks_agreeing": 18,
+      "weeks_moved_by_release_spike": 0,
+      "mismatch_weeks": {
+        "weekdays": 10,
+        "extra_offset_hours": 0,
+        "range_0730_x_median": 1.32,
+        "range_0830_x_median": 1.76,
+        "range_0930_x_median": 1.78,
+        "weeks": [
+          {
+            "first_bar_utc": "2022-03-13T21:03:00+00:00",
+            "last_bar_utc": "2022-03-18T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2022-03-20T21:05:00+00:00",
+            "last_bar_utc": "2022-03-25T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          }
+        ]
+      },
+      "from_utc": "2021-11-07 22:06",
+      "to_utc": "2022-03-25 20:54",
+      "jobs_report_days": 4,
+      "peak_at_0830_share": 0.75
+    },
+    {
+      "from_utc_as_parsed": "2022-03-27T20:03:00+00:00",
+      "to_utc_as_parsed": "2022-11-04T20:54:00+00:00",
+      "offset_hours": -1,
+      "weeks": 32,
+      "weeks_with_evidence": 32,
+      "weeks_agreeing": 32,
+      "weeks_moved_by_release_spike": 1,
       "mismatch_weeks": {
         "weekdays": 5,
         "extra_offset_hours": 1,
-        "range_0730_x_median": 1.08,
-        "range_0830_x_median": 1.26,
-        "range_0930_x_median": 3.45
+        "range_0730_x_median": 0.86,
+        "range_0830_x_median": 1.11,
+        "range_0930_x_median": 4.04,
+        "weeks": [
+          {
+            "first_bar_utc": "2022-10-30T22:00:00+00:00",
+            "last_bar_utc": "2022-11-04T21:54:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          }
+        ]
       },
-      "from_utc": "2021-10-31 22:17",
-      "to_utc": "2022-03-11 20:54",
-      "jobs_report_days": 5,
-      "peak_at_0830_share": 0.6
-    },
-    {
-      "from_utc_as_parsed": "2022-03-13T21:03:00+00:00",
-      "to_utc_as_parsed": "2022-11-18T20:54:00+00:00",
-      "offset_hours": -1,
-      "weeks": 36,
-      "weeks_with_evidence": 36,
-      "weeks_agreeing": 36,
-      "mismatch_weeks": {
-        "weekdays": 15,
-        "extra_offset_hours": 1,
-        "range_0730_x_median": 1.03,
-        "range_0830_x_median": 1.34,
-        "range_0930_x_median": 3.02
-      },
-      "from_utc": "2022-03-13 22:03",
-      "to_utc": "2022-11-18 21:54",
+      "from_utc": "2022-03-27 21:03",
+      "to_utc": "2022-11-04 21:54",
       "jobs_report_days": 8,
       "peak_at_0830_share": 0.75
     },
     {
-      "from_utc_as_parsed": "2022-11-20T22:00:00+00:00",
+      "from_utc_as_parsed": "2022-11-06T21:03:00+00:00",
       "to_utc_as_parsed": "2026-01-09T21:54:00+00:00",
       "offset_hours": 0,
-      "weeks": 167,
-      "weeks_with_evidence": 161,
+      "weeks": 169,
+      "weeks_with_evidence": 163,
       "weeks_agreeing": 161,
+      "weeks_moved_by_release_spike": 11,
       "mismatch_weeks": {
         "weekdays": 55,
         "extra_offset_hours": 1,
         "range_0730_x_median": 1.25,
         "range_0830_x_median": 1.17,
-        "range_0930_x_median": 6.88
+        "range_0930_x_median": 6.88,
+        "weeks": [
+          {
+            "first_bar_utc": "2023-03-12T22:00:00+00:00",
+            "last_bar_utc": "2023-03-17T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2023-03-19T22:00:00+00:00",
+            "last_bar_utc": "2023-03-24T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2023-10-29T22:05:00+00:00",
+            "last_bar_utc": "2023-11-03T21:54:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2024-03-10T22:02:00+00:00",
+            "last_bar_utc": "2024-03-15T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2024-03-17T22:00:00+00:00",
+            "last_bar_utc": "2024-03-22T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2024-03-24T22:00:00+00:00",
+            "last_bar_utc": "2024-03-29T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2024-10-27T22:00:00+00:00",
+            "last_bar_utc": "2024-11-01T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2025-03-09T22:02:00+00:00",
+            "last_bar_utc": "2025-03-14T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2025-03-16T22:02:00+00:00",
+            "last_bar_utc": "2025-03-21T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2025-03-23T22:02:00+00:00",
+            "last_bar_utc": "2025-03-28T21:59:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2025-10-26T22:02:00+00:00",
+            "last_bar_utc": "2025-10-31T21:54:00+00:00",
+            "extra_offset_hours": 1,
+            "decided_by": "segment"
+          }
+        ]
       },
-      "from_utc": "2022-11-20 22:00",
+      "from_utc": "2022-11-06 21:03",
       "to_utc": "2026-01-09 21:54",
       "jobs_report_days": 38,
       "peak_at_0830_share": 0.711

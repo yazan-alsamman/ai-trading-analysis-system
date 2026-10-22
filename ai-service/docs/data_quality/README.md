@@ -27,25 +27,29 @@ detects each period from the evidence and moves the bars back (`app/data/clock.p
 there step by step; the segments and their evidence are in each `import.json` and in the "Clock
 segments" table of each report). The same periods were found in all four pairs:
 
-| Period (UTC) | Offset vs `Europe/Athens` | DST-mismatch weeks | Evidence |
+| Period (UTC) | Offset vs `Europe/Athens` | DST-mismatch weeks (net) | Evidence |
 | --- | --- | --- | --- |
-| first bar → 2021-10-29 | +1 h | same offset | week open 1 h late in every week with evidence (193-295 weeks, none disagree); jobs report at 08:30 after the correction (66-82%) |
-| 2021-10-31 → 2022-03-11 | 0 | +1 h | 08:30 releases peak at 09:30 in mismatch weeks (3.3-4.1× the median range, against 1.0-1.4× at 08:30) |
-| 2022-03-13 → 2022-11-04 (AUDUSD 2022-11-18) | -1 h | 0 net | week open 1 h early in 34-36 weeks |
-| 2022-11-06 → 2026-01-09 | 0 | +1 h | release spike at 09:30 in mismatch weeks (5.3-6.9× the median) |
+| first bar → 2021-11-05 | +1 h | +1 h | week open 1 h late (193-295 weeks; at most 3 weeks without agreement per pair); jobs report at 08:30 after the correction |
+| 2021-11-07 → 2022-03-25 | 0 | 0 | week open and release spike agree (18 of 20 weeks) |
+| 2022-03-27 → 2022-11-04 | -1 h | 0 (week of 2022-10-30, by its own release spike) | week open 1 h early in all 32 weeks: EU summer time without the DST change |
+| 2022-11-06 → 2026-01-09 | 0 | +1 h (11 weeks, 8-10 decided by their own spike) | the 08:30 release spike sits at 09:30 in mismatch weeks (5.3-6.9× the median range) |
 
-Since late 2021 these pairs follow US daylight saving (New York + 7 h). That differs from
+Since late 2022 these pairs follow US daylight saving (New York + 7 h). That differs from
 `Europe/Athens` only in the two or three weeks a year when the US and EU change clocks on different
-dates, so only those weeks are moved. After the correction: the jobs-report check is 68-82%, as
-good as EURUSD and XAUUSD, and in the mismatch weeks 26 of 29 days peak at 08:30. Bars in closed
-hours dropped from about 800 to 1 per pair.
+dates, so only those weeks are moved. The segments are identical in the four pairs. After the
+correction: the jobs-report check is 68-82%, as good as EURUSD and XAUUSD; in the mismatch weeks
+26 of 29 days peak at 08:30; bars in closed hours dropped from about 800 to 1 per pair (AUDUSD:
+86, its early Sunday session, which starts about an hour before 17:00 New York on some weeks).
+Dukascopy confirms every corrected period independently (section 3).
 
 XAUUSD and EURUSD come out as one segment with no correction, in every week.
 
-How the rule was made: the week-open steps after looking at the week-open pattern of all six
-exports, and the mismatch-week step after looking at the release spikes, both on 2026-10-22. The
-rule is mechanical and written down. Because it was set on the same data it corrects, the thesis
-should state that, together with this table.
+How the rule was made (all on 2026-10-22): the week-open steps after looking at the week-open
+pattern of all six exports; the mismatch-week step after looking at the release spikes; the
+stray-tick and weekly release-spike checks, and the rule that mismatch weeks do not set segment
+boundaries, after the Dukascopy cross-check showed two AUDUSD weeks moved by mistake. The rule is
+mechanical and written down in `app/data/clock.py`. Because it was set on the same data it
+corrects, the thesis should state that, with this table and the cross-check of section 3.
 
 ## 2. Other findings
 
@@ -63,4 +67,35 @@ should state that, together with this table.
 - **Bars in closed hours, XAUUSD.** 939 bars inside the 17:00-18:00 New York daily break: on some
   days gold closes later than the configured break.
 - **Longest holes.** 2025-07-02 20:03 New York (about 9 h, XAUUSD and EURUSD) and 2024-07-02 05:09
-  New York (about 12 h, EURUSD). These should be checked against Dukascopy in P1 task 5.
+  New York (about 12 h, EURUSD). Dukascopy has every minute of 2024-07-02 (UTC), where FxPro
+  EURUSD stops at 09:09 UTC and resumes at 21:00: a FxPro outage, not a market closure. The 2025
+  hole starts at 00:03 UTC on 2025-07-03, outside the sampled day.
+
+## 3. Dukascopy cross-check (P1 task 5)
+
+`dukascopy.md` and `dukascopy.json`, from `python -m app dukascopy download` and `compare`. Sample,
+fixed before any data was compared (`app/data/dukascopy.py`): for every year of each instrument's
+FxPro history up to 2025, the first full week of February, May, August and November (1,272 days),
+plus the two hole days. Nothing from the lockbox period was requested. Gate: correlation of
+5-minute returns at least 0.9 and best lag 0 in every year.
+
+| Instrument | Years | Lowest yearly correlation | Best lag | Median price gap (× FxPro 5-min range) | Gate |
+| --- | --- | --- | --- | --- | --- |
+| EURUSD | 2016-2025 | 0.990 | 0 in every year | 0.03-0.08 | pass |
+| GBPUSD | 2017-2025 | 0.989 | 0 in every year | 0.02-0.11 | pass |
+| USDJPY | 2016-2025 | 0.985 | 0 in every year | 0.02-0.11 | pass |
+| AUDUSD | 2018-2025 | 0.982 | 0 in every year | 0.03-0.14 | pass |
+| USDCAD | 2016-2025 | 0.985 | 0 in every year | 0.04-0.14 | pass |
+| XAUUSD | 2012-2025 | 0.979 | 0 in every year | 0.04-0.14 | pass for 2012-2025 |
+| XAUUSD | 2010-2011 | 0.005 (2010), 0.468 (2011) | +60 min in 2010 | 0.30-1.68 | fail |
+
+The four corrected pairs pass with lag 0 in every year, the corrected periods included, so the
+clock correction is confirmed by an independent feed. The first run of the cross-check (before the
+stray-tick and release-spike checks) caught two AUDUSD weeks in November 2022 moved by mistake;
+that is how they were found.
+
+**XAUUSD before August 2011 is one hour off and is not corrected.** By sample week, FxPro gold is
+60 minutes away from Dukascopy from February 2010 to May 2011 and agrees from August 2011; the week
+open did not show it, and the release spike only in a few weeks. These years are before the
+development period (2012-2017, D23), so no research step uses them. If they are ever needed, they
+need a correction checked against Dukascopy day by day.

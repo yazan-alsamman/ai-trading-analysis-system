@@ -631,13 +631,346 @@
       "offset_hours": 0,
       "weeks": 854,
       "weeks_with_evidence": 802,
-      "weeks_agreeing": 780,
+      "weeks_agreeing": 779,
+      "weeks_moved_by_release_spike": 23,
       "mismatch_weeks": {
         "weekdays": 263,
         "extra_offset_hours": 0,
         "range_0730_x_median": 1.19,
         "range_0830_x_median": 2.98,
-        "range_0930_x_median": 1.94
+        "range_0930_x_median": 1.94,
+        "weeks": [
+          {
+            "first_bar_utc": "2010-03-14T23:05:00+00:00",
+            "last_bar_utc": "2010-03-19T19:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2010-03-21T23:05:00+00:00",
+            "last_bar_utc": "2010-03-26T19:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2010-10-31T23:05:00+00:00",
+            "last_bar_utc": "2010-11-05T19:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2011-03-13T23:05:00+00:00",
+            "last_bar_utc": "2011-03-18T19:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2011-03-20T23:05:00+00:00",
+            "last_bar_utc": "2011-03-25T19:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2011-10-30T23:05:00+00:00",
+            "last_bar_utc": "2011-11-04T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2012-03-12T00:00:00+00:00",
+            "last_bar_utc": "2012-03-16T20:00:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2012-03-19T00:00:00+00:00",
+            "last_bar_utc": "2012-03-23T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2012-10-28T23:05:00+00:00",
+            "last_bar_utc": "2012-11-02T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2013-03-10T23:05:00+00:00",
+            "last_bar_utc": "2013-03-15T20:58:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2013-03-17T23:05:00+00:00",
+            "last_bar_utc": "2013-03-22T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2013-03-24T23:05:00+00:00",
+            "last_bar_utc": "2013-03-28T21:14:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2013-10-27T23:05:00+00:00",
+            "last_bar_utc": "2013-11-01T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2014-03-09T23:05:00+00:00",
+            "last_bar_utc": "2014-03-14T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2014-03-16T23:05:00+00:00",
+            "last_bar_utc": "2014-03-21T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2014-03-23T23:05:00+00:00",
+            "last_bar_utc": "2014-03-28T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2014-10-26T23:07:00+00:00",
+            "last_bar_utc": "2014-10-31T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2015-03-08T23:05:00+00:00",
+            "last_bar_utc": "2015-03-13T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2015-03-15T23:05:00+00:00",
+            "last_bar_utc": "2015-03-20T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2015-03-22T23:05:00+00:00",
+            "last_bar_utc": "2015-03-27T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2015-10-25T23:05:00+00:00",
+            "last_bar_utc": "2015-10-30T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2016-03-13T23:05:00+00:00",
+            "last_bar_utc": "2016-03-18T20:58:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2016-03-20T23:05:00+00:00",
+            "last_bar_utc": "2016-03-24T20:59:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2016-10-30T23:05:00+00:00",
+            "last_bar_utc": "2016-11-04T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2017-03-12T23:05:00+00:00",
+            "last_bar_utc": "2017-03-17T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2017-03-19T23:05:00+00:00",
+            "last_bar_utc": "2017-03-24T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2017-10-29T23:05:00+00:00",
+            "last_bar_utc": "2017-11-03T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2018-03-11T23:05:00+00:00",
+            "last_bar_utc": "2018-03-16T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2018-03-18T23:05:00+00:00",
+            "last_bar_utc": "2018-03-23T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2018-10-28T23:05:00+00:00",
+            "last_bar_utc": "2018-11-02T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2019-03-10T23:05:00+00:00",
+            "last_bar_utc": "2019-03-15T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2019-03-17T23:05:00+00:00",
+            "last_bar_utc": "2019-03-22T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2019-03-24T23:05:00+00:00",
+            "last_bar_utc": "2019-03-29T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2019-10-27T23:05:00+00:00",
+            "last_bar_utc": "2019-11-01T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2020-03-08T23:05:00+00:00",
+            "last_bar_utc": "2020-03-13T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2020-03-15T23:05:00+00:00",
+            "last_bar_utc": "2020-03-20T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2020-03-22T23:05:00+00:00",
+            "last_bar_utc": "2020-03-27T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2020-10-25T22:05:00+00:00",
+            "last_bar_utc": "2020-10-30T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2021-03-14T22:05:00+00:00",
+            "last_bar_utc": "2021-03-19T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2021-03-21T22:05:00+00:00",
+            "last_bar_utc": "2021-03-26T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2021-10-31T22:05:00+00:00",
+            "last_bar_utc": "2021-11-05T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2022-03-13T22:05:00+00:00",
+            "last_bar_utc": "2022-03-18T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2022-03-20T22:05:00+00:00",
+            "last_bar_utc": "2022-03-25T20:54:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2022-10-30T22:02:00+00:00",
+            "last_bar_utc": "2022-11-04T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2023-03-12T22:02:00+00:00",
+            "last_bar_utc": "2023-03-17T20:57:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2023-03-19T22:02:00+00:00",
+            "last_bar_utc": "2023-03-24T20:57:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2023-10-29T22:00:00+00:00",
+            "last_bar_utc": "2023-11-03T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2024-03-10T22:00:00+00:00",
+            "last_bar_utc": "2024-03-15T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2024-03-17T22:00:00+00:00",
+            "last_bar_utc": "2024-03-22T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2024-03-24T22:00:00+00:00",
+            "last_bar_utc": "2024-03-28T20:58:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2024-10-27T22:00:00+00:00",
+            "last_bar_utc": "2024-11-01T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "week"
+          },
+          {
+            "first_bar_utc": "2025-03-09T22:00:00+00:00",
+            "last_bar_utc": "2025-03-14T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2025-03-16T22:00:00+00:00",
+            "last_bar_utc": "2025-03-21T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2025-03-23T22:00:00+00:00",
+            "last_bar_utc": "2025-03-28T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          },
+          {
+            "first_bar_utc": "2025-10-26T22:00:00+00:00",
+            "last_bar_utc": "2025-10-31T20:56:00+00:00",
+            "extra_offset_hours": 0,
+            "decided_by": "segment"
+          }
+        ]
       },
       "from_utc": "2010-01-10 23:05",
       "to_utc": "2026-01-09 21:59",

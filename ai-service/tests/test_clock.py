@@ -137,3 +137,42 @@ def test_mismatch_weeks_on_the_right_clock_are_left_alone() -> None:
     segs = clock.check_mismatch_weeks(clean, _whole(clean), TZ)
     assert segs[0]["mismatch_weeks"]["extra_offset_hours"] == 0
     pd.testing.assert_frame_equal(clock.apply_mismatch_weeks(clean, segs, TZ), clean)
+
+
+def test_stray_ticks_before_the_open_are_not_the_open() -> None:
+    weeks_ = []
+    for k in range(6):
+        monday = pd.Timestamp("2022-11-07", tz=TZ) + pd.Timedelta(weeks=k)
+        stray = pd.Series([monday - pd.Timedelta(minutes=57)])  # Sunday 23:03 server time
+        trading = pd.Series(
+            pd.date_range(monday, monday + pd.Timedelta(days=4, hours=23), freq="1min")
+        )
+        weeks_ += [stray, trading]
+    ts = pd.Series(pd.DatetimeIndex(pd.concat(weeks_)).tz_convert("UTC").as_unit("ns"))
+    assert _runs(clock.detect(ts, EUR, TZ)) == [(0, 6)]
+
+
+def test_a_week_that_opens_early_but_trades_on_time_is_not_moved() -> None:
+    # Six weeks of a pair that sometimes starts trading an hour early (AUDUSD), on the right
+    # clock: the US 08:30 release spike says the clock is right, whatever the week open says.
+    bars = []
+    for k in range(10):
+        day = pd.Timestamp("2022-10-03") + pd.Timedelta(weeks=k)
+        monday = day.tz_localize(TZ)  # 00:00 on the server clock, across the DST change
+        start = monday - pd.Timedelta(hours=1) if k >= 4 else monday
+        bars.append(
+            pd.Series(pd.date_range(start, monday + pd.Timedelta(days=4, hours=23), freq="1min"))
+        )
+    ts = pd.DatetimeIndex(pd.concat(bars)).tz_convert("UTC").as_unit("ns")
+    ny = ts.tz_convert("America/New_York")
+    spike = ((ny.hour == 8) & (ny.minute == 30)).astype(float) * 5 + 1
+    df = pd.DataFrame(
+        {"ts_utc": ts, "high": 1.1 + spike * 1e-4, "low": 1.1 - spike * 1e-4, "close": 1.1}
+    )
+    assert _runs(clock.detect(df["ts_utc"], EUR, TZ)) == [
+        (0, 5),
+        (-1, 5),
+    ]  # week open alone; 10-31 is a mismatch week
+    segs = clock.detect(df, EUR, TZ)
+    assert _runs(segs) == [(0, 10)]
+    assert segs[0]["weeks_moved_by_release_spike"] == 6
