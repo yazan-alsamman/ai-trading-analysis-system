@@ -104,8 +104,9 @@ pre-v0.2 work removed. P1 in progress: tasks 1 (layout), 2 (lockbox sealed,
 `python -m app quality`, `docs/data_quality/`) and 5 (Dukascopy cross-check: `python -m app
 dukascopy download|compare`, all instruments pass 2012-2025) done. P1 gate passed (Fadi, 2026-10-22).
 P2 in progress: tasks 1 (primitives: `app/smc/primitives.py`, parameters in
-`app/config/strategy.toml`) and 2 (events: `app/smc/events.py`) done; next: the Sweep → CHoCH → FVG
-detector, then the ~50-setup review. XAUUSD 2012-2017: 4,445 sweeps, 633 CHoCH, 326 with an FVG.
+`app/config/strategy.toml`), 2 (events: `app/smc/events.py`) and 3 (detector: `python -m app smc
+detect`, `docs/phase2/patterns_XAUUSD.md`) done; next: the ~50-pattern review. XAUUSD 2012-2017:
+198 Sweep → CHoCH → FVG patterns (104 buy, 94 sell, 22-40 a year).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
