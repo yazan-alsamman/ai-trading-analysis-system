@@ -74,6 +74,15 @@ def plan(
         return Plan("REJECTED", "REJECT_NON_POSITIVE_RISK", entry, sl, None, risk, None, None)
     if not at_close and not sign * (close - entry) > 0:
         return Plan("REJECTED", "REJECT_PRICE_AT_ENTRY", entry, sl, None, risk, None, None)
+    return target(direction, entry, sl, risk, targets, p)
+
+
+def target(
+    direction: str, entry: float, sl: float, risk: float, targets: list[Level], p: Strategy
+) -> Plan:
+    """The TP rule alone: the nearest opposite level beyond the entry with R >= ``min_r``,
+    rejected if that level is beyond ``max_r``. Shared with the random entries of E0."""
+    sign = 1.0 if direction == "buy" else -1.0
     side = "high" if sign > 0 else "low"
     beyond = sorted(
         (lv for lv in targets if lv.side == side and sign * (lv.price - entry) > 0),

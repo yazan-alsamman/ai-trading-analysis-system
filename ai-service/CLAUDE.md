@@ -129,7 +129,11 @@ instruments.** The research question stays on XAUUSD (train on all six, report X
 instrument). Open: a cost model for the five pairs. L1 review sample drawn (`docs/phase3/review_L1/REVIEW.md`, seed 410733, 50 patterns,
 five instruments x with / without FVG; AUDUSD has no development data); eye review passed (Fadi 50/50; Claude's second opinion
 agrees, 5 same-bar news patterns borderline: `REVIEW_claude.md`).
-Then task 4 (E0 random entries vs E1 rules only, development period).
+Task 4 (`python -m app research baselines`, `docs/phase3/baselines.md`) done: FX costs set (gold
+formula, 0.2 pip minimum and SL slippage). Development period, five instruments: E1 (L1) 378 trades,
+mean net R -0.046 vs matched random E0 -0.063 (difference +0.017, 95% -0.10 to +0.13, p = 0.36):
+**H1 not supported on 2012-2017**; 53% of E1 trades end at the 48-bar horizon. P3 gate (1,000
+labelled, L1 pooled 1,634) passed on counts; the design also asks for E1 on walk-forward.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

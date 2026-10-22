@@ -27,7 +27,7 @@ class Instrument:
     week_open: str
     week_close: str
     daily_break: tuple[str, str] | None = None
-    cost_extra_frac: float | None = None  # costs are configured per instrument (XAUUSD so far)
+    cost_extra_frac: float | None = None  # costs are configured per instrument
     cost_extra_min: float | None = None
     sl_slippage: float | None = None
 

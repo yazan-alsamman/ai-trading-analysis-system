@@ -8,6 +8,7 @@
     python -m app smc detect --symbol XAUUSD    # P2 patterns, development period
     python -m app setups build|label --rules V5-S  # P3 setups and labels, development period
     python -m app setups count --rules V5-S        # P3 sample counts (no performance)
+    python -m app research baselines               # P3 E0 vs E1, development period
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -25,6 +26,7 @@ COMMANDS = {
     "dukascopy": "app.data.dukascopy",
     "smc": "app.smc.detector",
     "setups": "app.setups.builder",
+    "research": "app.research.baselines",
 }
 
 
