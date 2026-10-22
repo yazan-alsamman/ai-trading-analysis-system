@@ -72,6 +72,10 @@ Lifecycle: DEVELOPING → ARMED → ACTIVE → CLOSED / EXPIRED / INVALIDATED; d
 Strict vs loosened rules (CHoCH or BOS, FVG as a feature) is decided in P3 after counting samples.
 One TP in v1 (TP1/TP2 after v1). Custom user strategies: after v1.
 
+Exact v1 definitions and the variants registered for P3 (same-bar reclaim, prior-trend CHoCH, strict
+FVG linkage, rejection audit log): `docs/MARKET_STRUCTURE_DEFINITIONS.md`. v1 changes only by a new
+recorded version.
+
 ## Engineering rules
 
 - Python 3.12, ruff (line 100). Reuse `../libs/backtest`, `../libs/indicators`, `../libs/strategies`.
