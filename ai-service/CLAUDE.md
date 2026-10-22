@@ -97,10 +97,15 @@ One TP in v1 (TP1/TP2 after v1). Custom user strategies: after v1.
 9. P9 Freeze, open lockbox once, paper trading ≥ 3 months or 100 signals.
 10. P10 Thesis, evaluation report, model card, demo, reproducibility.
 
-**Status (2026-10-21):** design locked; phase 0 reset done (`docs/AUDIT-2026-10-21.md`): all
+**Status (2026-10-22):** design locked; phase 0 reset done (`docs/AUDIT-2026-10-21.md`): all
 pre-v0.2 work removed. P1 in progress: tasks 1 (layout), 2 (lockbox sealed,
-`docs/lockbox/MANIFEST-2026-10-21.json`) and 3 (importer: `python -m app import`, store in
-`data/processed/<SYMBOL>/{m1,5m,15m,1h,4h,D1}.parquet`, untracked) done; next task 4 (quality report).
+`docs/lockbox/MANIFEST-2026-10-21.json`), 3 (importer: `python -m app import`, store in
+`data/processed/<SYMBOL>/{m1,5m,15m,1h,4h,D1}.parquet`, untracked) and 4 (quality report:
+`python -m app quality`, `docs/data_quality/`) done; next task 5 (Dukascopy cross-check).
+Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
+the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
+`docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
+XAUUSD and EURUSD need no correction.
 
 Layout: `app/main.py` (service), `app/config/` (instruments + D23 splits, TOML), `app/cli.py`
 (`python -m app <command>`), `app/lockbox.py`, and one package per layer: `data` (L1), `smc` (L2),
