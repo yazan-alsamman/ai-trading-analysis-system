@@ -174,12 +174,28 @@ the reference.
   time, CHoCH close time, prior-trend swings for V2); FVG (three bar times, bounds, size in ATR,
   linkage rule for V3); final code; rule-set name and data hash.
 
+### V5-S: liquid sessions only, daily break as a break in the data
+
+Registered after the P2 gate failed (section 10): six of the seven rejected patterns came from
+thin hours (after the New York close, early Asia, a US holiday) or gold's daily reopen.
+
+- **Rule**: (a) the configured daily break (XAUUSD 17:00-18:00 New York) and the weekend are a
+  break in the data for every rule, as holes already are for the FVG: a swing, a sweep, a CHoCH or
+  an FVG cannot use a bar inside the break, and the first bar after the reopen cannot be a swing or
+  a sweep bar; (b) a sweep counts only when its first bar opens in the London or New York session,
+  02:00-16:00 New York, Monday to Friday, and not on a US market holiday (`market_holidays`).
+- **Session hours are a parameter of the variant**, fixed before it is run; any other window is a
+  new variant.
+- **Expected effect on the P2 sample** (descriptive only): rule (b) removes five of the seven
+  rejected patterns (#12, #28, #44, #45, #49); #17 (15:30 New York) and #33 (05:00 New York, holiday
+  week) are inside the window.
+
 ### How the variants are decided (fixed now, before any variant is run)
 
 1. Every variant runs on **2012-2017 only** with the same code path and data; the walk-forward,
    the secondary holdout and the lockbox are not loaded. Sample counts for the P3 gate may be
    counted on all pre-lockbox history, as the design allows; no performance is computed there.
-2. For V1-S, V2-T, V3-L and the chosen combination: the funnel (V4-A) per year, and a **new
+2. For V1-S, V2-T, V3-L, V5-S and the chosen combination: the funnel (V4-A) per year, and a **new
    50-chart review** drawn with a seed fixed before drawing, same tool and criteria as P2.
 3. In P3, the rules-only result of each (triple barrier, E1 vs E1s of the design) on 2012-2017.
 4. A variant replaces v1 only if its review precision is at least v1's **and** it keeps enough
@@ -191,3 +207,4 @@ the reference.
 | Version | Date | Change |
 | --- | --- | --- |
 | v1 | 2026-10-22 | Sections 1-8 as implemented (commit `eb0be0a`). |
+| v1 | 2026-10-22 | **P2 gate not passed**: detection precision 43/50 = 86% (Wilson 95% 74-93%) against 90%. Review by Claude, adopted by Fadi, borderline cases counted as no (`docs/phase2/review/REVIEW.md`, `score.json`). V5-S registered. |
