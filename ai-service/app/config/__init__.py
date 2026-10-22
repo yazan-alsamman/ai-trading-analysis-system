@@ -40,6 +40,28 @@ class Splits:
     embargo_days: int
 
 
+@dataclass(frozen=True)
+class Strategy:
+    """Strategy v1 parameters (``strategy.toml``); bar counts are in entry-timeframe bars."""
+
+    context_timeframes: tuple[str, ...]
+    entry_timeframe: str
+    k_context: int
+    k_entry: int
+    max_age_days: int
+    previous_day: bool
+    atr_period: int
+    min_depth_atr: float
+    breakout_depth_atr: float
+    close_back_bars: int
+    choch_window_bars: int
+    fvg_min_size_atr: float
+    sl_buffer_atr: float
+    min_r: float
+    max_r: float
+    horizon_bars: int
+
+
 def _load(name: str) -> dict:
     with open(CONFIG_DIR / name, "rb") as f:
         return tomllib.load(f)
@@ -84,8 +106,32 @@ def splits() -> Splits:
     return out
 
 
+@cache
+def strategy() -> Strategy:
+    raw = _load("strategy.toml")
+    return Strategy(
+        context_timeframes=tuple(raw["timeframes"]["context"]),
+        entry_timeframe=raw["timeframes"]["entry"],
+        k_context=raw["swings"]["k_context"],
+        k_entry=raw["swings"]["k_entry"],
+        max_age_days=raw["liquidity"]["max_age_days"],
+        previous_day=raw["liquidity"]["previous_day"],
+        atr_period=raw["sweep"]["atr_period"],
+        min_depth_atr=raw["sweep"]["min_depth_atr"],
+        breakout_depth_atr=raw["sweep"]["breakout_depth_atr"],
+        close_back_bars=raw["sweep"]["close_back_bars"],
+        choch_window_bars=raw["choch"]["window_bars"],
+        fvg_min_size_atr=raw["fvg"]["min_size_atr"],
+        sl_buffer_atr=raw["trade"]["sl_buffer_atr"],
+        min_r=raw["trade"]["min_r"],
+        max_r=raw["trade"]["max_r"],
+        horizon_bars=raw["trade"]["horizon_bars"],
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     summary = {"instruments": {k: asdict(v) for k, v in instruments().items()}}
     summary["splits"] = asdict(splits())
+    summary["strategy"] = asdict(strategy())
     print(json.dumps(summary, indent=2, default=str))
     return 0

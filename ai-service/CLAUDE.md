@@ -102,7 +102,9 @@ pre-v0.2 work removed. P1 in progress: tasks 1 (layout), 2 (lockbox sealed,
 `docs/lockbox/MANIFEST-2026-10-21.json`), 3 (importer: `python -m app import`, store in
 `data/processed/<SYMBOL>/{m1,5m,15m,1h,4h,D1}.parquet`, untracked) and 4 (quality report:
 `python -m app quality`, `docs/data_quality/`) and 5 (Dukascopy cross-check: `python -m app
-dukascopy download|compare`, all instruments pass 2012-2025) done. P1 gate: to be confirmed by Fadi.
+dukascopy download|compare`, all instruments pass 2012-2025) done. P1 gate passed (Fadi, 2026-10-22).
+P2 in progress: task 1 (primitives: `app/smc/primitives.py`, parameters in `app/config/strategy.toml`)
+done; next: events (sweep, breakout, CHoCH, FVG), the Sweep → CHoCH → FVG detector, the ~50-setup review.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
