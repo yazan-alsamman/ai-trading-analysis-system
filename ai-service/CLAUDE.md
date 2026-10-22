@@ -119,8 +119,10 @@ rule set for P3. Its rejections point at the FVG link (V3-L) and CHoCH clarity (
 P3 in progress: task 1 (setup builder: `python -m app setups build --rules V5-S`,
 `docs/phase3/`) done. Trade choices (Fadi, 2026-10-22): limit entry waits 8 bars; nearest liquidity
 beyond 4R is rejected, not capped; spread = mean of the decision bar. XAUUSD V5-S 2012-2017: 104 armed
-setups (v1: 140), about 17 a year: far below the P3 gate of 1,000 labelled setups. Next: task 2
-(lifecycle and triple-barrier labels).
+setups (v1: 140). Task 2 (lifecycle and triple-barrier labels: `python -m app setups label`) done:
+V5-S 42 labelled setups in 2012-2017 (v1: 59), about 7 a year; 19% TP before SL, mean net R -0.14
+(2x costs -0.31). The P3 gate (1,000 labelled setups) is out of reach for strict rules on gold alone.
+Next: task 3 (sample counts and the strictness decision).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

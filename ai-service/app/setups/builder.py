@@ -212,6 +212,10 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--rules", default="V5-S")
     b.add_argument("--store", type=Path, default=STORE)
     b.add_argument("--out", type=Path, default=OUT_DIR)
+    if argv and argv[0] == "label":
+        from app.setups.labels import main as label
+
+        return label(argv[1:])
     args = ap.parse_args(argv)
 
     p = strategy(args.rules)
