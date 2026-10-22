@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import tomllib
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date
 from functools import cache
 from pathlib import Path
@@ -60,6 +60,10 @@ class Strategy:
     min_r: float
     max_r: float
     horizon_bars: int
+    rule_set: str = "v1"
+    break_is_gap: bool = False
+    sweep_session: tuple[str, str] | None = None
+    skip_us_holidays: bool = False
 
 
 def _load(name: str) -> dict:
@@ -107,9 +111,10 @@ def splits() -> Splits:
 
 
 @cache
-def strategy() -> Strategy:
+def strategy(rule_set: str = "v1") -> Strategy:
+    """v1, or a named variant from ``[variants.<name>]`` applied on top of it."""
     raw = _load("strategy.toml")
-    return Strategy(
+    base = Strategy(
         context_timeframes=tuple(raw["timeframes"]["context"]),
         entry_timeframe=raw["timeframes"]["entry"],
         k_context=raw["swings"]["k_context"],
@@ -127,6 +132,15 @@ def strategy() -> Strategy:
         max_r=raw["trade"]["max_r"],
         horizon_bars=raw["trade"]["horizon_bars"],
     )
+    if rule_set == "v1":
+        return base
+    variants = raw.get("variants", {})
+    if rule_set not in variants:
+        raise KeyError(f"unknown rule set {rule_set!r}; known: v1, {', '.join(variants)}")
+    changes = dict(variants[rule_set])
+    if "sweep_session" in changes:
+        changes["sweep_session"] = tuple(changes["sweep_session"])
+    return replace(base, rule_set=rule_set, **changes)
 
 
 def main(argv: list[str] | None = None) -> int:

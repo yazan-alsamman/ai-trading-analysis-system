@@ -113,8 +113,8 @@ detect`, `docs/phase2/patterns_XAUUSD.md`) and 4 (review tool: `python -m app sm
 sample|score`) done. XAUUSD 2012-2017: 198 Sweep → CHoCH → FVG patterns (104 buy, 94 sell, 22-40 a year).
 **P2 gate not passed (v1)**: 43/50 = 86% (95% 74-93%) against 90%; review by Claude, adopted by Fadi,
 borderline cases counted as no (`docs/phase2/review/REVIEW.md`; state this in the thesis). Cause: thin
-sessions and gold's daily reopen. Next: variant V5-S (`docs/MARKET_STRUCTURE_DEFINITIONS.md` §9), then a
-new 50-pattern review.
+sessions and gold's daily reopen. V5-S built (`--rules V5-S`):
+145 patterns; its 50-chart review (`docs/phase2/review_V5-S/REVIEW.md`, seed 731205) is next.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

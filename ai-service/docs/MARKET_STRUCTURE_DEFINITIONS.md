@@ -214,3 +214,4 @@ thin hours (after the New York close, early Asia, a US holiday) or gold's daily 
 | --- | --- | --- |
 | v1 | 2026-10-22 | Sections 1-8 as implemented (commit `eb0be0a`). |
 | v1 | 2026-10-22 | **P2 gate not passed**: detection precision 43/50 = 86% (Wilson 95% 74-93%) against 90%. Review by Claude, adopted by Fadi, borderline cases counted as no (`docs/phase2/review/REVIEW.md`, `score.json`). V5-S registered. |
+| V5-S | 2026-10-22 | Built as a named rule set (`strategy("V5-S")`; v1 output unchanged, same SHA-256). XAUUSD 2012-2017: 145 patterns (all also v1 patterns); removes 5 of the 7 patterns rejected in the v1 review. Review sample drawn with seed 731205 (`docs/phase2/review_V5-S/`); waiting for the review. |

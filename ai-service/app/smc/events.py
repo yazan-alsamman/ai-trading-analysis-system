@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 from app.config import Strategy
+from app.data.sessions import MARKET_TZ, hhmm_minutes, market_holidays
 from app.smc.primitives import Level, LevelBook, atr, swing_highs
 
 
@@ -45,6 +46,7 @@ class Side:
     close: np.ndarray
     ts: np.ndarray  # bar open, int64 ns
     step_ns: int
+    after_gap: np.ndarray  # True for the first bar after a gap (and for the first bar)
 
     @classmethod
     def of(cls, entry: pd.DataFrame, direction: str) -> Side:
@@ -53,9 +55,10 @@ class Side:
         step = (
             int((entry["close_utc"].iloc[0] - entry["ts_utc"].iloc[0]).value) if len(entry) else 0
         )
+        gap = np.r_[True, np.diff(ts) > step] if len(ts) else np.zeros(0, dtype=bool)
         if direction == "buy":
-            return cls("buy", 1.0, h, lo, c, ts, step)
-        return cls("sell", -1.0, -lo, -h, -c, ts, step)
+            return cls("buy", 1.0, h, lo, c, ts, step, gap)
+        return cls("sell", -1.0, -lo, -h, -c, ts, step, gap)
 
     def real(self, x: float) -> float:
         return float(self.sign * x)
@@ -64,7 +67,7 @@ class Side:
 @dataclass(frozen=True)
 class Sweep:
     direction: str  # "buy" after sell-side liquidity is swept, "sell" after buy-side
-    kind: str  # "sweep", "breakout" or "shallow"
+    kind: str  # "sweep", "breakout", "shallow", or "off_session" (rule sets with a session rule)
     level: Level
     first_idx: int  # first bar beyond the level
     settled_idx: int  # bar whose close decided the kind
@@ -110,10 +113,31 @@ def classify(side: Side, level_price: float, j: int, a: float, p: Strategy) -> t
     return "breakout", j + p.close_back_bars, ext, depth, "no_close_back"
 
 
+def sweep_allowed(entry: pd.DataFrame, after_gap: np.ndarray, p: Strategy) -> np.ndarray:
+    """Bars that may start a sweep: all of them in v1; with V5-S only bars opening in the session
+    window (New York, Monday to Friday, not a US market holiday) and not right after a gap."""
+    n = len(entry)
+    ok = np.ones(n, dtype=bool)
+    if p.break_is_gap:
+        ok &= ~after_gap
+    if p.sweep_session is not None or p.skip_us_holidays:
+        ny = entry["ts_utc"].dt.tz_convert(MARKET_TZ)
+        if p.sweep_session is not None:
+            mins = (ny.dt.hour * 60 + ny.dt.minute).to_numpy()
+            lo, hi = (hhmm_minutes(t) for t in p.sweep_session)
+            ok &= (mins >= lo) & (mins < hi) & (ny.dt.dayofweek < 5).to_numpy()
+        if p.skip_us_holidays and n:
+            day = ny.dt.tz_localize(None).dt.normalize()
+            holidays = market_holidays(int(day.dt.year.min()), int(day.dt.year.max()))
+            ok &= ~day.isin(list(holidays)).to_numpy()
+    return ok
+
+
 def detect_sweeps(entry: pd.DataFrame, levels: list[Level], p: Strategy) -> list[Sweep]:
     """Every level traded through, classified, in the order it was settled (both directions)."""
     a = atr(*(entry[k].to_numpy(float) for k in ("high", "low", "close")), p.atr_period)
     sides = {"buy": Side.of(entry, "buy"), "sell": Side.of(entry, "sell")}
+    allowed = sweep_allowed(entry, sides["buy"].after_gap, p)
     book = LevelBook(entry, levels, p.max_age_days)
     out = []
     for j in range(len(entry)):
@@ -123,6 +147,12 @@ def detect_sweeps(entry: pd.DataFrame, levels: list[Level], p: Strategy) -> list
         for direction, lvs in (("buy", traded["low"]), ("sell", traded["high"])):
             side = sides[direction]
             for lv in lvs:
+                if not allowed[j]:
+                    extreme = side.real(side.low[j])
+                    out.append(
+                        Sweep(direction, "off_session", lv, j, j, j, extreme, float(a[j]), 0.0)
+                    )
+                    continue
                 res = classify(side, side.sign * lv.price, j, a[j], p)
                 if res is None:
                     continue
@@ -144,11 +174,17 @@ def detect_sweeps(entry: pd.DataFrame, levels: list[Level], p: Strategy) -> list
     return sorted(out, key=lambda s: (s.settled_idx, s.first_idx, s.direction, s.level.key))
 
 
-def find_choch(side: Side, sweep: Sweep, k: int, window: int) -> tuple[Choch | None, str]:
-    """The CHoCH after a sweep, or (None, "no_reference" | "new_extreme" | "window" | "pending")."""
+def find_choch(
+    side: Side, sweep: Sweep, k: int, window: int, no_swing_after_gap: bool = False
+) -> tuple[Choch | None, str]:
+    """The CHoCH after a sweep, or (None, "no_reference" | "new_extreme" | "window" | "pending").
+    With ``no_swing_after_gap`` (V5-S) the first bar after a gap cannot be the reference swing."""
     n = len(side.close)
     extreme = sweep.extreme * side.sign
-    pivots = np.flatnonzero(swing_highs(side.high, k))
+    mask = swing_highs(side.high, k)
+    if no_swing_after_gap:
+        mask &= ~side.after_gap
+    pivots = np.flatnonzero(mask)
     before = pivots[pivots < sweep.extreme_idx]
     if not len(before):
         return None, "no_reference"

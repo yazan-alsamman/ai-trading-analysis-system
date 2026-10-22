@@ -23,10 +23,11 @@ import pandas as pd
 
 from app.config import strategy
 from app.data.importer import DEFAULT_OUT as STORE
-from app.smc.detector import development_frames
+from app.smc.detector import development_frames, suffix
 
 SAMPLE_SIZE = 50
-SEED = 20261022  # fixed on 2026-10-22, before any chart was drawn
+SEED = 20261022  # v1: fixed on 2026-10-22, before any chart was drawn
+SEEDS = {"v1": SEED, "V5-S": 731205}  # each fixed before that rule set was run (definitions §9)
 BARS_BEFORE = 40
 BARS_AFTER_CHOCH = 2
 REVIEW_DIR = Path(__file__).resolve().parents[2] / "docs" / "phase2" / "review"
@@ -145,10 +146,18 @@ def draw(row: pd.Series, entry: pd.DataFrame, path: Path, number: int) -> None:
     plt.close(fig)
 
 
-def write_sample(symbol: str, store: Path = STORE, out: Path = REVIEW_DIR) -> Path:
-    df = pd.read_parquet(store / symbol / "p2_patterns.parquet")
-    picked = sample(df)
-    entry = development_frames(symbol, store)[strategy().entry_timeframe]
+def review_dir(rules: str) -> Path:
+    return REVIEW_DIR if rules == "v1" else REVIEW_DIR.parent / f"review_{rules}"
+
+
+def write_sample(
+    symbol: str, store: Path = STORE, out: Path = REVIEW_DIR, rules: str = "v1"
+) -> Path:
+    p = strategy(rules)
+    df = pd.read_parquet(store / symbol / f"p2_patterns{suffix(p)}.parquet")
+    seed = SEEDS[rules]
+    picked = sample(df, seed=seed)
+    entry = development_frames(symbol, store, p)[p.entry_timeframe]
     out.mkdir(parents=True, exist_ok=True)
     rows = []
     for i, row in picked.iterrows():
@@ -160,7 +169,9 @@ def write_sample(symbol: str, store: Path = STORE, out: Path = REVIEW_DIR) -> Pa
             f" {row['direction']} | {row['level_source']} {row['level_price']:.2f} |  |  |"
         )
     years = f"{df['year'].min()}-{df['year'].max()}"
-    text = CHECKLIST.format(symbol=symbol, n=len(picked), total=len(df), years=years, seed=SEED)
+    text = CHECKLIST.format(
+        symbol=f"{symbol} ({rules})", n=len(picked), total=len(df), years=years, seed=seed
+    )
     path = out / "REVIEW.md"
     if path.exists():
         raise FileExistsError(f"{path} exists; a filled-in review is never overwritten")
@@ -208,12 +219,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument("action", choices=["sample", "score"])
     ap.add_argument("--symbol", default="XAUUSD")
     ap.add_argument("--store", type=Path, default=STORE)
-    ap.add_argument("--out", type=Path, default=REVIEW_DIR)
+    ap.add_argument("--rules", default="v1", help="v1 or a variant of strategy.toml")
+    ap.add_argument("--out", type=Path, help="default: docs/phase2/review[_<rules>]")
     args = ap.parse_args(argv)
+    out = args.out or review_dir(args.rules)
     if args.action == "sample":
-        print(f"wrote {write_sample(args.symbol, args.store, args.out)}")
+        print(f"wrote {write_sample(args.symbol, args.store, out, args.rules)}")
         return 0
-    result = score(args.out / "REVIEW.md")
-    (args.out / "score.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    result = score(out / "REVIEW.md")
+    (out / "score.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result))
     return 0

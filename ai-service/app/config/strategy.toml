@@ -30,3 +30,10 @@ sl_buffer_atr = 0.1      # SL beyond the sweep extreme by this much, plus the sp
 min_r = 1.5
 max_r = 4.0
 horizon_bars = 48        # triple barrier: TP, SL, or this many bars after the fill
+
+# Named variants (docs/MARKET_STRUCTURE_DEFINITIONS.md §9): only the keys they change.
+[variants.V5-S]
+break_is_gap = true                  # entry frame: closed-hour bars removed, first bar after a gap
+                                     # is neither a swing nor a sweep bar
+sweep_session = ["02:00", "16:00"]   # New York; a sweep's first bar must open in this window
+skip_us_holidays = true              # and not on a US market holiday
