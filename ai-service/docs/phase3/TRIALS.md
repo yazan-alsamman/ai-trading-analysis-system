@@ -16,7 +16,24 @@ P3 task 2 (`labels_XAUUSD_v1.md`, `labels_XAUUSD_V5-S.md`): 2 trials.
 | 6 | 2026-10-23 | **L1-M**: L1 with signal-based position management (opposite signal exits, same-direction signal extends to 48 bars after it, cap 192; one position per instrument). Registered before the run (`MARKET_STRUCTURE_DEFINITIONS.md`, L1-M). Measured on development and walk-forward periods | `docs/phase4/L1-M.md` | -0.053 | -0.060 | +0.007 (-0.104 to +0.114) | 0.46 | -0.043 (both periods) | Fadi |
 
 Each E1 / E0 trial also reports E1s (V5-S) and E1 without same-bar patterns; those are read from
-the same run and are not counted as separate trials. Trials so far: **6**.
+the same run and are not counted as separate trials. Trials so far: **6** run, **4** registered
+and pending (7-10 below); N for the Deflated Sharpe after P4 task 3: **10**.
+
+## P4 meta-model trials (walk-forward test windows, 2018-01 to 2024-06)
+
+Registered 2026-10-23 in `docs/phase4/PREREG_P4.md` before any model was fitted. Label
+`y = 1{net R > 0}` weighted by |net R|, Platt, EV acceptance rule, minimum 30 accepted trades;
+H2 decided on trial 7 alone. Baseline: E1 on the same windows, 1,058 trades, mean net R -0.047.
+
+| # | Date | Configuration | Report | Accepted | Mean net R accepted | Accepted - E1 (one-sided 95% lower) | BSS | Debiased ECE | Status | Asked by |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 7 | 2026-10-23 | **E2** elastic-net LR (primary) | `docs/phase4/meta_lr.md` | | | | | | pending | Fadi |
+| 8 | 2026-10-23 | E3 LightGBM-small, fixed parameters | `docs/phase4/meta_lgbm.md` | | | | | | pending | Fadi |
+| 9 | 2026-10-23 | E4 MLP (16), mean of 5 seeds | `docs/phase4/meta_mlp.md` | | | | | | pending | Fadi |
+| 10 | 2026-10-23 | E2 with the design label (TP first), disclosure | `docs/phase4/meta_lr_tp.md` | | | | | | pending | Fadi |
+
+Controls (not counted in N, not used to choose anything; `PREREG_P4.md` §7): E0 + meta (20
+replications, 29 context features) and E1 + meta with context features only, for each family.
 
 ## Outcome mix of E1 by horizon
 
