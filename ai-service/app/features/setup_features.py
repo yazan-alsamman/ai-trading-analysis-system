@@ -1,11 +1,13 @@
 """Setup features (L4, P4 task 1) and the walk-forward dataset.
 
     python -m app features build        # L1 setups, six instruments, 2012-01-01 to 2024-06-30
+    python -m app features e0           # their matched random entries, 20 replications
 
 Writes ``data/processed/p4_dataset_<rules>.parquet`` (one row per labelled setup: identity,
 features, label ``y`` and realised R; untracked) and ``docs/phase4/dataset_<rules>.md`` (counts
 and feature coverage only: outcomes of the walk-forward period are read only by the walk-forward
-protocol, never summarised here).
+protocol, never summarised here). ``e0`` writes ``data/processed/p4_e0_<rules>.parquet``: the
+control arm of ``PREREG_P4.md`` §7, one row per random trade with the ``CONTEXT`` features only.
 
 Every feature is known at the close of the decision (CHoCH) bar: entry-frame values at that bar
 and earlier, higher-timeframe values from bars that closed by then. All are scale-free (ATR
@@ -49,11 +51,13 @@ from app.config import Strategy, instruments, splits, strategy
 from app.data.aggregate import trading_day
 from app.data.importer import DEFAULT_OUT as STORE
 from app.data.sessions import MARKET_TZ
+from app.research.baselines import SEED, e0, market
 from app.setups.counts import history_frames
 from app.setups.labels import label_all
 from app.smc.primitives import atr
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "phase4"
+E0_REPS = 20  # PREREG_P4.md §7
 EMA_SPAN = 20
 SPREAD_DAYS = 20
 ATR_PCT_BARS = 20 * 96  # about 20 trading days of 15-minute bars
@@ -123,6 +127,41 @@ def _asia(entry: pd.DataFrame, ny: pd.DatetimeIndex) -> pd.DataFrame:
 
 def features(frames: dict[str, pd.DataFrame], setups: pd.DataFrame, symbol: str, p) -> pd.DataFrame:
     """One row of features per setup (``label_all`` rows), from data known at its decision."""
+    if len(setups) == 0:
+        return pd.DataFrame(index=setups.index)
+    f = pd.concat(
+        [pattern_features(frames, setups, p), context_features(frames, setups, symbol, p)], axis=1
+    )
+    return f[FEATURES]
+
+
+def pattern_features(frames: dict[str, pd.DataFrame], setups: pd.DataFrame, p) -> pd.DataFrame:
+    """The ``PATTERN`` features: only a detected sweep, CHoCH and FVG have them."""
+    entry = frames[p.entry_timeframe]
+    d = setups["decision_idx"].to_numpy(int)
+    sign = np.where(setups["direction"].to_numpy() == "buy", 1.0, -1.0)
+    close = entry["close"].to_numpy(float)[d]
+    a = setups["atr"].to_numpy(float)
+    f = pd.DataFrame(index=setups.index)
+    f["depth_atr"] = setups["depth_atr"].to_numpy(float)
+    f["levels_taken"] = setups["levels_taken"].to_numpy(float)
+    f["src_4h"] = (setups["level_source"] == "4h").to_numpy(float)
+    f["src_pd"] = (setups["level_source"] == "pd").to_numpy(float)
+    fvg = setups["fvg_size_atr"].to_numpy(float)
+    f["has_fvg"] = (~np.isnan(fvg)).astype(float)
+    f["fvg_size_atr"] = np.nan_to_num(fvg, nan=0.0)
+    f["bars_sweep_to_choch"] = setups["bars_sweep_to_choch"].to_numpy(float)
+    f["displacement_atr"] = sign * (close - setups["extreme"].to_numpy(float)) / a
+    f["choch_margin_atr"] = sign * (close - setups["choch_ref_price"].to_numpy(float)) / a
+    return f
+
+
+def context_features(
+    frames: dict[str, pd.DataFrame], setups: pd.DataFrame, symbol: str, p
+) -> pd.DataFrame:
+    """The ``CONTEXT`` features, which any trade has at its decision bar, a random entry of E0
+    included. ``setups`` needs ``decision_idx``, ``direction``, ``atr``, ``risk``, ``spread``,
+    ``r_multiple``, ``target_source``, ``entry`` and ``tp``."""
     entry = frames[p.entry_timeframe]
     n = len(setups)
     if n == 0:
@@ -140,18 +179,8 @@ def features(frames: dict[str, pd.DataFrame], setups: pd.DataFrame, symbol: str,
 
     f["r_multiple"] = setups["r_multiple"].to_numpy(float)
     f["risk_atr"] = risk / a
-    f["depth_atr"] = setups["depth_atr"].to_numpy(float)
-    f["levels_taken"] = setups["levels_taken"].to_numpy(float)
-    f["src_4h"] = (setups["level_source"] == "4h").to_numpy(float)
-    f["src_pd"] = (setups["level_source"] == "pd").to_numpy(float)
     f["tgt_4h"] = (setups["target_source"] == "4h").to_numpy(float)
     f["tgt_pd"] = (setups["target_source"] == "pd").to_numpy(float)
-    fvg = setups["fvg_size_atr"].to_numpy(float)
-    f["has_fvg"] = (~np.isnan(fvg)).astype(float)
-    f["fvg_size_atr"] = np.nan_to_num(fvg, nan=0.0)
-    f["bars_sweep_to_choch"] = setups["bars_sweep_to_choch"].to_numpy(float)
-    f["displacement_atr"] = sign * (close - setups["extreme"].to_numpy(float)) / a
-    f["choch_margin_atr"] = sign * (close - setups["choch_ref_price"].to_numpy(float)) / a
 
     for tf, name in (("1h", "trend_1h"), ("4h", "trend_4h"), ("D1", "trend_d1")):
         f[name] = sign * _trend(frames[tf], t, p.atr_period)
@@ -217,7 +246,7 @@ def features(frames: dict[str, pd.DataFrame], setups: pd.DataFrame, symbol: str,
     f["usd_long"] = ((sign > 0) == usd_base).astype(float)
     for s in SYMBOLS:
         f[f"sym_{s}"] = float(s == symbol)
-    return f
+    return f[CONTEXT]
 
 
 FEATURES = [
@@ -228,6 +257,12 @@ FEATURES = [
     "spread_vs_hour", "atr_pct", "d1_atr_pct", "tp_usd_min_lot", "direction_buy", "usd_long",
     *[f"sym_{s}" for s in SYMBOLS],
 ]  # fmt: skip
+# PREREG_P4.md §7: a random entry has no sweep, CHoCH or FVG, so it has only the context features.
+PATTERN = [
+    "depth_atr", "levels_taken", "src_4h", "src_pd", "has_fvg", "fvg_size_atr",
+    "bars_sweep_to_choch", "displacement_atr", "choch_margin_atr",
+]  # fmt: skip
+CONTEXT = [f for f in FEATURES if f not in PATTERN]
 
 
 def dataset(symbol: str, p: Strategy, end: pd.Timestamp, store: Path = STORE) -> pd.DataFrame:
@@ -242,6 +277,31 @@ def dataset(symbol: str, p: Strategy, end: pd.Timestamp, store: Path = STORE) ->
     df.insert(0, "symbol", symbol)
     f = features(frames, df, symbol, p)
     return pd.concat([df[ID_COLS + TARGETS], f[FEATURES]], axis=1)
+
+
+def e0_dataset(
+    symbol: str, p: Strategy, end: pd.Timestamp, reps: int, rng, store: Path = STORE
+) -> pd.DataFrame:
+    """E0 (``baselines.e0``: same instrument, year, New York hour, risk in ATR, TP rule, labels
+    and costs) for every labelled setup of one instrument, 2012 to ``end``, ``reps`` times, with
+    the context features of each random entry. ``setup_id`` is the E1 setup it is matched to;
+    the random trade has its own decision and exit times, which the folds use."""
+    frames = history_frames(symbol, p, store, end)
+    if frames[p.entry_timeframe].empty:
+        return pd.DataFrame()
+    e1 = label_all(frames, symbol, p)
+    if e1.empty:
+        return pd.DataFrame()
+    e1 = e1[e1["state"] == "CLOSED"].reset_index(drop=True)
+    df = e0(market(frames, p), e1, symbol, p, rng, reps)
+    if df.empty:
+        return df
+    ts = frames[p.entry_timeframe]["ts_utc"]
+    df["decision_utc"] = ts.iloc[df["decision_idx"].to_numpy(int)].reset_index(drop=True)
+    df["exit_utc"] = ts.iloc[df["exit_idx"].to_numpy(int)].reset_index(drop=True)
+    df["year"] = df["decision_utc"].dt.year
+    f = context_features(frames, df, symbol, p)
+    return pd.concat([df[["rep", *ID_COLS, *TARGETS]], f], axis=1)
 
 
 def render(df: pd.DataFrame, p: Strategy, end: pd.Timestamp) -> str:
@@ -273,14 +333,36 @@ def render(df: pd.DataFrame, p: Strategy, end: pd.Timestamp) -> str:
     return "\n".join(lines)
 
 
+def main_e0(args) -> int:
+    p = strategy(args.rules)
+    end = pd.Timestamp(splits().walk_forward[1], tz="UTC")
+    rng = np.random.default_rng(SEED)
+    parts = []
+    for s in args.symbol or [x for x in SYMBOLS if x in instruments()]:
+        part = e0_dataset(s, p, end, args.reps, rng, args.store)
+        print(f"{s}: {len(part)} random trades", file=sys.stderr)
+        if len(part):
+            parts.append(part)
+    if not parts:
+        print("no random trades", file=sys.stderr)
+        return 1
+    df = pd.concat(parts, ignore_index=True).sort_values(["rep", "decision_utc", "symbol"])
+    df.reset_index(drop=True).to_parquet(args.store / f"p4_e0_{p.rule_set}.parquet", index=False)
+    print(f"{len(df)} random trades, {args.reps} replications, {len(CONTEXT)} context features")
+    return 0
+
+
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="python -m app features build")
-    ap.add_argument("command", choices=["build"])
+    ap = argparse.ArgumentParser(prog="python -m app features")
+    ap.add_argument("command", choices=["build", "e0"])
     ap.add_argument("--rules", default="L1")
     ap.add_argument("--symbol", action="append")
+    ap.add_argument("--reps", type=int, default=E0_REPS, help="E0 replications (e0 only)")
     ap.add_argument("--store", type=Path, default=STORE)
     ap.add_argument("--out", type=Path, default=OUT_DIR)
     args = ap.parse_args(argv)
+    if args.command == "e0":
+        return main_e0(args)
     p = strategy(args.rules)
     end = pd.Timestamp(splits().walk_forward[1], tz="UTC")
     parts = []

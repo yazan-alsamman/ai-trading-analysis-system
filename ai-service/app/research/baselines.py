@@ -114,6 +114,15 @@ def random_trade(
             "gross_r": lab.gross_r,
             "net_r": lab.net_r,
             "net_r_2x": lab.net_r_2x,
+            "reason": lab.reason,
+            "exit_idx": lab.exit_idx,
+            "atr": float(m.atr[j]),
+            "risk": risk,
+            "spread": float(m.spread[j]),
+            "entry": entry,
+            "tp": pl.tp,
+            "r_multiple": pl.r_multiple,
+            "target_source": pl.target.source,
         }
     return None
 

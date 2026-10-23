@@ -10,7 +10,9 @@
     python -m app setups count --rules V5-S        # P3 sample counts (no performance)
     python -m app research baselines               # P3 E0 vs E1, development period
     python -m app research walkforward             # P4 walk-forward folds, E1 on test windows
+    python -m app research meta --model lr|lgbm|mlp  # P4 meta-models (docs/phase4/PREREG_P4.md)
     python -m app features build                   # P4 setup features, walk-forward dataset
+    python -m app features e0                      # P4 matched random entries, context features
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
