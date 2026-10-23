@@ -27,7 +27,7 @@ H2 decided on trial 7 alone. Baseline: E1 on the same windows, 1,058 trades, mea
 
 | # | Date | Configuration | Report | Accepted | Mean net R accepted | Accepted - E1 (one-sided 95% lower) | BSS | Debiased ECE | Status | Asked by |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 7 | 2026-10-23 | **E2** elastic-net LR (primary) | `docs/phase4/meta_lr.md` | | | | | | pending | Fadi |
+| 7 | 2026-10-23 | **E2** elastic-net LR (primary) | `docs/phase4/meta_lr.md` | 209 (19.8%) | -0.054 | -0.007 (-0.122) | -0.011 | +0.032 | **H2 not supported**; P4 gate fail (BSS < 0) | Fadi |
 | 8 | 2026-10-23 | E3 LightGBM-small, fixed parameters | `docs/phase4/meta_lgbm.md` | | | | | | pending | Fadi |
 | 9 | 2026-10-23 | E4 MLP (16), mean of 5 seeds | `docs/phase4/meta_mlp.md` | | | | | | pending | Fadi |
 | 10 | 2026-10-23 | E2 with the design label (TP first), disclosure | `docs/phase4/meta_lr_tp.md` | | | | | | pending | Fadi |

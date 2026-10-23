@@ -17,6 +17,7 @@ from app.research.meta import (
     run,
     scored_rows,
     sign_test,
+    top_counts,
     uniqueness,
 )
 from app.research.walkforward import folds, predict, target
@@ -168,6 +169,12 @@ def test_deflated_sharpe_falls_with_the_number_of_trials() -> None:
     assert ten["dsr"] < one["dsr"]
     assert deflated_sharpe(np.random.default_rng(1).normal(1.0, 1.0, 400), 10)["dsr"] > 0.99
     assert np.isnan(deflated_sharpe(np.ones(5))["dsr"])
+
+
+def test_top_counts_never_rank_zero_coefficients() -> None:
+    m = np.array([[0.0, 0.0, 0.0], [0.0, -0.5, 0.2], [0.3, 0.0, 0.0]])
+    assert list(top_counts(m, k=2)) == [1, 1, 1]
+    assert list(top_counts(np.zeros((13, 38)))) == [0] * 38
 
 
 def test_uniqueness_of_disjoint_and_identical_labels() -> None:

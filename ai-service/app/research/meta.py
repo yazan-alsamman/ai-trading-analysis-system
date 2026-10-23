@@ -518,6 +518,14 @@ def render(
     return "\n".join(lines)
 
 
+def top_counts(m: np.ndarray, k: int = TOP) -> np.ndarray:
+    """Windows (rows of ``m``) in which each feature is among the ``k`` largest by |value|; a zero
+    value is never counted, so ties among zero coefficients rank nothing."""
+    top = np.argsort(-np.abs(m), axis=1, kind="stable")[:, :k]
+    hit = np.take_along_axis(m, top, axis=1) != 0
+    return np.bincount(top[hit], minlength=m.shape[1])
+
+
 def _diagnostics(df: pd.DataFrame, info: list, features: list[str]) -> list[str]:
     u_all = uniqueness(df)
     lines = [
@@ -535,16 +543,15 @@ def _diagnostics(df: pd.DataFrame, info: list, features: list[str]) -> list[str]
     imps = [d["importance"] for d in info if "importance" in d]
     if imps:
         m = np.vstack(imps)
-        top = np.argsort(-np.abs(m), axis=1)[:, :TOP]
-        in_top = np.bincount(top.ravel(), minlength=m.shape[1])
+        in_top = top_counts(m)
         nonzero = (m != 0).sum(axis=0)
         positive = (m > 0).sum(axis=0)
         mean = m.mean(axis=0)
         rank = np.argsort(-np.abs(mean))
         lines += [
             "Model reading over the windows: mean value (LR: standardised coefficient; LightGBM:"
-            f" mean |SHAP| on the test rows), windows in the top {TOP}, windows non-zero and"
-            " positive.",
+            f" mean |SHAP| on the test rows), windows in the top {TOP} (non-zero values only),"
+            " windows non-zero and positive.",
             "",
             "| Feature | Mean | Top 10 | Non-zero | Positive |",
             "| --- | --- | --- | --- | --- |",
