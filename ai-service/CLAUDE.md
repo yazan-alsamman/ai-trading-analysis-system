@@ -116,7 +116,26 @@ borderline cases counted as no (`docs/phase2/review/REVIEW.md`; state this in th
 sessions and gold's daily reopen. V5-S built (`--rules V5-S`):
 145 patterns. **P2 gate passed with V5-S** (Fadi's review, 46/50 = 92%, 95% 81-97%): V5-S is the
 rule set for P3. Its rejections point at the FVG link (V3-L) and CHoCH clarity (V2-T), both P3 variants.
-Next: P3 (setup builder, triple barrier, sample count, strictness decision, E0-E1).
+P3 in progress: task 1 (setup builder: `python -m app setups build --rules V5-S`,
+`docs/phase3/`) done. Trade choices (Fadi, 2026-10-22): limit entry waits 8 bars; nearest liquidity
+beyond 4R is rejected, not capped; spread = mean of the decision bar. XAUUSD V5-S 2012-2017: 104 armed
+setups (v1: 140). Task 2 (lifecycle and triple-barrier labels: `python -m app setups label`) done:
+V5-S 42 labelled setups in 2012-2017 (v1: 59), about 7 a year; 19% TP before SL, mean net R -0.14
+(2x costs -0.31). The P3 gate (1,000 labelled setups) is out of reach for strict rules on gold alone.
+Task 3 counts (`python -m app setups count`, counts only, 2012 to 2026-01-09, six instruments):
+v1 543, V5-S 377, L1 (FVG optional, market entry) 1,634 labelled setups (gold 134 / 88 / 387). Only
+L1 pooled over the six instruments passes 1,000. **Decision (Fadi, 2026-10-22): L1, pooled over the six
+instruments.** The research question stays on XAUUSD (train on all six, report XAUUSD and per
+instrument). Open: a cost model for the five pairs. L1 review sample drawn (`docs/phase3/review_L1/REVIEW.md`, seed 410733, 50 patterns,
+five instruments x with / without FVG; AUDUSD has no development data); eye review passed (Fadi 50/50; Claude's second opinion
+agrees, 5 same-bar news patterns borderline: `REVIEW_claude.md`).
+Task 4 (`python -m app research baselines`, `docs/phase3/baselines.md`) done: FX costs set (gold
+formula, 0.2 pip minimum and SL slippage). Development period, five instruments: E1 (L1) 378 trades,
+mean net R -0.046 vs matched random E0 -0.063 (difference +0.017, 95% -0.10 to +0.13, p = 0.36):
+**H1 not supported on 2012-2017**; 53% of E1 trades end at the 48-bar horizon. P3 gate (1,000
+labelled, L1 pooled 1,634) passed on counts; the design also asks for E1 on walk-forward.
+Horizon trials 96 / 192 bars (Fadi, 2026-10-23): no edge either (p 0.46 / 0.60); horizon stays 48.
+Every performance look on 2012-2017 is logged in `docs/phase3/TRIALS.md` (5 trials so far).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

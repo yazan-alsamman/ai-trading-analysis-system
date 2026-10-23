@@ -11,6 +11,14 @@ quote_currency = "USD"
 week_open = "18:00"
 week_close = "17:00"
 daily_break = ["17:00", "18:00"]
+# Costs (price units): spread + max(cost_extra_frac * spread, cost_extra_min); SL fills slip by
+# sl_slippage. $0.10 is the design's minimum; the SL slippage value is an initial assumption.
+cost_extra_frac = 0.5
+cost_extra_min = 0.10
+sl_slippage = 0.10
+
+# FX pairs (Fadi, 2026-10-22): the same formula with a 0.2 pip minimum and 0.2 pip SL slippage,
+# about the gold ratio ($0.10 against a median spread near $0.38; FX median spreads 0.7-1.2 pips).
 
 [EURUSD]
 point = 0.00001
@@ -19,6 +27,9 @@ contract_size = 100000
 quote_currency = "USD"
 week_open = "17:00"
 week_close = "17:00"
+cost_extra_frac = 0.5
+cost_extra_min = 0.00002
+sl_slippage = 0.00002
 
 [GBPUSD]
 point = 0.00001
@@ -27,6 +38,9 @@ contract_size = 100000
 quote_currency = "USD"
 week_open = "17:00"
 week_close = "17:00"
+cost_extra_frac = 0.5
+cost_extra_min = 0.00002
+sl_slippage = 0.00002
 
 [USDJPY]
 point = 0.001
@@ -35,6 +49,9 @@ contract_size = 100000
 quote_currency = "JPY"
 week_open = "17:00"
 week_close = "17:00"
+cost_extra_frac = 0.5
+cost_extra_min = 0.002
+sl_slippage = 0.002
 
 [AUDUSD]
 point = 0.00001
@@ -43,6 +60,9 @@ contract_size = 100000
 quote_currency = "USD"
 week_open = "17:00"
 week_close = "17:00"
+cost_extra_frac = 0.5
+cost_extra_min = 0.00002
+sl_slippage = 0.00002
 
 [USDCAD]
 point = 0.00001
@@ -51,3 +71,6 @@ contract_size = 100000
 quote_currency = "CAD"
 week_open = "17:00"
 week_close = "17:00"
+cost_extra_frac = 0.5
+cost_extra_min = 0.00002
+sl_slippage = 0.00002

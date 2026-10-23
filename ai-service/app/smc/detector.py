@@ -38,7 +38,7 @@ class Pattern:
     sweep: Sweep  # of the primary level
     levels: tuple[Level, ...]  # every level the sweep bar(s) took, primary first
     choch: Choch
-    fvg: Fvg
+    fvg: Fvg | None  # None only for rule sets with fvg_required = false
 
     @property
     def primary(self) -> Level:
@@ -78,9 +78,9 @@ def detect(frames: dict[str, pd.DataFrame], p: Strategy) -> list[Pattern]:
         if choch is None:
             continue
         fvg = find_fvg(side, s, choch, p.fvg_min_size_atr)
-        if fvg is None:
+        if fvg is None and p.fvg_required:
             continue
-        key = (s.direction, s.extreme_idx, choch.idx, fvg.idx)
+        key = (s.direction, s.extreme_idx, choch.idx, fvg.idx if fvg else -1)
         groups.setdefault(key, []).append((s, choch, fvg))
     out = []
     for found in groups.values():
@@ -151,16 +151,16 @@ def table(patterns: list[Pattern], entry: pd.DataFrame) -> pd.DataFrame:
                 "extreme_idx": s.extreme_idx,
                 "choch_idx": c.idx,
                 "choch_ref_idx": c.ref_idx,
-                "fvg_idx": f.idx,
+                "fvg_idx": f.idx if f else -1,
                 "sweep_utc": ts.iloc[s.first_idx],
                 "choch_utc": ts.iloc[c.idx],
                 "extreme": s.extreme,
                 "choch_ref_price": c.ref_price,
-                "fvg_low": f.low,
-                "fvg_high": f.high,
+                "fvg_low": f.low if f else np.nan,
+                "fvg_high": f.high if f else np.nan,
                 "atr": s.atr,
                 "depth_atr": s.depth_atr,
-                "fvg_size_atr": f.size_atr,
+                "fvg_size_atr": f.size_atr if f else np.nan,
                 "bars_sweep_to_choch": c.idx - s.settled_idx,
                 "year": ts.iloc[c.idx].year,
             }
