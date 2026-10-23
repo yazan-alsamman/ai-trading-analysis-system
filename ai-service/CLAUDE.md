@@ -134,6 +134,8 @@ formula, 0.2 pip minimum and SL slippage). Development period, five instruments:
 mean net R -0.046 vs matched random E0 -0.063 (difference +0.017, 95% -0.10 to +0.13, p = 0.36):
 **H1 not supported on 2012-2017**; 53% of E1 trades end at the 48-bar horizon. P3 gate (1,000
 labelled, L1 pooled 1,634) passed on counts; the design also asks for E1 on walk-forward.
+Horizon trials 96 / 192 bars (Fadi, 2026-10-23): no edge either (p 0.46 / 0.60); horizon stays 48.
+Every performance look on 2012-2017 is logged in `docs/phase3/TRIALS.md` (5 trials so far).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
