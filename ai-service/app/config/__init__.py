@@ -72,6 +72,8 @@ class Strategy:
     skip_us_holidays: bool = False
     fvg_required: bool = True
     entry_mode: str = "fvg_limit"  # or "close": market entry at the decision bar's close
+    management: str = "none"  # or "signals": opposite signal exits, same-direction extends (L1-M)
+    max_hold_bars: int | None = None
 
 
 def _load(name: str) -> dict:

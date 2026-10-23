@@ -50,3 +50,14 @@ sweep_session = ["02:00", "16:00"]
 skip_us_holidays = true
 fvg_required = false                 # Sweep -> CHoCH is enough; an FVG, if any, is a feature
 entry_mode = "close"                 # market entry at the decision (CHoCH) bar's close
+
+# L1 with signal-based position management (Fadi, 2026-10-23; docs/MARKET_STRUCTURE_DEFINITIONS.md,
+# section L1-M). Same detection, entry, SL and TP as L1.
+[variants.L1-M]
+break_is_gap = true
+sweep_session = ["02:00", "16:00"]
+skip_us_holidays = true
+fvg_required = false
+entry_mode = "close"
+management = "signals"               # opposite signal closes, same-direction signal extends
+max_hold_bars = 192                  # cap from the entry, extensions included

@@ -13,9 +13,10 @@ P3 task 2 (`labels_XAUUSD_v1.md`, `labels_XAUUSD_V5-S.md`): 2 trials.
 | 3 | 2026-10-22 | Horizon 48 bars (12 h), the registered value | `baselines.md` | -0.046 | -0.063 | +0.017 (-0.095 to +0.125) | 0.36 | -0.072 | P3 task 4 |
 | 4 | 2026-10-23 | Horizon 96 bars (24 h) | `baselines_h96.md` | -0.066 | -0.069 | +0.003 (-0.123 to +0.124) | 0.46 | -0.063 | Fadi |
 | 5 | 2026-10-23 | Horizon 192 bars (48 h) | `baselines_h192.md` | -0.100 | -0.083 | -0.017 (-0.154 to +0.116) | 0.60 | -0.180 | Fadi |
+| 6 | 2026-10-23 | **L1-M**: L1 with signal-based position management (opposite signal exits, same-direction signal extends to 48 bars after it, cap 192; one position per instrument). Registered before the run (`MARKET_STRUCTURE_DEFINITIONS.md`, L1-M). Measured on development and walk-forward periods | `docs/phase4/L1-M.md` | pending | | | | | Fadi |
 
 Each E1 / E0 trial also reports E1s (V5-S) and E1 without same-bar patterns; those are read from
-the same run and are not counted as separate trials. Trials so far: **5**.
+the same run and are not counted as separate trials. Trials so far: **6**.
 
 ## Outcome mix of E1 by horizon
 

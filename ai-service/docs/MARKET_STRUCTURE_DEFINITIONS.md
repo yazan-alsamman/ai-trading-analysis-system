@@ -209,6 +209,50 @@ SL and TP as in the setup builder. Registered on 2026-10-22 for the P3 sample co
   largest remainder). AUDUSD has no bar before 2018 and is not covered. Same tool, same charts
   (ending two bars after the CHoCH), same criteria, with criterion 4 only when an FVG is shaded.
 
+### L1-M: L1 with signal-based position management (registered 2026-10-23, before any run)
+
+Requested by Fadi on 2026-10-23 after the P3 results (53% of L1 trades ended at the 48-bar
+horizon). Detection, entry, SL and TP are exactly L1's; only the exit and the position count
+change. A **signal** is a confirmed L1 pattern (sweep -> CHoCH) at its decision bar's close,
+whether or not its own setup is armed. Per instrument, bar by bar, everything decided with
+information available at that bar's close:
+
+1. **One position per instrument.** A new trade opens only when no position is open at the close
+   of the decision bar, from an armed setup (L1 entry rules), at that bar's close.
+2. **Intrabar exits first.** On each bar after the entry: a gap through the SL at the open, the
+   SL, then the TP (an ambiguous bar counts as SL), exactly as L1. SL or TP always beats the
+   rules below.
+3. **Opposite signal**: a confirmed signal in the other direction closes the position at its
+   decision bar's close, in profit or in loss (`opposite`). That signal may open a new trade at
+   the same close if its setup is armed. Signals in both directions on one bar close the position
+   and open nothing.
+4. **Same-direction signal**: no new position. The horizon becomes 48 bars after that signal's
+   decision bar, capped at 192 bars after the original entry (`max_hold_bars`). An extension is
+   applied at the close it becomes known, before the horizon exit of that same close, and never
+   earlier. Each extension is recorded.
+5. **Horizon**: otherwise the position closes at the close of its horizon bar (`timeout`), or
+   of bar 192 after the entry (`max_hold`).
+6. **Costs**: as L1 (round trip spread + max(50%, minimum) at the entry bar's spread; SL slippage
+   on SL exits). No separate commission (the extra cost stands for it). **Swap is not modelled**
+   (no swap data): the number of 17:00 New York rollovers each trade crosses is reported instead.
+   Sensitivity at 0x, 1x, 2x and 3x costs.
+
+**Outcomes kept**: exit reason (`tp`, `sl`, `opposite`, `timeout`, `max_hold`), gross and net R,
+bars held, extensions, rollovers. **Primary objective: net R per trade.** Binary targets are
+sensitivity analyses only, both reported: net R > 0, and net R >= +0.25R (+0.25R is about 3-6x
+the median round-trip cost of 0.04-0.09R, so a trade below it barely pays its costs and risk;
+fixed now, not tuned). The positive rate under any target is measured, not assumed.
+
+**E0 for L1-M**: the matched random entries of P3 task 4 (same instrument, year, New York hour,
+risk in ATR, TP rule, costs; seed 20261023, 200 replications), each managed by the same rules
+with the **real** L1 signal stream of its instrument (closed by an opposite real signal, extended
+by a same-direction one, same cap). Random trades do not interact with each other.
+
+**Comparison**: L1 and L1-M, E1 and E0, on the development period (2012-2017) and on the
+walk-forward period (2018 to 2024-06) separately, from the same frames (2012 to 2024-07-01). The
+secondary holdout and the lockbox are not loaded. No model is trained on L1-M before this
+comparison. Logged as trial 6 in `docs/phase3/TRIALS.md`.
+
 ### How the variants are decided (fixed now, before any variant is run)
 
 1. Every variant runs on **2012-2017 only** with the same code path and data; the walk-forward,
