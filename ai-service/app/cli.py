@@ -9,6 +9,7 @@
     python -m app setups build|label --rules V5-S  # P3 setups and labels, development period
     python -m app setups count --rules V5-S        # P3 sample counts (no performance)
     python -m app research baselines               # P3 E0 vs E1, development period
+    python -m app research walkforward             # P4 walk-forward folds, E1 on test windows
     python -m app features build                   # P4 setup features, walk-forward dataset
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
@@ -27,7 +28,7 @@ COMMANDS = {
     "dukascopy": "app.data.dukascopy",
     "smc": "app.smc.detector",
     "setups": "app.setups.builder",
-    "research": "app.research.baselines",
+    "research": "app.research.cli",
     "features": "app.features.setup_features",
 }
 

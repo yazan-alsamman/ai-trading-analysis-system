@@ -77,6 +77,15 @@ def test_usd_long_follows_the_base_currency() -> None:
     assert (t["usd_long"] == t["direction_buy"]).all()
 
 
+def test_tp_in_usd_on_the_smallest_lot() -> None:
+    gold = _table(_frames())
+    assert np.allclose(gold["tp_usd_min_lot"], (gold["tp"] - gold["entry"]).abs())  # 1 oz
+    jpy = _table(_frames(), symbol="USDJPY")  # 1,000 USD of a JPY-quoted pair: yen / price
+    assert np.allclose(
+        jpy["tp_usd_min_lot"], (jpy["tp"] - jpy["entry"]).abs() * 1000 / jpy["entry"]
+    )
+
+
 def test_features_never_change_when_bars_are_appended() -> None:
     full = _frames()
     whole = _table(full).set_index("setup_id")

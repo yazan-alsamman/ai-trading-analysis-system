@@ -29,6 +29,9 @@ Families (design §9.1):
 * **Volatility**: ``atr_pct`` (entry ATR percentile in the last 20 trading days),
   ``d1_atr_pct`` (D1 ATR percentile in the last 250 days).
 * **Instrument**: ``direction_buy``, ``usd_long`` (the trade is long USD), ``sym_<SYMBOL>``.
+* **Trade size** (Fadi, 2026-10-23): ``tp_usd_min_lot``, the profit in USD at the TP on the
+  smallest lot (0.01), converted at the decision close for a non-USD quote. The one feature in
+  dollars, on purpose: Fadi treats a target under about $3-4 at 0.01 lot as not worth a trade.
 
 Not yet: news timing (needs the historical calendar, open with Yazan), the encoder embedding
 (L5, P5), regime probabilities (L6, P5), cross-asset inputs (an ablation)."""
@@ -55,9 +58,20 @@ EMA_SPAN = 20
 SPREAD_DAYS = 20
 ATR_PCT_BARS = 20 * 96  # about 20 trading days of 15-minute bars
 D1_PCT_DAYS = 250
+MIN_LOT = 0.01
 ASIA = (20, 24)  # New York hours, the evening part of the trading day
 SYMBOLS = ("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD")
-ID_COLS = ["symbol", "setup_id", "decision_utc", "year", "direction"]
+ID_COLS = [
+    "symbol",
+    "setup_id",
+    "decision_utc",
+    "year",
+    "direction",
+    "entry",
+    "tp",
+    "risk",
+    "spread",
+]
 TARGETS = ["y", "net_r", "net_r_2x", "gross_r", "reason", "exit_utc"]
 
 
@@ -193,6 +207,11 @@ def features(frames: dict[str, pd.DataFrame], setups: pd.DataFrame, symbol: str,
         d1_pct[ok] = pct[i[ok]]
     f["d1_atr_pct"] = d1_pct
 
+    inst = instruments()[symbol]
+    usd = np.abs(setups["tp"].to_numpy(float) - setups["entry"].to_numpy(float))
+    usd = usd * inst.contract_size * MIN_LOT
+    f["tp_usd_min_lot"] = usd if inst.quote_currency == "USD" else usd / close
+
     f["direction_buy"] = (sign > 0).astype(float)
     usd_base = symbol.startswith("USD")
     f["usd_long"] = ((sign > 0) == usd_base).astype(float)
@@ -206,7 +225,7 @@ FEATURES = [
     "tgt_pd", "has_fvg", "fvg_size_atr", "bars_sweep_to_choch", "displacement_atr",
     "choch_margin_atr", "trend_1h", "trend_4h", "trend_d1", "pd_pos", "asia_range_atr",
     "asia_pos", "hour_sin", "hour_cos", "dow", "london_kz", "ny_kz", "spread_r", "spread_atr",
-    "spread_vs_hour", "atr_pct", "d1_atr_pct", "direction_buy", "usd_long",
+    "spread_vs_hour", "atr_pct", "d1_atr_pct", "tp_usd_min_lot", "direction_buy", "usd_long",
     *[f"sym_{s}" for s in SYMBOLS],
 ]  # fmt: skip
 

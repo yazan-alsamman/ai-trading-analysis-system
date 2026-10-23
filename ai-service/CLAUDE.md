@@ -143,6 +143,14 @@ six instruments, 2012 to 2024-06, 37 scale-free features, no-look-ahead test. FX
 (AUDUSD 2018). Found: EURUSD recorded spread is zero on 54-63% of bars in 2021-2023 (other pairs
 much lower then too), so costs there are understated; 4 patterns span a weekend (sweep Friday,
 CHoCH Sunday evening); news timing not available yet.
+Costs (Fadi, 2026-10-23): no spread floor; the cost model stays (median total cost 0.04-0.05R on FX,
+0.09R on gold); feature `tp_usd_min_lot` added (Fadi: a target under $3-4 at 0.01 lot is no trade).
+**Rules frozen (L1, 2026-10-23).** Task 2 (walk-forward protocol: `python -m app research
+walkforward`, `app/research/walkforward.py`) done: 13 six-month test windows 2018-01 to 2024-06,
+expanding train from 2012, purge + 1-day embargo by exit time, last 25% of train as the calibration
+slice (Platt or isotonic by Brier), Brier skill vs the train base rate, ECE (10 bins). E1 on the
+walk-forward test windows: 1,058 trades, TP 11.1%, mean net R -0.047 (95% -0.115 to +0.020).
+Next: task 3, models E2 (LR), E3 (LightGBM), E4 (MLP), EV filter vs E1, SHAP.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

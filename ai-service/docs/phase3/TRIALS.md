@@ -32,3 +32,13 @@ going from 48 to 192 bars, TP rises by 15 points and SL by 27. E1 stays within t
 matched random entries at every horizon (p 0.36 / 0.46 / 0.60), and the TP rate is about
 1.5 points above E0 at each horizon. So the horizon was not hiding an edge. **The registered
 horizon (48) stays**; no parameter was changed by these trials.
+
+## Measurements of the frozen rules (not trials)
+
+The rules (L1, `strategy.toml`) were frozen on 2026-10-23, before P4. Measuring them on later
+periods chooses nothing, so it is not a trial; any change to them after this date is a new
+version and a new trial.
+
+| Date | Measurement | Report | Result |
+| --- | --- | --- | --- |
+| 2026-10-23 | E1 on the 13 walk-forward test windows (2018-01 to 2024-06) | `docs/phase4/walkforward_L1.md` | 1,058 trades, TP 11.1%, mean net R -0.047 (95% weekly block -0.115 to +0.020) |
