@@ -136,6 +136,13 @@ mean net R -0.046 vs matched random E0 -0.063 (difference +0.017, 95% -0.10 to +
 labelled, L1 pooled 1,634) passed on counts; the design also asks for E1 on walk-forward.
 Horizon trials 96 / 192 bars (Fadi, 2026-10-23): no edge either (p 0.46 / 0.60); horizon stays 48.
 Every performance look on 2012-2017 is logged in `docs/phase3/TRIALS.md` (5 trials so far).
+P4 started (2026-10-23, branch `ai/p4-meta-model`, stacked on #55). Label as the design (§9.2): y = 1 for TP
+first, 0 for SL or horizon; realised R kept. Task 1 (L4 features and dataset: `python -m app features
+build`, `app/features/setup_features.py`, `docs/phase4/dataset_L1.md`) done: 1,436 labelled L1 setups,
+six instruments, 2012 to 2024-06, 37 scale-free features, no-look-ahead test. FX data start 2016
+(AUDUSD 2018). Found: EURUSD recorded spread is zero on 54-63% of bars in 2021-2023 (other pairs
+much lower then too), so costs there are understated; 4 patterns span a weekend (sweep Friday,
+CHoCH Sunday evening); news timing not available yet.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

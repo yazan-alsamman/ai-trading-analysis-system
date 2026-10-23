@@ -29,9 +29,12 @@ GATE = 1000
 START = pd.Timestamp("2012-01-01", tz="UTC")  # XAUUSD before 2011-08 is on a shifted clock
 
 
-def history_frames(symbol: str, p: Strategy, store: Path = STORE) -> dict[str, pd.DataFrame]:
-    """All bars from 2012 to the lockbox start (the store holds nothing later)."""
-    end = pd.Timestamp(splits().lockbox_start, tz="UTC")
+def history_frames(
+    symbol: str, p: Strategy, store: Path = STORE, end: pd.Timestamp | None = None
+) -> dict[str, pd.DataFrame]:
+    """All bars from 2012 that closed by ``end`` (default: the lockbox start; the store holds
+    nothing later)."""
+    end = pd.Timestamp(splits().lockbox_start, tz="UTC") if end is None else end
     frames = {
         k: v[v["ts_utc"] >= START].reset_index(drop=True)
         for k, v in load_frames(symbol, end, store).items()

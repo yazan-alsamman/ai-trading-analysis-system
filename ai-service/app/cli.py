@@ -9,6 +9,7 @@
     python -m app setups build|label --rules V5-S  # P3 setups and labels, development period
     python -m app setups count --rules V5-S        # P3 sample counts (no performance)
     python -m app research baselines               # P3 E0 vs E1, development period
+    python -m app features build                   # P4 setup features, walk-forward dataset
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -27,6 +28,7 @@ COMMANDS = {
     "smc": "app.smc.detector",
     "setups": "app.setups.builder",
     "research": "app.research.baselines",
+    "features": "app.features.setup_features",
 }
 
 
