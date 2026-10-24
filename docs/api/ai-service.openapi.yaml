@@ -1,18 +1,25 @@
 openapi: 3.1.0
 info:
   title: ai-service (stateless trading engine)
-  version: 0.1.0-draft
+  version: 0.2.0
   description: "The stateless trading engine (ai-service, owned by Fadi). The backend owns the data,\n\
-    the schedule, the storage and the delivery; ai-service decides setups and their states.\n\n**Draft**:\
-    \ this contract is not final until Fadi approves it. The open points are listed in\ndocs/ai-contract.md.\
-    \ Generated from backend/app/ai/contract.py by\nbackend/scripts/ai_contract.py (do not edit by hand).\n\
-    \n- Every timestamp is UTC, ISO-8601 with `Z`. Every bar is closed; `ts` is its open time.\n- `request_id`\
-    \ is deterministic (`{instrument lower}-{profile}-{bar_close_ts}`): the same\n  request gives the\
-    \ same result, and a retry always sends the same body.\n- `setup_id` is deterministic and chosen by\
-    \ ai-service; `open_setups` echoes setups exactly as\n  last returned.\n- Responses may carry fields\
-    \ this document does not list (the backend ignores them).\n- 422: the request does not match the contract\
-    \ (never retried). 5xx, timeouts and connection\n  errors are retried by the backend with the same\
-    \ body.\n"
+    the schedule, the storage and the delivery; ai-service decides setups and their states.\n\n**Version\
+    \ 0.2.0**: Fadi's answers to the 17 open points of 0.1.0-draft are applied\n(docs/ai-contract.md,\
+    \ section 7). `/v1` changes only by adding fields; `info.version` follows\nsemver; ai-service reports\
+    \ its versions in every answer and in `/health`. Generated from\nbackend/app/ai/contract.py by backend/scripts/ai_contract.py\
+    \ (do not edit by hand).\n\n- Every timestamp is UTC, ISO-8601 with `Z`. Every bar is closed; `ts`\
+    \ is its open time.\n  `1d` bars are New York trading days: 17:00 to 17:00 America/New_York (DST-aware).\n\
+    - The decision bar (the last bar of the smallest timeframe) always has a `spread`; without\n  one\
+    \ the backend does not call ai-service.\n- `request_id` is deterministic (`{instrument lower}-{profile}-{bar_close_ts}`):\
+    \ the same\n  body gives a byte-identical response, and a retry always sends the same body.\n- `setup_id`\
+    \ is deterministic and chosen by ai-service; `open_setups` echoes setups exactly as\n  last returned.\
+    \ A response carries the current state of every setup in `new_setups` and its\n  full history in `transitions`\
+    \ (the backend dedupes by `(setup_id, to, at)`; a state never\n  goes backwards).\n- Transitions:\
+    \ DEVELOPING -> ARMED -> ACTIVE -> CLOSED; DEVELOPING or ARMED -> EXPIRED or\n  INVALIDATED. ARMED\
+    \ and ACTIVE may share an `at`.\n- `grade` is A-D and always null in v1. Money is USD only in v1.\n\
+    - Responses may carry fields this document does not list (the backend ignores them).\n- 422: the request\
+    \ does not match the contract (never retried). 5xx, timeouts and connection\n  errors are retried\
+    \ by the backend with the same body. No model: 200 with\n  `status: model_unavailable`.\n"
 servers:
 - url: http://ai-service:8001
   description: inside the compose network
@@ -88,6 +95,19 @@ paths:
                       l: 2386.3
                       c: 2392.4
                       spread: null
+                    1d:
+                    - ts: '2026-10-14T21:00:00Z'
+                      o: 2361.8
+                      h: 2378.5
+                      l: 2356.2
+                      c: 2374.1
+                      spread: null
+                    - ts: '2026-10-15T21:00:00Z'
+                      o: 2374.1
+                      h: 2383.9
+                      l: 2369.4
+                      c: 2380.7
+                      spread: null
                   open_setups:
                   - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
                     state: ACTIVE
@@ -99,9 +119,10 @@ paths:
                     probability: 0.55
                     ev_r: 0.65
                     ev_r_lower: 0.2
-                    grade: B
+                    grade: null
                     valid_until: '2026-10-19T10:30:00Z'
                     horizon_until: '2026-10-19T17:30:00Z'
+                    created_at: '2026-10-19T09:30:00Z'
                     evidence:
                       trend_4h: up
                       pullback_to: ema50_1h
@@ -165,9 +186,10 @@ paths:
                       probability: 0.58
                       ev_r: 0.74
                       ev_r_lower: 0.31
-                      grade: B
+                      grade: null
                       valid_until: '2026-10-19T15:15:00Z'
                       horizon_until: '2026-10-19T20:15:00Z'
+                      created_at: '2026-10-19T14:15:00Z'
                       evidence:
                         trend_4h: up
                         breakout: range_high_1h
@@ -176,16 +198,57 @@ paths:
                         atr_15m: 2.4
                         rsi_15m: 58.2
                         spread_pts: 26
+                    - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                      state: CLOSED
+                      direction: buy
+                      entry: 2390.0
+                      sl: 2386.0
+                      tp: 2398.0
+                      r_multiple: 2.0
+                      probability: 0.55
+                      ev_r: 0.65
+                      ev_r_lower: 0.2
+                      grade: null
+                      valid_until: '2026-10-19T10:30:00Z'
+                      horizon_until: '2026-10-19T17:30:00Z'
+                      created_at: '2026-10-19T09:30:00Z'
+                      evidence:
+                        trend_4h: up
+                        pullback_to: ema50_1h
+                      features:
+                        atr_15m: 2.1
+                        rsi_15m: 41.3
                     transitions:
+                    - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                      from: DEVELOPING
+                      to: ARMED
+                      at: '2026-10-19T09:30:00Z'
+                      reason: trigger
+                      realized_r: null
+                    - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                      from: ARMED
+                      to: ACTIVE
+                      at: '2026-10-19T09:37:00Z'
+                      reason: entry_filled
+                      realized_r: null
                     - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
                       from: ACTIVE
                       to: CLOSED
                       at: '2026-10-19T14:07:00Z'
                       reason: tp_hit
                       realized_r: 2.0
+                    - setup_id: xauusd-intraday-2026-10-19T14:15:00Z-buy
+                      from: DEVELOPING
+                      to: ARMED
+                      at: '2026-10-19T14:15:00Z'
+                      reason: trigger
+                      realized_r: null
                     abstentions:
                     - reason: weak_edge
-                      detail: 'sell side: ev_r_lower -0.12 below 0'
+                      detail:
+                        side: sell
+                        ev_r_lower: -0.12
+                        threshold: 0.0
                 model_unavailable:
                   value:
                     request_id: xauusd-intraday-2026-10-19T14:15:00Z
@@ -198,7 +261,8 @@ paths:
                     transitions: []
                     abstentions:
                     - reason: model_unavailable
-                      detail: no model is loaded
+                      detail:
+                        message: no model is loaded
         '422': &id002
           description: The request does not match the contract (FastAPI style; never retried)
           content:
@@ -233,9 +297,10 @@ paths:
                     probability: 0.58
                     ev_r: 0.74
                     ev_r_lower: 0.31
-                    grade: B
+                    grade: null
                     valid_until: '2026-10-19T15:15:00Z'
                     horizon_until: '2026-10-19T20:15:00Z'
+                    created_at: '2026-10-19T14:15:00Z'
                     evidence:
                       trend_4h: up
                       breakout: range_high_1h
@@ -305,9 +370,10 @@ paths:
                     probability: 0.58
                     ev_r: 0.74
                     ev_r_lower: 0.31
-                    grade: B
+                    grade: null
                     valid_until: '2026-10-19T15:15:00Z'
                     horizon_until: '2026-10-19T20:15:00Z'
+                    created_at: '2026-10-19T14:15:00Z'
                     evidence:
                       trend_4h: up
                       breakout: range_high_1h
@@ -327,8 +393,8 @@ paths:
               examples:
                 arabic:
                   value:
-                    text: 'إعداد شراء على الذهب (XAU/USD) بتقييم B: الدخول عند 2400.00، وقف الخسارة 2395.00،
-                      والهدف 2410.00 (عائد 2R). الاتجاه على فريم 4 ساعات صاعد والسعر اخترق أعلى نطاق الساعة.
+                    text: 'إعداد شراء على الذهب (XAU/USD): الدخول عند 2400.00، وقف الخسارة 2395.00، والهدف
+                      2410.00 (عائد 2R). الاتجاه على فريم 4 ساعات صاعد والسعر اخترق أعلى نطاق الساعة.
                       احتمال بلوغ الهدف أولاً 58% والقيمة المتوقعة 0.74R. الإعداد صالح حتى 15:15 بتوقيت
                       UTC، ولا أخبار عالية التأثير قبل 17:00.'
                     verified: true
@@ -357,13 +423,10 @@ components:
           title: Reason
           type: string
         detail:
-          anyOf:
-          - type: string
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          default: null
+          additionalProperties: true
+          description: an object (Fadi, point 14)
           title: Detail
+          type: object
       required:
       - reason
       title: Abstention
@@ -422,7 +485,8 @@ components:
             type: number
           - type: 'null'
           default: null
-          description: average spread over the bar, in price units (XAU/USD 0.25)
+          description: 'average spread over the bar, in price units (XAU/USD 0.25). The decision bar (the
+            last bar of the smallest timeframe) always has one: without it the backend does not call ai-service'
           title: Spread
       required:
       - ts
@@ -512,7 +576,9 @@ components:
       additionalProperties: false
       description: 'Evaluate the bar that closed at ``bar_close_ts``. Every bar is closed; the smallest
 
-        timeframe ends exactly at ``bar_close_ts`` (its last bar is the one just closed).'
+        timeframe ends exactly at ``bar_close_ts`` (its last bar is the one just closed, the
+
+        decision bar, which has a spread). ``1d`` bars open at 17:00 America/New_York.'
       properties:
         request_id:
           description: 'deterministic: {instrument lower}-{profile}-{bar_close_ts}'
@@ -544,7 +610,8 @@ components:
             maxItems: 5000
             minItems: 1
             type: array
-          description: 'timeframe -> bars, oldest first (defaults: 500 x 15m, 500 x 1h, 300 x 4h)'
+          description: 'timeframe -> bars, oldest first (defaults: 2000 x 15m, 500 x 1h, 300 x 4h, 260
+            x 1d; fewer when the history is shorter)'
           propertyNames:
             enum:
             - 1m
@@ -581,6 +648,14 @@ components:
       title: EvaluateRequest
       type: object
     EvaluateResponse:
+      description: '``new_setups`` carries the **current state** of every setup ai-service knows about,
+        and
+
+        ``transitions`` the **full history** of their state changes (Fadi, point 10): the backend
+
+        dedupes by ``(setup_id, to, at)``. The same body gives a byte-identical response (point
+
+        16). ``status`` ``model_unavailable`` is a 200, not a 503 (point 8).'
       properties:
         request_id:
           title: Request Id
@@ -634,6 +709,9 @@ components:
       title: ExplainRequest
       type: object
     ExplainResponse:
+      description: 'Shown to a user only when ``verified`` or ``template_used`` (the fixed template filled
+
+        with the setup''s own numbers); otherwise the explanation is unavailable (Fadi, extra 5).'
       properties:
         text:
           minLength: 1
@@ -644,7 +722,7 @@ components:
           title: Verified
           type: boolean
         template_used:
-          description: 'proposal: true when a fixed template was used'
+          description: true when the fixed template was used
           title: Template Used
           type: boolean
       required:
@@ -654,7 +732,10 @@ components:
       title: ExplainResponse
       type: object
     Grade:
-      description: 'Proposal (to agree with Fadi): A best .. D worst.'
+      description: 'A best .. D worst (Fadi, point 1). **Always null in v1**: no model has passed the
+        gate
+
+        yet, so every reader (API, UI, alerts) must handle a null grade.'
       enum:
       - A
       - B
@@ -679,9 +760,11 @@ components:
       type: object
     InstrumentSpec:
       additionalProperties: false
-      description: 'Contract specs (B4, docs/instruments.md). Proposal: sent with every evaluate so prices
+      description: 'Contract specs (B4, docs/instruments.md), sent with every evaluate and size request
 
-        can be rounded to ``tick_size``, and with every size request.'
+        (Fadi, point 2). Prices are rounded to ``tick_size``: the stop **away from** the entry, the
+
+        target **toward** it (the backend uses the same rule wherever it rounds a price).'
       properties:
         contract_size:
           description: 'units per 1.0 lot (XAU/USD: 100 oz)'
@@ -727,7 +810,7 @@ components:
             type: string
           - type: 'null'
           default: null
-          description: 'proposal: currency of the P&L per price unit (XAU/USD: USD)'
+          description: 'currency of the P&L per price unit (XAU/USD: USD)'
           title: Quote Currency
         margin_rate:
           anyOf:
@@ -736,7 +819,8 @@ components:
             type: number
           - type: 'null'
           default: null
-          description: 'proposal: margin fraction of notional at 1:1; null = leverage'
+          description: 'margin as a fraction of notional; margin = notional in USD x max(margin_rate,
+            1 / leverage); null: 1 / leverage'
           title: Margin Rate
       required:
       - contract_size
@@ -749,6 +833,9 @@ components:
       type: object
     RiskSettings:
       additionalProperties: false
+      description: '``daily_loss_limit_pct`` and ``max_drawdown_pct`` are optional (Fadi, point 15): the
+
+        backend applies both guards itself before calling ``/v1/size`` (B10).'
       properties:
         risk_per_trade_pct:
           exclusiveMinimum: 0
@@ -756,19 +843,23 @@ components:
           title: Risk Per Trade Pct
           type: number
         daily_loss_limit_pct:
-          exclusiveMinimum: 0
-          maximum: 100
+          anyOf:
+          - exclusiveMinimum: 0
+            maximum: 100
+            type: number
+          - type: 'null'
+          default: null
           title: Daily Loss Limit Pct
-          type: number
         max_drawdown_pct:
-          exclusiveMinimum: 0
-          maximum: 100
+          anyOf:
+          - exclusiveMinimum: 0
+            maximum: 100
+            type: number
+          - type: 'null'
+          default: null
           title: Max Drawdown Pct
-          type: number
       required:
       - risk_per_trade_pct
-      - daily_loss_limit_pct
-      - max_drawdown_pct
       title: RiskSettings
       type: object
     Setup:
@@ -847,6 +938,7 @@ components:
           - $ref: '#/components/schemas/Grade'
           - type: 'null'
           default: null
+          description: A best .. D; always null in v1
         valid_until:
           anyOf:
           - format: date-time
@@ -863,6 +955,15 @@ components:
           default: null
           description: trade horizon end
           title: Horizon Until
+        created_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          default: null
+          description: close of the bar where the setup became known as DEVELOPING (the time of its first
+            event); optional until ai-service sends it
+          title: Created At
         evidence:
           additionalProperties: true
           title: Evidence
@@ -906,6 +1007,9 @@ components:
       title: SizeRequest
       type: object
     SizeResponse:
+      description: 'Money is USD only in v1 (Fadi, point 3): ``risk_usd`` is always USD, ai-service converts
+
+        from the quote currency (e.g. JPY) itself.'
       properties:
         lots:
           minimum: 0
@@ -974,6 +1078,9 @@ components:
       title: Transition
       type: object
     Versions:
+      description: 'Always present: ``strategy`` and ``features``. ``model`` is null only with
+
+        ``model_unavailable`` (Fadi, point 12).'
       properties:
         strategy:
           maxLength: 64
@@ -985,7 +1092,7 @@ components:
             type: string
           - type: 'null'
           default: null
-          description: 'null: no model loaded'
+          description: null only with status model_unavailable
           title: Model
         features:
           maxLength: 64

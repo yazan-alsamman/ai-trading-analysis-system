@@ -586,7 +586,7 @@ A setup sized for one user (B10, ``app/ai/sizing.py``): by ai-service ``/v1/size
 - PK `pk` (setup_id, user_id)
 - FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
 - FK (user_id) → users (id) ON DELETE CASCADE
-- CHECK `ck_ai_setup_sizes_source`: `source IN ('ai-service', 'local')`
+- CHECK `ck_ai_setup_sizes_source`: `source IN ('remote', 'local')`
 
 ### `ai_setup_takes`
 
@@ -688,6 +688,37 @@ A user wants ARMED alerts of an instrument and profile (B11), optionally only fr
 **Indexes**
 
 - `ix_ai_alert_follows_market` (ai_alert_follows.instrument_id, ai_alert_follows.profile)
+
+### `ai_evaluation_runs`
+
+One ``ai.evaluate`` run (B9, ``app/ai/evaluate.py``) of an instrument, profile and bar: what happened (``status``: ok, abstained, skipped, unavailable, contract_error, error), why (``reason``), the request size and bar coverage, and a summary of the answer (or of the local abstention when ai-service was not called). Read by ``/admin/system/status``.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | bigint | no | `Identity()` | PK |
+| `instrument_id` | uuid | no |  | FK |
+| `profile` | varchar(32) | no |  |  |
+| `bar_close_ts` | timestamp with time zone | no |  |  |
+| `request_id` | varchar(160) | no |  |  |
+| `status` | varchar(24) | no |  |  |
+| `reason` | varchar(64) | yes |  |  |
+| `request_bytes` | integer | yes |  |  |
+| `coverage` | jsonb | no | `'{}'::jsonb` |  |
+| `detail` | jsonb | no | `'{}'::jsonb` |  |
+| `duration_ms` | integer | yes |  |  |
+| `started_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `finished_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
+- CHECK `ck_ai_evaluation_runs_status`: `status IN ('ok', 'abstained', 'skipped', 'unavailable', 'contract_error', 'error')`
+- UNIQUE `uq_ai_evaluation_runs_key` (instrument_id, profile, bar_close_ts)
+
+**Indexes**
+
+- `ix_ai_evaluation_runs_finished` (ai_evaluation_runs.finished_at)
 
 ## Workspaces
 

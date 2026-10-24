@@ -352,10 +352,15 @@ A follower who did not take a setup hears nothing after ARMED.
 **Explanation (ARMED only):**
 - ai-service `/v1/explain` is asked once per language the recipients use (`AI_EXPLAIN_LANGS`:
   `ar`, `en`), with an 8 s timeout and one attempt.
-- The answer is stored in `ai_setup_explanations` and reused.
+- Usually `ai.explain` (B9) has already stored it right after the evaluation; the alert reuses
+  what is stored.
 - If ai-service is unavailable or answers 404, the alert goes out with the template text only.
   The explanation is not retried, and the rest of that run stops asking.
-- An answer with `verified: false` is stored and logged, but never sent.
+- Fadi's rule (B9, docs/ai-contract.md#9-explanations): a `verified` answer is sent; a
+  `verified: false` answer with `template_used: true` sends the template text; any other
+  answer is **not stored and never sent**. Without an explanation the data says
+  `explanation_status: "unavailable"` and the text adds "الشرح غير متاح" / "Explanation
+  unavailable". The grade line is left out while the grade is null (always in v1).
 
 ### Live view
 

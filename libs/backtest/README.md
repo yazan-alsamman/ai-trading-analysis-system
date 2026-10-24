@@ -43,7 +43,8 @@ Give `backtest()` enough bars before `start` for the strategy's warm-up
 
 | Field | Default | |
 |---|---|---|
-| `initial_capital` | 10,000 | quote currency |
+| `initial_capital` | 10,000 | quote currency (account currency with `conversion`) |
+| `conversion` | none | the account currency is not the quote currency: `{"type": "inverse_price"}` (account = base, e.g. USD on USD/JPY) or `{"type": "fixed", "rate": r}`; money results are then in the account currency |
 | `fee_bps` | 10 | per side, of the fill's notional (0.10 %, Binance spot) |
 | `slippage_bps` | 5 | against you on every fill |
 | `direction` | `long_only` | `long_only`: sells only close longs. `long_short`: a sell opens a short, a buy closes it; an opposite signal reverses |
