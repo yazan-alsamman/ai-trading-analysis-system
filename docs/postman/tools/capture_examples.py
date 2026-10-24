@@ -65,7 +65,7 @@ import asyncio, json
 from datetime import timedelta
 from pathlib import Path
 from sqlalchemy import select, text
-from app.ai import contract as c, store
+from app.ai import contract as c, explain, store
 from app.db.session import SessionLocal
 from app.models.instrument import Instrument
 
@@ -110,6 +110,10 @@ async def main():
             {"id": setup_id},
         )
         await session.commit()
+        # its Arabic explanation (the contract's example, verified) for AI setup explanation
+        await explain.store_answer(
+            session, setup_id, "ar", c.ExplainResponse.model_validate(load("explain-response"))
+        )
         print(first.inserted, second.transitions_applied)
 
 
@@ -420,7 +424,8 @@ class Runner:
     def seed_ai_setup(self) -> None:
         """An AI setup with two events for the Admin → AI examples: the contract's example
         evaluate response, then the setup going ARMED → ACTIVE (in-process, like the worker),
-        and its ACTIVE alert marked failed so the outbox retry has a row to retry."""
+        its ACTIVE alert marked failed so the outbox retry has a row to retry, and its
+        Arabic explanation."""
         out = subprocess.run(
             [sys.executable, "-c", SEED_AI_SETUP], cwd=BACKEND, capture_output=True, text=True
         )

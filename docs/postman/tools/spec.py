@@ -1058,7 +1058,8 @@ FOLDERS: list[Folder] = [
                 "GET",
                 "/ai/setups/:setup_id/size",
                 "The setup sized for your account: by ai-service `/v1/size` or, when it is not "
-                "available, by the backend (`source`: `ai-service` or `local`). The daily-loss "
+                "available, by the backend (`source`: `remote` or `local`; a local size always has a "
+                "warning saying so). The daily-loss "
                 "and drawdown guards of your taken trades apply first. Returns `lots`, "
                 "`risk_amount`, `margin_required`, `feasible`, `warnings`, the `inputs` used "
                 "(with their `sources`) and whether you `taken` it. Stored and reused while the "
@@ -1074,6 +1075,38 @@ FOLDERS: list[Folder] = [
                         404,
                         path_vars={"setup_id": "unknown-setup"},
                     )
+                ],
+            ),
+            Req(
+                "ai_setup_explanation",
+                "AI setup explanation",
+                "GET",
+                "/ai/setups/:setup_id/explanation",
+                "The setup explained in `lang` (`ar` or `en`, default `en`), only when it may be "
+                "shown: verified by ai-service against the setup's numbers "
+                "(`explanation_status`: `verified`) or the fixed template filled with them "
+                "(`template`). Otherwise `explanation` is null and `explanation_status` is "
+                '`unavailable`: show "الشرح غير متاح" / "Explanation unavailable". No '
+                "unverified number ever reaches a user. 404 unknown setup.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                query=[("lang", "ar", "ar or en (default en)")],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[
+                    Variant(
+                        "200 Unavailable (no shown explanation in English)",
+                        200,
+                        query={"lang": "en"},
+                    ),
+                    Variant(
+                        "422 Unknown language",
+                        422,
+                        query={"lang": "fr"},
+                    ),
+                    Variant(
+                        "404 Setup not found",
+                        404,
+                        path_vars={"setup_id": "unknown-setup"},
+                    ),
                 ],
             ),
             Req(
@@ -3426,7 +3459,10 @@ FOLDERS: list[Folder] = [
                         "data-quality report of every monitored instrument (`data_quality`), "
                         "the economic-calendar refresh (`calendar`: last success, last error, "
                         "back-off, stored rows), the AI alert outbox (`ai_alerts`: rows per "
-                        "status, oldest pending in seconds), "
+                        "status, oldest pending in seconds), the periodic AI evaluation "
+                        "(`ai_evaluate`: enabled, the last run of every instrument and profile "
+                        "with status, reason, duration, request size and bars sent, counts of "
+                        "the last 24 h, the last contract error), "
                         "WebSocket "
                         "clients summed over every API process (each reports every 30 s), "
                         "notification channels, unhandled errors in "
