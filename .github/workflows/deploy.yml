@@ -115,7 +115,24 @@ jobs:
           # docs/https.md)
           ssh vps 'mkdir -p /opt/trading/host-nginx'
           scp infra/host-nginx/* vps:/opt/trading/host-nginx/
-          scp .env.example infra/deploy/remote-deploy.sh infra/deploy/backup.sh vps:/opt/trading/
+          scp .env.example infra/deploy/remote-deploy.sh infra/deploy/backup.sh \
+            infra/deploy/set-env-secrets.sh vps:/opt/trading/
+      - name: cTrader app credentials into .env (only when missing or empty; never printed)
+        # B1 (docs/ctrader-feed.md). The values go over SSH on stdin, never in argv or the log;
+        # a key that already has a value on the server is kept. No secrets in GitHub: skipped.
+        env:
+          CTRADER_CLIENT_ID: ${{ secrets.CTRADER_CLIENT_ID }}
+          CTRADER_CLIENT_SECRET: ${{ secrets.CTRADER_CLIENT_SECRET }}
+        run: |
+          if [ -z "$CTRADER_CLIENT_ID" ] || [ -z "$CTRADER_CLIENT_SECRET" ]; then
+            echo "cTrader secrets are not set in GitHub: skipped"
+            exit 0
+          fi
+          echo "::add-mask::$CTRADER_CLIENT_ID"
+          echo "::add-mask::$CTRADER_CLIENT_SECRET"
+          printf 'CTRADER_CLIENT_ID=%s\nCTRADER_CLIENT_SECRET=%s\n' \
+            "$CTRADER_CLIENT_ID" "$CTRADER_CLIENT_SECRET" \
+            | ssh vps 'bash /opt/trading/set-env-secrets.sh'
       - name: Pull images and restart the trading stack
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | ssh vps 'docker login ghcr.io -u ${{ github.actor }} --password-stdin'

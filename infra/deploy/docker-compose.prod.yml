@@ -113,6 +113,18 @@ services:
     mem_limit: 128m
     cpus: 0.25
 
+  # B1: XAU/USD quotes from the cTrader Open API into 1m bars (docs/ctrader-feed.md). Idles
+  # (logs once an hour) until CTRADER_ENABLED=true and an account is linked; never crash-loops.
+  # No port: it only makes an outbound WebSocket connection.
+  feed-ctrader:
+    <<: *backend
+    command: python -m app.feeds.ctrader
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 128m
+    cpus: 0.25
+
   ai-service:
     image: ${AI_IMAGE:-ghcr.io/yazan-alsamman/ai-trading-ai-service}:${IMAGE_TAG:?}
     restart: unless-stopped
