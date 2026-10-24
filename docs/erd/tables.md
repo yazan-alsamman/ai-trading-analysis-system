@@ -16,6 +16,7 @@ An account: login e-mail, Argon2 password hash and one of four roles (trader, an
 | `full_name` | varchar(200) | yes |  |  |
 | `role` | enum user_role (trader, analyst, expert, admin) | no | `trader` |  |
 | `is_active` | boolean | no | `true` |  |
+| `sessions_revoked_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `now()` |  |
 | `updated_at` | timestamp with time zone | no | `now()` |  |
 
@@ -41,6 +42,7 @@ One row per issued refresh token; ``id`` is the token's ``jti`` claim.
 | `created_at` | timestamp with time zone | no | `now()` |  |
 | `revoked_at` | timestamp with time zone | yes |  |  |
 | `replaced_by` | uuid | yes |  |  |
+| `family_id` | uuid | yes |  |  |
 
 **Constraints**
 
@@ -49,6 +51,7 @@ One row per issued refresh token; ``id`` is the token's ``jti`` claim.
 
 **Indexes**
 
+- `ix_refresh_tokens_family_id` (refresh_tokens.family_id)
 - `ix_refresh_tokens_user_id` (refresh_tokens.user_id)
 
 ### `api_keys`

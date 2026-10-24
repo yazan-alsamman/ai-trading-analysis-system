@@ -79,7 +79,7 @@ INACTIVE_INSTRUMENT = "inactive_instrument"
 FORBIDDEN = "forbidden"
 TOO_MANY_SUBSCRIPTIONS = "too_many_subscriptions"
 TOKEN_EXPIRED = "token_expired"
-AUTH_REVOKED = "auth_revoked"  # API key revoked/expired/lost "stream", user deactivated
+AUTH_REVOKED = "auth_revoked"  # key revoked/expired/no "stream", user gone, session ended
 UNAVAILABLE = "unavailable"
 
 
