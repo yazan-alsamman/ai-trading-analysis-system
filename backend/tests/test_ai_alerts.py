@@ -61,6 +61,7 @@ class FakeAI:
         self.calls: list[tuple[str, dict]] = []
         self.explain_status = 200
         self.verified = True
+        self.template_used = False
         self.size_status = 200
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -73,7 +74,8 @@ class FakeAI:
                 return httpx.Response(self.explain_status, json={"detail": "nope"})
             text = EXPLAINED[body["lang"]]
             return httpx.Response(
-                200, json={"text": text, "verified": self.verified, "template_used": False}
+                200,
+                json={"text": text, "verified": self.verified, "template_used": self.template_used},
             )
         if self.size_status != 200:
             return httpx.Response(self.size_status, json={"detail": "nope"})
@@ -255,7 +257,7 @@ async def test_armed_goes_to_matching_followers(
     assert (data["entry"], data["sl"], data["tp"]) == (2400.0, 2395.0, 2410.0)
     assert data["size"] == {
         "lots": 0.04, "risk_amount": 20.0, "currency": "USD", "margin_required": 96.0,
-        "feasible": True, "warnings": [], "source": "ai-service",
+        "feasible": True, "warnings": [], "source": "remote",
     }  # fmt: skip
     assert data["explanation"] == EXPLAINED["ar"]  # the user's language
     assert note.title == "إعداد شراء على XAU/USD: الدخول 2,400.00"
@@ -513,8 +515,17 @@ async def test_explain_unavailable_or_unverified(
     await dispatch(session_factory, redis_client, fake)
     note = (await inbox(session))[-1]
     assert note.data["setup_id"] == "xau-3" and "explanation" not in note.data
-    stored = await session.get(AISetupExplanation, ("xau-3", "ar"))
-    assert stored.verified is False  # kept (not asked again), never sent
+    assert note.data["explanation_status"] == "unavailable"
+    # neither verified nor a template (B9, Fadi's rule): not stored, never sent
+    assert await session.get(AISetupExplanation, ("xau-3", "ar")) is None
+
+    fake.template_used = True  # not verified, but the fixed template: sent
+    await new_setups(session, gold, armed("xau-5"))
+    await dispatch(session_factory, redis_client, fake)
+    note = (await inbox(session))[-1]
+    assert note.data["setup_id"] == "xau-5" and note.data["explanation"]
+    assert (await session.get(AISetupExplanation, ("xau-5", "ar"))).template_used is True
+    fake.template_used = False
 
     fake.explain_status = 404
     await new_setups(session, gold, armed("xau-4"))

@@ -26,12 +26,28 @@ class Settings(BaseSettings):
     ai_size_timeout_seconds: float = 5.0
     ai_explain_timeout_seconds: float = 30.0
     ai_max_retries: int = 2
-    ai_bars_15m: int = 500
+    # bars per timeframe of an evaluate request (Fadi, point 5: ~20 trading days of 15m and a
+    # year of New York trading days; final counts come with his P6). Shorter history: sent as
+    # it is, and the coverage is reported
+    ai_bars_15m: int = 2000
     ai_bars_1h: int = 500
     ai_bars_4h: int = 300
+    ai_bars_1d: int = 260
+    # gzip the request bodies (Content-Encoding: gzip); only once ai-service decompresses them
+    ai_request_gzip: bool = False
+    # The periodic evaluation (B9, docs/ai-contract.md#8-the-evaluate-task): off until enabled
+    # on the server. A beat tick at each 15m boundary schedules one ai.evaluate per instrument
+    # and profile, AI_EVALUATE_DELAY_SECONDS after the boundary (the bar is closed and stored)
+    ai_evaluate_enabled: bool = False
+    ai_evaluate_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
+    ai_profiles: str = "intraday"  # comma list; intraday only in v1 (Fadi)
+    ai_evaluate_delay_seconds: int = 20
     # AI setup sizing (B10, docs/risk-management.md#ai-setups): auto = ai-service /v1/size, then
     # the local B4 lot sizing if it is unavailable; remote = no fallback (503); local = never call
     ai_size_mode: str = "auto"
+    # a 404 from /v1/size (ai-service has no /v1/size yet) falls back to the local sizing;
+    # turned off once Fadi's P6 ships it: then a 404 is a 503, never a silent local size
+    ai_size_local_fallback_on_404: bool = True
     ai_size_concurrency: int = 4  # ai-service calls at once when one setup is sized for many users
     # used when the risk config does not give the value (sizing mode not "risk", guard unset)
     ai_default_risk_pct: float = 1.0
@@ -166,6 +182,9 @@ class Settings(BaseSettings):
     data_quality_max_lag_seconds: int = 120  # watermark lag allowed while the market is open
     data_quality_max_missing_pct: float = 1.0  # missing 1m bars over the lookback window
     data_quality_spike_pct: float = 2.0  # largest 1m close-to-close move on the evaluated bar
+    # an instrument flapping between ok and degraded alerts the admins at most once per this
+    # (the state in /health/data still changes at once)
+    data_quality_alert_cooldown_seconds: int = 1800
     # Economic calendar (B6, docs/economic-calendar.md): the ForexFactory weekly JSON, fetched
     # at most once per interval (one request), with a back-off after a 429/403
     calendar_enabled: bool = True
@@ -231,14 +250,7 @@ class Settings(BaseSettings):
     def data_quality_instrument_list(self) -> list[tuple[str, str]]:
         """``(source, symbol)`` of DATA_QUALITY_INSTRUMENTS (entries without ``:`` are
         ignored), normalised like stored instruments."""
-        out = []
-        for item in self.data_quality_instruments.split(","):
-            source, sep, symbol = item.strip().partition(":")
-            if sep and source.strip() and symbol.strip():
-                pair = (source.strip().lower(), symbol.strip().upper())
-                if pair not in out:
-                    out.append(pair)
-        return out
+        return _pairs(self.data_quality_instruments)
 
     @property
     def ai_explain_lang_list(self) -> list[str]:
@@ -246,8 +258,28 @@ class Settings(BaseSettings):
 
     @property
     def ai_bar_counts(self) -> dict[str, int]:
-        """Bars per timeframe in an evaluate request, oldest first."""
-        return {"15m": self.ai_bars_15m, "1h": self.ai_bars_1h, "4h": self.ai_bars_4h}
+        """Bars per timeframe in an evaluate request, oldest first (0 leaves it out)."""
+        counts = {
+            "15m": self.ai_bars_15m,
+            "1h": self.ai_bars_1h,
+            "4h": self.ai_bars_4h,
+            "1d": self.ai_bars_1d,
+        }
+        return {tf: n for tf, n in counts.items() if n > 0}
+
+    @property
+    def ai_evaluate_instrument_list(self) -> list[tuple[str, str]]:
+        """``(source, symbol)`` of AI_EVALUATE_INSTRUMENTS, normalised like stored ones."""
+        return _pairs(self.ai_evaluate_instruments)
+
+    @property
+    def ai_profile_list(self) -> list[str]:
+        out = []
+        for item in self.ai_profiles.split(","):
+            name = item.strip().lower()
+            if name and name not in out:
+                out.append(name)
+        return out
 
     @property
     def calendar_currency_list(self) -> list[str]:
@@ -265,6 +297,19 @@ class Settings(BaseSettings):
     def backtest_quota(self, role: str) -> tuple[int, int]:
         """(concurrent queued + running, per UTC day; 0 = unlimited)."""
         return getattr(self, f"backtest_concurrent_{role}"), getattr(self, f"backtest_daily_{role}")
+
+
+def _pairs(value: str) -> list[tuple[str, str]]:
+    """``source:symbol`` comma list -> ``(source, SYMBOL)`` pairs (entries without ``:`` are
+    ignored, duplicates dropped)."""
+    out = []
+    for item in value.split(","):
+        source, sep, symbol = item.strip().partition(":")
+        if sep and source.strip() and symbol.strip():
+            pair = (source.strip().lower(), symbol.strip().upper())
+            if pair not in out:
+                out.append(pair)
+    return out
 
 
 @lru_cache

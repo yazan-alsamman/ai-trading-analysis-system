@@ -31,6 +31,7 @@ from tests.utils import bearer
 NOW = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
 T0 = datetime(2026, 10, 19, 14, 15, tzinfo=UTC)
 SETUP_ID = "xau-b4-buy"
+LOCAL = "sized by the backend (AI_SIZE_MODE=local)"
 GOLD_SPECS = {
     "contract_size": 100,
     "tick_size": 0.01,
@@ -200,7 +201,8 @@ async def test_b4_example_locally(
     await profile(session, user)
     result = await size(session, await armed(session, gold), user)
     assert (result.lots, result.risk_amount, result.feasible) == (0.04, 20.0, True)
-    assert (result.margin_required, result.source, result.warnings) == (96.0, "local", [])
+    assert (result.margin_required, result.source) == (96.0, "local")
+    assert result.warnings == [LOCAL]  # a local size always says so
     stored = await session.get(AISetupSize, (SETUP_ID, user.id))
     assert (stored.lots, stored.risk_usd, stored.source) == (0.04, 20.0, "local")
     assert stored.inputs["account"] == {"balance": 2000.0, "currency": "USD", "leverage": 100.0}
@@ -258,7 +260,7 @@ async def test_currencies(session: AsyncSession, gold, make_user, local_mode) ->
     await profile(session, tether, currency="USDT")
     result = await size(session, await armed(session, gold), tether)
     assert (result.lots, result.risk_amount, result.margin_required) == (0.04, 20.0, 96.0)
-    assert result.warnings == ["USD, USDT and USDC treated as the same dollar (1:1)"]
+    assert result.warnings == [LOCAL, "USD, USDT and USDC treated as the same dollar (1:1)"]
 
     euro = await make_user("eur@example.com")
     await profile(session, euro, currency="EUR")  # no EUR/USD market: no rate
@@ -294,7 +296,7 @@ async def test_ai_service_answer_is_stored(
     row = await armed(session, gold)
     result = await size(session, row, user, client=client_for(fake))
     assert (result.lots, result.risk_amount, result.margin_required) == (0.04, 20.0, 96.0)
-    assert (result.source, result.feasible) == ("ai-service", True)
+    assert (result.source, result.feasible) == ("remote", True)
     [(path, request_id, body)] = fake.requests
     assert path == "/v1/size" and request_id == SETUP_ID
     sent = json.loads(body)
@@ -306,7 +308,7 @@ async def test_ai_service_answer_is_stored(
         "max_drawdown_pct": 10.0,
     }
     assert sent["instrument_spec"]["contract_size"] == 100
-    assert (await session.get(AISetupSize, (SETUP_ID, user.id))).source == "ai-service"
+    assert (await session.get(AISetupSize, (SETUP_ID, user.id))).source == "remote"
 
 
 async def test_unavailable_falls_back_in_auto_only(
@@ -578,7 +580,7 @@ async def test_batch_sizing(
         session, row, [u.id for u in users], client=client_for(fake), now=NOW
     )
     ok = [r for r in results.values() if isinstance(r, sizing.SizeResult)]
-    assert len(ok) == 4 and all(r.lots == 0.04 and r.source == "ai-service" for r in ok)
+    assert len(ok) == 4 and all(r.lots == 0.04 and r.source == "remote" for r in ok)
     error = results[users[4].id]
     assert isinstance(error, sizing.ProfileError)
     assert str(error).startswith("the risk profile cannot be used: currency: String should")
@@ -603,7 +605,7 @@ async def test_size_endpoint_and_admin_detail(
     res = await client.get(url, headers=headers)
     assert res.status_code == 200, res.text
     body = res.json()
-    assert (body["lots"], body["risk_amount"], body["source"]) == (0.04, 20.0, "ai-service")
+    assert (body["lots"], body["risk_amount"], body["source"]) == (0.04, 20.0, "remote")
     assert body["inputs"] == {
         "balance": 2000.0,
         "currency": "USD",
@@ -635,5 +637,100 @@ async def test_size_endpoint_and_admin_detail(
     detail = (await client.get(f"/api/v1/admin/ai/setups/{SETUP_ID}", headers=admin_headers)).json()
     assert detail["takes_count"] == 0 and detail["setup_id"] == SETUP_ID
     [brief] = detail["sizes"]
-    assert (brief["user_id"], brief["lots"], brief["source"]) == (str(user.id), 0.04, "ai-service")
+    assert (brief["user_id"], brief["lots"], brief["source"]) == (str(user.id), 0.04, "remote")
     assert "events" in detail and "last_payload" in detail
+
+
+# --- USD/JPY and the margin (B9) ---------------------------------------------------------------
+
+JPY_SPECS = {**GOLD_SPECS, "contract_size": 100_000, "quote_currency": "JPY"}
+
+
+async def usdjpy_armed(session: AsyncSession, **specs) -> AISetup:
+    pair = await make_instrument(
+        session, "USD/JPY", "twelvedata", market=MarketType.forex, **{**JPY_SPECS, **specs}
+    )
+    req = request_at(T0)
+    payload = setup("usdjpy-buy", "ARMED", entry=150.0, sl=149.5, tp=151.0)
+    await store.apply_evaluation(session, pair, req, response(req, new=[payload]))
+    return await session.get(AISetup, "usdjpy-buy", populate_existing=True)
+
+
+async def test_usdjpy_local_size_hand_computed(
+    session: AsyncSession, make_user, local_mode
+) -> None:
+    """USD account 10,000, risk 1 % = 100 USD, USD/JPY 150.00, sl 149.50 (50 pips):
+    0.50 x 100,000 = 50,000 JPY = 333.33 USD per lot -> 0.30 lots (B10 path, through
+    ``tb.lots_for_risk``). Margin: notional 0.30 x 100,000 USD = 30,000 USD; leverage 100 and no
+    margin rate -> 30,000 / 100 = 300 USD."""
+    user = await make_user("jpy@example.com")
+    await profile(session, user, balance=10_000)
+    result = await size(session, await usdjpy_armed(session), user)
+    assert (result.lots, result.feasible) == (0.3, True)
+    assert result.risk_amount == pytest.approx(100.0)
+    assert result.margin_required == pytest.approx(300.0)
+
+
+@pytest.mark.parametrize(
+    ("margin_rate", "leverage", "expected"),
+    [
+        (0.05, 100, 1_500.0),  # the broker's 5 % beats the user's 1:100
+        (0.005, 100, 300.0),  # the user's 1:100 (1 %) beats 0.5 %
+        (None, 30, 1_000.0),  # unknown rate: 1 / leverage, as before
+    ],
+)
+async def test_margin_uses_the_larger_of_rate_and_leverage(
+    session: AsyncSession, make_user, local_mode, margin_rate, leverage, expected
+) -> None:
+    """Fadi (extra 3): margin = notional in USD x max(margin_rate, 1 / leverage)."""
+    user = await make_user(f"margin-{margin_rate}-{leverage}@example.com")
+    await profile(session, user, balance=10_000, leverage=leverage)
+    result = await size(session, await usdjpy_armed(session, margin_rate=margin_rate), user)
+    assert result.lots == 0.3
+    assert result.margin_required == pytest.approx(expected)
+
+
+async def test_404_without_the_local_fallback_is_a_503(
+    session: AsyncSession, gold, make_user, fake: FakeAI, monkeypatch
+) -> None:
+    """Fadi (extra 2): once /v1/size exists, a user never gets a local size without knowing
+    it. With AI_SIZE_LOCAL_FALLBACK_ON_404=false a 404 is a 503 (as AI_SIZE_MODE=remote)."""
+    monkeypatch.setattr(get_settings(), "ai_size_local_fallback_on_404", False)
+    user = await make_user("no404@example.com")
+    await profile(session, user)
+    row = await armed(session, gold)
+    fake.faults = [404]
+    with pytest.raises(sizing.SizeUnavailable) as err:
+        await size(session, row, user, client=client_for(fake))
+    assert err.value.status == 503 and "AI_SIZE_LOCAL_FALLBACK_ON_404" in str(err.value)
+    assert await session.get(AISetupSize, (SETUP_ID, user.id)) is None
+
+
+def test_size_request_guards_are_optional() -> None:
+    """Fadi (point 15): the backend applies the daily-loss and drawdown guards (B10), so they
+    are optional in SizeRequest."""
+    risk = c.RiskSettings(risk_per_trade_pct=1)
+    assert (risk.daily_loss_limit_pct, risk.max_drawdown_pct) == (None, None)
+    assert risk.model_dump(mode="json", exclude_none=True) == {"risk_per_trade_pct": 1.0}
+
+
+async def test_local_size_rounds_the_stop_away_from_the_entry(
+    session: AsyncSession, gold, make_user, local_mode
+) -> None:
+    """A stop off the 0.01 tick (2395.004) is sized as 2395.00, away from the entry (Fadi,
+    point 2): 5.00 at risk per oz, 0.04 lots, as the B4 example."""
+    user = await make_user("tick@example.com")
+    await profile(session, user)
+    result = await size(session, await armed(session, gold, sl=2395.004), user)
+    assert (result.lots, result.risk_amount) == (0.04, 20.0)
+
+
+def test_alert_text_rounds_with_the_same_rule() -> None:
+    from app.notifications.templates import inbox  # noqa: PLC0415
+
+    data = {
+        "state": "ARMED", "direction": "sell", "entry": 2400.004, "sl": 2405.001,
+        "tp": 2390.009, "instrument": {"symbol": "XAU/USD", "price_precision": 2},
+    }  # fmt: skip
+    _, body = inbox("ai_setup", data, "en")
+    assert "2,405.01" in body and "2,390.01" in body and "2,400.00" in body

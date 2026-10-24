@@ -3,13 +3,14 @@ account, "I took this trade", and your taken trades. AI setups are global: whoev
 signals may use them (``strategy_resolver.may_read_ai_setup``)."""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 
-from app.ai import follows, sizing, takes
+from app.ai import explain, follows, sizing, takes
 from app.api.deps import CurrentUser, SessionDep, SignalsReader
 from app.schemas.ai import (
+    AIExplanationRead,
     AISizeInputs,
     AISizeRead,
     AITradeRead,
@@ -60,6 +61,24 @@ async def setup_size(setup_id: SetupId, principal: SignalsReader, session: Sessi
         computed_at=result.computed_at,
         inputs=AISizeInputs(**result.inputs["account"], **result.inputs["risk"], sources=sources),
         taken=await takes.taken(session, user.id, setup_id),
+    )
+
+
+@router.get("/ai/setups/{setup_id}/explanation", response_model=AIExplanationRead)
+async def setup_explanation(
+    setup_id: SetupId,
+    principal: SignalsReader,
+    session: SessionDep,
+    lang: Annotated[Literal["ar", "en"], Query()] = "en",
+):
+    """The setup's explanation in ``lang``, when it may be shown: verified by ai-service
+    against the setup's numbers, or the fixed template filled with them. Otherwise
+    ``explanation`` is null and ``explanation_status`` is ``unavailable`` (show "الشرح غير
+    متاح" / "Explanation unavailable"). 404 unknown setup."""
+    await takes.get_setup_or_404(session, principal.user, setup_id)
+    shown = await explain.stored(session, setup_id, lang)
+    return AIExplanationRead(
+        setup_id=setup_id, lang=lang, explanation=shown.text, explanation_status=shown.status
     )
 
 

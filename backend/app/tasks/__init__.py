@@ -32,6 +32,7 @@ celery_app = Celery(
         "app.tasks.data_quality",
         "app.tasks.calendar",
         "app.tasks.ai_alerts",
+        "app.tasks.ai",
     ],
 )
 celery_app.conf.update(
@@ -54,6 +55,7 @@ celery_app.conf.update(
         "backtests.*": {"queue": "backtests"},
         "notifications.*": {"queue": "notifications"},
         "ai_alerts.*": {"queue": "notifications"},
+        "ai.explain": {"queue": "notifications"},  # up to 30 s per call: off the live queue
         "news.*": {"queue": "maintenance"},
         "housekeeping.*": {"queue": "maintenance"},
         "subscriptions.*": {"queue": "maintenance"},
@@ -74,6 +76,13 @@ celery_app.conf.update(
         "notifications-digests": {"task": "notifications.digests", "schedule": crontab(minute="*")},
         # pending deliveries whose send task was lost (B11)
         "notifications-sweep": {"task": "notifications.sweep", "schedule": crontab(minute="*")},
+        # AI evaluations (B9): at each 15m boundary, one ai.evaluate per instrument and profile
+        # AI_EVALUATE_DELAY_SECONDS later; nothing while AI_EVALUATE_ENABLED is false
+        "ai-evaluate-tick": {
+            "task": "ai.evaluate_tick",
+            "schedule": crontab(minute="0,15,30,45"),
+            "options": {"expires": 300},
+        },
         # AI setup alerts from the outbox (B11), every 30 s
         "ai-alerts-dispatch": {
             "task": "ai_alerts.dispatch",

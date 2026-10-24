@@ -221,6 +221,17 @@ jobs:
       - name: End-to-end suite
         working-directory: backend
         run: python -m pytest tests_e2e -v -p no:cacheprovider
+      - name: Fake ai-service over the compose network (B9; dev/CI only, never in prod)
+        # the backend's client in the worker container against tools/fake_ai_service (gzip
+        # bodies, determinism, 503 retried, 422 contract error, explain 404)
+        run: |
+          docker compose --profile fake-ai up -d fake-ai
+          docker compose cp docs/api/ai-service-examples/evaluate-request.json worker:/tmp/req.json
+          docker compose cp tools/fake_ai_service/e2e_check.py worker:/tmp/e2e_check.py
+          docker compose exec -T -e AI_SERVICE_URL=http://fake-ai:8001 -e AI_REQUEST_GZIP=true \
+            worker python /tmp/e2e_check.py /tmp/req.json \
+            || { docker compose --profile fake-ai logs fake-ai; exit 1; }
+          docker compose --profile fake-ai rm -sf fake-ai
       - name: Host-proxy entry 8090 (real client IP from the proxy only; 80 ignores it)
         # Linux Docker with docker-proxy, as on the VPS: a connection to the loopback-published
         # 127.0.0.1:8090 reaches nginx from the compose network's gateway, inside DOCKER_SUBNET

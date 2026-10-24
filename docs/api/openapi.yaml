@@ -1824,6 +1824,77 @@ paths:
       security:
       - BearerJWT: []
       - ApiKey: []
+  /api/v1/ai/setups/{setup_id}/explanation:
+    get:
+      tags:
+      - ai
+      summary: Setup Explanation
+      description: 'The setup''s explanation in ``lang``, when it may be shown: verified by ai-service
+
+        against the setup''s numbers, or the fixed template filled with them. Otherwise
+
+        ``explanation`` is null and ``explanation_status`` is ``unavailable`` (show "الشرح غير
+
+        متاح" / "Explanation unavailable"). 404 unknown setup.'
+      operationId: ai_setup_explanation
+      parameters:
+      - name: setup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          title: Setup Id
+      - name: lang
+        in: query
+        required: false
+        schema:
+          enum:
+          - ar
+          - en
+          type: string
+          default: en
+          title: Lang
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIExplanationRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+      - ApiKey: []
   /api/v1/ai/setups/{setup_id}/take:
     post:
       tags:
@@ -9870,6 +9941,38 @@ paths:
       - BearerJWT: []
 components:
   schemas:
+    AIExplanationRead:
+      properties:
+        setup_id:
+          type: string
+          title: Setup Id
+        lang:
+          type: string
+          enum:
+          - ar
+          - en
+          title: Lang
+        explanation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Explanation
+          description: null unless verified or the fixed template (no unverified number is shown)
+        explanation_status:
+          type: string
+          enum:
+          - verified
+          - template
+          - unavailable
+          title: Explanation Status
+          description: 'unavailable: show ''الشرح غير متاح'' / ''Explanation unavailable'''
+      type: object
+      required:
+      - setup_id
+      - lang
+      - explanation
+      - explanation_status
+      title: AIExplanationRead
     AIModelIn:
       properties:
         model_id:
@@ -10445,7 +10548,8 @@ components:
         source:
           type: string
           title: Source
-          description: ai-service, or local (the backend's B4 lot sizing)
+          description: remote (ai-service /v1/size) or local (the backend's B4 lot sizing; a local size
+            always has a warning saying so)
         computed_at:
           type: string
           format: date-time

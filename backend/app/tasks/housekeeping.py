@@ -17,8 +17,13 @@ def cleanup() -> dict:
 
     result = run_async(go)
     logger.info(
-        "housekeeping.cleanup deleted refresh_tokens=%d api_keys=%d",
+        "housekeeping.cleanup deleted refresh_tokens=%d api_keys=%d ai_evaluation_runs=%d",
         result.refresh_tokens,
         result.api_keys,
+        result.ai_evaluation_runs,
     )
-    return {"refresh_tokens": result.refresh_tokens, "api_keys": result.api_keys}
+    return {
+        "refresh_tokens": result.refresh_tokens,
+        "api_keys": result.api_keys,
+        "ai_evaluation_runs": result.ai_evaluation_runs,
+    }

@@ -9,8 +9,11 @@ For one setup (ARMED or ACTIVE) and one user:
    call;
 3. ai-service ``/v1/size`` (``AI_SIZE_MODE``: ``auto`` falls back to the local B4 lot sizing
    when ai-service is unavailable or has no ``/v1/size`` yet, ``remote`` never falls back,
-   ``local`` never calls). A contract error (another 4xx, a bad body) is not hidden by a
-   fallback: it raises ``SizeContractError``;
+   ``local`` never calls). A 404 falls back only while ``AI_SIZE_LOCAL_FALLBACK_ON_404`` is on
+   (until Fadi's P6 ships ``/v1/size``); off, it is a 503 like an unavailable ai-service. A
+   contract error (another 4xx, a bad body) is not hidden by a fallback: it raises
+   ``SizeContractError``. Every size says where it comes from (``source``: ``remote`` or
+   ``local``) and a local size always carries a warning saying so;
 4. the result is stored in ``ai_setup_sizes`` with the inputs it depends on; the same inputs
    later reuse it without a call.
 
@@ -38,7 +41,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import AIContractError, AIServiceClient, AIUnavailableError
-from app.ai.contract import PRICED_STATES, Setup, SizeRequest, SizeResponse
+from app.ai.contract import PRICED_STATES, Setup, SizeRequest, SizeResponse, round_levels
 from app.ai.specs import MissingSpecs, instrument_spec, spec_hash
 from app.core.config import get_settings
 from app.models.ai import AISetup, AISetupSize, AISetupTake
@@ -92,7 +95,7 @@ class SizeResult:
     margin_required: float | None
     feasible: bool
     warnings: list[str]
-    source: str  # ai-service | local
+    source: str  # remote (ai-service /v1/size) | local (the backend's B4 lot sizing)
     computed_at: datetime
     inputs: dict[str, Any]
     cached: bool = False
@@ -201,8 +204,13 @@ async def local_size(
 ) -> tuple[float, float, float | None, bool, list[str]]:
     """(lots, risk amount, margin, feasible, warnings) with the platform's B4 lot sizing:
     risk amount = balance x risk %, lots rounded down to ``lot_step`` and limited to
-    ``min_lot``/``max_lot``, margin = entry x contract size x lots / leverage converted to the
-    account currency (null without a conversion rate)."""
+    ``min_lot``/``max_lot`` (``tb.lots_for_risk``, which converts the quote currency into the
+    account currency: USD/JPY for a USD account at 1 / entry). Prices off the tick are rounded
+    first with Fadi's rule (``round_levels``: the stop away from the entry).
+
+    Margin (Fadi, extra 3) = notional in the account currency x max(``margin_rate``,
+    1 / leverage): the broker's margin rate when it asks for more than the user's leverage;
+    without a margin rate, 1 / leverage as before. Null without a conversion rate."""
     account = risk.account
     spec = risk_service.contract_spec(instrument)
     if spec is None:
@@ -211,12 +219,18 @@ async def local_size(
         session, instrument, account.currency, setup.entry
     )
     amount = account.balance * risk.risk.risk_per_trade_pct / 100
-    sized = tb.lots_for_risk(amount, setup.entry, setup.sl, spec, account.currency, rate)
+    entry, sl = setup.entry, setup.sl
+    if instrument.tick_size:  # the stop away from the entry (Fadi, point 2): never less risk
+        entry, sl, _ = round_levels(setup.direction.value, entry, sl, None, instrument.tick_size)
+    sized = tb.lots_for_risk(amount, entry, sl, spec, account.currency, rate)
     warnings = [*notes, *sized.warnings]
     margin = None
     if sized.conversion_rate is not None:
-        notional = setup.entry * spec.contract_size * sized.lots * sized.conversion_rate
-        margin = notional / account.leverage
+        notional = entry * spec.contract_size * sized.lots * sized.conversion_rate
+        fraction = 1 / account.leverage
+        if instrument.margin_rate is not None:
+            fraction = max(instrument.margin_rate, fraction)
+        margin = notional * fraction
     else:
         warnings.append(
             f"no conversion rate from {spec.quote_currency} to {account.currency}: "
@@ -278,7 +292,8 @@ async def _finish(
     job: _Job,
     now: datetime,
 ) -> SizeResult:
-    mode = get_settings().ai_size_mode
+    settings = get_settings()
+    mode = settings.ai_size_mode
     warnings = list(job.risk.warnings)
     if job.guards:
         lots, amount, margin, feasible, source = 0.0, 0.0, None, False, "local"
@@ -287,7 +302,7 @@ async def _finish(
         r = job.response
         lots, amount, margin, feasible = r.lots, r.risk_usd, r.margin_required, r.feasible
         warnings += r.warnings
-        source = "ai-service"
+        source = "remote"
     else:
         error = job.error
         if isinstance(error, AIContractError) and error.status != 404:
@@ -298,6 +313,11 @@ async def _finish(
                 error.detail,
             )
             raise SizeContractError(f"ai-service answered outside the contract: {error}")
+        if isinstance(error, AIContractError) and not settings.ai_size_local_fallback_on_404:
+            raise SizeUnavailable(
+                "ai-service /v1/size answered 404 and the local fallback is off "
+                "(AI_SIZE_LOCAL_FALLBACK_ON_404=false)"
+            )
         if error is not None and mode == "remote":
             raise SizeUnavailable(f"ai-service /v1/size is unavailable: {error}")
         if error is not None and not isinstance(error, AIContractError | AIUnavailableError):
@@ -306,6 +326,8 @@ async def _finish(
             warnings.append("ai-service has no /v1/size yet (404); sized by the backend")
         elif error is not None:
             warnings.append("ai-service is unavailable; sized by the backend")
+        else:
+            warnings.append("sized by the backend (AI_SIZE_MODE=local)")
         lots, amount, margin, feasible, local_warnings = await local_size(
             session, instrument, setup, job.risk
         )

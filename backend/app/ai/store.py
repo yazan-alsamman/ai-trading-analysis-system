@@ -5,9 +5,18 @@ ai-service decides setups and their states; the backend only records them:
 - ``apply_evaluation`` writes one evaluate response in one transaction and returns the state
   changes (B11 turns them into notifications). Re-applying the same response changes nothing
   and reports no state change.
+- Contract 0.2.0 (Fadi, points 9-11): a response carries the current state of every setup in
+  ``new_setups`` and its full history in ``transitions``. Transitions are applied first, in
+  ``(at, state order)`` order (ARMED and ACTIVE may share an ``at``) and deduped by
+  ``(setup_id, to, at)``; history the setup has already passed is skipped silently. Then each
+  setup is reconciled with its current state. A state never goes backwards: a setup sent back
+  in an earlier state is a **contract error** (logged, listed in the result), and ours is kept.
+- A new setup's first event is at its ``created_at`` when ai-service sends it, otherwise at
+  ``bar_close_ts``; it starts in the state its history starts from.
 - Final states (CLOSED, EXPIRED, INVALIDATED) never change again. A transition that is not in
-  ``ALLOWED``, that starts from another state than the stored one, or that names an unknown
-  setup is rejected and logged; the rest of the response is still applied.
+  ``ALLOWED`` (ACTIVE -> INVALIDATED is not, any more; rows that already made it keep it as
+  history), that starts from another state than the stored one, or that names an unknown setup
+  is rejected and logged; the rest of the response is still applied.
 - Every state change except to DEVELOPING is also written to ``ai_setup_outbox`` in the same
   transaction (B11): the alerts survive a crash and are sent by ``ai_alerts.dispatch``.
 - ``open_setups`` gives the next request's ``open_setups``: the last payload of every
@@ -28,7 +37,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.contract import (
+    ALLOWED_TRANSITIONS,
     FINAL_STATES,
+    STATE_RANK,
     EvaluateRequest,
     EvaluateResponse,
     EvaluateStatus,
@@ -42,13 +53,8 @@ from app.models.instrument import Instrument
 
 logger = logging.getLogger(__name__)
 
-S = SetupState
-# The only state changes the backend records (to agree with Fadi, docs/ai-contract.md)
-ALLOWED: dict[SetupState, frozenset[SetupState]] = {
-    S.DEVELOPING: frozenset({S.ARMED, S.EXPIRED, S.INVALIDATED}),
-    S.ARMED: frozenset({S.ACTIVE, S.EXPIRED, S.INVALIDATED}),
-    S.ACTIVE: frozenset({S.CLOSED, S.INVALIDATED}),
-}
+# The only state changes the backend records (contract 0.2.0, docs/ai-contract.md)
+ALLOWED = ALLOWED_TRANSITIONS
 MUTABLE = (
     "entry",
     "sl",
@@ -93,6 +99,9 @@ class ApplyResult:
     transitions_applied: int = 0
     transitions_known: int = 0  # already recorded (a re-applied response)
     rejected: list[Rejection] = field(default_factory=list)
+    # the response contradicts itself or our records (a state going backwards): logged as an
+    # error and shown in /admin/system/status; our state is kept
+    contract_errors: list[Rejection] = field(default_factory=list)
     state_changes: list[StateChange] = field(default_factory=list)
 
 
@@ -219,6 +228,22 @@ def _reject(result: ApplyResult, setup_id: str, reason: str) -> None:
     )
 
 
+def _contract_error(result: ApplyResult, setup_id: str, reason: str) -> None:
+    result.contract_errors.append(Rejection(setup_id, reason))
+    logger.error(
+        "ai-service contract error: setup %s: %s (%s); our state is kept",
+        setup_id,
+        reason,
+        result.request_id,
+    )
+
+
+def _order(t: Transition) -> tuple[datetime, int]:
+    """Transitions in time order; at the same ``at`` (ARMED and ACTIVE in one response) in
+    life-cycle order."""
+    return t.at, STATE_RANK[t.from_]
+
+
 async def apply_evaluation(
     session: AsyncSession, instrument: Instrument, req: EvaluateRequest, resp: EvaluateResponse
 ) -> ApplyResult:
@@ -252,16 +277,26 @@ async def apply_evaluation(
         known = {(s, t, a) for s, t, a in events.all()}
     now = datetime.now(UTC)
     versions = _versions(resp.versions)
+    transitions = sorted(resp.transitions, key=_order)
+    first_from: dict[str, SetupState] = {}
+    for t in transitions:
+        first_from.setdefault(t.setup_id, t.from_)
 
+    new: set[str] = set()
     for setup in resp.new_setups:
-        await _apply_setup(session, result, instrument, req, setup, rows, versions, now)
-    for transition in sorted(resp.transitions, key=lambda t: t.at):
+        if setup.setup_id not in rows and setup.setup_id not in new:
+            start = first_from.get(setup.setup_id, setup.state)
+            await _insert_setup(session, result, instrument, req, setup, start, rows, versions, now)
+            new.add(setup.setup_id)
+    for transition in transitions:
         await _apply_transition(session, result, instrument, req, transition, rows, known, now)
+    for setup in resp.new_setups:
+        await _reconcile(session, result, instrument, req, setup, rows, versions, now, new)
     await enqueue_alerts(session, result.state_changes)
     await session.commit()
     logger.info(
         "ai-service %s applied: inserted=%d updated=%d unchanged=%d transitions=%d "
-        "known=%d rejected=%d",
+        "known=%d rejected=%d contract_errors=%d",
         req.request_id,
         result.inserted,
         result.updated,
@@ -269,11 +304,50 @@ async def apply_evaluation(
         result.transitions_applied,
         result.transitions_known,
         len(result.rejected),
+        len(result.contract_errors),
     )
     return result
 
 
-async def _apply_setup(
+async def _insert_setup(
+    session: AsyncSession,
+    result: ApplyResult,
+    instrument: Instrument,
+    req: EvaluateRequest,
+    setup: Setup,
+    start: SetupState,
+    rows: dict[str, AISetup],
+    versions: dict[str, str | None],
+    now: datetime,
+) -> None:
+    """A setup seen for the first time, in ``start`` (where its history in ``transitions``
+    starts, or its current state without history); the transitions then move it on. Its first
+    event is at ``created_at`` when ai-service sends it, else at ``bar_close_ts``."""
+    payload = {**setup.payload(), "state": start.value}
+    at = setup.created_at or req.bar_close_ts
+    row = AISetup(
+        setup_id=setup.setup_id,
+        instrument_id=instrument.id,
+        profile=req.profile,
+        direction=setup.direction.value,
+        state=start.value,
+        last_payload=payload,
+        first_request_id=req.request_id,
+        last_request_id=req.request_id,
+        created_at=now,
+        updated_at=now,
+        **_values(setup),
+        **versions,
+    )
+    session.add(row)
+    await session.flush()
+    rows[setup.setup_id] = row
+    await _event(session, setup.setup_id, None, row.state, at, req.request_id)
+    result.inserted += 1
+    result.state_changes.append(StateChange(setup.setup_id, None, row.state, at, "new"))
+
+
+async def _reconcile(
     session: AsyncSession,
     result: ApplyResult,
     instrument: Instrument,
@@ -282,84 +356,61 @@ async def _apply_setup(
     rows: dict[str, AISetup],
     versions: dict[str, str | None],
     now: datetime,
+    new: set[str],
 ) -> None:
+    """Bring a stored setup to the current state ai-service reports (after the transitions):
+    the same state updates the fields; a later one missing from the history is recorded as a
+    forward move when ``ALLOWED`` (else rejected, nothing taken); an earlier one is a contract
+    error and nothing of the item is taken (our state and payload are kept)."""
     payload = setup.payload()
-    row = rows.get(setup.setup_id)
-    if row is None:
-        row = AISetup(
-            setup_id=setup.setup_id,
-            instrument_id=instrument.id,
-            profile=req.profile,
-            direction=setup.direction.value,
-            state=setup.state.value,
-            last_payload=payload,
-            first_request_id=req.request_id,
-            last_request_id=req.request_id,
-            created_at=now,
-            updated_at=now,
-            **_values(setup),
-            **versions,
-        )
-        session.add(row)
-        await session.flush()
-        rows[setup.setup_id] = row
-        await _event(session, setup.setup_id, None, row.state, req.bar_close_ts, req.request_id)
-        result.inserted += 1
-        result.state_changes.append(
-            StateChange(setup.setup_id, None, row.state, req.bar_close_ts, "new")
-        )
-        return
-    if row.instrument_id != instrument.id or row.profile != req.profile:
+    row = rows[setup.setup_id]
+    fresh = setup.setup_id in new
+    if not fresh and (row.instrument_id != instrument.id or row.profile != req.profile):
         _reject(result, setup.setup_id, "the setup_id belongs to another instrument or profile")
         return
-    if row.state in FINAL:
+    ours, theirs = SetupState(row.state), setup.state
+    if theirs != ours:
+        if STATE_RANK[theirs] <= STATE_RANK[ours]:
+            # backwards: nothing of this item is taken (its fields describe the earlier state)
+            _contract_error(
+                result, setup.setup_id, f"sent as {theirs.value} but it is {ours.value} already"
+            )
+            return
+        if ours in FINAL_STATES or theirs not in ALLOWED[ours]:
+            _reject(result, setup.setup_id, f"{ours.value} -> {theirs.value} is not allowed")
+            return
+        # a forward move without its transition: recorded like one, at bar_close_ts
+        if await _event(
+            session,
+            row.setup_id,
+            ours.value,
+            theirs.value,
+            req.bar_close_ts,
+            req.request_id,
+            reason="new_setups",
+        ):
+            result.state_changes.append(
+                StateChange(row.setup_id, ours.value, theirs.value, req.bar_close_ts, "new_setups")
+            )
+            await _close_takes(
+                session, row.setup_id, theirs.value, req.bar_close_ts, None, "new_setups"
+            )
+        row.state = theirs.value
+        payload = {**payload, "state": row.state}
+    if ours in FINAL_STATES:
         result.unchanged += 1  # final: never changes again
-        if payload.get("state") != row.state:
-            logger.info(
-                "ai-service sent %s as %s, it is already %s (kept)",
-                setup.setup_id,
-                payload.get("state"),
-                row.state,
-            )
         return
-    if setup.state.value != row.state:
-        if setup.state in ALLOWED[SetupState(row.state)]:
-            # a forward move reported through new_setups: recorded like a transition
-            if await _event(
-                session,
-                row.setup_id,
-                row.state,
-                setup.state.value,
-                req.bar_close_ts,
-                req.request_id,
-                reason="new_setups",
-            ):
-                result.state_changes.append(
-                    StateChange(
-                        row.setup_id, row.state, setup.state.value, req.bar_close_ts, "new_setups"
-                    )
-                )
-                await _close_takes(
-                    session, row.setup_id, setup.state.value, req.bar_close_ts, None, "new_setups"
-                )
-            row.state = setup.state.value
-        else:
-            logger.info(
-                "ai-service sent %s as %s, it stays %s (never backwards)",
-                setup.setup_id,
-                setup.state.value,
-                row.state,
-            )
-            payload = {**payload, "state": row.state}
     if row.last_payload == payload:
-        result.unchanged += 1
+        if not fresh:
+            result.unchanged += 1
         return
     for name, value in {**_values(setup), **versions}.items():
         setattr(row, name, value)
     row.last_payload = payload
     row.last_request_id = req.request_id
     row.updated_at = now
-    result.updated += 1
+    if not fresh:
+        result.updated += 1
 
 
 async def _apply_transition(
@@ -383,6 +434,12 @@ async def _apply_transition(
         result.transitions_known += 1  # already recorded: a re-applied response
         return
     current = SetupState(row.state)
+    if STATE_RANK[t.from_] < STATE_RANK[current] and (
+        t.to == current or STATE_RANK[t.to] < STATE_RANK[current]
+    ):
+        # history the setup has already passed (each response repeats the full history)
+        result.transitions_known += 1
+        return
     if current in FINAL_STATES:
         _reject(result, t.setup_id, f"{current.value} is final ({t.from_.value} -> {t.to.value})")
         return

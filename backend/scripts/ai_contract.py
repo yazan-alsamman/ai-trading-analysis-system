@@ -6,7 +6,7 @@
 The schemas come from ``app/ai/contract.py`` (pydantic only: this script needs nothing else
 from the backend, so the api-contract CI job runs it with just pydantic and PyYAML). The
 example payloads of docs/api/ai-service-examples/ are embedded, so they cannot drift either.
-The contract is a **draft** until Fadi approves it (docs/ai-contract.md).
+Version 0.2.0 applies Fadi's answers (docs/ai-contract.md).
 """
 
 from __future__ import annotations
@@ -42,18 +42,28 @@ DESCRIPTION = """\
 The stateless trading engine (ai-service, owned by Fadi). The backend owns the data,
 the schedule, the storage and the delivery; ai-service decides setups and their states.
 
-**Draft**: this contract is not final until Fadi approves it. The open points are listed in
-docs/ai-contract.md. Generated from backend/app/ai/contract.py by
-backend/scripts/ai_contract.py (do not edit by hand).
+**Version 0.2.0**: Fadi's answers to the 17 open points of 0.1.0-draft are applied
+(docs/ai-contract.md, section 7). `/v1` changes only by adding fields; `info.version` follows
+semver; ai-service reports its versions in every answer and in `/health`. Generated from
+backend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by hand).
 
 - Every timestamp is UTC, ISO-8601 with `Z`. Every bar is closed; `ts` is its open time.
+  `1d` bars are New York trading days: 17:00 to 17:00 America/New_York (DST-aware).
+- The decision bar (the last bar of the smallest timeframe) always has a `spread`; without
+  one the backend does not call ai-service.
 - `request_id` is deterministic (`{instrument lower}-{profile}-{bar_close_ts}`): the same
-  request gives the same result, and a retry always sends the same body.
+  body gives a byte-identical response, and a retry always sends the same body.
 - `setup_id` is deterministic and chosen by ai-service; `open_setups` echoes setups exactly as
-  last returned.
+  last returned. A response carries the current state of every setup in `new_setups` and its
+  full history in `transitions` (the backend dedupes by `(setup_id, to, at)`; a state never
+  goes backwards).
+- Transitions: DEVELOPING -> ARMED -> ACTIVE -> CLOSED; DEVELOPING or ARMED -> EXPIRED or
+  INVALIDATED. ARMED and ACTIVE may share an `at`.
+- `grade` is A-D and always null in v1. Money is USD only in v1.
 - Responses may carry fields this document does not list (the backend ignores them).
 - 422: the request does not match the contract (never retried). 5xx, timeouts and connection
-  errors are retried by the backend with the same body.
+  errors are retried by the backend with the same body. No model: 200 with
+  `status: model_unavailable`.
 """
 
 

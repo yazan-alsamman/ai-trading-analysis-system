@@ -226,11 +226,44 @@ stays in the quote currency, and the plan adds `lots`. The conversion rate is:
    unconverted one, as before. A rate of 1 is never assumed silently.
 
 Example: USD/JPY at 150.000, stop 149.500, account 10,000 USD, 1 % risk, no fees →
-quantity **30,000** USD (was 200) = **0.30 lots**; `risk_amount` = 100 USD. Instruments without
-specs (and backtests) are sized exactly as before, and every old field is kept. `fee_bps` still
-counts in `quantity`, so with the default 10 bps an XAU/USD plan gets fewer lots than the
-fee-free hand calculation in instruments.md. `margin_rate` is stored but not used for sizing
-yet: the cap is still `max_position_pct` (the user's leverage).
+quantity **30,000** USD (was 200) = **0.30 lots**; `risk_amount` = 100 USD. Every old field is
+kept. `fee_bps` still counts in `quantity`, so with the default 10 bps an XAU/USD plan gets
+fewer lots than the fee-free hand calculation in instruments.md. `margin_rate` is not used for
+the plan's size: the cap is still `max_position_pct` (the user's leverage).
+
+### Backtests and plans in another account currency (B9)
+
+Fadi reported that "the Sizer in libs/backtest" gave a USD/JPY size about 150× too small. A
+test with the hand example above (USD account 10,000, 1 % risk, USD/JPY 150.00, stop 50 pips
+away → **0.30 lots = 30,000 units**) was written first, against every path:
+
+| Path | Before | Now |
+|---|---|---|
+| AI setup sizing `local_size` (B10, `tb.lots_for_risk`) | right: 0.30 lots | unchanged |
+| plans and the calculator on an instrument **with** specs (B4) | right | unchanged |
+| plans and the calculator on an instrument **without** specs | 200 units (150× too small): the rate was ignored | 30,000 units (no lots: no specs) |
+| the backtest engine (`Sizer`, every mode) | 200 units (150× too small): the capital was taken as JPY | 30,000 units with `conversion` |
+| a backtest with `"risk_profile": true` | 150× too small (the profile's USD balance as JPY) | the profile's currency is converted |
+
+The fix:
+
+- **libs/backtest**: `BacktestConfig.conversion` (optional): `{"type": "inverse_price"}` when the
+  account currency is the instrument's base (a USD account on USD/JPY: 1 JPY = 1 / price USD
+  at each fill and close), or `{"type": "fixed", "rate": r}` (account currency per quote unit,
+  for the whole run). With it, `initial_capital` and every money result (equity, P&L, fees,
+  `risk_amount`) are in the account currency; prices and notional stay in the quote currency.
+  The size is computed on the equity converted to the quote currency, `cash` moves by the fees
+  and the P&L of each fill converted at that fill, and an open position adds its P&L at the
+  close. **Without it the engine runs the unchanged code path**: every USD-quoted and crypto
+  backtest, and every Y11 golden test, is bit-identical.
+- **Trade plans**: a conversion rate without contract specs converts the equity too (no lots).
+  Live plans and the calculator pass it when the rate is not 1, so USD-quoted and USDT plans
+  are unchanged.
+- **Backtests with the profile**: when the profile's currency is not the instrument's quote
+  currency (USD, USDT and USDC count as one), the stored config gets the `conversion`
+  (`inverse_price` when the account currency is the base, otherwise the latest rate of a
+  matching market, fixed for the run; none found: 422), and `config.risk_profile.conversion`
+  records it. An explicit `initial_capital` stays in the quote currency, as documented.
 
 ### Worked example
 
@@ -355,7 +388,9 @@ account. Other states give 409, and so does an instrument without specs.
 3. **`AI_SIZE_MODE`** decides what happens when ai-service cannot answer:
    - `auto` (default): ai-service first. When it is unavailable (timeouts, connection errors,
      5xx after the client's retries) or has no `/v1/size` yet (404), the backend sizes the
-     setup itself (`source: local`, with a warning).
+     setup itself (`source: local`, with a warning). The 404 fallback is allowed only while
+     `AI_SIZE_LOCAL_FALLBACK_ON_404=true` (the default until Fadi's P6 ships `/v1/size`);
+     with `false` a 404 is a 503 like an unavailable ai-service, never a silent local size.
    - `remote`: never falls back; 503 when ai-service is unavailable.
    - `local`: never calls ai-service.
 
@@ -367,12 +402,16 @@ account. Other states give 409, and so does an instrument without specs.
      `lot_step`;
    - below `min_lot`: 0 lots, `feasible: false` and a warning; above `max_lot`: capped, with a
      warning;
-   - margin = entry × contract size × lots × conversion rate / leverage, in the account
-     currency. Without a conversion rate the size is not feasible and the margin is null, both
-     with a warning. USD, USDT and USDC count as one dollar when there is no exact market, with
-     a warning.
-5. **Stored** in `ai_setup_sizes`, one row per setup and user, with `source` (`ai-service` or
-   `local`) and `inputs`:
+   - prices off the tick are rounded first with Fadi's rule: the stop **away from** the entry,
+     the target toward it (never a smaller risk);
+   - margin = notional in the account currency × **max(`margin_rate`, 1 / leverage)** (Fadi):
+     the broker's margin rate when it asks for more than the user's leverage; without a
+     margin rate, 1 / leverage. Without a conversion rate the size is not feasible and the
+     margin is null, both with a warning. USD, USDT and USDC count as one dollar when there is
+     no exact market, with a warning.
+5. **Stored** in `ai_setup_sizes`, one row per setup and user, with `source` (`remote`:
+   ai-service `/v1/size`, or `local`; a local size **always** carries a warning saying so,
+   also with `AI_SIZE_MODE=local`) and `inputs`:
    - `inputs` holds the account, the risk, a hash of the specs, a hash of the setup payload,
      the guards reached and the mode;
    - the same inputs give the stored result without a call;
@@ -451,7 +490,8 @@ still accepted). A 422 lists the errors with their paths
 (`{"loc": ["body", "config", "stop", "multiplier"], "path": "stop.multiplier", …}`).
 
 `"risk_profile": true` applies your profile: its rules, `fee_bps` and `account_size` (as
-`initial_capital`). Fields in the request win, and a Y11 `exits.stop_loss_pct` /
+`initial_capital`, converted when the profile's currency is not the instrument's quote
+currency: [above](#backtests-and-plans-in-another-account-currency-b9)). Fields in the request win, and a Y11 `exits.stop_loss_pct` /
 `take_profit_pct` replaces the profile's stop / take profit. The profile is snapshotted into
 the stored config (`config.risk_profile`: template, account size, currency, rules,
 `updated_at`), so the backtest stays reproducible after the profile changes. Results include

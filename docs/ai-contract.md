@@ -1,11 +1,15 @@
-# ai-service contract (B7) and AI storage (B8)
+# ai-service contract (B7), AI storage (B8) and the evaluate task (B9)
 
-> **Draft, version `0.1.0-draft`.** This is our side of Fadi's draft. Nothing is final until
-> Fadi approves it; the [open points](#7-open-points-to-agree-with-fadi) are listed at the end.
+> **Version `0.2.0`.** Fadi's answers to the 17 open points of `0.1.0-draft` are applied; each
+> point and its decision is in [section 7](#7-the-17-points-answered-by-fadi). `/v1` only ever
+> gains fields and the version follows semver. What still waits on Fadi (final bar counts and
+> a maximum request size with his P6, the explain timeout with his P7) is in
+> [section 12](#12-open-issues); how to turn the evaluation on is in
+> [section 11](#11-enabling-it-on-the-server).
 
 ai-service (`ai-service/`, owned by Fadi) holds all trading logic and is **stateless**: no
-database, no schedule, three endpoints. The backend owns the data, the schedule (B9), the
-storage (B8, below) and the delivery (B11).
+database, no schedule, three endpoints. The backend owns the data, the schedule (B9, section
+8), the storage (B8, section 5) and the delivery (B11).
 
 | Where | What |
 |---|---|
@@ -14,9 +18,12 @@ storage (B8, below) and the delivery (B11).
 | `docs/api/ai-service-examples/*.json` | example payloads, validated by the tests and embedded in the document; Fadi can use them in his tests |
 | `backend/app/ai/client.py` | `AIServiceClient` (timeouts, retries, errors) |
 | `backend/app/ai/store.py` | `apply_evaluation`, `open_setups`, the model registry |
+| `backend/app/ai/evaluate.py` | B9: the request builder, one run, the schedule, the status block |
+| `backend/app/ai/explain.py` | B9: `/v1/explain` and the rule on showing an explanation |
+| `backend/app/tasks/ai.py` | the Celery tasks `ai.evaluate_tick`, `ai.evaluate`, `ai.explain` |
+| `tools/fake_ai_service/` | a fake ai-service for development and CI (never in production, section 10) |
 | `GET/POST /api/v1/admin/ai/...` | admin views of setups and models |
 
-Not in this step: scheduling evaluations (B9), user risk settings (B10), notifications (B11).
 The rule-signal engine keeps running untouched. ai-service's placeholder `/v1/signal` stays as
 it is until Fadi replaces it.
 
@@ -26,20 +33,22 @@ it is until Fadi replaces it.
 |---|---|---|---|
 | `POST /v1/evaluate` | `EvaluateRequest` | `EvaluateResponse` | `AI_EVALUATE_TIMEOUT_SECONDS` = 10 |
 | `POST /v1/size` | `SizeRequest` | `SizeResponse` | `AI_SIZE_TIMEOUT_SECONDS` = 5 |
-| `POST /v1/explain` | `ExplainRequest` | `ExplainResponse` | `AI_EXPLAIN_TIMEOUT_SECONDS` = 30 |
+| `POST /v1/explain` | `ExplainRequest` | `ExplainResponse` | `AI_EXPLAIN_TIMEOUT_SECONDS` = 30 (final after Fadi's P7) |
 | `GET /health` | – | `{"status": "ok", "versions": {...}}` | – |
 
 General rules:
 
 - Every timestamp is UTC, ISO-8601 with `Z` (`2026-10-19T14:15:00Z`). Aware timestamps with
   another offset are accepted and converted; naive ones are refused.
-- Prices are finite and positive.
+- Prices are finite and positive. **Money is USD only in v1.**
 - Requests (which we build) refuse unknown fields. Responses (which ai-service builds) ignore
   them, so ai-service can add fields without breaking us.
 - **`Setup` is the exception**: it is ai-service's object. Its unknown fields are kept in both
   directions, and a setup parsed from JSON is sent back as that same JSON (section 3).
 - `X-Request-ID`: the `request_id` on evaluate, the `setup_id` on size and explain. It is for
   logs only.
+- `Content-Encoding: gzip` on the request body when `AI_REQUEST_GZIP=true` (off: ai-service
+  does not decompress request bodies yet, section 11).
 
 ## 2. Fields
 
@@ -49,9 +58,9 @@ Every bar is **closed**.
 
 | Field | Type | |
 |---|---|---|
-| `ts` | UTC | the bar's **open** time; it closes at `ts` + timeframe |
+| `ts` | UTC | the bar's **open** time; it closes at `ts` + timeframe (`1d`: 17:00 New York the next day) |
 | `o`, `h`, `l`, `c` | price | `h` is the highest, `l` the lowest |
-| `spread` | number ≥ 0 or null | average spread over the bar, **in price units** (XAU/USD: 0.25 = 25 points) |
+| `spread` | number ≥ 0 or null | average spread over the bar, **in price units** (XAU/USD: 0.25 = 25 points). **The decision bar always has one** |
 
 ### `EvaluateRequest`
 
@@ -59,19 +68,22 @@ Every bar is **closed**.
 |---|---|---|
 | `request_id` | string | `{instrument lower}-{profile}-{bar_close_ts}`, e.g. `xauusd-intraday-2026-10-19T14:15:00Z`; validated |
 | `instrument` | `XAUUSD` | `[A-Z0-9]{3,16}` |
-| `profile` | `intraday` | `[a-z0-9_]{1,32}` |
+| `profile` | `intraday` | `[a-z0-9_]{1,32}`; `intraday` only in v1 |
 | `bar_close_ts` | UTC | the close of the bar being evaluated |
-| `bars` | `{timeframe: [Bar]}` | oldest first, strictly increasing. Default counts: 500 × 15m, 500 × 1h, 300 × 4h (`AI_BARS_15M/1H/4H`); at most 5,000 per timeframe |
+| `bars` | `{timeframe: [Bar]}` | oldest first, strictly increasing. Default counts: **2,000 × 15m, 500 × 1h, 300 × 4h, 260 × 1d** (`AI_BARS_15M/1H/4H/1D`); at most 5,000 per timeframe. Fewer when the history is shorter (section 8) |
 | `open_setups` | `[Setup]` | every non-final setup of this instrument and profile, **exactly as last returned** (at most 200) |
 | `calendar` | `[{ts, currency, impact, title}]` | B6 `for_evaluate`: events within ±6 h, `CALENDAR_CURRENCIES`, impact medium or high (at most 500) |
-| `instrument_spec` | `InstrumentSpec` | B4 specs: `contract_size`, `tick_size`, `lot_step`, `min_lot`, `max_lot`, `price_basis`, `session_calendar`, plus the optional `quote_currency` and `margin_rate` (proposal) |
+| `instrument_spec` | `InstrumentSpec` | B4 specs: `contract_size`, `tick_size`, `lot_step`, `min_lot`, `max_lot`, `price_basis`, `session_calendar`, `quote_currency`, `margin_rate` |
 
 Rules checked on every request:
 
 - The **smallest** timeframe ends exactly at `bar_close_ts`: its last bar is the one that
-  just closed, so `bars` include that bar.
+  just closed (the **decision bar**), so `bars` include that bar.
 - In every other timeframe, the last bar has also closed by `bar_close_ts`. For example, at
   14:15 the newest 1h bar sent is 13:00, because the 14:00 bar is still forming.
+- **`1d` bars are New York trading days**: from 17:00 to 17:00 America/New_York, DST-aware
+  (22:00 UTC in winter, 21:00 UTC in summer; the day of a DST change lasts 23 or 25 hours).
+  A `1d` bar must open at 17:00 New York; it is closed when the next one opens.
 
 ### `Setup`
 
@@ -80,13 +92,14 @@ Rules checked on every request:
 | `setup_id` | string ≤ 128 | deterministic, chosen by ai-service |
 | `state` | `DEVELOPING`, `ARMED`, `ACTIVE`, `CLOSED`, `EXPIRED`, `INVALIDATED` | decided by ai-service |
 | `direction` | `buy`, `sell` | |
-| `entry`, `sl`, `tp` | price or null | **required in `ARMED` and `ACTIVE`**: buy `sl < entry < tp`, sell `tp < entry < sl` |
+| `entry`, `sl`, `tp` | price or null | **required in `ARMED` and `ACTIVE`**: buy `sl < entry < tp`, sell `tp < entry < sl`. Rounded to `tick_size`: the stop away from the entry, the target toward it |
 | `r_multiple` | number or null | reward / risk at entry |
 | `probability` | 0..1 or null | of reaching `tp` first |
 | `ev_r`, `ev_r_lower` | number or null | expected value in R and its lower bound |
-| `grade` | `A`, `B`, `C`, `D` or null | proposal |
+| `grade` | `A`, `B`, `C`, `D` or null | A best. **Always null in v1** (no model has passed the gate) |
 | `valid_until` | UTC or null | the entry is no longer valid after it |
 | `horizon_until` | UTC or null | the end of the trade horizon |
+| `created_at` | UTC or null | the close of the bar where the setup became known as `DEVELOPING`; optional until ai-service sends it |
 | `evidence`, `features` | objects | free-form, kept as they are |
 
 ### `EvaluateResponse`
@@ -94,21 +107,26 @@ Rules checked on every request:
 | Field | |
 |---|---|
 | `request_id` | must equal the request's (the client checks it) |
-| `status` | `ok`, `data_quality_failed`, `model_unavailable` |
-| `versions` | `{strategy, model, features}`; `model` may be null (no model loaded) |
-| `new_setups` | `[Setup]`: setups that appeared or changed |
-| `transitions` | `[{setup_id, from, to, at, reason, realized_r}]`: state changes of existing setups (`from` is `from_` in Python) |
-| `abstentions` | `[{reason, detail}]`: why nothing was proposed |
+| `status` | `ok`, `data_quality_failed`, `model_unavailable` (no model: a **200** with this status, not a 503) |
+| `versions` | `{strategy, model, features}`: `strategy` and `features` always present; `model` null **only** with `model_unavailable` |
+| `new_setups` | `[Setup]`: the **current state of every setup** ai-service knows about |
+| `transitions` | `[{setup_id, from, to, at, reason, realized_r}]`: the **full history** of their state changes (`from` is `from_` in Python) |
+| `abstentions` | `[{reason, detail}]`: why nothing was proposed; `detail` is an **object** |
+
+The same body always gets a byte-identical response.
 
 ### Size and explain
 
 | Model | Fields |
 |---|---|
-| `SizeRequest` | `setup`, `instrument_spec`, `account {balance, currency, leverage}`, `risk {risk_per_trade_pct, daily_loss_limit_pct, max_drawdown_pct}` |
-| `SizeResponse` | `lots`, `risk_usd`, `margin_required` (null allowed), `feasible`, `warnings[]` |
+| `SizeRequest` | `setup`, `instrument_spec`, `account {balance, currency, leverage}`, `risk {risk_per_trade_pct, daily_loss_limit_pct?, max_drawdown_pct?}` (the two guards are optional: the backend applies them, B10) |
+| `SizeResponse` | `lots`, `risk_usd` (**always USD**: ai-service converts from the quote currency, e.g. JPY), `margin_required` (null allowed), `feasible`, `warnings[]` |
 | `ExplainRequest` | `setup`, `lang` (`ar` or `en`) |
-| `ExplainResponse` | `text`, `verified` (checked against the setup's numbers), `template_used` (bool, proposal) |
+| `ExplainResponse` | `text`, `verified` (checked against the setup's numbers), `template_used` (boolean: the fixed template was used) |
 | `ErrorResponse` (422) | `{"detail": [{"loc": [...], "msg": "...", "type": "..."}]}` (FastAPI style), or a string |
+
+Margin (Fadi): **notional in USD × max(`margin_rate`, 1 / leverage)**. Without a
+`margin_rate`, 1 / leverage.
 
 The size example is the B4 hand example (docs/instruments.md): balance 2,000 USD, risk 1 % =
 20 USD, XAU/USD entry 2400.00, sl 2395.00, so 1 lot risks 500 USD and lots = **0.04**.
@@ -118,16 +136,18 @@ against the platform's own sizing function.
 ## 3. Idempotency and determinism
 
 - **`request_id` is deterministic.** The same instrument, profile and bar always give the same
-  id, and ai-service must give the same result for the same request.
+  id, and ai-service gives a byte-identical result for the same body.
 - **Retries send the same bytes.** The body is serialised once and every retry sends it
-  unchanged. A retry can never produce a second, different result.
+  unchanged (gzip with a fixed `mtime` too). A retry can never produce a second, different
+  result.
 - **`setup_id` is deterministic** (ai-service), so the same setup seen twice is one row.
 - **`open_setups` echoes setups as last returned.**
   - We store each setup's JSON (`ai_setups.last_payload`) and send it back unchanged: same
     values, unknown fields included, numbers and timestamp strings as ai-service wrote them.
   - The only change we make is `state`, updated when a transition moves the setup.
   - JSONB does not keep the key order of objects.
-- **Applying the same response twice changes nothing.** Section 5 has the details.
+- **Applying the same response twice changes nothing.** Our storage relies on determinism but
+  tolerates both a byte-identical and a merely equivalent answer. Section 5 has the details.
 
 ## 4. Timeouts, retries, errors (client)
 
@@ -146,9 +166,9 @@ backoff.
 
 Each attempt logs one line, for example `ai-service /v1/evaluate request_id=…
 attempt=2/3 status=200 latency_ms=412`. Payloads are never logged: an evaluate request
-carries about 1,300 bars.
+carries about 3,000 bars.
 
-## 5. Who decides what, and how results are stored (B8)
+## 5. Who decides what, and how results are stored (B8, B9)
 
 - **ai-service decides** setups, their states and every number. **The backend never creates or
   moves a setup on its own**: it only records what ai-service returns. It refuses what
@@ -156,56 +176,69 @@ carries about 1,300 bars.
 - `store.apply_evaluation(session, instrument, req, resp)` applies one response in **one
   transaction**:
   1. **Versions.** A model version that is not in `ai_model_versions` yet is added there,
-     inactive, with a note. A version that differs from the active model is logged.
+     inactive, with a note. A version that differs from the active model is logged. (No model
+     is registered by hand in v1.)
   2. **`status != ok`:** nothing else is stored. The result carries the status.
-  3. **`new_setups`**, for each item:
-     - **New `setup_id`:** a row in `ai_setups` (`last_payload` = the JSON as returned) and a
-       first event `null → state` at `bar_close_ts`.
-     - **Known `setup_id`, final state:** nothing changes, ever.
-     - **Known `setup_id`, not final:** the mutable fields are updated (prices, scores,
-       `valid_until`, `horizon_until`, evidence, features, `last_payload`, versions), but only
-       when something differs.
-       - A state change carried this way is recorded only if the table below allows it
-         (it is a forward move).
-       - The state **never moves backwards**: a setup sent again as `ARMED` while it is stored
-         as `ACTIVE` stays `ACTIVE`, and its payload says `ACTIVE`.
-  4. **`transitions`**, in `at` order. Each is recorded (event, `state`, `realized_r`,
-     `last_payload.state`) unless it is rejected:
-     - the `setup_id` is unknown, or belongs to another instrument or profile;
-     - the stored state is final;
-     - `from` is not the stored state;
-     - `from → to` is not in the table.
+  3. **New `setup_id`s** in `new_setups`: a row in `ai_setups` and a first event `null →
+     state`, where the state is the **start of its history** in `transitions` (or its current
+     state without history), at its **`created_at`** when ai-service sends it, else at
+     `bar_close_ts`.
+  4. **`transitions`** (the full history), in `(at, life-cycle order)` order: ARMED and ACTIVE
+     with the same `at` are applied in that order. Each is recorded (event, `state`,
+     `realized_r`, `last_payload.state`) unless:
+     - it is **already recorded** (same `setup_id`, `to` and `at`): skipped silently;
+     - it is **history the setup has already passed** (it ends at or before the stored
+       state): skipped silently;
+     - the `setup_id` is unknown, or belongs to another instrument or profile: rejected;
+     - the stored state is final: rejected;
+     - `from` is not the stored state: rejected;
+     - `from → to` is not in the table below (e.g. ACTIVE → INVALIDATED): rejected.
 
      A rejection is logged and listed in the result. **The rest of the response is still
-     applied.** A transition already recorded (same `setup_id`, `to` and `at`) is skipped
-     silently: it is a re-applied response.
-  5. The result has `inserted`, `updated`, `unchanged`, `transitions_applied`,
-     `transitions_known`, `rejected` and **`state_changes`** (`setup_id`, `from`, `to`, `at`,
-     `reason`, `realized_r`). B11 turns the state changes into notifications. Re-applying the
-     same response reports no state change.
+     applied.**
+  5. **`new_setups`** (the current state of each setup), after the transitions:
+     - the same state as stored: the mutable fields are updated (prices, scores,
+       `valid_until`, `horizon_until`, evidence, features, `last_payload`, versions), but only
+       when something differs; a final setup never changes again;
+     - a **later** state missing from the history: recorded as a forward move at
+       `bar_close_ts` if the table allows it, otherwise rejected (nothing of the item taken);
+     - an **earlier** state: the state would go backwards. That is a **contract error**: logged
+       as an error, listed in `contract_errors`, shown in `/admin/system/status`, and nothing
+       of the item is taken: our state and payload are kept.
+  6. The result has `inserted`, `updated`, `unchanged`, `transitions_applied`,
+     `transitions_known`, `rejected`, `contract_errors` and **`state_changes`** (`setup_id`,
+     `from`, `to`, `at`, `reason`, `realized_r`). B11 turns the state changes into
+     notifications (an outbox row in the same transaction). Re-applying the same response
+     reports no state change.
 
-**Allowed transitions** (to agree with Fadi):
+**Allowed transitions** (agreed with Fadi, point 9):
 
 | From | To |
 |---|---|
 | `DEVELOPING` | `ARMED`, `EXPIRED`, `INVALIDATED` |
 | `ARMED` | `ACTIVE`, `EXPIRED`, `INVALIDATED` |
-| `ACTIVE` | `CLOSED`, `INVALIDATED` |
+| `ACTIVE` | `CLOSED` |
 | `CLOSED`, `EXPIRED`, `INVALIDATED` | nothing: these states are final |
+
+No `DEVELOPING → ACTIVE`, and **`ACTIVE → INVALIDATED` is removed** (0.1.0 allowed it). A row
+that already went ACTIVE → INVALIDATED keeps it as history; the transition is rejected from
+now on.
 
 `store.open_setups(session, instrument, profile)` returns the `last_payload` of every non-final
 setup of that instrument and profile, ordered by `created_at` then `setup_id`. That list goes
-into the next request's `open_setups`, and it includes `DEVELOPING` setups.
+into the next request's `open_setups`, and it includes `DEVELOPING` setups. ai-service is
+stateless and may ignore it.
 
-### Tables (migration 0015, additive)
+### Tables (migrations 0015 and 0018, additive)
 
 | Table | Key | |
 |---|---|---|
 | `ai_setups` | `setup_id` | instrument (FK), profile, direction, state, prices, scores, grade, `valid_until`, `horizon_until`, `realized_r`, evidence, features, **`last_payload`**, the three versions, first and last `request_id`, `created_at`, `updated_at`. Checks on state, direction and probability. Indexes `(instrument_id, profile, state)` and `(created_at DESC)` |
 | `ai_setup_events` | `id` (identity) | append-only: `from_state` (null at first appearance), `to_state`, `at`, `reason`, `realized_r`, `request_id`. **Unique `(setup_id, to_state, at)`** |
 | `ai_model_versions` | `model_id` | training range, `data_hash`, `metrics`, `is_active`, `notes`. A partial unique index allows **at most one active** model |
-| `ai_setup_sizes` | `(setup_id, user_id)` | `lots`, `risk_usd`, `margin_required`, `feasible`, `warnings`, `inputs` (the account and risk sent). B10 fills it |
-| `ai_setup_explanations` | `(setup_id, lang)` | `text`, `verified`, `template_used`. B9 and B11 fill it |
+| `ai_setup_sizes` | `(setup_id, user_id)` | `lots`, `risk_usd`, `margin_required`, `feasible`, `warnings`, `inputs`, `source` (`remote` or `local`; 0018 renamed `ai-service` to `remote`). B10 fills it |
+| `ai_setup_explanations` | `(setup_id, lang)` | `text`, `verified`, `template_used`. Only answers that may be shown are stored (section 9) |
+| `ai_evaluation_runs` (0018) | `id`; unique `(instrument_id, profile, bar_close_ts)` | one row per evaluate run: `status`, `reason`, `request_bytes`, `coverage`, `detail`, `duration_ms`, `started_at`, `finished_at` |
 
 ### Admin endpoints (admin JWT only)
 
@@ -216,15 +249,7 @@ into the next request's `open_setups`, and it includes `DEVELOPING` setups.
 | `GET /api/v1/admin/ai/models` | the registry, newest first |
 | `POST /api/v1/admin/ai/models` | register a model, inactive (`model_id`, training range, `data_hash`, `metrics`, `notes`); repeating it updates the description |
 | `POST /api/v1/admin/ai/models/{model_id}/activate` | make it the only active model (one transaction) |
-
-User-facing reads come with B9 and B11.
-
-**B11 and `/v1/explain`.**
-- The alerts call `/v1/explain` only when a setup becomes ARMED, once per language the
-  recipients use, with an 8 s timeout and one attempt.
-- The answer is stored in `ai_setup_explanations` and reused.
-- If ai-service is unavailable or answers 404, the alert is sent with the template text only.
-- `verified: false` answers are never sent.
+| `GET /api/v1/admin/system/status` | the `ai_evaluate` block (section 8) |
 
 ## 6. Settings
 
@@ -235,50 +260,214 @@ User-facing reads come with B9 and B11.
 | `AI_SIZE_TIMEOUT_SECONDS` | `5` |
 | `AI_EXPLAIN_TIMEOUT_SECONDS` | `30` |
 | `AI_MAX_RETRIES` | `2` |
-| `AI_BARS_15M`, `AI_BARS_1H`, `AI_BARS_4H` | `500`, `500`, `300` |
+| `AI_BARS_15M`, `AI_BARS_1H`, `AI_BARS_4H`, `AI_BARS_1D` | `2000`, `500`, `300`, `260` (0 leaves a timeframe out) |
+| `AI_REQUEST_GZIP` | `false` |
+| `AI_EVALUATE_ENABLED` | **`false`** |
+| `AI_EVALUATE_INSTRUMENTS` | `fxpro:XAU/USD` (comma list of `source:symbol`) |
+| `AI_PROFILES` | `intraday` |
+| `AI_EVALUATE_DELAY_SECONDS` | `20` |
+| `AI_EXPLAIN_LANGS` | `ar,en` |
+| `AI_SIZE_LOCAL_FALLBACK_ON_404` | `true` (flip to `false` after Fadi's P6) |
+| `DATA_QUALITY_ALERT_COOLDOWN_SECONDS` | `1800` |
 
-The production memory cap of `ai-service` is now 512m (it was 256m).
+The production memory cap of `ai-service` is 512m.
 
-## 7. Open points to agree with Fadi
+## 7. The 17 points, answered by Fadi
 
-1. **`grade` values.** We propose `A`/`B`/`C`/`D`, with A the best and nullable. Is there a
-   grade, and what scale?
-2. **`instrument_spec` in evaluate.** We send the B4 specs with every request so prices can be
-   rounded to `tick_size`. Should the spec live in ai-service's config instead?
-3. **`quote_currency` and `margin_rate`.** They are optional extra fields of `instrument_spec`;
-   sizing needs the quote currency, and margin needs either a rate or the leverage. Keep them?
-4. **The bar that closes at `bar_close_ts`.** We say `bars` include it: the smallest
-   timeframe ends exactly there, and in the larger timeframes only closed bars are sent (at
-   14:15 the newest 1h bar is 13:00). Agreed?
-5. **Payload size.** 500 + 500 + 300 bars is about 100 KB of JSON. We cap each timeframe at
-   5,000 bars, `open_setups` at 200 and `calendar` at 500. What maximum body size will
-   ai-service accept?
-6. **`open_setups` content.** We send every non-final setup, **including `DEVELOPING`**, as
-   last returned, with `state` updated by transitions. Is that what ai-service wants?
-7. **`spread` units.** We send price units (XAU/USD 0.25 = 25 points), averaged over the bar,
-   or null when unknown. Price units or points? Average or close?
-8. **Error shape.** We expect FastAPI's 422 `{"detail": [{loc, msg, type}]}`, never retry it,
-   and retry every 5xx. Should a request that ai-service cannot process right now (e.g. no model) be
-   `200 + status: model_unavailable` (what we assume) or a 503?
-9. **Allowed transitions.** The table in section 5. Can `DEVELOPING` go straight to `ACTIVE`?
-   Can `ARMED` close without becoming `ACTIVE`, e.g. a stop hit before the fill?
-10. **States carried in `new_setups`.** If a known setup comes back in `new_setups` with a
-    later state, we record it as a forward move. If it comes back with an earlier state, we
-    keep ours. Should state changes only ever come through `transitions`?
-11. **The time of the first event.** A new setup has no creation time in the contract, so we
-    use `bar_close_ts`. Should `Setup` carry a `created_at`?
-12. **`versions.model` may be null** when no model is loaded (`model_unavailable`). Is
-    `strategy`/`features` always present?
-13. **`template_used`.** We read it as a boolean (a fixed template was used instead of the
-    generated text). Is it a boolean or a template id?
-14. **`Abstention.detail`.** We accept a string or an object. Which one?
-15. **`risk.daily_loss_limit_pct` and `max_drawdown_pct`** are required in `SizeRequest`. Does
-    `/v1/size` use them, or does the backend enforce them (B10)?
-    *Note (B10):* the backend applies both guards itself before calling `/v1/size`, from the
-    user's closed taken trades. A reached guard gives `feasible: false` without a call
-    (docs/risk-management.md#ai-setups-b10). ai-service may apply them too.
-16. **Determinism.** Given the same `request_id` and body, must the result be byte-identical, or
-    only the same setups and transitions? Our store tolerates both.
-17. **Versioning.** Our proposal: `/v1` stays backwards compatible (only added fields), and
-    `info.version` follows semver once the draft is approved. ai-service reports its versions
-    in `versions` and in `/health`.
+| # | Point | Decision (binding) | What changed here |
+|---|---|---|---|
+| 1 | `grade` values | A–D stays; **always null in v1** (no model has passed the gate). Every reader handles null | `Grade` documented; examples null; the alert text leaves the grade out when null |
+| 2 | `instrument_spec` in evaluate | sent with every evaluate. Rounding to `tick_size`: **SL away from the entry, TP toward it**; the backend uses the same rule wherever it rounds | `contract.round_levels`; used by `local_size` and the alert text |
+| 3 | `quote_currency`, `margin_rate` | both stay. **USD only** in v1 | no longer "proposal" |
+| 4 | the bar closing at `bar_close_ts` | accepted as proposed | – |
+| 5 | payload size and bar counts | ~**2,000 × 15m** (~20 trading days) and ~**a year of D1**; D1 = **17:00 to 17:00 America/New_York** (DST). Final counts and a max size with his P6 | `AI_BARS_15M=2000`, `AI_BARS_1D=260`; `1d` validated at 17:00 New York (`d1_open`, `d1_close`, `bar_close`); built on the fly (section 8); size measured (section 8) |
+| 6 | `open_setups` content | as proposed; the engine is stateless and may ignore them | – |
+| 7 | `spread` | price units, the bar average. **The decision bar must have a spread**; without it the backend does not call ai-service and records a local abstention `data_quality_failed` | section 8 |
+| 8 | errors | 422 FastAPI style: no retry; any 5xx: retry; no model: **200 + `model_unavailable`** | as before; a run with `model_unavailable` is `abstained` |
+| 9 | transitions | DEVELOPING → ARMED → ACTIVE → CLOSED; DEVELOPING or ARMED → EXPIRED or INVALIDATED. **ACTIVE → INVALIDATED removed**. No DEVELOPING → ACTIVE, but ARMED and ACTIVE may share an `at` (applied in order) | `ALLOWED_TRANSITIONS`; `store.ALLOWED`; ordering by `(at, state)` |
+| 10 | states in `new_setups` | each response carries the **current state** of every setup in `new_setups` and its **full history** in `transitions`; dedupe by `(setup_id, to, at)`; a state never goes backwards: a backwards state is a **contract error**, ours is kept | section 5 |
+| 11 | the time of the first event | `Setup.created_at` (close of the bar where DEVELOPING became known); optional for now; used when present, else `bar_close_ts` | `Setup.created_at` |
+| 12 | versions | `strategy` and `features` always present; `model` null **only** with `model_unavailable`. No model registered now | validated on `ok` responses |
+| 13 | `template_used` | a boolean | – |
+| 14 | `Abstention.detail` | an object | `detail: dict` (a string is refused) |
+| 15 | `daily_loss_limit_pct` / `max_drawdown_pct` | the backend applies them (B10) | optional in `SizeRequest` |
+| 16 | determinism | the same body gives a byte-identical response | our storage tolerates both |
+| 17 | versioning | accepted: `/v1` changes only by adding fields, `info.version` semver, versions in every answer and `/health` | contract **0.2.0**, OpenAPI regenerated |
+
+Fadi's extras:
+
+| # | Decision | What changed here |
+|---|---|---|
+| E1 | `risk_usd` is always USD: ai-service converts from the quote currency inside `/v1/size` | `SizeResponse` documented |
+| E2 | a 404 from `/v1/size` means "fall back to local" **for now**; once it exists, a user never gets a local size without knowing it | `source` is `remote` or `local` on every size, a local size always has a warning; `AI_SIZE_LOCAL_FALLBACK_ON_404=true` (off: a 404 is a 503) |
+| E3 | margin = notional in USD × max(`margin_rate`, 1 / leverage) | `local_size`; without a rate, 1 / leverage |
+| E4 | the explain timeout is 30 s, final after his P7 | already 30 s |
+| E5 | `verified=false`: not shown; `template_used=true`: the template text; otherwise `explanation: null`, `explanation_status: "unavailable"` ("الشرح غير متاح" / "Explanation unavailable"); no unverified number reaches a user | section 9 |
+| E6 | profiles: `intraday` only in v1 | `AI_PROFILES=intraday` |
+| E7 | grade as in point 1 | – |
+
+His bug report ("the backtest Sizer gives a USD/JPY size ~150× too small") was confirmed and
+fixed: [risk-management.md](risk-management.md#backtests-and-plans-in-another-account-currency-b9).
+
+## 8. The evaluate task
+
+**Schedule.** Beat runs `ai.evaluate_tick` at each 15m boundary (`:00 :15 :30 :45`). While
+`AI_EVALUATE_ENABLED=true` it schedules one `ai.evaluate(source, symbol, profile,
+bar_close_ts)` per instrument in `AI_EVALUATE_INSTRUMENTS` and profile in `AI_PROFILES`, with
+`eta = boundary + AI_EVALUATE_DELAY_SECONDS` (20 s: the 15m bar is closed and stored) and an
+expiry of one bar. Disabled: nothing is scheduled, and a run already queued does nothing.
+`ai.evaluate` runs on the default queue (the `worker` service); `ai.explain` on the
+notifications queue (also `worker`).
+
+**One run per key.** A Redis key `ai:evaluate:run:{source}:{symbol}:{profile}:{bar_close_ts}`
+is set with NX and a 6-hour expiry: a retried, redelivered or duplicated task finds it and
+does nothing. `ai_evaluation_runs` is unique on the same key.
+
+**Skips** (ai-service is not called; the run is recorded as a local abstention in the shape of
+an answer: `status: data_quality_failed`, `versions: {strategy: backend, model: null,
+features: none}`, one abstention with the reason):
+
+| Reason | When |
+|---|---|
+| `no_specs` | the instrument lacks B4 specs |
+| `bars_not_closed` | the 1m watermark has not reached `bar_close_ts` |
+| `market_closed` | the market is closed and the decision bar had no trading minute (weekends, breaks) |
+| `data_quality_degraded` | the B5 gate on the decision bar failed (gaps, a missing 1m bar in it, a spike, lag, no data) |
+| `decision_bar_missing` | no 15m bar ends at `bar_close_ts` |
+| `decision_bar_no_spread` | the decision bar has no spread (Fadi, point 7) |
+
+A bar that closed just before a session break (gold at 17:00 New York) is still evaluated: the
+market being closed now is not a reason when the bar traded and passed every check.
+
+**The request.**
+
+- Bars are cut at the last closed bar: the aggregates are `materialized_only = false`, so the
+  forming bucket is excluded by its end (`ts + timeframe ≤ bar_close_ts`).
+- The counts come from `AI_BARS_*`. When the history is shorter, what exists is sent; the
+  coverage of each timeframe (`requested`, `sent`, `from`, `short`) is logged (a warning when
+  short) and stored with the run.
+- The spread of each bar is the average of its 1m spreads (one query over 15m buckets; 1h and
+  4h add them up). The `1d` spread is null.
+- `1d` bars are built on the fly with the New York 17:00 boundary from the 1h aggregate,
+  itself built from the 1m data: the boundary is always on a UTC hour, so the OHLC is the same
+  as from the 1m bars. Only days closed by `bar_close_ts` are sent.
+- `calendar` from B6 `for_evaluate`, `open_setups` from the store (at most 200),
+  `instrument_spec` from B4, the deterministic `request_id`.
+
+**Request size**, measured with the defaults (2,000 × 15m + 500 × 1h + 300 × 4h + 260 × 1d =
+3,060 bars, 10 open setups, 20 calendar events): **330 KB of JSON, 42 KB gzip**; building it
+peaks at about **6 MB** of Python memory in the worker (cap 384 MB). The test
+`test_request_size_with_the_default_counts` prints it.
+
+**Calling ai-service** (`client.evaluate`, its timeouts and retries):
+
+| Outcome | Run status | Logged |
+|---|---|---|
+| 200, `ok` | `ok` | info |
+| 200, `model_unavailable` / `data_quality_failed` | `abstained` (reason = the status) | info |
+| 404 or connection refused (no `/v1/evaluate` yet) | `unavailable` (`no_evaluate_endpoint` / `connection_refused`) | a warning **at most once an hour**, not an error, the task succeeds |
+| 5xx or timeouts after the retries | `unavailable` (the last error) | a warning |
+| 422, another 4xx, a body outside the contract, a backwards state | `contract_error` (or `ok` with `contract_errors` for a backwards state) | an **error**, flagged in `/admin/system/status` (`last_contract_error`, kept 7 days) |
+
+**After the commit** of `apply_evaluation` (each step isolated: a failure is logged and never
+fails the run):
+
+1. `alerts.kick()`: the outbox rows are sent now rather than within 30 s;
+2. sizes (B10) of the **followers** of each setup that became ARMED (who follow its
+   instrument and profile, meet `min_grade`, may read it) and of the **takers** of each setup
+   that became ACTIVE; stored, the alerts reuse them;
+3. one `ai.explain` per newly ARMED setup and `AI_EXPLAIN_LANGS` language.
+
+**Visibility.** `GET /api/v1/admin/system/status` has an `ai_evaluate` block:
+
+```json
+{
+  "enabled": true,
+  "instruments": ["fxpro:XAU/USD"],
+  "profiles": ["intraday"],
+  "delay_seconds": 20,
+  "bars": {"15m": 2000, "1h": 500, "4h": 300, "1d": 260},
+  "last_runs": [
+    {"instrument": "fxpro:XAU/USD", "profile": "intraday", "bar_close_ts": "2026-10-19T14:15:00Z",
+     "at": "2026-10-19T14:15:21Z", "status": "unavailable", "reason": "no_evaluate_endpoint",
+     "duration_ms": 412, "request_bytes": 330036,
+     "coverage": {"15m": 2000, "1h": 500, "4h": 300, "1d": 260}, "coverage_short": []}
+  ],
+  "runs_last_24h": {"unavailable": 96},
+  "last_contract_error": null
+}
+```
+
+## 9. Explanations
+
+`ai.explain(setup_id, lang)` calls `/v1/explain` (30 s per attempt, the client's retries on
+5xx and timeouts, then 2 task retries a minute apart). A 404 (no `/v1/explain` yet, Fadi's P7)
+is `unavailable`, quietly.
+
+Fadi's rule, **on storing and on serving**, so that no unverified number ever reaches a user:
+
+| `verified` | `template_used` | Stored | Shown |
+|---|---|---|---|
+| true | any | yes | the text (`explanation_status: "verified"`) |
+| false | true | yes | the template text (`"template"`) |
+| false | false | **no** (logged without the text) | nothing: `explanation: null`, `explanation_status: "unavailable"` |
+
+- `GET /api/v1/ai/setups/{setup_id}/explanation?lang=ar|en` (signals readers):
+  `{setup_id, lang, explanation, explanation_status}`. Rows stored by B11 before this rule
+  (unverified, no template) are never served.
+- The ARMED alert (B11) carries the text when it may be shown, otherwise
+  `explanation_status: "unavailable"` and the line "الشرح غير متاح" / "Explanation
+  unavailable".
+
+## 10. The fake ai-service (development and CI only)
+
+`tools/fake_ai_service/fake_ai_service.py` is a small deterministic FastAPI app. It is **not**
+in `ai-service/` and **never** in the production compose (`infra/deploy/docker-compose.prod.yml`).
+
+- It serves the committed examples, or a deterministic life cycle: a DEVELOPING setup, then
+  ARMED, ACTIVE and CLOSED on the next bars, with the full history in `transitions`.
+- `POST /_fake/mode {"evaluate": ..., "size": ..., "explain": ...}` drives it:
+  `evaluate` = `lifecycle` (default), `same_at`, `examples`, `model_unavailable`, `backwards`,
+  `422`, `503`, `404`; `size` = `404` (default), `ok`, `503`; `explain` = `404` (default),
+  `verified`, `template`, `unverified`, `503`. `GET /_fake/requests` lists what it received;
+  `POST /_fake/reset` starts again. Gzip request bodies are accepted.
+- The backend tests use it in-process (`tests/test_ai_evaluate.py`, `tests/test_ai_explain.py`).
+- Locally: `docker compose --profile fake-ai up -d fake-ai`, then in `.env`
+  `AI_SERVICE_URL=http://fake-ai:8001` and `AI_EVALUATE_ENABLED=true`, and restart `worker`
+  and `beat`.
+
+## 11. Enabling it on the server
+
+Shipped with `AI_EVALUATE_ENABLED=false`: nothing calls ai-service on the server until Yazan
+turns it on. The deploy only **appends** keys that are new in `.env.example`, so a key the
+server already has keeps its value (`AI_BARS_15M=500` from B7 stays 500 until it is changed).
+
+```bash
+ssh -i ~/.ssh/trading_deploy deploy-trading@187.127.76.76
+cd /opt/trading
+# 1. the bar counts agreed with Fadi (the old 500 is kept by the deploy), then turn it on
+sed -i 's/^AI_BARS_15M=.*/AI_BARS_15M=2000/' .env
+grep -q '^AI_BARS_1D=' .env || echo 'AI_BARS_1D=260' >> .env
+sed -i 's/^AI_EVALUATE_ENABLED=.*/AI_EVALUATE_ENABLED=true/' .env
+grep -E '^AI_(EVALUATE_|BARS_|PROFILES)' .env
+# 2. restart only worker and beat of the project "trading" (nothing else, no other project)
+docker compose -p trading -f docker-compose.yml --env-file .env --env-file image.env \
+  up -d --no-deps --force-recreate worker beat
+# 3. after the next 15m boundary + 20 s: the last run per instrument and profile
+curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://127.0.0.1:8080/api/v1/admin/system/status \
+  | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["ai_evaluate"], indent=1))'
+```
+
+Until Fadi's `/v1/evaluate` is deployed, every run is `unavailable` (`no_evaluate_endpoint`),
+logged once an hour, and nothing else happens. To turn it off: the same `sed` with `false`
+and the same restart.
+
+## 12. Open issues
+
+- **Bar counts and a maximum request size** come with Fadi's P6; the counts are settings.
+- **Gzip:** ai-service (FastAPI) does not decompress request bodies yet. The client can send
+  gzip (`AI_REQUEST_GZIP=true`, 330 KB → 42 KB) once ai-service accepts `Content-Encoding:
+  gzip`; until then it stays off.
+- **`/v1/size`:** once P6 ships it, set `AI_SIZE_LOCAL_FALLBACK_ON_404=false`.
+- **`/v1/explain`** and its final timeout come with P7.
+- `created_at` is optional until ai-service sends it.

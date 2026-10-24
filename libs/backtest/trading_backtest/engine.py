@@ -22,6 +22,11 @@ Execution model (also in README.md, docs/backtesting.md and docs/risk-management
   and the fee ``fill * quantity * fee_rate``, on entry and on every exit fill.
 * Accounting: ``cash`` plus the position's value (longs: ``+q * price``; shorts: the sale
   proceeds are in cash and ``-q * price`` is owed).
+* With ``config.conversion`` (an account currency that is not the quote currency) the money is
+  kept in the account currency: the size is computed on the equity converted to the quote
+  currency, ``cash`` moves only by the fees and the P&L of each fill (converted at that fill),
+  and an open position adds its unrealised P&L converted at the close. Without it the code
+  path is the one above, unchanged.
 """
 
 from __future__ import annotations
@@ -114,6 +119,7 @@ def simulate(
 
     fee, slip = config.fee_rate, config.slippage_rate
     exits, guards = config.exits, config.guards
+    conv = config.conversion
     ctx = RiskContext(df, config)
     long_short = config.direction == "long_short"
     max_bars = exits.max_bars_held
@@ -169,13 +175,20 @@ def simulate(
         if i <= blocked_until:
             return skip(block_reason)
         fill = price * (1 + s * slip)  # a buy pays more, a short sale receives less
-        plan = ctx.plan(i - 1, s, cash, entry=fill)  # flat: equity == cash
+        if conv is None:
+            plan = ctx.plan(i - 1, s, cash, entry=fill)  # flat: equity == cash
+        else:
+            plan = ctx.plan(i - 1, s, cash, entry=fill, conversion_rate=conv.at(fill))
         if plan.invalid_reason is not None:
             return skip(plan.invalid_reason)
         q = plan.quantity
         entry_equity = cash
         entry_fee = fill * q * fee
-        cash -= s * fill * q + entry_fee
+        if conv is None:
+            cash -= s * fill * q + entry_fee
+        else:
+            entry_fee *= conv.at(fill)
+            cash -= entry_fee
         side, qty, qty0, entry_px, entry_i, entry_why = s, q, q, fill, i, reason
         init_stop = None if plan.stop is None else float(plan.stop)
         stop = math.nan if init_stop is None else init_stop
@@ -197,8 +210,15 @@ def simulate(
         nonlocal cash, side, qty, gross, exit_fees, blocked_until, block_reason, streak
         fill = price * (1 - side * slip)  # a long sells lower, a short buys back higher
         fee_paid = fill * q * fee
-        cash += side * fill * q - fee_paid
-        gross += side * (fill - entry_px) * q
+        if conv is None:
+            cash += side * fill * q - fee_paid
+            gross += side * (fill - entry_px) * q
+        else:
+            rate = conv.at(fill)
+            fee_paid *= rate
+            pnl = side * (fill - entry_px) * q * rate
+            cash += pnl - fee_paid
+            gross += pnl
         exit_fees += fee_paid
         qty -= q
         final = qty <= qty0 * 1e-12
@@ -232,7 +252,9 @@ def simulate(
                 gross_pnl=gross,
                 fees=fees,
                 net_pnl=net,
-                return_pct=net / (entry_px * qty0) * 100,
+                return_pct=net / (entry_px * qty0 * conv.at(entry_px)) * 100
+                if conv
+                else net / (entry_px * qty0) * 100,
                 bars_held=i - entry_i + (0 if at_open else 1),
                 entry_reason=entry_why,
                 exit_reason=reason,
@@ -323,7 +345,10 @@ def simulate(
                     if level == level and (stop != stop or side * (level - stop) > 0):
                         stop, stop_kind = level, "trailing_stop"
         # 6. mark to market; guards
-        eq = cash + side * qty * close[i]
+        if conv is None:
+            eq = cash + side * qty * close[i]
+        else:
+            eq = cash + side * qty * (close[i] - entry_px) * conv.at(close[i]) if side else cash
         equity[i - start] = last_equity = eq
         if dd_limit:
             peak = max(peak, eq)

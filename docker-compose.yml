@@ -135,6 +135,21 @@ services:
     ports:
       - "8001:8001"
 
+  # B9: a fake ai-service for development and CI (tools/fake_ai_service, docs/ai-contract.md
+  # section 10). Never in production (not in infra/deploy). Only with its profile:
+  #   docker compose --profile fake-ai up -d fake-ai   then AI_SERVICE_URL=http://fake-ai:8001
+  fake-ai:
+    profiles: ["fake-ai"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: uvicorn fake_ai_service:app --app-dir /fake --host 0.0.0.0 --port 8001
+    environment:
+      FAKE_AI_EXAMPLES: /examples
+    volumes:
+      - ./tools/fake_ai_service:/fake:ro
+      - ./docs/api/ai-service-examples:/examples:ro
+
   nginx:
     image: nginx:1.27-alpine
     volumes:

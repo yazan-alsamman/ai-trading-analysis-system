@@ -142,7 +142,7 @@ class AISetupSize(Base):
 
     __tablename__ = "ai_setup_sizes"
     __table_args__ = (
-        CheckConstraint("source IN ('ai-service', 'local')", name="ck_ai_setup_sizes_source"),
+        CheckConstraint("source IN ('remote', 'local')", name="ck_ai_setup_sizes_source"),
     )
 
     setup_id: Mapped[str] = mapped_column(
@@ -275,5 +275,44 @@ class AISetupExplanation(Base):
     verified: Mapped[bool] = mapped_column(Boolean)
     template_used: Mapped[bool] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+
+
+class AIEvaluationRun(Base):
+    """One ``ai.evaluate`` run (B9, ``app/ai/evaluate.py``) of an instrument, profile and bar:
+    what happened (``status``: ok, abstained, skipped, unavailable, contract_error, error), why
+    (``reason``), the request size and bar coverage, and a summary of the answer (or of the
+    local abstention when ai-service was not called). Read by ``/admin/system/status``."""
+
+    __tablename__ = "ai_evaluation_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "instrument_id", "profile", "bar_close_ts", name="uq_ai_evaluation_runs_key"
+        ),
+        CheckConstraint(
+            "status IN ('ok', 'abstained', 'skipped', 'unavailable', 'contract_error', 'error')",
+            name="ck_ai_evaluation_runs_status",
+        ),
+        Index("ix_ai_evaluation_runs_finished", "finished_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("instruments.id", ondelete="CASCADE")
+    )
+    profile: Mapped[str] = mapped_column(String(32))
+    bar_close_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    request_id: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(24))
+    reason: Mapped[str | None] = mapped_column(String(64))
+    request_bytes: Mapped[int | None] = mapped_column(Integer)
+    coverage: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    finished_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp()
     )

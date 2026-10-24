@@ -133,12 +133,19 @@ async def test_health_data_ok_and_disabled(
 
 
 async def test_transitions_log_and_notify_once(
-    session: AsyncSession, session_factory, redis_client: Redis, make_user, monitor, caplog
+    session: AsyncSession,
+    session_factory,
+    redis_client: Redis,
+    make_user,
+    monitor,
+    caplog,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     admin = await make_user("dq-admin@example.com", role=UserRole.admin)
     await make_user("dq-trader@example.com")
     instrument = await make_instrument(session)
     monitor("binance:BTC/USDT")
+    monkeypatch.setattr(get_settings(), "data_quality_alert_cooldown_seconds", 0)  # no cooldown
     caplog.set_level(logging.INFO, logger=LOGGER)
     base = datetime(2026, 7, 15, 10, tzinfo=UTC)
     t0 = base + timedelta(seconds=15)  # the task runs 15 s after the boundary
@@ -184,6 +191,57 @@ async def test_transitions_log_and_notify_once(
     assert (
         await session.scalar(select(func.count()).select_from(Notification))
     ) == 2  # the trader got nothing
+
+
+async def test_flapping_alerts_wait_for_the_cooldown(
+    session: AsyncSession,
+    session_factory,
+    redis_client: Redis,
+    make_user,
+    monitor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B9 (open from B5): ok -> degraded -> ok -> degraded within the cooldown sends one alert;
+    the state in Redis (/health/data) follows every change at once. When the cooldown ends,
+    a change the admins were not told about is sent once."""
+    await make_user("dq-admin3@example.com", role=UserRole.admin)
+    instrument = await make_instrument(session)
+    monitor("binance:BTC/USDT")
+    monkeypatch.setattr(get_settings(), "data_quality_alert_cooldown_seconds", 1800)
+    base = datetime(2026, 7, 15, 10, tzinfo=UTC)
+    t0 = base + timedelta(seconds=15)
+    await _write(session, instrument.id, base - timedelta(hours=52), base)
+
+    async def run(now: datetime) -> str:
+        [report] = await data_health.run(session_factory, redis_client, now)
+        stored = await redis_client.get(data_health.STATUS_KEY + "binance:BTC/USDT")
+        assert stored in (report.status.value, report.status.value.encode())  # at once
+        return report.status.value
+
+    async def titles() -> list[str]:
+        rows = await session.scalars(
+            select(Notification)
+            .where(Notification.type == NotificationType.system)
+            .order_by(Notification.created_at)
+        )
+        return [n.data["title"] for n in rows]
+
+    assert await run(t0) == "ok"
+    assert await run(t0 + timedelta(minutes=3)) == "degraded"  # alert 1
+    await _write(session, instrument.id, base, base + timedelta(minutes=7))
+    assert await run(t0 + timedelta(minutes=7)) == "ok"  # held: within the cooldown
+    assert await titles() == ["Data quality: binance:BTC/USDT is degraded"]
+    assert await run(t0 + timedelta(minutes=12)) == "degraded"  # back to what admins know
+    assert len(await titles()) == 1
+    # the cooldown ends while it is ok again: the recovery is sent once
+    await redis_client.delete(data_health.COOLDOWN_KEY + "binance:BTC/USDT")
+    await _write(session, instrument.id, base, base + timedelta(minutes=40))
+    assert await run(t0 + timedelta(minutes=40)) == "ok"
+    assert await run(t0 + timedelta(minutes=41)) == "ok"
+    assert await titles() == [
+        "Data quality: binance:BTC/USDT is degraded",
+        "Data quality: binance:BTC/USDT is ok",
+    ]
 
 
 async def test_closed_market_is_not_alerted(

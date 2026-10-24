@@ -103,10 +103,26 @@ erDiagram
         varchar min_grade
         timestamptz created_at
     }
+    ai_evaluation_runs {
+        bigint id PK
+        uuid instrument_id FK
+        varchar profile
+        timestamptz bar_close_ts
+        varchar request_id
+        varchar status
+        varchar reason
+        int request_bytes
+        jsonb coverage
+        jsonb detail
+        int duration_ms
+        timestamptz started_at
+        timestamptz finished_at
+    }
     instruments
     users
     ai_alert_follows }o--|| instruments : "instrument_id"
     ai_alert_follows }o--|| users : "user_id"
+    ai_evaluation_runs }o--|| instruments : "instrument_id"
     ai_setup_events }o--|| ai_setups : "setup_id"
     ai_setup_explanations }o--|| ai_setups : "setup_id"
     ai_setup_outbox }o--|| ai_setups : "setup_id"

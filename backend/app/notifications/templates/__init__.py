@@ -11,6 +11,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from app.ai.contract import round_levels
 from app.notifications.templates.messages import CHANNEL_NAMES, TEXTS
 
 LANGUAGES = ("ar", "en")
@@ -266,22 +267,32 @@ def _ai_setup(data: dict[str, Any], lang: str) -> tuple[str, str]:
     )
     lines = []
     if state in ("ARMED", "ACTIVE"):
+        # shown at the instrument's precision with Fadi's rule: the stop away from the entry,
+        # the target toward it (never a smaller risk or a larger reward than the real levels)
+        entry, sl, tp = round_levels(
+            str(data.get("direction", "buy")),
+            data.get("entry"),
+            data.get("sl"),
+            data.get("tp"),
+            10.0**-digits,
+        )
         lines.append(
             t(
                 lang,
                 "ai_setup.prices",
-                entry=num(data.get("entry"), digits),
-                sl=num(data.get("sl"), digits),
-                tp=num(data.get("tp"), digits),
+                entry=num(entry, digits),
+                sl=num(sl, digits),
+                tp=num(tp, digits),
             )
         )
     if state == "ARMED":
         probability = data.get("probability")
+        grade = data.get("grade")  # always null in v1 (Fadi): the line leaves it out
         lines.append(
             t(
                 lang,
-                "ai_setup.scores",
-                grade=data.get("grade") or "-",
+                "ai_setup.scores" if grade else "ai_setup.scores_no_grade",
+                grade=grade,
                 probability=num(probability * 100 if probability is not None else None, 0),
                 r_multiple=num(data.get("r_multiple"), 1),
             )
@@ -308,6 +319,8 @@ def _ai_setup(data: dict[str, Any], lang: str) -> tuple[str, str]:
             lines.append(t(lang, "ai_setup.warning", warning=warning))
         if data.get("explanation"):
             lines.append(str(data["explanation"]))
+        elif data.get("explanation_status") == "unavailable":
+            lines.append(t(lang, "ai_setup.explanation_unavailable"))
     if data.get("reason") and state != "ARMED":
         lines.append(t(lang, "ai_setup.reason", reason=data["reason"]))
     if data.get("pnl") is not None:

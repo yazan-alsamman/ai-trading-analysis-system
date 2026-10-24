@@ -26,10 +26,9 @@ from typing import Any
 
 from redis.asyncio import Redis
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai import sizing
+from app.ai import explain, sizing
 from app.ai.client import AIContractError, AIServiceClient, AIUnavailableError
 from app.ai.contract import ExplainRequest, Setup, iso_z
 from app.core.config import get_settings
@@ -217,9 +216,11 @@ async def _sizes(
 async def _explanations(
     factory: async_sessionmaker[AsyncSession], setup_id: str, langs: list[str], run: _Run
 ) -> dict[str, str]:
-    """The verified explanation of the setup per language: stored ones are reused; missing ones
-    are asked of ai-service once (short timeout, no retry). Unavailable or 404: none, and the
-    run stops asking. Not verified: stored, logged, never sent."""
+    """The explanation of the setup a user may see, per language (Fadi's rule,
+    ``explain.visible``: verified, else the template text): stored ones are reused; missing
+    ones are asked of ai-service once (short timeout, no retry; ``ai.explain`` has usually
+    stored them already). Unavailable or 404: none, and the run stops asking. Neither verified
+    nor a template: not stored, never sent."""
     out: dict[str, str] = {}
     async with factory() as session:
         stored = {
@@ -250,26 +251,16 @@ async def _explanations(
                     else:
                         logger.error("ai alerts: /v1/explain contract error: %s", exc)
                     continue
-                await session.execute(
-                    insert(AISetupExplanation)
-                    .values(
-                        setup_id=setup_id,
-                        lang=lang,
-                        text=answer.text,
-                        verified=answer.verified,
-                        template_used=answer.template_used,
-                    )
-                    .on_conflict_do_nothing(index_elements=["setup_id", "lang"])
-                )
-                await session.commit()
+                await explain.store_answer(session, setup_id, lang, answer)
                 row = await session.get(AISetupExplanation, (setup_id, lang))
-            if row is None:
-                continue
-            if row.verified:
-                out[lang] = row.text
-            else:
+            shown = explain.visible(row)
+            if shown.text is not None:
+                out[lang] = shown.text
+            elif row is not None:
                 logger.warning(
-                    "ai alerts: explanation %s/%s is not verified: not sent", setup_id, lang
+                    "ai alerts: explanation %s/%s is neither verified nor a template: not sent",
+                    setup_id,
+                    lang,
                 )
     return out
 
@@ -301,6 +292,7 @@ async def _items(
             text = explained.get(prefs[user.id].language)
             if text:
                 extra[user.id]["explanation"] = text
+            extra[user.id]["explanation_status"] = "available" if text else "unavailable"
     elif row.to_state in FINAL:
         takes = await session.scalars(
             select(AISetupTake).where(AISetupTake.setup_id == setup.setup_id)
