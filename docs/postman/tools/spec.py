@@ -3397,6 +3397,139 @@ FOLDERS: list[Folder] = [
                 ],
             ),
             Folder(
+                "cTrader Feed",
+                "The live XAU/USD feed from the cTrader Open API (FxPro; `docs/ctrader-feed.md`): "
+                "its status, linking the cTrader account by OAuth (view-only scope `accounts`), "
+                "choosing the trader account and a long backfill of M1 bars. Tokens are stored "
+                "encrypted and **never returned**. The feed ships disabled "
+                "(`CTRADER_ENABLED=false`): until the app credentials are set and an account is "
+                "linked, Connect and Choose account answer 409.\n\n"
+                "Linking: send **Connect**, open its `url` in a browser and approve; "
+                "cTrader sends you back to **OAuth callback** with `?code=&state=`. When the "
+                "redirect cannot reach the server, paste the code into **Link with a code** "
+                "(it lives one minute).",
+                [
+                    Req(
+                        "admin_feed_status",
+                        "cTrader feed status",
+                        "GET",
+                        "/admin/feeds/ctrader",
+                        "`enabled`, `env` (demo/live), `symbol`, `instrument`, whether the app "
+                        "credentials are set (`app_credentials`), the `redirect_uri` to register "
+                        "in the cTrader app, `linked` and the `link` (account, accounts the token "
+                        "sees, scope, linked/refreshed time, token expiry), what the running "
+                        "feed reports (`state`, `connected`, `last_tick_at`, `last_bar`, "
+                        "`reconnects_24h`, `last_error`, `updated_at`) and the last manual "
+                        "`backfill`. Never the tokens. Also in System status (`feeds.ctrader`).",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_feed_connect",
+                        "Connect cTrader account",
+                        "GET",
+                        "/admin/feeds/ctrader/connect",
+                        "The cTrader authorization URL to open (`url`, scope "
+                        "`accounts`: view only) with a one-time `state` valid 10 minutes and the "
+                        "`redirect_uri` it returns to (register it in the cTrader app first). "
+                        "409 when `CTRADER_CLIENT_ID` / `CTRADER_CLIENT_SECRET` are not set on "
+                        "the server (the saved example).",
+                        auth="admin",
+                        expect=[200, 409],
+                    ),
+                    Req(
+                        "admin_feed_callback",
+                        "OAuth callback (cTrader redirect)",
+                        "GET",
+                        "/admin/feeds/ctrader/callback",
+                        "Where cTrader sends the admin's browser back with `?code=&state=`. **No "
+                        "JWT**: the one-time `state` issued by Connect authorises it. Exchanges "
+                        "the code, stores the tokens encrypted, lists the accounts and chooses "
+                        "one when it can. 400: unknown or expired state, no code, or cTrader "
+                        "answered `?error=`; 502: cTrader refused the code. You normally never "
+                        "send this by hand.",
+                        auth="none",
+                        query=[
+                            ("code", "authorization-code-from-ctrader", "From the redirect"),
+                            ("state", "state-from-connect", "From Connect"),
+                        ],
+                        expect=[200, 400],
+                        variants=[
+                            Variant(
+                                "400 cTrader answered an error",
+                                400,
+                                query={"code": "", "state": "", "error": "access_denied"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_code",
+                        "Link with a code",
+                        "POST",
+                        "/admin/feeds/ctrader/code",
+                        "The same as the callback for a code pasted by hand (when the redirect "
+                        "cannot reach the server, or came back without state). The code lives "
+                        "one minute; the state must be one Connect issued (400 otherwise).",
+                        auth="admin",
+                        body={
+                            "code": "authorization-code-from-ctrader",
+                            "state": "state-from-connect",
+                        },
+                        expect=[200, 400],
+                        variants=[
+                            Variant(
+                                "422 Empty code",
+                                422,
+                                body={"code": "", "state": "state-from-connect"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_account",
+                        "Choose cTrader account",
+                        "PATCH",
+                        "/admin/feeds/ctrader",
+                        "Choose the trader account to stream: one of the linked token's "
+                        "`link.accounts` (422 otherwise). Restart `feed-ctrader` afterwards. "
+                        "`CTRADER_ACCOUNT_ID`, when set on the server, wins. 409 when no account "
+                        "is linked (the saved example).",
+                        auth="admin",
+                        body={"account_id": 12345678},
+                        expect=[200, 409],
+                        variants=[
+                            Variant("422 Invalid account id", 422, body={"account_id": 0}),
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_backfill",
+                        "Backfill cTrader bars",
+                        "POST",
+                        "/admin/feeds/ctrader/backfill",
+                        "Backfill M1 bars for `[from, to]` (time zone required, at most 400 "
+                        "days, `to` capped at now) as a background task, a day per request; a "
+                        "bar built live (with a spread) is never overwritten. Answers 202 with "
+                        "the `task_id`, the range and its length in `days`; progress is in the "
+                        "status (`backfill`). The task fails when no account is linked, or while "
+                        "the live feed is running on the same account.\n\n"
+                        "> On production this starts a real backfill against cTrader.",
+                        auth="admin",
+                        body={"from": "2026-10-01T00:00:00Z", "to": "2026-10-02T00:00:00Z"},
+                        expect=[202],
+                        variants=[
+                            Variant(
+                                "422 from after to",
+                                422,
+                                body={"from": "2026-10-02T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+                            ),
+                            Variant(
+                                "422 More than 400 days",
+                                422,
+                                body={"from": "2025-01-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            Folder(
                 "API Keys & Rate Limits",
                 "Every user's keys, rate-limit monitoring and the system status.",
                 [
@@ -3469,7 +3602,9 @@ FOLDERS: list[Folder] = [
                         "status, oldest pending in seconds), the periodic AI evaluation "
                         "(`ai_evaluate`: enabled, the last run of every instrument and profile "
                         "with status, reason, duration, request size and bars sent, counts of "
-                        "the last 24 h, the last contract error), "
+                        "the last 24 h, the last contract error), the cTrader live feed (`feeds.ctrader`: "
+                        "enabled, linked, connected, last tick and bar, reconnects, token expiry, "
+                        "last error; never the tokens), "
                         "WebSocket "
                         "clients summed over every API process (each reports every 30 s), "
                         "notification channels, unhandled errors in "
