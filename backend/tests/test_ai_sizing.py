@@ -637,3 +637,52 @@ async def test_size_endpoint_and_admin_detail(
     [brief] = detail["sizes"]
     assert (brief["user_id"], brief["lots"], brief["source"]) == (str(user.id), 0.04, "ai-service")
     assert "events" in detail and "last_payload" in detail
+
+
+# --- USD/JPY and the margin (B9) ---------------------------------------------------------------
+
+JPY_SPECS = {**GOLD_SPECS, "contract_size": 100_000, "quote_currency": "JPY"}
+
+
+async def usdjpy_armed(session: AsyncSession, **specs) -> AISetup:
+    pair = await make_instrument(
+        session, "USD/JPY", "twelvedata", market=MarketType.forex, **{**JPY_SPECS, **specs}
+    )
+    req = request_at(T0)
+    payload = setup("usdjpy-buy", "ARMED", entry=150.0, sl=149.5, tp=151.0)
+    await store.apply_evaluation(session, pair, req, response(req, new=[payload]))
+    return await session.get(AISetup, "usdjpy-buy", populate_existing=True)
+
+
+async def test_usdjpy_local_size_hand_computed(
+    session: AsyncSession, make_user, local_mode
+) -> None:
+    """USD account 10,000, risk 1 % = 100 USD, USD/JPY 150.00, sl 149.50 (50 pips):
+    0.50 x 100,000 = 50,000 JPY = 333.33 USD per lot -> 0.30 lots (B10 path, through
+    ``tb.lots_for_risk``). Margin: notional 0.30 x 100,000 USD = 30,000 USD; leverage 100 and no
+    margin rate -> 30,000 / 100 = 300 USD."""
+    user = await make_user("jpy@example.com")
+    await profile(session, user, balance=10_000)
+    result = await size(session, await usdjpy_armed(session), user)
+    assert (result.lots, result.feasible) == (0.3, True)
+    assert result.risk_amount == pytest.approx(100.0)
+    assert result.margin_required == pytest.approx(300.0)
+
+
+@pytest.mark.parametrize(
+    ("margin_rate", "leverage", "expected"),
+    [
+        (0.05, 100, 1_500.0),  # the broker's 5 % beats the user's 1:100
+        (0.005, 100, 300.0),  # the user's 1:100 (1 %) beats 0.5 %
+        (None, 30, 1_000.0),  # unknown rate: 1 / leverage, as before
+    ],
+)
+async def test_margin_uses_the_larger_of_rate_and_leverage(
+    session: AsyncSession, make_user, local_mode, margin_rate, leverage, expected
+) -> None:
+    """Fadi (extra 3): margin = notional in USD x max(margin_rate, 1 / leverage)."""
+    user = await make_user(f"margin-{margin_rate}-{leverage}@example.com")
+    await profile(session, user, balance=10_000, leverage=leverage)
+    result = await size(session, await usdjpy_armed(session, margin_rate=margin_rate), user)
+    assert result.lots == 0.3
+    assert result.margin_required == pytest.approx(expected)

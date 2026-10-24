@@ -774,3 +774,59 @@ async def test_live_plans_have_lots(
     # GBP account: no rate, flagged; the quantity is the unconverted one
     assert (pb["lots"], pb["lots_feasible"]) == (0.0, False)
     assert "no conversion rate" in pb["sizing_warnings"][0]
+
+
+# --- an account currency that is not the quote currency (B9, Fadi's USD/JPY report) ------------
+
+
+async def test_backtest_profile_on_usdjpy_converts_the_capital(
+    client: AsyncClient, session: AsyncSession, session_factory, alice, queued
+) -> None:
+    """A USD profile backtesting USD/JPY: the capital is USD, so the engine gets
+    ``conversion: inverse_price`` and 1 % risk is 1 % of the USD balance. Before the fix the
+    10,000 USD were taken as 10,000 JPY: every size was ~150x too small."""
+    user, headers = alice
+    pair = await make_instrument(
+        session, "USD/JPY", "twelvedata", MarketType.forex, **{**FX_SPECS, "quote_currency": "JPY"}
+    )
+    start = END - timedelta(minutes=3_000)
+    rng = random.Random(7)
+    price, candles = 150.0, []
+    for m in range(3_000):
+        step = rng.uniform(-0.05, 0.05)
+        o, c = price, price + step
+        candles.append(
+            CandleIn(ts=start + timedelta(minutes=m), open=o, high=max(o, c) + 0.02,
+                     low=min(o, c) - 0.02, close=c, volume=1)
+        )  # fmt: skip
+        price = c
+    await market_service.upsert_candles(session, pair.id, candles)
+    await session.commit()
+    await _set_profile(
+        session, user, config=RISK_1PCT | {"stop": {"type": "percent", "value": 0.5}},
+        account_size=10_000, quote_currency="USD",
+    )  # fmt: skip
+    data = await _backtest(client, headers, session_factory, pair, {"risk_profile": True})
+    assert data["status"] == "completed", data["error"]
+    assert data["config"]["conversion"] == {"type": "inverse_price"}
+    assert data["config"]["risk_profile"]["conversion"]["account_currency"] == "USD"
+    trades = (await client.get(f"/api/v1/backtests/{data['id']}/trades", headers=headers)).json()
+    first = trades["items"][0]
+    # 1 % of 10,000 USD = 100 USD at risk (0.5 % stop, no fees)
+    assert first["risk_amount"] == pytest.approx(100, rel=1e-6)
+    assert first["quantity"] * first["entry_price"] * 0.005 == pytest.approx(
+        100 * first["entry_price"], rel=1e-6
+    )
+
+
+async def test_position_size_without_specs_converts(
+    client: AsyncClient, session: AsyncSession, alice
+) -> None:
+    """USD/JPY without contract specs: no lots, but the quantity is in units of a USD
+    account's risk (30,000), not 150x smaller (200)."""
+    user, headers = alice
+    await _set_profile(session, user, quote_currency="USD")
+    jpy = await _flat_market(session, "USD/JPY", "twelvedata", 150.0, quote_currency="JPY")
+    plan = await _plan(client, headers, _size(jpy, 150, 149.5, 10_000))
+    assert plan["quantity"] == pytest.approx(30_000)
+    assert plan["lots"] is None and plan["risk_amount"] == pytest.approx(100)
