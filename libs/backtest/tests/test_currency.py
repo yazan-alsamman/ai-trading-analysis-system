@@ -41,7 +41,8 @@ def test_plan_trade_converts_without_specs() -> None:
     """A trade plan with a conversion rate but no contract specs (live plans and the calculator
     on an instrument without specs) sizes on the equity in the quote currency."""
     df = bars([(ENTRY, ENTRY, ENTRY, ENTRY)] * 3)
-    rules = {"stop": {"type": "percent", "value": 1}, "sizing": {"mode": "risk", "risk_pct": 1}}
+    sizing = {"mode": "risk", "risk_pct": 1, "max_position_pct": 1000}  # 3x notional
+    rules = {"stop": {"type": "percent", "value": 1}, "sizing": sizing}
     plan = plan_trade(df, 2, "buy", rules, BALANCE, stop=STOP, conversion_rate=1 / ENTRY)
     assert plan.quantity == approx(EXPECTED_UNITS / (1 + 0.001 * (ENTRY + STOP) / 0.5))
     rules["fee_bps"] = 0

@@ -244,9 +244,11 @@ def history_for(config: dict[str, Any]) -> int:
 
 @dataclass(frozen=True)
 class LotSizing:
-    """How to size on an instrument with contract specs for one account currency: the spec,
-    the conversion rate (account currency per quote unit; None = not found) and notes for
-    the plan's ``sizing_warnings``. Without a spec, plans are computed as before."""
+    """How to size on an instrument for one account currency: the spec (None without contract
+    specs), the conversion rate (account currency per quote unit; None = not found) and notes
+    for the plan's ``sizing_warnings``. Without a spec there are no lots, but a rate other than
+    1 still converts the equity (a USD account on a USD/JPY without specs); a rate of 1 or none
+    leaves the plan as it was."""
 
     spec: tb.ContractSpec | None = None
     rate: float | None = None
@@ -328,9 +330,9 @@ async def lot_sizing(
     session: AsyncSession, instrument: Instrument, account_currency: str, entry: float
 ) -> LotSizing:
     spec = contract_spec(instrument)
-    if spec is None:
-        return LotSizing()
     rate, notes = await conversion_rate(session, instrument, account_currency, entry)
+    if spec is None:
+        return LotSizing(rate=rate if rate is not None and rate != 1.0 else None)
     return LotSizing(spec, rate, tuple(notes))
 
 
@@ -344,6 +346,8 @@ def plan_dict(
 ) -> dict[str, Any]:
     if sizing is not None and sizing.spec is not None:
         kw.update(spec=sizing.spec, conversion_rate=sizing.rate)
+    elif sizing is not None and sizing.rate is not None:
+        kw.update(conversion_rate=sizing.rate)
     plan = tb.plan_trade(df, len(df) - 1, side, config, account_size, **kw).to_dict()
     if sizing is not None and sizing.notes:
         plan["sizing_warnings"] = [*sizing.notes, *plan["sizing_warnings"]]

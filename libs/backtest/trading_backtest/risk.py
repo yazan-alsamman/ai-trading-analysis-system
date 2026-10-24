@@ -705,7 +705,8 @@ class RiskContext:
         """The plan for the signal of bar ``i``: ``entry`` defaults to that bar's close (the
         engine passes the real fill); ``stop_price`` overrides the stop rule. With ``spec`` and
         ``conversion_rate`` (account currency per quote unit), ``equity`` is in the account
-        currency and the plan also has ``lots`` (see :class:`TradePlan`)."""
+        currency and the plan also has ``lots`` (see :class:`TradePlan`). A ``conversion_rate``
+        without ``spec`` converts the equity too (no lots)."""
         config = self.config
         entry = float(self.close[i]) if entry is None else float(entry)
         fee = config.fee_rate
@@ -735,7 +736,7 @@ class RiskContext:
                     price = entry + side * distance * per_unit  # stop validated present
                     r = distance
                 plan.targets.append({"price": price, "r": r, "close_pct": fraction * 100})
-        rate = conversion_rate if spec is not None else None
+        rate = conversion_rate  # also without specs: the equity is converted, no lots
         if spec is not None:
             plan.lots, plan.lots_feasible, plan.conversion_rate = 0.0, False, rate
             if rate is None:

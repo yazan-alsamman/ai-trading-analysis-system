@@ -8,6 +8,11 @@ JSON (``BacktestConfig.from_dict``; unknown fields are errors, messages carry th
      "check_entry_bar": true,
      "exits": {"max_bars_held": null, "exit_on_opposite_signal": true}}
 
+``conversion`` (optional) says the account currency is not the quote currency: then
+``initial_capital`` and every money result (equity, P&L, fees, risk) are in the account currency,
+while prices and notional stay in the quote currency (:class:`Conversion`). Without it everything
+is in the quote currency, as before.
+
 The risk parts are described in ``trading_backtest.risk``. The Y11 fields
 ``exits.stop_loss_pct`` and ``exits.take_profit_pct`` are still accepted as aliases of
 ``stop: {"type": "percent"}`` and ``take_profit: {"type": "percent"}``.
@@ -26,6 +31,7 @@ from trading_backtest.risk import Guards, StopRule, TargetRule, TrailingRule
 
 Direction = Literal["long_only", "long_short"]
 SizingMode = Literal["fraction", "fixed", "risk", "volatility"]
+ConversionType = Literal["fixed", "inverse_price"]
 
 DIRECTIONS = ("long_only", "long_short")
 SIZING_MODES = ("fraction", "fixed", "risk", "volatility")
@@ -101,6 +107,27 @@ class Sizer:
         return out
 
 
+@dataclass(frozen=True)
+class Conversion:
+    """Account currency per unit of the quote currency, when they differ.
+
+    ``inverse_price``: the account currency is the instrument's base (a USD account on USD/JPY),
+    so one JPY is worth ``1 / price`` USD at every fill and close. ``fixed``: ``rate`` for the
+    whole run (e.g. EUR/JPY for a USD account, with the USD/JPY rate when the run starts).
+    """
+
+    type: ConversionType
+    rate: float | None = None
+
+    def at(self, price: float) -> float:
+        return self.rate if self.type == "fixed" else 1.0 / price
+
+    def to_dict(self) -> dict[str, Any]:
+        if self.type == "fixed":
+            return {"type": "fixed", "rate": self.rate}
+        return {"type": "inverse_price"}
+
+
 def sizer_from(model: Any) -> Sizer:
     common = {
         "max_position_pct": float(model.max_position_pct),
@@ -148,6 +175,17 @@ class _Exits(rk._M):
     exit_on_opposite_signal: bool = Field(default=True, strict=True)
 
 
+class ConversionIn(rk._M):
+    type: ConversionType
+    rate: float | None = Field(default=None, gt=0, le=1e9, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _rate(self) -> ConversionIn:
+        if (self.type == "fixed") != (self.rate is not None):
+            raise ValueError("a fixed conversion needs a rate; inverse_price takes none")
+        return self
+
+
 class BacktestConfigIn(rk._M):
     """JSON input of :class:`BacktestConfig` (validation and JSON Schema)."""
 
@@ -162,6 +200,7 @@ class BacktestConfigIn(rk._M):
     guards: rk.GuardsIn | None = None
     check_entry_bar: bool = Field(default=True, strict=True)
     exits: _Exits = _Exits()
+    conversion: ConversionIn | None = None
 
     @model_validator(mode="after")
     def _aliases(self) -> BacktestConfigIn:
@@ -181,6 +220,7 @@ class BacktestConfig:
     sizing: Sizer = field(default_factory=Sizer)
     exits: ExitRules = field(default_factory=ExitRules)
     guards: Guards = field(default_factory=Guards)
+    conversion: Conversion | None = None  # None: the capital is in the quote currency
 
     @property
     def fee_rate(self) -> float:
@@ -193,7 +233,7 @@ class BacktestConfig:
     def to_dict(self) -> dict[str, Any]:
         """Normalised JSON (``from_dict(to_dict())`` gives the same config)."""
         e = self.exits
-        return {
+        out = {
             "initial_capital": self.initial_capital,
             "fee_bps": self.fee_bps,
             "slippage_bps": self.slippage_bps,
@@ -209,6 +249,9 @@ class BacktestConfig:
                 "exit_on_opposite_signal": e.exit_on_opposite_signal,
             },
         }
+        if self.conversion is not None:  # only when set: older configs stay as they were
+            out["conversion"] = self.conversion.to_dict()
+        return out
 
     def risk_dict(self) -> dict[str, Any]:
         """The risk part (a risk config / profile)."""
@@ -248,6 +291,11 @@ class BacktestConfig:
                 check_entry_bar=model.check_entry_bar,
             ),
             guards=rk.guards_rule(model.guards),
+            conversion=(
+                Conversion(model.conversion.type, model.conversion.rate)
+                if model.conversion is not None
+                else None
+            ),
         )
 
     @classmethod

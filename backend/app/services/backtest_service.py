@@ -183,12 +183,38 @@ def strategy_of(row: Backtest) -> tuple[ts.Strategy, tb.BacktestConfig]:
     return strategy, tb.BacktestConfig.from_dict(config)
 
 
+async def capital_conversion(
+    session: AsyncSession, instrument: Instrument, account_currency: str
+) -> dict[str, Any] | None:
+    """How the engine converts a capital in ``account_currency`` (the profile's) into the
+    instrument's quote currency (``tb.Conversion``): None when they are the same currency (USD,
+    USDT and USDC count as one), ``inverse_price`` when the account currency is the base
+    (USD/JPY for a USD account: 1 JPY = 1 / price USD at every fill), otherwise the latest
+    rate of a matching market, fixed for the run. 422 when there is none (never assumed 1)."""
+    quote, base = instrument.pnl_currency, instrument.base_asset
+    usd = risk_service._usd  # noqa: SLF001 - the same alias rule as live sizing
+    if usd(quote) == usd(account_currency):
+        return None
+    if usd(base) == usd(account_currency):
+        return {"type": "inverse_price"}
+    rate, _ = await risk_service.conversion_rate(session, instrument, account_currency, 1.0)
+    if rate is None:
+        raise _unprocessable(
+            f"No conversion rate from {quote} to {account_currency} (the risk profile's "
+            f"currency): set config.initial_capital, in {quote}"
+        )
+    return {"type": "fixed", "rate": rate}
+
+
 async def _with_profile(
-    session: AsyncSession, user: User, requested: dict[str, Any]
+    session: AsyncSession, user: User, requested: dict[str, Any], instrument: Instrument
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The caller's risk profile under the request: its rules, fee and account size, unless the
     request sets them (a Y11 ``exits.stop_loss_pct`` / ``take_profit_pct`` replaces the
-    profile's stop / take profit). Returns the config and the profile's snapshot."""
+    profile's stop / take profit). Returns the config and the profile's snapshot.
+
+    The profile's account size is in the profile's currency: when that is not the instrument's
+    quote currency, the config gets the engine's ``conversion`` (``capital_conversion``)."""
     profile = await risk_service.get_or_create(session, user)
     rules = {k: v for k, v in profile.config.items() if k in RISK_KEYS}
     exits = requested.get("exits") or {}
@@ -210,6 +236,15 @@ async def _with_profile(
         "config": profile.config,
         "updated_at": profile.updated_at.isoformat(),
     }
+    if "initial_capital" not in requested and "conversion" not in requested:
+        conversion = await capital_conversion(session, instrument, profile.quote_currency)
+        if conversion is not None:
+            merged["conversion"] = conversion
+            meta["conversion"] = {
+                "account_currency": profile.quote_currency,
+                "quote_currency": instrument.pnl_currency,
+                **conversion,
+            }
     return merged, meta
 
 
@@ -223,8 +258,9 @@ async def create(session: AsyncSession, user: User, data: BacktestCreate) -> Bac
     if not isinstance(use_profile, bool):
         raise _unprocessable(f"config: {PROFILE_KEY} must be true or false")
     profile_meta = None
+    instrument = await market_service.get_instrument_or_404(session, data.instrument_id)
     if use_profile:
-        requested, profile_meta = await _with_profile(session, user, requested)
+        requested, profile_meta = await _with_profile(session, user, requested, instrument)
     try:
         config = tb.BacktestConfig.from_dict(requested)
     except tb.ConfigError as exc:
@@ -234,7 +270,6 @@ async def create(session: AsyncSession, user: User, data: BacktestCreate) -> Bac
         ) from None
     if data.end > datetime.now(UTC):
         raise _unprocessable("end must not be in the future")
-    await market_service.get_instrument_or_404(session, data.instrument_id)
 
     await _lock_user(session, user.id)
     await check_quota(session, user)
