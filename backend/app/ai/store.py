@@ -360,7 +360,8 @@ async def _reconcile(
 ) -> None:
     """Bring a stored setup to the current state ai-service reports (after the transitions):
     the same state updates the fields; a later one missing from the history is recorded as a
-    forward move when ``ALLOWED`` (else rejected); an earlier one is a contract error."""
+    forward move when ``ALLOWED`` (else rejected, nothing taken); an earlier one is a contract
+    error and nothing of the item is taken (our state and payload are kept)."""
     payload = setup.payload()
     row = rows[setup.setup_id]
     fresh = setup.setup_id in new
@@ -370,31 +371,31 @@ async def _reconcile(
     ours, theirs = SetupState(row.state), setup.state
     if theirs != ours:
         if STATE_RANK[theirs] <= STATE_RANK[ours]:
+            # backwards: nothing of this item is taken (its fields describe the earlier state)
             _contract_error(
                 result, setup.setup_id, f"sent as {theirs.value} but it is {ours.value} already"
             )
-        elif ours in FINAL_STATES or theirs not in ALLOWED[ours]:
+            return
+        if ours in FINAL_STATES or theirs not in ALLOWED[ours]:
             _reject(result, setup.setup_id, f"{ours.value} -> {theirs.value} is not allowed")
-        else:
-            # a forward move without its transition: recorded like one, at bar_close_ts
-            if await _event(
-                session,
-                row.setup_id,
-                ours.value,
-                theirs.value,
-                req.bar_close_ts,
-                req.request_id,
-                reason="new_setups",
-            ):
-                result.state_changes.append(
-                    StateChange(
-                        row.setup_id, ours.value, theirs.value, req.bar_close_ts, "new_setups"
-                    )
-                )
-                await _close_takes(
-                    session, row.setup_id, theirs.value, req.bar_close_ts, None, "new_setups"
-                )
-            row.state = theirs.value
+            return
+        # a forward move without its transition: recorded like one, at bar_close_ts
+        if await _event(
+            session,
+            row.setup_id,
+            ours.value,
+            theirs.value,
+            req.bar_close_ts,
+            req.request_id,
+            reason="new_setups",
+        ):
+            result.state_changes.append(
+                StateChange(row.setup_id, ours.value, theirs.value, req.bar_close_ts, "new_setups")
+            )
+            await _close_takes(
+                session, row.setup_id, theirs.value, req.bar_close_ts, None, "new_setups"
+            )
+        row.state = theirs.value
         payload = {**payload, "state": row.state}
     if ours in FINAL_STATES:
         result.unchanged += 1  # final: never changes again

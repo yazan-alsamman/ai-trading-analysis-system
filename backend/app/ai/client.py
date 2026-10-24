@@ -8,12 +8,15 @@
   200 whose body does not match the contract is an ``AIContractError`` too.
 - After the last attempt: ``AIUnavailableError``.
 - Every attempt logs the request id, attempt, status and latency, never the payloads (an
-  evaluate request carries ~1,300 bars).
+  evaluate request carries ~3,000 bars).
+- ``AI_REQUEST_GZIP``: the body is sent gzip-compressed (``Content-Encoding: gzip``). Off by
+  default: ai-service does not decompress request bodies yet (docs/ai-contract.md).
 """
 
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import logging
 import random
@@ -124,12 +127,20 @@ class AIServiceClient:
             timeout if timeout is not None else get_settings().ai_explain_timeout_seconds,
         )
 
+    @staticmethod
+    def encode(req: BaseModel) -> bytes:
+        """The JSON body of a request, exactly as sent (before any compression)."""
+        return json.dumps(req.model_dump(mode="json", by_alias=True)).encode()
+
     async def _call(
         self, path: str, req: BaseModel, model: type[R], request_id: str, timeout: float
     ) -> R:
         # serialised once: every attempt sends exactly the same bytes
-        content = json.dumps(req.model_dump(mode="json", by_alias=True)).encode()
+        content = self.encode(req)
         headers = {"Content-Type": "application/json", "X-Request-ID": request_id}
+        if get_settings().ai_request_gzip:
+            content = gzip.compress(content, mtime=0)  # mtime 0: the same body, the same bytes
+            headers["Content-Encoding"] = "gzip"
         attempts = self.max_retries + 1
         last_error = ""
         for attempt in range(1, attempts + 1):

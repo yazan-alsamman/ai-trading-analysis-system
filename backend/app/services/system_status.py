@@ -17,6 +17,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai import evaluate as evaluation
 from app.calendar import service as calendar_service
 from app.core import ops
 from app.core.config import get_settings
@@ -39,6 +40,8 @@ BEAT_TASKS = (
     "calendar.refresh",
     "ai_alerts.dispatch",
     "notifications.sweep",
+    "ai.evaluate_tick",
+    "ai.evaluate",
 )
 
 
@@ -173,6 +176,12 @@ async def _ai_alerts(session: AsyncSession) -> dict[str, Any]:
     }
 
 
+async def _ai_evaluate(session: AsyncSession, redis: Redis) -> dict[str, Any]:
+    """The periodic evaluation (B9): enabled, the last run of every instrument and profile
+    (time, status, reason, duration, request size, bars sent), the last contract error."""
+    return await evaluation.status(session, redis)
+
+
 async def _notifications(redis: Redis) -> dict[str, Any]:
     server = enabled_channels()
     return {
@@ -229,6 +238,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
         "data_quality": lambda: _data_quality(session, redis),
         "calendar": lambda: _calendar(session, redis),
         "ai_alerts": lambda: _ai_alerts(session),
+        "ai_evaluate": lambda: _ai_evaluate(session, redis),
         "notifications": lambda: _notifications(redis),
         "errors_last_hour": lambda: ops.errors_last_hour(redis),
     }

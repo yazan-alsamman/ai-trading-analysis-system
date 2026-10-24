@@ -228,18 +228,18 @@ async def test_new_setups_never_move_a_state_backwards(
     trans = [move("s1", "ARMED", "ACTIVE", t0 + timedelta(minutes=20))]
     await store.apply_evaluation(session, gold, r3, response(r3, transitions=trans))
     # ai-service sends it back as ARMED with a new stop: a backwards state is a contract error
-    # (Fadi, point 10); the prices update, the state stays ACTIVE
+    # (Fadi, point 10); nothing of it is taken, the setup stays ACTIVE as it was
     r4 = request_at(t0 + timedelta(minutes=45))
     res = await store.apply_evaluation(
         session, gold, r4, response(r4, new=[setup("s1", "ARMED", sl=2396.0)])
     )
-    assert res.state_changes == [] and res.updated == 1
+    assert res.state_changes == [] and (res.updated, res.unchanged) == (0, 0)
     assert [(e.setup_id, e.reason) for e in res.contract_errors] == [
         ("s1", "sent as ARMED but it is ACTIVE already")
     ]
     row = await session.get(AISetup, "s1", populate_existing=True)
     assert (row.state, row.sl, row.last_payload["state"], row.last_payload["sl"]) == (
-        "ACTIVE", 2396.0, "ACTIVE", 2396.0,
+        "ACTIVE", 2395.0, "ACTIVE", 2395.0,
     )  # fmt: skip
     # a final setup sent again is left as it is
     r5 = request_at(t0 + timedelta(minutes=60))
@@ -249,7 +249,7 @@ async def test_new_setups_never_move_a_state_backwards(
     res = await store.apply_evaluation(
         session, gold, r6, response(r6, new=[setup("s1", "ARMED", tp=2420.0)])
     )
-    assert res.unchanged == 1 and res.updated == 0 and len(res.contract_errors) == 1
+    assert res.unchanged == 0 and res.updated == 0 and len(res.contract_errors) == 1
     row = await session.get(AISetup, "s1", populate_existing=True)
     assert (row.state, row.tp, row.realized_r) == ("CLOSED", 2410.0, 1.5)
 
