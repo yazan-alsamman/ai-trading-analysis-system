@@ -255,7 +255,7 @@ async def test_armed_goes_to_matching_followers(
     assert (data["entry"], data["sl"], data["tp"]) == (2400.0, 2395.0, 2410.0)
     assert data["size"] == {
         "lots": 0.04, "risk_amount": 20.0, "currency": "USD", "margin_required": 96.0,
-        "feasible": True, "warnings": [], "source": "ai-service",
+        "feasible": True, "warnings": [], "source": "remote",
     }  # fmt: skip
     assert data["explanation"] == EXPLAINED["ar"]  # the user's language
     assert note.title == "إعداد شراء على XAU/USD: الدخول 2,400.00"

@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # AI setup sizing (B10, docs/risk-management.md#ai-setups): auto = ai-service /v1/size, then
     # the local B4 lot sizing if it is unavailable; remote = no fallback (503); local = never call
     ai_size_mode: str = "auto"
+    # a 404 from /v1/size (ai-service has no /v1/size yet) falls back to the local sizing;
+    # turned off once Fadi's P6 ships it: then a 404 is a 503, never a silent local size
+    ai_size_local_fallback_on_404: bool = True
     ai_size_concurrency: int = 4  # ai-service calls at once when one setup is sized for many users
     # used when the risk config does not give the value (sizing mode not "risk", guard unset)
     ai_default_risk_pct: float = 1.0

@@ -2,6 +2,7 @@
 from app.db.base import Base
 from app.models.ai import (
     AIAlertFollow,
+    AIEvaluationRun,
     AIModelVersion,
     AISetup,
     AISetupEvent,
@@ -70,6 +71,7 @@ from app.models.workspace import Workspace
 
 __all__ = [
     "AIAlertFollow",
+    "AIEvaluationRun",
     "AISetupOutbox",
     "AIModelVersion",
     "AISetup",

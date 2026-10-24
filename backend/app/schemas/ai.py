@@ -157,7 +157,10 @@ class AISizeRead(BaseModel):
     margin_required: float | None = Field(description="account currency; null: no rate")
     feasible: bool
     warnings: list[str]
-    source: str = Field(description="ai-service, or local (the backend's B4 lot sizing)")
+    source: str = Field(
+        description="remote (ai-service /v1/size) or local (the backend's B4 lot sizing; "
+        "a local size always has a warning saying so)"
+    )
     computed_at: datetime
     inputs: AISizeInputs
     taken: bool = Field(description="you said you took this setup")
