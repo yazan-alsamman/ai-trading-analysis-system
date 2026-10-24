@@ -1,5 +1,7 @@
 """B8 AI storage: apply_evaluation (idempotent, final states, the transition table, rejections),
-open_setups (exact echo), the model registry and the admin endpoints."""
+open_setups (exact echo), the model registry and the admin endpoints. B9 / contract 0.2.0:
+the full history in ``transitions`` (deduped, in order at the same ``at``), ACTIVE ->
+INVALIDATED refused, a backwards state as a contract error, ``created_at``."""
 
 import copy
 import json
@@ -60,8 +62,10 @@ def response(req: c.EvaluateRequest, *, new=(), transitions=(), status="ok", ver
 
 
 def setup(setup_id: str, state: str, **changes) -> dict:
-    return {**load("evaluate-response-ok")["new_setups"][0], "setup_id": setup_id, "state": state,
-            **changes}  # fmt: skip
+    """The example's new setup (without its ``created_at``: tests that want one pass it)."""
+    base = {k: v for k, v in load("evaluate-response-ok")["new_setups"][0].items()
+            if k != "created_at"}  # fmt: skip
+    return {**base, "setup_id": setup_id, "state": state, **changes}
 
 
 def move(setup_id: str, frm: str, to: str, at: datetime, **extra) -> dict:
@@ -101,29 +105,34 @@ async def test_apply_the_ok_example_twice(session: AsyncSession, gold: Instrumen
     resp = c.EvaluateResponse.model_validate(load("evaluate-response-ok"))
 
     first = await store.apply_evaluation(session, gold, req, resp)
-    assert (first.inserted, first.updated, first.unchanged) == (1, 0, 0)
-    assert (first.transitions_applied, first.rejected) == (1, [])
+    assert (first.inserted, first.updated, first.unchanged) == (1, 0, 1)
+    # the open setup's history up to ACTIVE is known already; its close and the new one's
+    # DEVELOPING -> ARMED are applied
+    assert (first.transitions_applied, first.transitions_known) == (2, 2)
+    assert first.rejected == first.contract_errors == []
     assert [(s.setup_id, s.from_state, s.to_state) for s in first.state_changes] == [
-        (NEW_ID, None, "ARMED"),
+        (NEW_ID, None, "DEVELOPING"),
         (OPEN_ID, "ACTIVE", "CLOSED"),
+        (NEW_ID, "DEVELOPING", "ARMED"),
     ]
     assert first.state_changes[1].realized_r == 2.0 and first.status == "ok"
     after_first = await counts(session)
-    assert after_first == (2, 3)
+    assert after_first == (2, 4)
 
     second = await store.apply_evaluation(session, gold, req, resp)  # a re-applied response
-    assert (second.inserted, second.updated, second.unchanged) == (0, 0, 1)
-    assert (second.transitions_applied, second.transitions_known) == (0, 1)
-    assert second.state_changes == [] and second.rejected == []
+    assert (second.inserted, second.updated, second.unchanged) == (0, 0, 2)
+    assert (second.transitions_applied, second.transitions_known) == (0, 4)
+    assert second.state_changes == [] and second.rejected == second.contract_errors == []
     assert await counts(session) == after_first
 
     row = await session.get(AISetup, NEW_ID, populate_existing=True)
     assert (row.state, row.entry, row.grade, row.model_version) == (
         "ARMED",
         2400.0,
-        "B",
+        None,  # always null in v1 (Fadi, point 1)
         VERSIONS["model"],
     )
+    assert row.last_payload == resp.new_setups[0].payload()
     assert row.first_request_id == req.request_id and row.evidence["trend_4h"] == "up"
     closed = await session.get(AISetup, OPEN_ID, populate_existing=True)
     assert (closed.state, closed.realized_r) == ("CLOSED", 2.0)
@@ -181,7 +190,8 @@ async def test_illegal_transitions_are_rejected_the_rest_applies(
             transitions=[
                 move("closed-one", "CLOSED", "ACTIVE", t0 + timedelta(minutes=5)),  # final
                 move("armed", "ARMED", "CLOSED", t0 + timedelta(minutes=6)),  # not in the table
-                move("armed", "DEVELOPING", "ARMED", t0 + timedelta(minutes=7)),  # wrong from
+                move("armed", "DEVELOPING", "ARMED", t0 + timedelta(minutes=7)),  # history: known
+                move("armed", "ACTIVE", "CLOSED", t0 + timedelta(minutes=7)),  # wrong from
                 move("ghost", "ARMED", "ACTIVE", t0 + timedelta(minutes=8)),  # unknown
                 move("armed", "ARMED", "INVALIDATED", t0 + timedelta(minutes=9), reason="news"),
             ],
@@ -190,10 +200,11 @@ async def test_illegal_transitions_are_rejected_the_rest_applies(
     assert [(r.setup_id, r.reason) for r in result.rejected] == [
         ("closed-one", "CLOSED is final (CLOSED -> ACTIVE)"),
         ("armed", "ARMED -> CLOSED is not allowed"),
-        ("armed", "from DEVELOPING but the setup is ARMED"),
+        ("armed", "from ACTIVE but the setup is ARMED"),
         ("ghost", "unknown setup_id"),
     ]
     assert (result.inserted, result.transitions_applied) == (1, 1)  # the rest was applied
+    assert result.transitions_known == 1
     assert [(s.setup_id, s.to_state) for s in result.state_changes] == [
         ("brand-new", "ARMED"),
         ("armed", "INVALIDATED"),
@@ -216,12 +227,16 @@ async def test_new_setups_never_move_a_state_backwards(
     r3 = request_at(t0 + timedelta(minutes=30))
     trans = [move("s1", "ARMED", "ACTIVE", t0 + timedelta(minutes=20))]
     await store.apply_evaluation(session, gold, r3, response(r3, transitions=trans))
-    # ai-service repeats it as ARMED with a new stop: prices update, the state stays ACTIVE
+    # ai-service sends it back as ARMED with a new stop: a backwards state is a contract error
+    # (Fadi, point 10); the prices update, the state stays ACTIVE
     r4 = request_at(t0 + timedelta(minutes=45))
     res = await store.apply_evaluation(
         session, gold, r4, response(r4, new=[setup("s1", "ARMED", sl=2396.0)])
     )
     assert res.state_changes == [] and res.updated == 1
+    assert [(e.setup_id, e.reason) for e in res.contract_errors] == [
+        ("s1", "sent as ARMED but it is ACTIVE already")
+    ]
     row = await session.get(AISetup, "s1", populate_existing=True)
     assert (row.state, row.sl, row.last_payload["state"], row.last_payload["sl"]) == (
         "ACTIVE", 2396.0, "ACTIVE", 2396.0,
@@ -234,7 +249,7 @@ async def test_new_setups_never_move_a_state_backwards(
     res = await store.apply_evaluation(
         session, gold, r6, response(r6, new=[setup("s1", "ARMED", tp=2420.0)])
     )
-    assert res.unchanged == 1 and res.updated == 0
+    assert res.unchanged == 1 and res.updated == 0 and len(res.contract_errors) == 1
     row = await session.get(AISetup, "s1", populate_existing=True)
     assert (row.state, row.tp, row.realized_r) == ("CLOSED", 2410.0, 1.5)
 
@@ -329,7 +344,7 @@ async def test_admin_endpoints(
     res = await client.get(f"/api/v1/admin/ai/setups/{OPEN_ID}", headers=admin_headers)
     detail = res.json()
     assert [(e["from_state"], e["to_state"]) for e in detail["events"]] == [
-        (None, "ACTIVE"),
+        (None, "ACTIVE"),  # seeded from the request's open_setups
         ("ACTIVE", "CLOSED"),
     ]
     assert detail["last_payload"]["state"] == "CLOSED" and detail["realized_r"] == 2.0
@@ -353,3 +368,176 @@ async def test_admin_endpoints(
     }
     res = await client.post("/api/v1/admin/ai/models/nope/activate", headers=admin_headers)
     assert res.status_code == 404
+
+
+# --- contract 0.2.0 (Fadi, points 9-11) ---------------------------------------------------------
+
+
+async def test_full_history_every_response(session: AsyncSession, gold: Instrument) -> None:
+    """Each response carries the current state in new_setups and the full history in
+    transitions: applying four bars of it records each event once, in order."""
+    t0 = utc(2026, 10, 19, 14, 15)
+    m15 = timedelta(minutes=15)
+    history = [
+        move("h1", "DEVELOPING", "ARMED", t0 + m15, reason="trigger"),
+        move("h1", "ARMED", "ACTIVE", t0 + 2 * m15, reason="entry_filled"),
+        move("h1", "ACTIVE", "CLOSED", t0 + 3 * m15, reason="tp_hit", realized_r=2.0),
+    ]
+    states = ["DEVELOPING", "ARMED", "ACTIVE", "CLOSED"]
+    changes = []
+    for k, state in enumerate(states):
+        req = request_at(t0 + k * m15, await store.open_setups(session, gold, "intraday"))
+        prices = {} if state != "DEVELOPING" else {"entry": None, "sl": None, "tp": None}
+        current = setup("h1", state, created_at=c.iso_z(t0), **prices)
+        res = await store.apply_evaluation(
+            session, gold, req, response(req, new=[current], transitions=history[:k])
+        )
+        assert res.rejected == res.contract_errors == []
+        assert res.transitions_known == max(0, k - 1)  # the history it has seen already
+        changes += [(s.from_state, s.to_state) for s in res.state_changes]
+    assert changes == [
+        (None, "DEVELOPING"),
+        ("DEVELOPING", "ARMED"),
+        ("ARMED", "ACTIVE"),
+        ("ACTIVE", "CLOSED"),
+    ]
+    assert await events_of(session, "h1") == [
+        (None, "DEVELOPING", None),
+        ("DEVELOPING", "ARMED", None),
+        ("ARMED", "ACTIVE", None),
+        ("ACTIVE", "CLOSED", 2.0),
+    ]
+
+
+async def test_armed_and_active_at_the_same_time_apply_in_order(
+    session: AsyncSession, gold: Instrument
+) -> None:
+    """No DEVELOPING -> ACTIVE, but ARMED and ACTIVE may come in one response with the same
+    ``at`` (listed in any order): applied DEVELOPING -> ARMED, then ARMED -> ACTIVE."""
+    t0 = utc(2026, 10, 19, 14, 15)
+    r1 = request_at(t0)
+    developing = setup("fast", "DEVELOPING", entry=None, sl=None, tp=None)
+    await store.apply_evaluation(session, gold, r1, response(r1, new=[developing]))
+    r2 = request_at(t0 + timedelta(minutes=15))
+    at = t0 + timedelta(minutes=9)
+    res = await store.apply_evaluation(
+        session, gold, r2,
+        response(r2, new=[setup("fast", "ACTIVE")], transitions=[
+            move("fast", "ARMED", "ACTIVE", at, reason="entry_filled"),
+            move("fast", "DEVELOPING", "ARMED", at, reason="trigger"),
+        ]),
+    )  # fmt: skip
+    assert res.rejected == [] and res.transitions_applied == 2
+    assert [(s.from_state, s.to_state, s.at) for s in res.state_changes] == [
+        ("DEVELOPING", "ARMED", at),
+        ("ARMED", "ACTIVE", at),
+    ]
+    assert (await session.get(AISetup, "fast", populate_existing=True)).state == "ACTIVE"
+
+
+async def test_developing_to_active_directly_is_refused(
+    session: AsyncSession, gold: Instrument
+) -> None:
+    t0 = utc(2026, 10, 19, 14, 15)
+    r1 = request_at(t0)
+    await store.apply_evaluation(
+        session,
+        gold,
+        r1,
+        response(r1, new=[setup("d", "DEVELOPING", entry=None, sl=None, tp=None)]),
+    )
+    r2 = request_at(t0 + timedelta(minutes=15))
+    res = await store.apply_evaluation(
+        session, gold, r2,
+        response(r2, transitions=[move("d", "DEVELOPING", "ACTIVE", t0 + timedelta(minutes=5))]),
+    )  # fmt: skip
+    assert [r.reason for r in res.rejected] == ["DEVELOPING -> ACTIVE is not allowed"]
+    assert (await session.get(AISetup, "d")).state == "DEVELOPING"
+
+
+async def test_active_to_invalidated_is_rejected(session: AsyncSession, gold: Instrument) -> None:
+    """Removed by Fadi (point 9): an ACTIVE setup ends only as CLOSED."""
+    t0 = utc(2026, 10, 19, 14, 15)
+    r1 = request_at(t0)
+    await store.apply_evaluation(session, gold, r1, response(r1, new=[setup("act", "ACTIVE")]))
+    assert c.SetupState.INVALIDATED not in store.ALLOWED[c.SetupState.ACTIVE]
+    r2 = request_at(t0 + timedelta(minutes=15))
+    res = await store.apply_evaluation(
+        session, gold, r2,
+        response(r2, transitions=[
+            move("act", "ACTIVE", "INVALIDATED", t0 + timedelta(minutes=3), reason="news")
+        ]),
+    )  # fmt: skip
+    assert [r.reason for r in res.rejected] == ["ACTIVE -> INVALIDATED is not allowed"]
+    assert res.state_changes == []
+    # nor through new_setups
+    res = await store.apply_evaluation(
+        session, gold, r2, response(r2, new=[setup("act", "INVALIDATED")])
+    )
+    assert [r.reason for r in res.rejected] == ["ACTIVE -> INVALIDATED is not allowed"]
+    row = await session.get(AISetup, "act", populate_existing=True)
+    assert (row.state, row.last_payload["state"]) == ("ACTIVE", "ACTIVE")
+
+
+async def test_a_stored_active_to_invalidated_stays_as_history(
+    session: AsyncSession, gold: Instrument
+) -> None:
+    """A row that already went ACTIVE -> INVALIDATED (0.1.0 allowed it) is kept as it is."""
+    t0 = utc(2026, 10, 19, 14, 15)
+    r1 = request_at(t0)
+    await store.apply_evaluation(session, gold, r1, response(r1, new=[setup("old", "ACTIVE")]))
+    session.add(
+        AISetupEvent(setup_id="old", from_state="ACTIVE", to_state="INVALIDATED",
+                     at=t0 + timedelta(minutes=5), request_id="legacy")
+    )  # fmt: skip
+    await session.execute(
+        update(AISetup).where(AISetup.setup_id == "old").values(state="INVALIDATED")
+    )
+    await session.commit()
+    r2 = request_at(t0 + timedelta(minutes=15))
+    res = await store.apply_evaluation(
+        session, gold, r2, response(r2, new=[setup("old", "INVALIDATED")])
+    )
+    assert res.rejected == res.contract_errors == [] and res.unchanged == 1
+    assert await events_of(session, "old") == [
+        (None, "ACTIVE", None),
+        ("ACTIVE", "INVALIDATED", None),
+    ]
+
+
+async def test_duplicate_transition_is_ignored(session: AsyncSession, gold: Instrument) -> None:
+    """The same (setup_id, to, at) twice, in one response or in two: recorded once."""
+    t0 = utc(2026, 10, 19, 14, 15)
+    r1 = request_at(t0)
+    await store.apply_evaluation(session, gold, r1, response(r1, new=[setup("dup", "ARMED")]))
+    r2 = request_at(t0 + timedelta(minutes=15))
+    filled = move("dup", "ARMED", "ACTIVE", t0 + timedelta(minutes=4), reason="entry_filled")
+    res = await store.apply_evaluation(
+        session, gold, r2, response(r2, transitions=[filled, filled])
+    )
+    assert (res.transitions_applied, res.transitions_known, res.rejected) == (1, 1, [])
+    again = await store.apply_evaluation(session, gold, r2, response(r2, transitions=[filled]))
+    assert (again.transitions_applied, again.transitions_known) == (0, 1)
+    assert await events_of(session, "dup") == [(None, "ARMED", None), ("ARMED", "ACTIVE", None)]
+
+
+async def test_created_at_is_the_first_event(session: AsyncSession, gold: Instrument) -> None:
+    """``created_at`` (Fadi, point 11) dates the first event; without it, bar_close_ts."""
+    t0 = utc(2026, 10, 19, 14, 15)
+    req = request_at(t0)
+    born = t0 - timedelta(minutes=30)
+    await store.apply_evaluation(
+        session, gold, req,
+        response(req, new=[
+            setup("with", "DEVELOPING", entry=None, sl=None, tp=None, created_at=c.iso_z(born)),
+            setup("without", "DEVELOPING", entry=None, sl=None, tp=None),
+        ]),
+    )  # fmt: skip
+    firsts = dict(
+        (await session.execute(
+            select(AISetupEvent.setup_id, AISetupEvent.at).where(AISetupEvent.from_state.is_(None))
+        )).all()
+    )  # fmt: skip
+    assert firsts == {"with": born, "without": t0}
+    row = await session.get(AISetup, "with")
+    assert row.last_payload["created_at"] == c.iso_z(born)  # echoed as returned

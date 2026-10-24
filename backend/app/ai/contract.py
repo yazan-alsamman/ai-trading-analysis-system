@@ -1,9 +1,10 @@
 """The ai-service contract (B7, docs/ai-contract.md): requests the backend sends and responses
 it accepts on ``POST /v1/evaluate``, ``/v1/size`` and ``/v1/explain``.
 
-**Draft** until Fadi approves it (``CONTRACT_VERSION``). The generated document is
-docs/api/ai-service.openapi.yaml (``scripts/ai_contract.py``); example payloads are in
-docs/api/ai-service-examples/.
+Version 0.2.0 (``CONTRACT_VERSION``): Fadi's answers to the 17 open points of 0.1.0-draft are
+applied (docs/ai-contract.md section 7). ``/v1`` only ever gains fields; the version follows
+semver. The generated document is docs/api/ai-service.openapi.yaml (``scripts/ai_contract.py``);
+example payloads are in docs/api/ai-service-examples/.
 
 Depends on pydantic only, so ai-service can vendor this file as it is.
 
@@ -13,6 +14,8 @@ Depends on pydantic only, so ai-service can vendor this file as it is.
   JSON serialises back to exactly that JSON (``open_setups`` echoes setups as last returned).
 - Timestamps are timezone-aware and normalised to UTC (``...Z`` on the wire); prices are
   finite and positive; ``0 <= probability <= 1``.
+- ``1d`` bars are trading days of 17:00 to 17:00 America/New_York (DST-aware), not UTC days:
+  ``bar_close`` gives the close of a bar of any timeframe.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ import copy
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
+from zoneinfo import ZoneInfo
 
 from pydantic import (
     AfterValidator,
@@ -36,7 +40,7 @@ from pydantic import (
 )
 from pydantic_core import to_jsonable_python
 
-CONTRACT_VERSION = "0.1.0-draft"
+CONTRACT_VERSION = "0.2.0"
 
 
 # --- shared types -------------------------------------------------------------------------------
@@ -53,6 +57,26 @@ class SetupState(StrEnum):
 
 FINAL_STATES = frozenset({SetupState.CLOSED, SetupState.EXPIRED, SetupState.INVALIDATED})
 PRICED_STATES = frozenset({SetupState.ARMED, SetupState.ACTIVE})
+# The order of the life cycle (Fadi, points 9 and 10): a state never goes backwards. The final
+# states share the last rank.
+STATE_RANK: dict[SetupState, int] = {
+    SetupState.DEVELOPING: 0,
+    SetupState.ARMED: 1,
+    SetupState.ACTIVE: 2,
+    SetupState.CLOSED: 3,
+    SetupState.EXPIRED: 3,
+    SetupState.INVALIDATED: 3,
+}
+# The only state changes (Fadi, point 9): DEVELOPING -> ARMED -> ACTIVE -> CLOSED, and
+# DEVELOPING or ARMED -> EXPIRED or INVALIDATED. No DEVELOPING -> ACTIVE (ARMED and ACTIVE may
+# come in the same response with the same ``at``), and no ACTIVE -> INVALIDATED.
+ALLOWED_TRANSITIONS: dict[SetupState, frozenset[SetupState]] = {
+    SetupState.DEVELOPING: frozenset(
+        {SetupState.ARMED, SetupState.EXPIRED, SetupState.INVALIDATED}
+    ),
+    SetupState.ARMED: frozenset({SetupState.ACTIVE, SetupState.EXPIRED, SetupState.INVALIDATED}),
+    SetupState.ACTIVE: frozenset({SetupState.CLOSED}),
+}
 
 
 class Direction(StrEnum):
@@ -67,7 +91,8 @@ class EvaluateStatus(StrEnum):
 
 
 class Grade(StrEnum):
-    """Proposal (to agree with Fadi): A best .. D worst."""
+    """A best .. D worst (Fadi, point 1). **Always null in v1**: no model has passed the gate
+    yet, so every reader (API, UI, alerts) must handle a null grade."""
 
     A = "A"
     B = "B"
@@ -87,8 +112,42 @@ TIMEFRAMES: dict[str, timedelta] = {
 Timeframe = Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
 
 
+NEW_YORK = ZoneInfo("America/New_York")
+DAY_CLOSE_HOUR = 17  # the trading day ends at 17:00 New York time (Fadi, point 5)
+
+
 def _utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
+
+
+def _ny_at_close(year: int, month: int, day: int) -> datetime:
+    return datetime(year, month, day, DAY_CLOSE_HOUR, tzinfo=NEW_YORK).astimezone(UTC)
+
+
+def d1_open(value: datetime) -> datetime:
+    """Open (UTC) of the trading day containing ``value``: the latest 17:00 America/New_York
+    at or before it. 22:00 UTC in winter (EST), 21:00 UTC in summer (EDT)."""
+    local = value.astimezone(NEW_YORK)
+    start = _ny_at_close(local.year, local.month, local.day)
+    if start > value.astimezone(UTC):
+        before = local.date() - timedelta(days=1)
+        start = _ny_at_close(before.year, before.month, before.day)
+    return start
+
+
+def d1_close(open_ts: datetime) -> datetime:
+    """Close (UTC) of the trading day opening at ``open_ts``: 17:00 New York the next day
+    (23 or 25 hours later across a DST change)."""
+    after = open_ts.astimezone(NEW_YORK).date() + timedelta(days=1)
+    return _ny_at_close(after.year, after.month, after.day)
+
+
+def bar_close(timeframe: str, ts: datetime) -> datetime:
+    """When the bar of ``timeframe`` opening at ``ts`` closes: ``ts`` + the timeframe, except
+    ``1d`` (17:00 New York the next day)."""
+    if timeframe == "1d":
+        return d1_close(ts)
+    return ts + TIMEFRAMES[timeframe]
 
 
 UtcDatetime = Annotated[AwareDatetime, AfterValidator(_utc)]
@@ -134,7 +193,10 @@ class Bar(_Request):
     l: Price  # noqa: E741 - the contract's name
     c: Price
     spread: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = Field(
-        default=None, description="average spread over the bar, in price units (XAU/USD 0.25)"
+        default=None,
+        description="average spread over the bar, in price units (XAU/USD 0.25). The decision "
+        "bar (the last bar of the smallest timeframe) always has one: without it the backend "
+        "does not call ai-service",
     )
 
     @model_validator(mode="after")
@@ -154,8 +216,9 @@ class CalendarEvent(_Request):
 
 
 class InstrumentSpec(_Request):
-    """Contract specs (B4, docs/instruments.md). Proposal: sent with every evaluate so prices
-    can be rounded to ``tick_size``, and with every size request."""
+    """Contract specs (B4, docs/instruments.md), sent with every evaluate and size request
+    (Fadi, point 2). Prices are rounded to ``tick_size``: the stop **away from** the entry, the
+    target **toward** it (the backend uses the same rule wherever it rounds a price)."""
 
     contract_size: Price = Field(description="units per 1.0 lot (XAU/USD: 100 oz)")
     tick_size: Price = Field(description="minimum price increment (XAU/USD: 0.01)")
@@ -168,10 +231,12 @@ class InstrumentSpec(_Request):
         description="when the market trades (docs/instruments.md#session-calendar); null: 24/7",
     )
     quote_currency: Annotated[str, Field(pattern=r"^[A-Z0-9]{2,16}$")] | None = Field(
-        default=None, description="proposal: currency of the P&L per price unit (XAU/USD: USD)"
+        default=None, description="currency of the P&L per price unit (XAU/USD: USD)"
     )
     margin_rate: Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)] | None = Field(
-        default=None, description="proposal: margin fraction of notional at 1:1; null = leverage"
+        default=None,
+        description="margin as a fraction of notional; margin = notional in USD x "
+        "max(margin_rate, 1 / leverage); null: 1 / leverage",
     )
 
     @model_validator(mode="after")
@@ -202,9 +267,14 @@ class Setup(BaseModel):
     probability: Probability | None = Field(default=None, description="of reaching tp first")
     ev_r: Finite | None = Field(default=None, description="expected value in R")
     ev_r_lower: Finite | None = Field(default=None, description="lower bound of ev_r")
-    grade: Grade | None = None
+    grade: Grade | None = Field(default=None, description="A best .. D; always null in v1")
     valid_until: UtcDatetime | None = Field(default=None, description="entry no longer valid")
     horizon_until: UtcDatetime | None = Field(default=None, description="trade horizon end")
+    created_at: UtcDatetime | None = Field(
+        default=None,
+        description="close of the bar where the setup became known as DEVELOPING (the time of "
+        "its first event); optional until ai-service sends it",
+    )
     evidence: dict[str, Any] = Field(default_factory=dict)
     features: dict[str, Any] = Field(default_factory=dict)
 
@@ -242,7 +312,8 @@ class Setup(BaseModel):
 
 class EvaluateRequest(_Request):
     """Evaluate the bar that closed at ``bar_close_ts``. Every bar is closed; the smallest
-    timeframe ends exactly at ``bar_close_ts`` (its last bar is the one just closed)."""
+    timeframe ends exactly at ``bar_close_ts`` (its last bar is the one just closed, the
+    decision bar, which has a spread). ``1d`` bars open at 17:00 America/New_York."""
 
     request_id: str = Field(
         max_length=160,
@@ -253,7 +324,8 @@ class EvaluateRequest(_Request):
     profile: Profile
     bar_close_ts: UtcDatetime
     bars: dict[Timeframe, Annotated[list[Bar], Field(min_length=1, max_length=5000)]] = Field(
-        description="timeframe -> bars, oldest first (defaults: 500 x 15m, 500 x 1h, 300 x 4h)"
+        description="timeframe -> bars, oldest first (defaults: 2000 x 15m, 500 x 1h, "
+        "300 x 4h, 260 x 1d; fewer when the history is shorter)"
     )
     open_setups: list[Setup] = Field(
         default_factory=list,
@@ -272,21 +344,27 @@ class EvaluateRequest(_Request):
         if not self.bars:
             raise ValueError("bars needs at least one timeframe")
         for tf, bars in self.bars.items():
-            step = TIMEFRAMES[tf]
             for before, after in zip(bars, bars[1:], strict=False):
                 if after.ts <= before.ts:
                     raise ValueError(f"bars[{tf}] must be oldest first, without duplicates")
-            if bars[-1].ts + step > self.bar_close_ts:
+            if tf == "1d" and any(d1_open(b.ts) != b.ts for b in bars):
+                raise ValueError("bars[1d] must open at 17:00 America/New_York")
+            if bar_close(tf, bars[-1].ts) > self.bar_close_ts:
                 raise ValueError(f"bars[{tf}]: the last bar is not closed at bar_close_ts")
         smallest = min(self.bars, key=lambda tf: TIMEFRAMES[tf])
-        if self.bars[smallest][-1].ts + TIMEFRAMES[smallest] != self.bar_close_ts:
+        if bar_close(smallest, self.bars[smallest][-1].ts) != self.bar_close_ts:
             raise ValueError(f"bars[{smallest}] must end with the bar closing at bar_close_ts")
         return self
 
 
 class Versions(_Response):
+    """Always present: ``strategy`` and ``features``. ``model`` is null only with
+    ``model_unavailable`` (Fadi, point 12)."""
+
     strategy: str = Field(max_length=64)
-    model: str | None = Field(default=None, max_length=128, description="null: no model loaded")
+    model: str | None = Field(
+        default=None, max_length=128, description="null only with status model_unavailable"
+    )
     features: str = Field(max_length=64)
 
 
@@ -305,16 +383,27 @@ class Transition(_Response):
 
 class Abstention(_Response):
     reason: str = Field(max_length=64, examples=["high_impact_event"])
-    detail: str | dict[str, Any] | None = None
+    detail: dict[str, Any] = Field(default_factory=dict, description="an object (Fadi, point 14)")
 
 
 class EvaluateResponse(_Response):
+    """``new_setups`` carries the **current state** of every setup ai-service knows about, and
+    ``transitions`` the **full history** of their state changes (Fadi, point 10): the backend
+    dedupes by ``(setup_id, to, at)``. The same body gives a byte-identical response (point
+    16). ``status`` ``model_unavailable`` is a 200, not a 503 (point 8)."""
+
     request_id: str
     status: EvaluateStatus
     versions: Versions
     new_setups: list[Setup] = Field(default_factory=list)
     transitions: list[Transition] = Field(default_factory=list)
     abstentions: list[Abstention] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _model(self) -> Self:
+        if self.status == EvaluateStatus.ok and self.versions.model is None:
+            raise ValueError("versions.model is null only with status model_unavailable")
+        return self
 
 
 # --- size ---------------------------------------------------------------------------------------
@@ -327,9 +416,12 @@ class Account(_Request):
 
 
 class RiskSettings(_Request):
+    """``daily_loss_limit_pct`` and ``max_drawdown_pct`` are optional (Fadi, point 15): the
+    backend applies both guards itself before calling ``/v1/size`` (B10)."""
+
     risk_per_trade_pct: Annotated[float, Field(gt=0, le=100, allow_inf_nan=False)]
-    daily_loss_limit_pct: Annotated[float, Field(gt=0, le=100, allow_inf_nan=False)]
-    max_drawdown_pct: Annotated[float, Field(gt=0, le=100, allow_inf_nan=False)]
+    daily_loss_limit_pct: Annotated[float, Field(gt=0, le=100, allow_inf_nan=False)] | None = None
+    max_drawdown_pct: Annotated[float, Field(gt=0, le=100, allow_inf_nan=False)] | None = None
 
 
 class SizeRequest(_Request):
@@ -340,6 +432,9 @@ class SizeRequest(_Request):
 
 
 class SizeResponse(_Response):
+    """Money is USD only in v1 (Fadi, point 3): ``risk_usd`` is always USD, ai-service converts
+    from the quote currency (e.g. JPY) itself."""
+
     lots: Annotated[float, Field(ge=0, allow_inf_nan=False)]
     risk_usd: Annotated[float, Field(ge=0, allow_inf_nan=False)]
     margin_required: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = None
@@ -356,9 +451,12 @@ class ExplainRequest(_Request):
 
 
 class ExplainResponse(_Response):
+    """Shown to a user only when ``verified`` or ``template_used`` (the fixed template filled
+    with the setup's own numbers); otherwise the explanation is unavailable (Fadi, extra 5)."""
+
     text: str = Field(min_length=1)
     verified: bool = Field(description="the text was checked against the setup's numbers")
-    template_used: bool = Field(description="proposal: true when a fixed template was used")
+    template_used: bool = Field(description="true when the fixed template was used")
 
 
 # --- errors and health --------------------------------------------------------------------------

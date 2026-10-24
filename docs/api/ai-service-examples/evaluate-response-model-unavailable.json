@@ -5,6 +5,6 @@
   "new_setups": [],
   "transitions": [],
   "abstentions": [
-    {"reason": "model_unavailable", "detail": "no model is loaded"}
+    {"reason": "model_unavailable", "detail": {"message": "no model is loaded"}}
   ]
 }
