@@ -16,17 +16,22 @@ ws://<host>/ws/market?api_key=<tk_... key>      (external programs, key needs th
 - External programs can use an API key with the `stream` scope instead (`?api_key=`, see
   [api-keys.md](api-keys.md)). The connection belongs to the key's owner: the topic rules are the
   same, including the owner's own `user:` topic. A `token` wins if both are given.
-- If the token or key is missing, invalid, expired or revoked, the key lacks `stream`, or the
-  user is inactive, the server accepts and then closes with code **4401**.
+- If the token or key is missing, invalid, expired or revoked, the key lacks `stream`, the
+  user is inactive, or the token's login session has ended (logout, password change), the
+  server accepts and then closes with code **4401**.
 - When the access token expires during the connection, the server sends
   `{"type":"error","code":"token_expired",...}` and closes with **4401**. Refresh the token and
   reconnect.
 - The identity is **re-checked while the socket is open**: on every heartbeat (25 s) and at
-  once when an API key is revoked or its scopes change, or a user is deactivated or changes
-  role. If the user is gone or inactive, or the key is revoked, expired or no longer has
-  `stream`, the server sends `{"type":"error","code":"auth_revoked","message":"<reason>"}` and
-  closes with **4401** and the reason (`API key revoked`, `API key expired`, `API key lacks the
-  'stream' scope`, `user deactivated`). Do not reconnect with the same credentials. A role or
+  once when an API key is revoked or its scopes change, a user is deactivated, deleted or
+  changes role, the user **logs out** (that session's sockets only) or **changes the password**
+  or a stolen refresh token is detected (every login socket of the user; API-key sockets stay).
+  If the user is gone or inactive, the key is revoked, expired or no longer has `stream`, or the
+  login session ended, the server sends
+  `{"type":"error","code":"auth_revoked","message":"<reason>"}` and closes with **4401** and the
+  reason (`API key revoked`, `API key expired`, `API key lacks the 'stream' scope`,
+  `user deactivated`, `user not found`, `session ended`). Do not reconnect with the same
+  credentials; after `session ended`, log in again. A role or
   scope change that only removes a topic (a demoted admin's chats of other users, `news`
   without `news:read`) keeps the socket and sends
   `{"type":"unsubscribed","topic":"<topic>","reason":"forbidden"}` for each topic dropped.
@@ -108,7 +113,8 @@ forwarded at most once per 3 s per user. See [chat.md](chat.md).
   - `forbidden`
   - `too_many_subscriptions`
   - `token_expired`
-  - `auth_revoked`: the key was revoked/expired/lost `stream`, or the user was deactivated
+  - `auth_revoked`: the key was revoked/expired/lost `stream`, the user was deactivated or
+    deleted, or the login session ended (logout, password change, stolen refresh token)
   - `unavailable`: the live feed is temporarily down
 
   Only `token_expired` and `auth_revoked` close the socket (with **4401**).
@@ -167,7 +173,7 @@ forwarded at most once per 3 s per user. See [chat.md](chat.md).
 | Idle timeout | 75 s without any client frame → close **1001** |
 | Slow consumer | more than 256 undelivered messages → close **1013** |
 | Bad or expired token / API key | close **4401** |
-| Key revoked or lost `stream`, user deactivated or deleted (while open) | `auth_revoked` error, close **4401**: at once, at the latest on the next heartbeat |
+| Key revoked or lost `stream`, user deactivated or deleted, logout of that session, password change or stolen refresh token (while open) | `auth_revoked` error, close **4401**: at once, at the latest on the next heartbeat |
 | Concurrent connections | 5 per identity (user for a JWT, key for an API key) → close **4429** |
 | New connections | 20 per minute per IP → close **4429** |
 
@@ -179,7 +185,7 @@ protocol-level pings.
 - Reconnect with exponential backoff: 1 s, 2 s, 4 s … capped at 30 s, plus a little jitter. Reset
   the delay after a successful connection.
 - On **4401**, refresh the access token (`POST /api/v1/auth/refresh`) before reconnecting. If the
-  refresh fails, send the user to log in.
+  refresh fails (always after `session ended`), send the user to log in.
 - On **4429**, you have too many open connections or open them too fast: close unused ones (one
   connection can carry 50 subscriptions) and wait at least 3 s before retrying, backing off as
   above.

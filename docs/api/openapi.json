@@ -642,6 +642,7 @@
           "auth"
         ],
         "summary": "Refresh",
+        "description": "Rotate the refresh token: a new pair in the same login session (the access token keeps\nits ``sid``). A refresh token presented again after its rotation is treated as stolen:\nevery session of the user ends and their WebSockets close (4401 ``session ended``).",
         "operationId": "auth_refresh",
         "requestBody": {
           "content": {
@@ -723,6 +724,7 @@
           "auth"
         ],
         "summary": "Logout",
+        "description": "End this login session: its whole refresh-token family is revoked and its WebSockets\nclose at once (4401 ``session ended``). Sessions on other devices stay. Access tokens are\nstateless: REST calls with one keep working until it expires. Idempotent.",
         "operationId": "auth_logout",
         "requestBody": {
           "content": {
@@ -922,6 +924,7 @@
           "users"
         ],
         "summary": "Change Password",
+        "description": "Change your password. Every login session ends (refresh tokens revoked) and every\nWebSocket opened with a login closes (4401 ``session ended``); API keys and their sockets\nare not affected.",
         "operationId": "users_change_password",
         "requestBody": {
           "content": {

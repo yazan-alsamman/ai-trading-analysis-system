@@ -153,6 +153,7 @@ erDiagram
         varchar full_name
         enum_user_role role
         bool is_active
+        timestamptz sessions_revoked_at
         timestamptz created_at
         timestamptz updated_at
     }
@@ -163,6 +164,7 @@ erDiagram
         timestamptz created_at
         timestamptz revoked_at
         uuid replaced_by
+        uuid family_id
     }
     api_keys {
         uuid id PK

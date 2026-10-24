@@ -186,7 +186,9 @@ def build() -> dict[str, Any]:
             ["code", "message"],
             "A rejected client message; the socket stays open. token_expired (the token or key "
             "expired) and auth_revoked (API key revoked, expired or without stream; user "
-            "deactivated or deleted; message = the reason) are followed by a close with 4401.",
+            "deactivated or deleted; the login session ended: logout of that session, password "
+            "change or a stolen refresh token, message 'session ended'; message = the reason) "
+            "are followed by a close with 4401.",
         ),
         "Candle": typed(
             "candle",
@@ -355,9 +357,11 @@ def build() -> dict[str, Any]:
                 "?api_key=<key with the stream scope>; refused connections are closed with 4401 "
                 "(4429 over the connection limits). At most 50 topic subscriptions per "
                 "connection, 4 KB per client frame; idle 75 s closes with 1001; a client that "
-                "falls 256 messages behind is closed with 1013. The user and API key are "
-                "re-checked on every heartbeat and at once when a key is revoked or the user "
-                "deactivated (error auth_revoked, then 4401)."
+                "falls 256 messages behind is closed with 1013. The user, API key and login "
+                "session are re-checked on every heartbeat and at once when a key is revoked, "
+                "the user is deactivated or deleted, logs out (that session only), changes the "
+                "password or a stolen refresh token is detected (every login socket; API-key "
+                "sockets stay): error auth_revoked, then 4401."
             ),
             "messages": refs(
                 "Subscribe",
