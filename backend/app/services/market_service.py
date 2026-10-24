@@ -55,8 +55,7 @@ _RELATIONS = {
 
 # spread/source only overwrite with a value; received_at keeps the earliest arrival (least()
 # ignores NULL), so a re-sent bar does not hide the feed's real lag.
-_UPSERT = text(
-    """
+_UPSERT_SQL = """
     INSERT INTO candles_1m AS c
         (instrument_id, ts, open, high, low, close, volume, trades, spread, source, received_at)
     SELECT CAST(:instrument_id AS uuid), u.ts, u.open, u.high, u.low, u.close, u.volume,
@@ -84,7 +83,10 @@ _UPSERT = text(
         source = coalesce(excluded.source, c.source),
         received_at = least(c.received_at, excluded.received_at)
     """
-)
+_UPSERT = text(_UPSERT_SQL)
+# keep_live (B1 backfill): a stored bar that has a spread (built live from quotes) is never
+# overwritten; only missing bars and bars without a spread are written
+_UPSERT_KEEP_LIVE = text(_UPSERT_SQL + "    WHERE c.spread IS NULL")
 
 
 # --- instruments ----------------------------------------------------------------------------
@@ -196,21 +198,27 @@ async def update_instrument(
 
 
 async def upsert_candles(
-    session: AsyncSession, instrument_id: uuid.UUID, candles: Sequence[CandleIn]
+    session: AsyncSession,
+    instrument_id: uuid.UUID,
+    candles: Sequence[CandleIn],
+    *,
+    keep_live: bool = False,
 ) -> int:
     """Insert or update 1m candles. Returns the number of rows written; the caller commits.
 
     If the same ``ts`` appears more than once, the last occurrence wins. ``spread`` and
     ``source`` are only overwritten by a value, ``received_at`` (default: now) keeps the
-    earliest arrival.
+    earliest arrival. ``keep_live``: an existing bar that has a spread is left as it is (a
+    backfill never overwrites a bar built live; same statement, one extra ``WHERE``).
     """
+    statement = _UPSERT_KEEP_LIVE if keep_live else _UPSERT
     by_ts = {c.ts: c for c in candles}
     rows = [by_ts[ts] for ts in sorted(by_ts)]
     written = 0
     for i in range(0, len(rows), UPSERT_CHUNK_SIZE):
         chunk = rows[i : i + UPSERT_CHUNK_SIZE]
         result = await session.execute(
-            _UPSERT,
+            statement,
             {
                 "instrument_id": instrument_id,
                 "ts": [c.ts for c in chunk],

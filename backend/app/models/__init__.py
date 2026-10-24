@@ -29,6 +29,7 @@ from app.models.expert import (
     SubscriptionPlan,
     SubscriptionStatus,
 )
+from app.models.feed import FeedCredential
 from app.models.instrument import Instrument, MarketType
 from app.models.news import (
     NewsArticle,
@@ -142,6 +143,7 @@ __all__ = [
     "SignalSide",
     "Timeframe",
     "User",
+    "FeedCredential",
     "UserRole",
     "UserStrategy",
     "Visibility",

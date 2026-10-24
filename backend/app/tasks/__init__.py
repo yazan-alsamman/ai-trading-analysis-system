@@ -33,6 +33,7 @@ celery_app = Celery(
         "app.tasks.calendar",
         "app.tasks.ai_alerts",
         "app.tasks.ai",
+        "app.tasks.feeds",
     ],
 )
 celery_app.conf.update(
@@ -60,6 +61,7 @@ celery_app.conf.update(
         "housekeeping.*": {"queue": "maintenance"},
         "subscriptions.*": {"queue": "maintenance"},
         "ops.*": {"queue": "maintenance"},
+        "feeds.*": {"queue": "maintenance"},  # long backfills (worker-backtest)
     },
     task_ignore_result=True,
     beat_schedule={
