@@ -35,26 +35,34 @@ def _encode(claims: dict[str, Any]) -> str:
     return jwt.encode(claims, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def create_access_token(user: User) -> str:
+def create_access_token(user: User, session_id: uuid.UUID | None = None) -> str:
+    """``session_id``: the login session (the refresh-token family), as the ``sid`` claim. A
+    token without one (issued before B12 part 2, or minted by scripts) has no session."""
     now = datetime.now(UTC)
-    return _encode(
-        {
-            "sub": str(user.id),
-            "role": user.role.value,
-            "type": "access",
-            "iat": now,
-            "exp": now + timedelta(minutes=get_settings().jwt_access_minutes),
-        }
-    )
+    claims = {
+        "sub": str(user.id),
+        "role": user.role.value,
+        "type": "access",
+        "iat": now,
+        "exp": now + timedelta(minutes=get_settings().jwt_access_minutes),
+    }
+    if session_id is not None:
+        claims["sid"] = str(session_id)
+    return _encode(claims)
 
 
-async def create_refresh_token(session: AsyncSession, user: User) -> tuple[str, RefreshToken]:
-    """Issue a refresh token and add its row to the session (the caller commits)."""
+async def create_refresh_token(
+    session: AsyncSession, user: User, family_id: uuid.UUID | None = None
+) -> tuple[str, RefreshToken]:
+    """Issue a refresh token and add its row to the session (the caller commits).
+    ``family_id``: the session it continues (a rotation); None starts one (a login)."""
     now = datetime.now(UTC)
+    row_id = uuid.uuid4()
     row = RefreshToken(
-        id=uuid.uuid4(),
+        id=row_id,
         user_id=user.id,
         expires_at=now + timedelta(days=get_settings().jwt_refresh_days),
+        family_id=family_id or row_id,
     )
     session.add(row)
     await session.flush()
@@ -97,6 +105,8 @@ def decode_token(token: str, expected_type: TokenType) -> dict[str, Any]:
         payload["sub"] = uuid.UUID(payload["sub"])
         if expected_type == "refresh":
             payload["jti"] = uuid.UUID(payload["jti"])
+        else:
+            payload["sid"] = uuid.UUID(payload["sid"]) if payload.get("sid") else None
     except (KeyError, TypeError, ValueError) as exc:
         raise credentials_exception() from exc
     return payload

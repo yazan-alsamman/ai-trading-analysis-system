@@ -13,7 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from pydantic import ValidationError
-from sqlalchemy import or_, select
+from sqlalchemy import exists, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import get_session_factory
@@ -24,6 +24,7 @@ from app.core.security import decode_token
 from app.models.api_key import ApiKey, Scope
 from app.models.chat import Conversation
 from app.models.instrument import Instrument
+from app.models.refresh_token import RefreshToken
 from app.models.user import User, UserRole
 from app.realtime import protocol, publisher
 from app.realtime.hub import (
@@ -62,13 +63,17 @@ class _Auth:
     credential: str  # "access token" / "API key", for the expiry message
     scopes: frozenset[str] | None = None  # an API key's scopes (None: a login, every scope)
     key_id: uuid.UUID | None = None  # the API key (None: a login)
+    session_id: uuid.UUID | None = None  # the access token's sid (None: API key / older token)
+    issued_at: float = 0.0  # the access token's iat (unix seconds)
 
 
 async def _authenticate(
     token: str | None, api_key: str | None, session_factory: async_sessionmaker[AsyncSession]
 ) -> _Auth | str:
     """The connection's identity, or why it is refused (closed with 4401). A token wins over
-    an API key; a key needs the ``stream`` scope."""
+    an API key; a key needs the ``stream`` scope. An access token whose login session has
+    ended (logout, password change, refresh reuse) is refused, although it has not expired:
+    the same rule as the re-check (``_revoked``)."""
     if token:
         try:
             payload = decode_token(token, "access")
@@ -76,9 +81,19 @@ async def _authenticate(
             return "invalid or expired token"
         async with session_factory() as session:
             user = await session.get(User, payload["sub"])
-        if user is None or not user.is_active:
-            return "invalid or expired token"
-        return _Auth(user, float(payload["exp"]), f"user:{user.id}", "access token")
+            if user is None or not user.is_active:
+                return "invalid or expired token"
+            auth = _Auth(
+                user,
+                float(payload["exp"]),
+                f"user:{user.id}",
+                "access token",
+                session_id=payload["sid"],
+                issued_at=float(payload.get("iat") or 0),
+            )
+            found = (await session.execute(_identity_query(user.id, auth))).first()
+        reason = _revoked(found, auth)
+        return auth if reason is None else reason
     if api_key:
         async with session_factory() as session:
             try:
@@ -136,7 +151,7 @@ async def _serve(
 ) -> None:
     user = auth.user
     await websocket.accept()
-    client = hub.new_client(websocket, user.id, auth.key_id)
+    client = hub.new_client(websocket, user.id, auth.key_id, auth.session_id)
     client.is_admin = user.role == UserRole.admin
     await hub.register(client)
     receiver = watchdog = stop_wait = None
@@ -219,13 +234,57 @@ async def _watchdog(
             pass
 
 
+SESSION_ENDED = "session ended"
+
+
+def _identity_query(user_id: uuid.UUID, auth: _Auth):
+    """One query (primary key, plus an indexed EXISTS on the refresh-token family):
+
+    - a login: the user's ``is_active``, ``role`` and ``sessions_revoked_at``, and whether the
+      token's session (``sid``) still has an unrevoked refresh token (``live``; always true
+      for an older token without ``sid``);
+    - an API key: the user's ``is_active`` and ``role`` and the key's state."""
+    if auth.key_id is not None:
+        return (
+            select(User.is_active, User.role, ApiKey.revoked_at, ApiKey.expires_at, ApiKey.scopes)
+            .join(User, User.id == ApiKey.user_id)
+            .where(ApiKey.id == auth.key_id)
+        )
+    if auth.session_id is not None:
+        live = (
+            exists()
+            .where(
+                RefreshToken.family_id == auth.session_id,
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .label("live")
+        )
+    else:
+        live = literal(True).label("live")
+    return select(User.is_active, User.role, User.sessions_revoked_at, live).where(
+        User.id == user_id
+    )
+
+
 def _revoked(found, auth: _Auth) -> str | None:
-    """Why the connection may no longer stay open (None: it may)."""
+    """Why the connection may no longer stay open (None: it may).
+
+    A login's socket also closes when its session ended (``session ended``): with a ``sid``,
+    when that refresh-token family has no unrevoked row left (logout revokes the family;
+    password change and refresh reuse revoke every family); an older token without ``sid``,
+    when every session of the user was ended after it was issued (``sessions_revoked_at`` >
+    its ``iat``). API-key sockets are not tied to a login session."""
     if found is None:
-        return "API key revoked" if auth.key_id is not None else "user deactivated"
+        return "API key revoked" if auth.key_id is not None else "user not found"
     if not found.is_active:
         return "user deactivated"
     if auth.key_id is None:
+        if not found.live:
+            return SESSION_ENDED
+        ended = found.sessions_revoked_at
+        if auth.session_id is None and ended is not None and auth.issued_at < ended.timestamp():
+            return SESSION_ENDED
         return None
     if found.revoked_at is not None:
         return "API key revoked"
@@ -242,18 +301,12 @@ async def _recheck(
     session_factory: async_sessionmaker[AsyncSession],
     auth: _Auth,
 ) -> bool:
-    """Read the user (and API key) again: one primary-key query. Closes the connection with
-    ``auth_revoked`` / 4401 if the user is gone or inactive, or the key is revoked, expired or
-    without ``stream``; otherwise drops the topics the role or scopes no longer allow. False
-    if it closed. A database error keeps the connection (checked again next heartbeat)."""
-    if auth.key_id is None:
-        query = select(User.is_active, User.role).where(User.id == client.user_id)
-    else:
-        query = (
-            select(User.is_active, User.role, ApiKey.revoked_at, ApiKey.expires_at, ApiKey.scopes)
-            .join(User, User.id == ApiKey.user_id)
-            .where(ApiKey.id == auth.key_id)
-        )
+    """Read the user (and API key, or login session) again: one query (``_identity_query``).
+    Closes the connection with ``auth_revoked`` / 4401 if the user is gone or inactive, the
+    key is revoked, expired or without ``stream``, or the login session ended; otherwise drops
+    the topics the role or scopes no longer allow. False if it closed. A database error keeps
+    the connection (checked again next heartbeat)."""
+    query = _identity_query(client.user_id, auth)
     try:
         async with hub.auth_lock, session_factory() as session:
             found = (await session.execute(query)).first()

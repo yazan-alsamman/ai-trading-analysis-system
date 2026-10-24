@@ -35,6 +35,9 @@ class User(Base):
         server_default=UserRole.trader.value,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    # every session ended at this time (password change, refresh reuse, deactivation): the
+    # WebSockets of access tokens issued before it without a session id close (B12 part 2)
+    sessions_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
