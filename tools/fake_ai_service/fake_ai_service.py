@@ -37,11 +37,11 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
-EXAMPLES = Path(
-    os.environ.get(
-        "FAKE_AI_EXAMPLES",
-        Path(__file__).resolve().parents[2] / "docs" / "api" / "ai-service-examples",
-    )
+# in the repository: docs/api/ai-service-examples; in the fake-ai container: FAKE_AI_EXAMPLES
+EXAMPLES = (
+    Path(os.environ["FAKE_AI_EXAMPLES"])
+    if os.environ.get("FAKE_AI_EXAMPLES")
+    else Path(__file__).resolve().parents[2] / "docs" / "api" / "ai-service-examples"
 )
 VERSIONS = {"strategy": "fake-1.0.0", "model": "fake-model-1", "features": "fake-f1"}
 DEFAULT_MODES = {"evaluate": "lifecycle", "size": "404", "explain": "404"}
