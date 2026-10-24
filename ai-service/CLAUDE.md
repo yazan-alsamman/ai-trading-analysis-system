@@ -101,7 +101,7 @@ recorded version.
 9. P9 Freeze, open lockbox once, paper trading ≥ 3 months or 100 signals.
 10. P10 Thesis, evaluation report, model card, demo, reproducibility.
 
-**Status (2026-10-22):** design locked; phase 0 reset done (`docs/AUDIT-2026-10-21.md`): all
+**Status (2026-10-24):** design locked; phase 0 reset done (`docs/AUDIT-2026-10-21.md`): all
 pre-v0.2 work removed. P1 in progress: tasks 1 (layout), 2 (lockbox sealed,
 `docs/lockbox/MANIFEST-2026-10-21.json`), 3 (importer: `python -m app import`, store in
 `data/processed/<SYMBOL>/{m1,5m,15m,1h,4h,D1}.parquet`, untracked) and 4 (quality report:
@@ -135,7 +135,7 @@ mean net R -0.046 vs matched random E0 -0.063 (difference +0.017, 95% -0.10 to +
 **H1 not supported on 2012-2017**; 53% of E1 trades end at the 48-bar horizon. P3 gate (1,000
 labelled, L1 pooled 1,634) passed on counts; the design also asks for E1 on walk-forward.
 Horizon trials 96 / 192 bars (Fadi, 2026-10-23): no edge either (p 0.46 / 0.60); horizon stays 48.
-Every performance look on 2012-2017 is logged in `docs/phase3/TRIALS.md` (5 trials so far).
+Every performance look is logged in `docs/phase3/TRIALS.md` (10 trials; N = 10 for the Deflated Sharpe).
 P4 started (2026-10-23, branch `ai/p4-meta-model`, stacked on #55). Label as the design (§9.2): y = 1 for TP
 first, 0 for SL or horizon; realised R kept. Task 1 (L4 features and dataset: `python -m app features
 build`, `app/features/setup_features.py`, `docs/phase4/dataset_L1.md`) done: 1,436 labelled L1 setups,
@@ -150,7 +150,32 @@ walkforward`, `app/research/walkforward.py`) done: 13 six-month test windows 201
 expanding train from 2012, purge + 1-day embargo by exit time, last 25% of train as the calibration
 slice (Platt or isotonic by Brier), Brier skill vs the train base rate, ECE (10 bins). E1 on the
 walk-forward test windows: 1,058 trades, TP 11.1%, mean net R -0.047 (95% -0.115 to +0.020).
-Next: task 3, models E2 (LR), E3 (LightGBM), E4 (MLP), EV filter vs E1, SHAP.
+L1-M (Fadi, 2026-10-23; trial 6, registered before the run, `docs/phase4/L1-M.md`): opposite
+signal exits, same-direction signal extends (cap 192 bars). No difference from L1: walk-forward
+mean net R -0.047 for both, E1 - E0 p 0.54. L1 stays.
+**P4 amendment registered 2026-10-23 before any fit** (`docs/phase4/PREREG_P4.md`, approved by Fadi
+as written): label y = 1{net R > 0} weighted by |net R| (replaces TP first), Platt only, EV rule
+p*m1 + (1-p)*m0 > 0 with means from train, minimum 30 accepted, H2 decided on E2 alone (pooled,
+XAUUSD named secondary), pooled debiased ECE on 10 equal-mass bins, E0 + meta control arm.
+Task 3 (`python -m app research meta --model lr|lgbm|mlp [--label tp] [--arm context|e0]`,
+`app/research/meta.py`; `python -m app features e0`) done, trials 7-10 (`docs/phase4/meta_*.md`):
+
+| Trial | Model | Accepted | Mean net R acc. (all -0.047) | BSS |
+| --- | --- | --- | --- | --- |
+| 7 | **E2 LR (primary)** | 209 | -0.054 | -0.011 |
+| 8 | E3 LightGBM-small | 226 | -0.144 | -0.022 |
+| 9 | E4 MLP | 249 | -0.093 | -0.013 |
+| 10 | E2, design label | 335 | -0.145 | -0.001 |
+
+**H2 not supported; P4 gate not passed** (Brier skill < 0 for every model; debiased ECE 0.015-0.032
+passes). E2's inner CV shrinks every coefficient to zero in 9 of 13 windows, so whole windows are
+accepted or rejected. Control arms for LR (§7, not trials): context features only gain -0.037;
+E0 (20 random replications) gains 5th / median / 95th -0.085 / -0.018 / +0.103; E1 with 38 features
+-0.007 (about the 61st percentile of random): **the SMC pattern adds no information** beyond
+session, volatility and cost context. Thesis notes: the yearly condition of H2 passes trivially for
+a filter that trades less in losing years; label uniqueness median 1.0 (no AFML weights needed).
+Open: LightGBM and MLP control arms (registered, not needed for H2); what P4's failed gate means
+for P5 (Fadi).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
