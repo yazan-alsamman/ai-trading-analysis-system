@@ -144,6 +144,15 @@ connections per IP (`app/core/rate_limit.py`).
 - Never committed: `.env.example` has empty placeholders; the server `.env` is created by the
   deploy with generated secrets (`chmod 600`). Channel secrets (Telegram, SMTP, FCM) are added by
   hand on the server; with them empty the channel is reported as disabled.
+- The cTrader app credentials (B1, docs/ctrader-feed.md) come from the GitHub secrets
+  `CTRADER_CLIENT_ID` / `CTRADER_CLIENT_SECRET`: the Deploy workflow masks them and sends them
+  over SSH on stdin to `infra/deploy/set-env-secrets.sh`, which writes a key into the server
+  `.env` only when it is missing or empty (never in argv, never printed).
+- The cTrader OAuth tokens live in `feed_credentials`, **encrypted** (Fernet, key derived from
+  `JWT_SECRET` with HKDF-SHA256 and its own label): never in `.env`, logs or API answers. The
+  feed's WebSocket library logger stays at WARNING (frames carry the client secret and token),
+  and the log filter redacts `code=`, `state=` and `client_secret=` in URLs. Rotating
+  `JWT_SECRET` means linking the account again.
 - Never logged: query-string credentials (`?token=`, `?api_key=`) are redacted by our Nginx log
   format and by the app's log filters; the Telegram bot token and webhook secret are redacted;
   HTTP client loggers are kept at WARNING (they would log URLs). CI runs the whole test suite with

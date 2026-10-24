@@ -87,6 +87,19 @@ erDiagram
         timestamptz fetched_at
         varchar content_hash
     }
+    feed_credentials {
+        varchar provider PK
+        varchar env
+        text access_token_enc
+        text refresh_token_enc
+        timestamptz expires_at
+        varchar scope
+        bigint account_id
+        jsonb accounts
+        timestamptz linked_at
+        timestamptz refreshed_at
+        timestamptz updated_at
+    }
     users
     candles_1m }o--|| instruments : "instrument_id"
     price_alerts }o--|| instruments : "instrument_id"

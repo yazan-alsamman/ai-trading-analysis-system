@@ -111,6 +111,32 @@ services:
       - redis
       - db
 
+  # B1: the cTrader live feed (docs/ctrader-feed.md); idles while CTRADER_ENABLED=false
+  feed-ctrader:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    command: python -m app.feeds.ctrader
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.25
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # B1: a mock cTrader Open API (tools/fake_ctrader) for development and CI, never in
+  # production. Only with its profile: docker compose --profile fake-ctrader up -d fake-ctrader,
+  # then CTRADER_WS_URL=ws://fake-ctrader:5036
+  fake-ctrader:
+    profiles: ["fake-ctrader"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python /fake/fake_ctrader.py --port 5036 --tick-rate 2
+    volumes:
+      - ./tools/fake_ctrader:/fake:ro
+
   # development SMTP server: every email ends up in http://localhost:8025
   mailpit:
     image: axllent/mailpit:v1.21.8

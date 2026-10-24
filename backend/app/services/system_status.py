@@ -182,6 +182,14 @@ async def _ai_evaluate(session: AsyncSession, redis: Redis) -> dict[str, Any]:
     return await evaluation.status(session, redis)
 
 
+async def _feeds(session: AsyncSession) -> dict[str, Any]:
+    """The cTrader live feed (B1): enabled, linked, connected, last tick and bar, reconnects,
+    token expiry, last error. Never the tokens."""
+    from app.api.v1.admin_feeds import feed_status  # noqa: PLC0415 - avoids an import cycle
+
+    return {"ctrader": await feed_status(session)}
+
+
 async def _notifications(redis: Redis) -> dict[str, Any]:
     server = enabled_channels()
     return {
@@ -239,6 +247,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
         "calendar": lambda: _calendar(session, redis),
         "ai_alerts": lambda: _ai_alerts(session),
         "ai_evaluate": lambda: _ai_evaluate(session, redis),
+        "feeds": lambda: _feeds(session),
         "notifications": lambda: _notifications(redis),
         "errors_last_hour": lambda: ops.errors_last_hour(redis),
     }

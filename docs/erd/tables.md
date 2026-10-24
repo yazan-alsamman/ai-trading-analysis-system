@@ -278,6 +278,29 @@ A version of an economic-calendar event as it was known at ``fetched_at``. Revis
 - `ix_economic_events_key_fetched` (economic_events.event_key, fetched_at DESC)
 - `ix_economic_events_scheduled` (economic_events.scheduled_at)
 
+### `feed_credentials`
+
+Base class used for declarative class definitions.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `provider` | varchar(32) | no |  | PK |
+| `env` | varchar(8) | no |  |  |
+| `access_token_enc` | text | no |  |  |
+| `refresh_token_enc` | text | no |  |  |
+| `expires_at` | timestamp with time zone | no |  |  |
+| `scope` | varchar(16) | no |  |  |
+| `account_id` | bigint | yes |  |  |
+| `accounts` | jsonb | no | `'[]'::jsonb` |  |
+| `linked_at` | timestamp with time zone | no | `now()` |  |
+| `refreshed_at` | timestamp with time zone | yes |  |  |
+| `updated_at` | timestamp with time zone | no | `now()` |  |
+
+**Constraints**
+
+- PK `pk` (provider)
+- CHECK `ck_feed_credentials_env`: `env IN ('demo', 'live')`
+
 ## Strategies, backtests and risk
 
 ### `user_strategies`

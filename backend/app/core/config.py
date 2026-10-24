@@ -194,8 +194,22 @@ class Settings(BaseSettings):
     calendar_fetch_max_bytes: int = 2 * 1024 * 1024
     calendar_backoff_hours: float = 6.0  # no request at all for this long after a 429/403
     calendar_currencies: str = "USD"  # default filter of reads and of for_evaluate (comma list)
+    # cTrader Open API live feed (B1, docs/ctrader-feed.md): the feed-ctrader service idles
+    # until enabled AND an account is linked (GET /admin/feeds/ctrader/connect)
+    ctrader_enabled: bool = False
+    ctrader_env: str = "demo"  # demo | live: the host the account belongs to
+    ctrader_account_id: int | None = None  # empty: the account chosen when linking
+    ctrader_symbol: str = "XAUUSD"  # the broker's symbol name
+    ctrader_instrument: str = "fxpro:XAU/USD"  # source:symbol of the instrument the bars go to
+    ctrader_close_grace_seconds: float = 3.0  # a bar without a next tick closes this late
+    ctrader_backfill_max_days: int = 7  # gap filled on start and after a reconnect
+    # the Open API application (written by the deploy from GitHub secrets; never in git)
+    ctrader_client_id: str = ""
+    ctrader_client_secret: str = ""
+    # development and CI only: the mock server (tools/fake_ctrader); empty: the official host
+    ctrader_ws_url: str = ""
 
-    @field_validator("api_docs_enabled", mode="before")
+    @field_validator("api_docs_enabled", "ctrader_account_id", mode="before")
     @classmethod
     def _empty_is_auto(cls, value: object) -> object:
         # the deploy appends new keys to the server .env as `KEY=` (empty): that means automatic
@@ -280,6 +294,12 @@ class Settings(BaseSettings):
             if name and name not in out:
                 out.append(name)
         return out
+
+    @property
+    def ctrader_instrument_key(self) -> tuple[str, str] | None:
+        """``(source, SYMBOL)`` of CTRADER_INSTRUMENT (None when malformed)."""
+        pairs = _pairs(self.ctrader_instrument)
+        return pairs[0] if pairs else None
 
     @property
     def calendar_currency_list(self) -> list[str]:
