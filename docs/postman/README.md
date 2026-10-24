@@ -44,7 +44,7 @@ collection or the committed file against the VPS.
 03 · Users (me)             10 · Workspaces             17 · Expert Studio
 04 · Market Data            11 · API Keys               18 · Notifications
 05 · Indicators                  Using an API key       19 · Admin
-06 · Strategies & Signals   12 · News                        Users · Market Data
+06 · Strategies & Signals   12 · News                        Users · Market Data · cTrader Feed
 07 · Risk Management        13 · Community                   API Keys & Rate Limits
                             14 · Price Alerts                AI Engine · News & Moderation
                                                              Subscriptions & Chat · Notifications
@@ -75,7 +75,7 @@ environment's `base_url` to `https://trading.yazanalsamman.com` and `ws_url` to
 `wss://trading.yazanalsamman.com`; until then it points at `http://187.127.76.76:8080`.
 
 On production, Register, Admin and the create requests write real data (the calendar import adds
-the sample's events, Activate AI model switches the active model): prefer Local for full runs.
+the sample's events, Activate AI model switches the active model, Backfill cTrader bars starts a real backfill): prefer Local for full runs.
 
 ## Updating after an API change
 
