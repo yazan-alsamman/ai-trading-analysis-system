@@ -5,6 +5,11 @@ The ``data_quality.check`` beat task stores one report per instrument every minu
 TTL). ``GET /api/v1/health/data`` and ``GET /admin/system/status`` read them and compute a
 missing one on the spot. A status change is logged once; when an instrument turns bad
 (``degraded``/``no_data``) or recovers, admins get one ``system`` notification.
+
+Flapping (B9): after an alert, no other alert about the same instrument for
+``DATA_QUALITY_ALERT_COOLDOWN_SECONDS`` (default 1800). The state itself (``/health/data``)
+still changes at once; what the admins were last told is kept, and a change held back by the
+cooldown is sent when it ends if the instrument is still in that state.
 """
 
 from __future__ import annotations
@@ -29,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 REPORT_KEY = "dq:report:"  # + source:symbol -> the latest report (JSON)
 STATUS_KEY = "dq:status:"  # + source:symbol -> the last status the beat task saw
+ALERTED_KEY = "dq:alerted:"  # + source:symbol -> "bad" | "good": what admins were last told
+COOLDOWN_KEY = "dq:alert-cooldown:"  # + source:symbol -> set while no other alert is sent
 REPORT_TTL = 300
 STATUS_TTL = 7 * 24 * 3600
 # worst first: the overall status of /health/data and the "data" field of /health/ready
@@ -138,12 +145,7 @@ async def _notify_admins(
         logger.exception("data quality: notifying admins about %s failed", report.instrument)
 
 
-async def _transition(
-    factory: async_sessionmaker[AsyncSession],
-    redis: Redis,
-    report: QualityReport,
-    previous: str | None,
-) -> None:
+def _transition(report: QualityReport, previous: str | None) -> None:
     bad = report.status in BAD_STATUSES
     failed = ", ".join(f"{c.name} ({c.detail})" for c in report.failed) or "-"
     logger.log(
@@ -156,10 +158,44 @@ async def _transition(
         report.last_closed_bar.isoformat() if report.last_closed_bar else None,
         report.lag_seconds,
     )
-    # admins hear about an instrument turning bad or recovering, once; not about every
-    # ok <-> closed of the daily break, nor about the first check after a fresh start
-    if previous is not None and (QualityStatus(previous) in BAD_STATUSES) != bad:
-        await _notify_admins(factory, redis, report)
+
+
+def _text(value: str | bytes | None) -> str | None:
+    return value.decode() if isinstance(value, bytes) else value
+
+
+async def _alert(
+    factory: async_sessionmaker[AsyncSession],
+    redis: Redis,
+    report: QualityReport,
+    previous: str | None,
+) -> None:
+    """Admins hear about an instrument turning bad or recovering, once; not about every
+    ok <-> closed of the daily break, nor about the first check after a fresh start, and at
+    most once per ``DATA_QUALITY_ALERT_COOLDOWN_SECONDS`` (checked on every run, so a change
+    held back is sent when the cooldown ends, if it still holds)."""
+    name = report.instrument
+    state = "bad" if report.status in BAD_STATUSES else "good"
+    told = _text(await redis.get(ALERTED_KEY + name))
+    if told is None:
+        if previous is None:  # the first check after a fresh start: nothing to tell
+            await redis.set(ALERTED_KEY + name, state, ex=STATUS_TTL)
+            return
+        told = "bad" if QualityStatus(previous) in BAD_STATUSES else "good"
+    if told == state:
+        return
+    cooldown = get_settings().data_quality_alert_cooldown_seconds
+    if cooldown > 0 and not await redis.set(COOLDOWN_KEY + name, "1", nx=True, ex=cooldown):
+        if previous != report.status.value:
+            logger.info(
+                "data quality %s: %s, the admins' alert waits for the cooldown (%d s)",
+                name,
+                report.status.value,
+                cooldown,
+            )
+        return
+    await redis.set(ALERTED_KEY + name, state, ex=STATUS_TTL)
+    await _notify_admins(factory, redis, report)
 
 
 async def run(
@@ -180,5 +216,9 @@ async def run(
         if isinstance(previous, bytes):
             previous = previous.decode()
         if previous != report.status.value:
-            await _transition(factory, redis, report, previous)
+            _transition(report, previous)
+        try:
+            await _alert(factory, redis, report, previous)
+        except Exception:  # noqa: BLE001 - an alert must never break the check
+            logger.exception("data quality: alerting about %s failed", report.instrument)
     return reports
