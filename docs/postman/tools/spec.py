@@ -540,8 +540,11 @@ FOLDERS: list[Folder] = [
                 "Refresh tokens",
                 "POST",
                 "/auth/refresh",
-                "Rotates the refresh token: the response holds a **new** pair and the old "
-                "refresh token is revoked. Reusing a revoked refresh token answers 401.",
+                "Rotates the refresh token: the response holds a **new** pair in the same login "
+                "session (the access token keeps its `sid` claim) and the old refresh token is "
+                "revoked. A refresh token presented again after its rotation is treated as "
+                "stolen: it answers 401, **every** session of the user ends and their WebSockets "
+                "close (4401 `session ended`).",
                 auth="none",
                 body={"refresh_token": "{{refresh_token}}"},
                 tests=LOGIN_TESTS,
@@ -558,8 +561,10 @@ FOLDERS: list[Folder] = [
                 "Logout",
                 "POST",
                 "/auth/logout",
-                "Revokes the given refresh token of the current user. The access token keeps "
-                "working until it expires, so clients should simply drop it.",
+                "Ends this login session: its whole refresh-token family is revoked and its "
+                "WebSockets close at once (4401 `session ended`). Sessions on other devices "
+                "stay. Access tokens are stateless: REST calls with one keep working until it "
+                "expires, so clients should simply drop it. Idempotent.",
                 body={"refresh_token": "{{refresh_token}}"},
                 expect=[204],
                 tests=LOGOUT_TESTS,
@@ -593,7 +598,9 @@ FOLDERS: list[Folder] = [
                 "Change my password",
                 "POST",
                 "/users/me/password",
-                "Needs the current password. The test script swaps `user_password` and "
+                "Needs the current password. Every login session ends (refresh tokens revoked) "
+                "and every WebSocket opened with a login closes (4401 `session ended`); API keys "
+                "and their sockets are not affected. The test script swaps `user_password` and "
                 "`user_new_password`, so running it twice restores the original password.",
                 body={
                     "current_password": "{{user_password}}",
@@ -3846,8 +3853,10 @@ and use the URL and messages below. Full protocol: `docs/websocket.md`.
 
 Invalid/expired credentials: the server accepts, then closes with **4401**. Refresh the token \
 and reconnect. Open sockets are re-checked on every heartbeat and at once when the API key is \
-revoked (or loses `stream`) or the user is deactivated: `error` `auth_revoked` (message = the \
-reason), then **4401**. A topic the role or key scopes no longer allow is dropped with \
+revoked (or loses `stream`), the user is deactivated or deleted, logs out (that session only), \
+changes the password or a stolen refresh token is detected (every login socket; API-key sockets \
+stay): `error` `auth_revoked` (message = the reason, e.g. `session ended`, `user not found`), \
+then **4401**. A topic the role or key scopes no longer allow is dropped with \
 `unsubscribed` + `reason: "forbidden"`.
 
 ### Client → server (JSON text frames, max 4 KB)
@@ -3915,7 +3924,7 @@ indicator after ~5 s without a new one.
 | Server heartbeat | every 25 s; send `{"op":"ping"}` every ~30 s |
 | Idle timeout | 75 s without a client frame → **1001** |
 | Slow consumer | > 256 undelivered messages → **1013** |
-| Bad / expired / revoked token or key, deactivated user | **4401** |
+| Bad / expired / revoked token or key, deactivated or deleted user, login session ended (logout, password change, stolen refresh token) | **4401** |
 | Connections | 5 per identity, 20 new per minute per IP → **4429** |
 | Server error on the connection (also when its periodic re-check stops) | **1011** |
 
