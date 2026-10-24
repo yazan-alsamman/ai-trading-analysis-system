@@ -250,3 +250,21 @@ def test_created_at_is_optional() -> None:
 def test_active_never_goes_to_invalidated() -> None:
     assert c.ALLOWED_TRANSITIONS[c.SetupState.ACTIVE] == {c.SetupState.CLOSED}
     assert c.SetupState.ACTIVE not in c.ALLOWED_TRANSITIONS[c.SetupState.DEVELOPING]
+
+
+@pytest.mark.parametrize(
+    ("direction", "levels", "expected"),
+    [
+        # buy: stop below, target above -> both rounded down (stop away, target toward entry)
+        ("buy", (2400.004, 2395.006, 2410.009), (2400.0, 2395.0, 2410.0)),
+        # sell: stop above, target below -> both rounded up
+        ("sell", (2400.006, 2405.001, 2390.001), (2400.01, 2405.01, 2390.01)),
+        # already on the tick: unchanged (decimal arithmetic, no float drift)
+        ("buy", (2400.0, 2395.0, 2410.0), (2400.0, 2395.0, 2410.0)),
+        ("sell", (1.08505, None, None), (1.09, None, None)),
+    ],
+)
+def test_round_levels_stop_away_target_toward(direction, levels, expected) -> None:
+    """Fadi (point 2): rounding never makes the risk smaller or the reward larger."""
+    tick = 0.01
+    assert c.round_levels(direction, *levels, tick) == expected

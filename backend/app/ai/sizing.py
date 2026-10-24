@@ -41,7 +41,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import AIContractError, AIServiceClient, AIUnavailableError
-from app.ai.contract import PRICED_STATES, Setup, SizeRequest, SizeResponse
+from app.ai.contract import PRICED_STATES, Setup, SizeRequest, SizeResponse, round_levels
 from app.ai.specs import MissingSpecs, instrument_spec, spec_hash
 from app.core.config import get_settings
 from app.models.ai import AISetup, AISetupSize, AISetupTake
@@ -205,7 +205,8 @@ async def local_size(
     """(lots, risk amount, margin, feasible, warnings) with the platform's B4 lot sizing:
     risk amount = balance x risk %, lots rounded down to ``lot_step`` and limited to
     ``min_lot``/``max_lot`` (``tb.lots_for_risk``, which converts the quote currency into the
-    account currency: USD/JPY for a USD account at 1 / entry).
+    account currency: USD/JPY for a USD account at 1 / entry). Prices off the tick are rounded
+    first with Fadi's rule (``round_levels``: the stop away from the entry).
 
     Margin (Fadi, extra 3) = notional in the account currency x max(``margin_rate``,
     1 / leverage): the broker's margin rate when it asks for more than the user's leverage;
@@ -218,11 +219,14 @@ async def local_size(
         session, instrument, account.currency, setup.entry
     )
     amount = account.balance * risk.risk.risk_per_trade_pct / 100
-    sized = tb.lots_for_risk(amount, setup.entry, setup.sl, spec, account.currency, rate)
+    entry, sl = setup.entry, setup.sl
+    if instrument.tick_size:  # the stop away from the entry (Fadi, point 2): never less risk
+        entry, sl, _ = round_levels(setup.direction.value, entry, sl, None, instrument.tick_size)
+    sized = tb.lots_for_risk(amount, entry, sl, spec, account.currency, rate)
     warnings = [*notes, *sized.warnings]
     margin = None
     if sized.conversion_rate is not None:
-        notional = setup.entry * spec.contract_size * sized.lots * sized.conversion_rate
+        notional = entry * spec.contract_size * sized.lots * sized.conversion_rate
         fraction = 1 / account.leverage
         if instrument.margin_rate is not None:
             fraction = max(instrument.margin_rate, fraction)

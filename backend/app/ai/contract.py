@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import copy
 from datetime import UTC, datetime, timedelta
+from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN, Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
 from zoneinfo import ZoneInfo
@@ -157,6 +158,27 @@ Probability = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 Instrument = Annotated[str, Field(pattern=r"^[A-Z0-9]{3,16}$", examples=["XAUUSD"])]
 Profile = Annotated[str, Field(pattern=r"^[a-z0-9_]{1,32}$", examples=["intraday"])]
 SetupId = Annotated[str, Field(min_length=1, max_length=128)]
+
+
+def tick_round(value: float, tick: float, mode: Literal["nearest", "down", "up"]) -> float:
+    """``value`` on a multiple of ``tick`` (decimal arithmetic: 2395.005 with 0.01 is exact)."""
+    steps = Decimal(str(value)) / Decimal(str(tick))
+    rounding = {"nearest": ROUND_HALF_EVEN, "down": ROUND_FLOOR, "up": ROUND_CEILING}[mode]
+    return float(steps.quantize(Decimal(1), rounding=rounding) * Decimal(str(tick)))
+
+
+def round_levels(
+    direction: str, entry: float | None, sl: float | None, tp: float | None, tick: float
+) -> tuple[float | None, float | None, float | None]:
+    """Fadi's rounding rule (point 2): the entry to the nearest tick, the stop **away from** the
+    entry and the target **toward** it, so rounding never makes the risk smaller or the reward
+    larger. A buy rounds its stop and target down, a sell up."""
+    down: Literal["down", "up"] = "down" if direction == "buy" else "up"
+    return (
+        None if entry is None else tick_round(entry, tick, "nearest"),
+        None if sl is None else tick_round(sl, tick, down),
+        None if tp is None else tick_round(tp, tick, down),
+    )
 
 
 def iso_z(value: datetime) -> str:

@@ -712,3 +712,25 @@ def test_size_request_guards_are_optional() -> None:
     risk = c.RiskSettings(risk_per_trade_pct=1)
     assert (risk.daily_loss_limit_pct, risk.max_drawdown_pct) == (None, None)
     assert risk.model_dump(mode="json", exclude_none=True) == {"risk_per_trade_pct": 1.0}
+
+
+async def test_local_size_rounds_the_stop_away_from_the_entry(
+    session: AsyncSession, gold, make_user, local_mode
+) -> None:
+    """A stop off the 0.01 tick (2395.004) is sized as 2395.00, away from the entry (Fadi,
+    point 2): 5.00 at risk per oz, 0.04 lots, as the B4 example."""
+    user = await make_user("tick@example.com")
+    await profile(session, user)
+    result = await size(session, await armed(session, gold, sl=2395.004), user)
+    assert (result.lots, result.risk_amount) == (0.04, 20.0)
+
+
+def test_alert_text_rounds_with_the_same_rule() -> None:
+    from app.notifications.templates import inbox  # noqa: PLC0415
+
+    data = {
+        "state": "ARMED", "direction": "sell", "entry": 2400.004, "sl": 2405.001,
+        "tp": 2390.009, "instrument": {"symbol": "XAU/USD", "price_precision": 2},
+    }  # fmt: skip
+    _, body = inbox("ai_setup", data, "en")
+    assert "2,405.01" in body and "2,390.01" in body and "2,400.00" in body
