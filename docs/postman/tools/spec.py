@@ -3418,7 +3418,8 @@ FOLDERS: list[Folder] = [
                         "System status",
                         "GET",
                         "/admin/system/status",
-                        "The operations view in one call: version and uptime, database (size, "
+                        "The operations view in one call: version, uptime and the public HTTPS name "
+                        "(`public_hostname`, null when unset), database (size, "
                         "connections, migration, slowest queries when `pg_stat_statements` is "
                         "installed), Redis, Celery (queue lengths, live workers, last run of each "
                         "scheduled task), market data freshness per active instrument, the "

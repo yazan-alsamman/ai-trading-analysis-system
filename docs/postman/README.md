@@ -70,6 +70,10 @@ npx newman run docs/postman/AI-Trading-Platform.postman_collection.json \
 through `--working-dir docs/postman`; in the Postman app, pick the file again in the request's
 **Body → form-data** tab (or set Postman's working directory to this folder).
 
+Once HTTPS is live on `trading.yazanalsamman.com` (`docs/https.md`), set the Production
+environment's `base_url` to `https://trading.yazanalsamman.com` and `ws_url` to
+`wss://trading.yazanalsamman.com`; until then it points at `http://187.127.76.76:8080`.
+
 On production, Register, Admin and the create requests write real data (the calendar import adds
 the sample's events, Activate AI model switches the active model): prefer Local for full runs.
 
