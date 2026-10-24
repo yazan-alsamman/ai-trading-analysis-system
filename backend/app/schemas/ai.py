@@ -166,6 +166,17 @@ class AISizeRead(BaseModel):
     taken: bool = Field(description="you said you took this setup")
 
 
+class AIExplanationRead(BaseModel):
+    setup_id: str
+    lang: Literal["ar", "en"]
+    explanation: str | None = Field(
+        description="null unless verified or the fixed template (no unverified number is shown)"
+    )
+    explanation_status: Literal["verified", "template", "unavailable"] = Field(
+        description="unavailable: show 'الشرح غير متاح' / 'Explanation unavailable'"
+    )
+
+
 class AIModelIn(BaseModel):
     model_config = ConfigDict(extra="forbid", protected_namespaces=())
 
