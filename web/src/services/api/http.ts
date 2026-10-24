@@ -29,7 +29,8 @@ export interface HttpClient {
 }
 
 function buildUrl(baseUrl: string, path: string, query?: RequestOptions<unknown>['query']): string {
-  const url = new URL(`${baseUrl}${path}`);
+  // a relative base (/api/v1) resolves against the page, so it keeps the page's scheme
+  const url = new URL(`${baseUrl}${path}`, globalThis.location?.origin);
   for (const [k, v] of Object.entries(query ?? {})) {
     if (v !== undefined) url.searchParams.set(k, String(v));
   }

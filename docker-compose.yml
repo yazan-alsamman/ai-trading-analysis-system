@@ -138,9 +138,11 @@ services:
   nginx:
     image: nginx:1.27-alpine
     volumes:
-      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/nginx:/etc/nginx/conf.d:ro  # default.conf + trading-site.inc
     ports:
       - "${NGINX_PORT:-80}:80"
+      # what the host's HTTPS proxy reaches in production (docs/https.md); loopback only
+      - "127.0.0.1:${NGINX_PROXY_PORT:-8090}:8090"
     networks:
       default:
         ipv4_address: ${NGINX_IP:-172.30.57.10}

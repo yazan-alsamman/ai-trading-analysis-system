@@ -22,6 +22,16 @@ describe('HTTP client', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
   });
 
+  it('resolves a relative base (/api/v1) on the page origin, so https pages call https', async () => {
+    const fetchMock = mockFetch(200, { value: 1 });
+    vi.stubGlobal('fetch', fetchMock);
+    const relative = createHttpClient({ baseUrl: '/api/v1', timeoutMs: 1000, getToken: () => undefined, onUnauthorized: vi.fn() });
+    await relative.request('GET', '/x', { schema: z.object({ value: z.number() }) });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${window.location.origin}/api/v1/x`);
+    expect(new URL(url).protocol).toBe(window.location.protocol);
+  });
+
   it('turns a schema mismatch into a contract error instead of bad data', async () => {
     vi.stubGlobal('fetch', mockFetch(200, { value: 'one' }));
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
