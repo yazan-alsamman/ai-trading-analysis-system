@@ -179,6 +179,17 @@ was. Left open, not needed for H2: E3 / E4 control arms. **Decision (Fadi, 2026-
 (P6 needs no model; it unblocks the backend's B9). v1 ships rules with abstention and no probability
 (`model`, `grade`, `probability`, `ev_r` null) until a model passes a gate. P6 started on branch
 `ai/p6-live-scanner` (plan: `docs/phase6/PLAN.md`).
+**Decision (Fadi, 2026-10-25): the service stays a signal giver, split into scalp (5m) / intraday /
+swing, with trade management on TP and SL and AI layers. Signal frequency is descriptive only: no
+minimum, zero signals on a day is valid, and nothing is loosened or chosen to produce more
+signals.** Draft registration (`docs/strategies/PREREG.md`) and plan (`docs/strategies/PLAN.md`):
+strategies S1-S6 (family A) and S7-S8 (family B, exploratory), no count-driven fallbacks;
+management bundles M0-M8 (family C, chosen inside the walk-forward); AI A1 range, A2 regime, A3
+exits, A4 direction (family D; P5's encoder and HMM fold in here); trials 11-25. Primary period
+2018-01-01 to 2024-07-01; 4-week block bootstrap, two tests (percentile and t with K - 1) under
+Holm; statuses validated / exploratory / inconclusive / unvalidated; swap only as labelled
+estimated scenarios. L1 keeps its frozen rules and management. **No outcome of any of them before
+Fadi approves `PREREG.md`**; counts are allowed. Stage A waits for Fadi's go.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
