@@ -37,7 +37,7 @@ abstention, `probability`, `ev_r`, `grade` and `versions.model` null.
 | 5 | done for **XAUUSD only** (Fadi, 2026-10-25: the six-instrument replay takes about 6.5 h on this laptop; gold is the research instrument): 154,915 bars, 187 / 187 setups, **zero differences**, no bar refused, no transition rejected; in-process latency mean 182 ms, p95 216 ms (1,000 bars). The five pairs run the same code; their replay stays open (`--symbols EURUSD ...`) | `python -m app live replay --symbols XAUUSD`, `docs/phase6/replay.md` |
 | 6 | done: the B4 arithmetic of `libs/backtest/trading_backtest/sizing.py` vendored unchanged (`lots_for_risk` already converts USD/JPY; `Sizer` is not used); hand example and USD/JPY 0.30 lots | `app/scoring/lots.py`, `app/scoring/size.py`, `tests/test_size.py` |
 | 7 | proposal written, to agree with Yazan | `docs/phase6/EXPOSURE.md` |
-| 8 | runtime dependencies set; image measurement pending (Docker) | `pyproject.toml`, `python -m app live bench` |
+| 8 | done: image without research extras (674 MB), at 512 MB / 0.5 CPU p95 377 ms for 1,000 bars and 923 ms for 5,000, peak memory 113 MiB: **gate < 10 s passed** | `pyproject.toml`, `.dockerignore`, `docs/phase6/performance.md` |
 
 Choices made in tasks 2-6 (Fadi to confirm):
 
