@@ -3629,7 +3629,10 @@ FOLDERS: list[Folder] = [
                         "`ev_r_lower`), `grade`, validity window and its `state` (DEVELOPING → "
                         "ARMED → ACTIVE → CLOSED, or EXPIRED / INVALIDATED). `realized_r` is set "
                         "once it closes; the strategy, model and features versions that produced "
-                        "it are kept. The first one is stored as `ai_setup_id`.",
+                        "it are kept. While ai-service runs the rules alone (v1, no model: "
+                        "`model_version` null), `probability`, `ev_r`, `ev_r_lower` and `grade` "
+                        'are null and alerts read "Probability n/a". The first one is stored as '
+                        "`ai_setup_id`.",
                         auth="admin",
                         query=[("limit", "50", "1–200")],
                         optional_query=[
