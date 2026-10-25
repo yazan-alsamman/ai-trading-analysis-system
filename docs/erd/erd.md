@@ -215,6 +215,7 @@ erDiagram
         double margin_rate
         varchar price_basis
         jsonb session_calendar
+        double cost_per_unit
         varchar spec_source
         timestamptz spec_updated_at
         timestamptz created_at

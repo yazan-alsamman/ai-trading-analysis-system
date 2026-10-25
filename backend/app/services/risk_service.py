@@ -248,11 +248,13 @@ class LotSizing:
     specs), the conversion rate (account currency per quote unit; None = not found) and notes
     for the plan's ``sizing_warnings``. Without a spec there are no lots, but a rate other than
     1 still converts the equity (a USD account on a USD/JPY without specs); a rate of 1 or none
-    leaves the plan as it was."""
+    leaves the plan as it was. ``cost_per_unit``: the instrument's fixed round-trip cost (XAU/USD
+    0.25), counted in the risk per unit instead of the profile's ``fee_bps``."""
 
     spec: tb.ContractSpec | None = None
     rate: float | None = None
     notes: tuple[str, ...] = ()
+    cost_per_unit: float | None = None
 
 
 def contract_spec(instrument: Instrument) -> tb.ContractSpec | None:
@@ -331,9 +333,11 @@ async def lot_sizing(
 ) -> LotSizing:
     spec = contract_spec(instrument)
     rate, notes = await conversion_rate(session, instrument, account_currency, entry)
+    cost = instrument.cost_per_unit
     if spec is None:
-        return LotSizing(rate=rate if rate is not None and rate != 1.0 else None)
-    return LotSizing(spec, rate, tuple(notes))
+        converts = rate if rate is not None and rate != 1.0 else None
+        return LotSizing(rate=converts, cost_per_unit=cost)
+    return LotSizing(spec, rate, tuple(notes), cost)
 
 
 def plan_dict(
@@ -348,6 +352,8 @@ def plan_dict(
         kw.update(spec=sizing.spec, conversion_rate=sizing.rate)
     elif sizing is not None and sizing.rate is not None:
         kw.update(conversion_rate=sizing.rate)
+    if sizing is not None and sizing.cost_per_unit is not None:
+        kw.update(cost_per_unit=sizing.cost_per_unit)
     plan = tb.plan_trade(df, len(df) - 1, side, config, account_size, **kw).to_dict()
     if sizing is not None and sizing.notes:
         plan["sizing_warnings"] = [*sizing.notes, *plan["sizing_warnings"]]

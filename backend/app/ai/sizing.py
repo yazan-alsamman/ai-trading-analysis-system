@@ -210,7 +210,10 @@ async def local_size(
 
     Margin (Fadi, extra 3) = notional in the account currency x max(``margin_rate``,
     1 / leverage): the broker's margin rate when it asks for more than the user's leverage;
-    without a margin rate, 1 / leverage as before. Null without a conversion rate."""
+    without a margin rate, 1 / leverage as before. Null without a conversion rate.
+
+    An instrument with a fixed ``cost_per_unit`` (XAU/USD 0.25 per oz, Fadi) is sized on a risk
+    per unit of ``|entry - sl| + cost_per_unit``, and a warning says so."""
     account = risk.account
     spec = risk_service.contract_spec(instrument)
     if spec is None:
@@ -222,8 +225,13 @@ async def local_size(
     entry, sl = setup.entry, setup.sl
     if instrument.tick_size:  # the stop away from the entry (Fadi, point 2): never less risk
         entry, sl, _ = round_levels(setup.direction.value, entry, sl, None, instrument.tick_size)
-    sized = tb.lots_for_risk(amount, entry, sl, spec, account.currency, rate)
+    cost = instrument.cost_per_unit
+    sized = tb.lots_for_risk(amount, entry, sl, spec, account.currency, rate, cost_per_unit=cost)
     warnings = [*notes, *sized.warnings]
+    if cost is not None:
+        warnings.append(
+            f"risk per unit includes the fixed trading cost of {cost:g} per unit (round trip)"
+        )
     margin = None
     if sized.conversion_rate is not None:
         notional = entry * spec.contract_size * sized.lots * sized.conversion_rate
@@ -254,6 +262,7 @@ async def _prepare(
     profile: RiskProfile,
     spec_digest: str,
     now: datetime,
+    cost_per_unit: float | None = None,
 ) -> _Job:
     try:
         risk = risk_service.ai_risk_inputs(profile)
@@ -265,11 +274,13 @@ async def _prepare(
     key = {
         "account": risk.account.model_dump(),
         "risk": risk.risk.model_dump(),
-        "spec_hash": spec_digest,
+        "spec_hash": spec_digest,  # the specs, cost_per_unit included when set
         "setup_hash": _hash(setup_row.last_payload),
         "guards": [g for g in blocked if g in (DAILY_LOSS, DRAWDOWN)],
         "mode": get_settings().ai_size_mode,
     }
+    if cost_per_unit is not None:  # also in spec_hash; explicit so the stored inputs show it
+        key["cost_per_unit"] = cost_per_unit
     stored = await session.get(AISetupSize, (setup_row.setup_id, profile.user_id))
     return _Job(profile.user_id, risk, key, blocked, stored)
 
@@ -384,7 +395,7 @@ async def _size(
     jobs: list[_Job] = []
     for user_id, profile in profiles.items():
         try:
-            job = await _prepare(session, setup_row, profile, digest, now)
+            job = await _prepare(session, setup_row, profile, digest, now, instrument.cost_per_unit)
         except SizingError as exc:
             out[user_id] = exc
             continue

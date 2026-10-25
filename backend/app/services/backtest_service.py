@@ -42,6 +42,7 @@ MAX_CURVE_POINTS = 2000
 PROGRESS_RUNNING, PROGRESS_LOADED, PROGRESS_COMPUTED = 5, 30, 80
 QUEUED_TOO_LONG = timedelta(hours=6)
 SNAPSHOT_KEY = "strategy"  # config.strategy: the custom strategy's snapshot
+COST_KEY = "cost_per_unit"  # config.cost_per_unit: the instrument's fixed cost, set by the server
 PROFILE_KEY = "risk_profile"  # config.risk_profile: true in a request, the profile's snapshot after
 RISK_KEYS = ("stop", "trailing", "take_profit", "sizing", "guards")
 SECONDS_PER_YEAR = 365 * 24 * 3600
@@ -257,10 +258,16 @@ async def create(session: AsyncSession, user: User, data: BacktestCreate) -> Bac
     use_profile = requested.pop(PROFILE_KEY, False)
     if not isinstance(use_profile, bool):
         raise _unprocessable(f"config: {PROFILE_KEY} must be true or false")
+    if COST_KEY in requested:
+        raise _unprocessable(f"config: {COST_KEY} is set by the server (from the instrument)")
     profile_meta = None
     instrument = await market_service.get_instrument_or_404(session, data.instrument_id)
     if use_profile:
         requested, profile_meta = await _with_profile(session, user, requested, instrument)
+    if instrument.cost_per_unit is not None:
+        # the instrument's fixed cost (XAU/USD 0.25 per oz, Fadi) replaces fee_bps and
+        # slippage_bps for this run: the engine ignores them (docs/risk-management.md)
+        requested[COST_KEY] = instrument.cost_per_unit
     try:
         config = tb.BacktestConfig.from_dict(requested)
     except tb.ConfigError as exc:
@@ -759,10 +766,13 @@ async def all_trades(session: AsyncSession, backtest_id: uuid.UUID) -> list[Back
 async def read(session: AsyncSession, row: Backtest) -> dict[str, Any]:
     instrument = await session.get(Instrument, row.instrument_id)
     trades = await all_trades(session, row.id) if row.status == BacktestStatus.completed else []
+    cost = row.config.get(COST_KEY)
     return {
         **summary(row, instrument),
         "params_hash": row.params_hash,
         "config": row.config,
+        "cost_model": "bps" if cost is None else "fixed_per_unit",
+        "cost_per_unit": cost,
         "first_bar": row.first_bar_at,
         "last_bar": row.last_bar_at,
         "metrics": row.metrics,

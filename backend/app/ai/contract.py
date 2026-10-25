@@ -1,11 +1,12 @@
 """The ai-service contract (B7, docs/ai-contract.md): requests the backend sends and responses
 it accepts on ``POST /v1/evaluate``, ``/v1/size`` and ``/v1/explain``.
 
-Version 0.2.1 (``CONTRACT_VERSION``): Fadi's answers to the 17 open points of 0.1.0-draft are
+Version 0.2.2 (``CONTRACT_VERSION``): Fadi's answers to the 17 open points of 0.1.0-draft are
 applied (docs/ai-contract.md section 7); 0.2.1 accepts ``ok`` with ``versions.model`` null (v1
-runs the rules alone, Fadi 25 Oct). ``/v1`` only ever gains fields; the version follows
-semver. The generated document is docs/api/ai-service.openapi.yaml (``scripts/ai_contract.py``);
-example payloads are in docs/api/ai-service-examples/.
+runs the rules alone, Fadi 25 Oct); 0.2.2 adds the optional ``InstrumentSpec.cost_per_unit``
+(the fixed trading cost per unit, sent with ``/v1/size``). ``/v1`` only ever gains fields; the
+version follows semver. The generated document is docs/api/ai-service.openapi.yaml
+(``scripts/ai_contract.py``); example payloads are in docs/api/ai-service-examples/.
 
 Depends on pydantic only, so ai-service can vendor this file as it is.
 
@@ -42,7 +43,7 @@ from pydantic import (
 )
 from pydantic_core import to_jsonable_python
 
-CONTRACT_VERSION = "0.2.1"
+CONTRACT_VERSION = "0.2.2"
 
 
 # --- shared types -------------------------------------------------------------------------------
@@ -261,12 +262,27 @@ class InstrumentSpec(_Request):
         description="margin as a fraction of notional; margin = notional in USD x "
         "max(margin_rate, 1 / leverage); null: 1 / leverage",
     )
+    cost_per_unit: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = Field(
+        default=None,
+        description="fixed trading cost per unit of quantity, price units, per round trip "
+        "(XAU/USD: 0.25 per oz: spread and every cost). Size with a risk per unit of "
+        "|entry - sl| + cost_per_unit. Sent with /v1/size (contract 0.2.2); null: none",
+    )
 
     @model_validator(mode="after")
     def _lots(self) -> Self:
         if self.min_lot > self.max_lot:
             raise ValueError("min_lot must be <= max_lot")
         return self
+
+    @model_serializer(mode="wrap")
+    def _without_cost(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """No ``cost_per_unit`` key without a cost: a body without one stays byte-identical to
+        contract 0.2.1 (evaluate requests never carry it)."""
+        data = handler(self)
+        if data.get("cost_per_unit") is None:
+            data.pop("cost_per_unit", None)
+        return data
 
 
 class Setup(BaseModel):
