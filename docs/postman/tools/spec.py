@@ -1010,7 +1010,9 @@ FOLDERS: list[Folder] = [
                 "the stop rule); omitted `config` / `account_size` from your risk profile. A "
                 "`stop` price replaces the stop rule. On an instrument with contract specs the "
                 "plan is sized in the account currency and adds `lots`, `lots_feasible`, "
-                "`lots_risk_amount`, `conversion_rate` and `sizing_warnings`.",
+                "`lots_risk_amount`, `conversion_rate` and `sizing_warnings`. An instrument with a "
+                "fixed cost per unit (XAU/USD: 0.25) counts it in the risk per unit instead of "
+                "`fee_bps` (the plan carries `cost_per_unit` and a warning).",
                 body={
                     "instrument_id": "{{instrument_id}}",
                     "timeframe": "{{timeframe}}",
@@ -1423,7 +1425,10 @@ FOLDERS: list[Folder] = [
                 "optional (defaults are stored resolved). `config` takes the risk rules of "
                 "`docs/risk-management.md` (`stop`, `trailing`, `take_profit` with partial "
                 '`levels`, `sizing`, `guards`, `check_entry_bar`); `"risk_profile": true` uses '
-                "your risk profile instead. 422: unknown strategy, bad params or config (with "
+                "your risk profile instead. An instrument with a fixed cost per unit (XAU/USD: "
+                "0.25) gets `config.cost_per_unit` from the server and `fee_bps` / "
+                "`slippage_bps` are then ignored; sending `cost_per_unit` yourself answers 422. "
+                "422: unknown strategy, bad params or config (with "
                 "`path`, e.g. `stop.multiplier`), `start ≥ end`, `end` in the future, no "
                 "candles in the range.",
                 body={
@@ -1471,7 +1476,19 @@ FOLDERS: list[Folder] = [
                             "start": "2026-10-10T00:00:00Z",
                             "end": "2026-10-01T00:00:00Z",
                         },
-                    )
+                    ),
+                    Variant(
+                        "422 cost_per_unit is set by the server",
+                        422,
+                        body={
+                            "instrument_id": "{{instrument_id}}",
+                            "timeframe": "{{timeframe}}",
+                            "strategy_key": "{{strategy_key}}",
+                            "start": "{{backtest_start}}",
+                            "end": "{{backtest_end}}",
+                            "config": {"cost_per_unit": 0.25},
+                        },
+                    ),
                 ],
             ),
             Req(
@@ -1479,7 +1496,9 @@ FOLDERS: list[Folder] = [
                 "Get backtest result",
                 "GET",
                 "/backtests/:backtest_id",
-                "Everything a results page needs: config, status/progress, metrics, equity and "
+                "Everything a results page needs: config, the cost model (`cost_model`: `bps` = "
+                "`fee_bps` + `slippage_bps` of notional, or `fixed_per_unit` = the instrument's "
+                "`cost_per_unit` × quantity per round trip), status/progress, metrics, equity and "
                 "drawdown curves (at most 2,000 Lightweight Charts points) and entry/exit "
                 "markers. In the Collection Runner this request repeats until the backtest has "
                 "finished.",
@@ -3199,8 +3218,10 @@ FOLDERS: list[Folder] = [
                         "`quote_currency` (P&L currency, default `quote_asset`), `margin_rate` "
                         "(0–1, 0.01 = 1:100), `price_basis` (`bid` | `mid` | `last`) and "
                         "`session_calendar` (IANA `tz`, `week_open` / `week_close`, "
-                        "`daily_breaks`, `holidays`). Specs sent here get `spec_source` = "
-                        "`manual`.",
+                        "`daily_breaks`, `holidays`) and `cost_per_unit` (fixed round-trip trading "
+                        "cost per unit of quantity in price units, e.g. 0.25 for XAU/USD; "
+                        "backtests and sizing then use it instead of `fee_bps` / "
+                        "`slippage_bps`). Specs sent here get `spec_source` = `manual`.",
                         auth="admin",
                         body={
                             "symbol": "PM{{$timestamp}}/USDT",
@@ -3215,6 +3236,7 @@ FOLDERS: list[Folder] = [
                             "min_lot": 0.000001,
                             "max_lot": 1000.0,
                             "price_basis": "last",
+                            "cost_per_unit": 0.02,
                             "session_calendar": {
                                 "tz": "UTC",
                                 "daily_breaks": [{"start": "23:55", "end": "00:05"}],
