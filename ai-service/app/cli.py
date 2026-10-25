@@ -13,6 +13,7 @@
     python -m app research meta --model lr|lgbm|mlp  # P4 meta-models (docs/phase4/PREREG_P4.md)
     python -m app features build                   # P4 setup features, walk-forward dataset
     python -m app features e0                      # P4 matched random entries, context features
+    python -m app live replay                      # P6 live = backtest, walk-forward period
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -32,6 +33,7 @@ COMMANDS = {
     "setups": "app.setups.builder",
     "research": "app.research.cli",
     "features": "app.features.setup_features",
+    "live": "app.live.replay",
 }
 
 

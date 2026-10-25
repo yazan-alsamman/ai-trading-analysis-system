@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
@@ -119,6 +120,13 @@ def previous_day_levels(d1: pd.DataFrame) -> list[Level]:
     return sorted(out, key=lambda lv: (lv.available_utc, lv.key))
 
 
+@lru_cache(maxsize=65536)
+def _busdays(start: date, end: date) -> int:
+    """Weekdays in [start, end) (``np.busday_count``), cached: the level book asks the same pairs
+    for every bar."""
+    return int(np.busday_count(start, end))
+
+
 class LevelBook:
     """The active liquidity levels as the entry bars go by.
 
@@ -139,7 +147,7 @@ class LevelBook:
         self.active: dict[str, list[Level]] = {"high": [], "low": []}
 
     def _fresh(self, lv: Level, today: date) -> bool:
-        return int(np.busday_count(lv.day, today)) <= self.max_age
+        return _busdays(lv.day, today) <= self.max_age
 
     def step(self, j: int) -> dict[str, list[Level]]:
         t = pd.Timestamp(self.open_utc[j])

@@ -156,6 +156,25 @@ def strategy(rule_set: str = "v1") -> Strategy:
     return replace(base, rule_set=rule_set, **changes)
 
 
+@dataclass(frozen=True)
+class Profile:
+    """A live evaluation profile (``serving.toml``): which rule set runs, and how much history
+    the request must carry."""
+
+    name: str
+    rules: str
+    history_trading_days: int
+    max_gap_minutes: int
+    gap_window_hours: int
+
+
+@cache
+def profiles() -> dict[str, Profile]:
+    return {
+        name: Profile(name=name, **spec) for name, spec in _load("serving.toml")["profiles"].items()
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     summary = {"instruments": {k: asdict(v) for k, v in instruments().items()}}
     summary["splits"] = asdict(splits())
