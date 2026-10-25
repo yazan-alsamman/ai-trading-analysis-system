@@ -1,8 +1,9 @@
 """The ai-service contract (B7, docs/ai-contract.md): requests the backend sends and responses
 it accepts on ``POST /v1/evaluate``, ``/v1/size`` and ``/v1/explain``.
 
-Version 0.2.0 (``CONTRACT_VERSION``): Fadi's answers to the 17 open points of 0.1.0-draft are
-applied (docs/ai-contract.md section 7). ``/v1`` only ever gains fields; the version follows
+Version 0.2.1 (``CONTRACT_VERSION``): Fadi's answers to the 17 open points of 0.1.0-draft are
+applied (docs/ai-contract.md section 7); 0.2.1 accepts ``ok`` with ``versions.model`` null (v1
+runs the rules alone, Fadi 25 Oct). ``/v1`` only ever gains fields; the version follows
 semver. The generated document is docs/api/ai-service.openapi.yaml (``scripts/ai_contract.py``);
 example payloads are in docs/api/ai-service-examples/.
 
@@ -41,7 +42,7 @@ from pydantic import (
 )
 from pydantic_core import to_jsonable_python
 
-CONTRACT_VERSION = "0.2.0"
+CONTRACT_VERSION = "0.2.1"
 
 
 # --- shared types -------------------------------------------------------------------------------
@@ -286,9 +287,15 @@ class Setup(BaseModel):
     sl: Price | None = None
     tp: Price | None = None
     r_multiple: Finite | None = Field(default=None, description="reward / risk at entry")
-    probability: Probability | None = Field(default=None, description="of reaching tp first")
-    ev_r: Finite | None = Field(default=None, description="expected value in R")
-    ev_r_lower: Finite | None = Field(default=None, description="lower bound of ev_r")
+    probability: Probability | None = Field(
+        default=None, description="of reaching tp first; null without a model (v1)"
+    )
+    ev_r: Finite | None = Field(
+        default=None, description="expected value in R; null without a model (v1)"
+    )
+    ev_r_lower: Finite | None = Field(
+        default=None, description="lower bound of ev_r; null without a model (v1)"
+    )
     grade: Grade | None = Field(default=None, description="A best .. D; always null in v1")
     valid_until: UtcDatetime | None = Field(default=None, description="entry no longer valid")
     horizon_until: UtcDatetime | None = Field(default=None, description="trade horizon end")
@@ -380,12 +387,16 @@ class EvaluateRequest(_Request):
 
 
 class Versions(_Response):
-    """Always present: ``strategy`` and ``features``. ``model`` is null only with
-    ``model_unavailable`` (Fadi, point 12)."""
+    """Always present: ``strategy`` and ``features`` (Fadi, point 12). ``model`` is null when no
+    model runs: with ``ok`` that is v1, the rules alone (``probability``, ``ev_r`` and
+    ``grade`` null too); ``model_unavailable`` is only "a model is registered but not loaded"
+    (Fadi, 25 Oct; contract 0.2.1)."""
 
     strategy: str = Field(max_length=64)
     model: str | None = Field(
-        default=None, max_length=128, description="null only with status model_unavailable"
+        default=None,
+        max_length=128,
+        description="null: no model runs (ok: rules only, v1) or it is not loaded",
     )
     features: str = Field(max_length=64)
 
@@ -420,12 +431,6 @@ class EvaluateResponse(_Response):
     new_setups: list[Setup] = Field(default_factory=list)
     transitions: list[Transition] = Field(default_factory=list)
     abstentions: list[Abstention] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def _model(self) -> Self:
-        if self.status == EvaluateStatus.ok and self.versions.model is None:
-            raise ValueError("versions.model is null only with status model_unavailable")
-        return self
 
 
 # --- size ---------------------------------------------------------------------------------------

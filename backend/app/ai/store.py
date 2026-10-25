@@ -121,7 +121,7 @@ def _versions(versions: Versions) -> dict[str, str | None]:
 
 async def _record_model(session: AsyncSession, versions: Versions, request_id: str) -> None:
     """A model version ai-service reports is added to the registry (inactive) if unknown."""
-    if not versions.model:
+    if not versions.model:  # v1 runs the rules alone: ``ok`` without a model (contract 0.2.1)
         return
     await session.execute(
         insert(AIModelVersion)

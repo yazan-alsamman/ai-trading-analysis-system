@@ -1,25 +1,29 @@
 openapi: 3.1.0
 info:
   title: ai-service (stateless trading engine)
-  version: 0.2.0
+  version: 0.2.1
   description: "The stateless trading engine (ai-service, owned by Fadi). The backend owns the data,\n\
     the schedule, the storage and the delivery; ai-service decides setups and their states.\n\n**Version\
-    \ 0.2.0**: Fadi's answers to the 17 open points of 0.1.0-draft are applied\n(docs/ai-contract.md,\
-    \ section 7). `/v1` changes only by adding fields; `info.version` follows\nsemver; ai-service reports\
-    \ its versions in every answer and in `/health`. Generated from\nbackend/app/ai/contract.py by backend/scripts/ai_contract.py\
-    \ (do not edit by hand).\n\n- Every timestamp is UTC, ISO-8601 with `Z`. Every bar is closed; `ts`\
-    \ is its open time.\n  `1d` bars are New York trading days: 17:00 to 17:00 America/New_York (DST-aware).\n\
-    - The decision bar (the last bar of the smallest timeframe) always has a `spread`; without\n  one\
-    \ the backend does not call ai-service.\n- `request_id` is deterministic (`{instrument lower}-{profile}-{bar_close_ts}`):\
+    \ 0.2.1**: Fadi's answers to the 17 open points of 0.1.0-draft are applied\n(docs/ai-contract.md,\
+    \ section 7); 0.2.1 accepts `status: ok` with `versions.model` null.\n`/v1` changes only by adding\
+    \ fields; `info.version` follows semver; ai-service reports its\nversions in every answer and in `/health`.\
+    \ Generated from\nbackend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by hand).\n\
+    \n- Every timestamp is UTC, ISO-8601 with `Z`. Every bar is closed; `ts` is its open time.\n  `1d`\
+    \ bars are New York trading days: 17:00 to 17:00 America/New_York (DST-aware).\n- The decision bar\
+    \ (the last bar of the smallest timeframe) always has a `spread`; without\n  one the backend does\
+    \ not call ai-service.\n- `request_id` is deterministic (`{instrument lower}-{profile}-{bar_close_ts}`):\
     \ the same\n  body gives a byte-identical response, and a retry always sends the same body.\n- `setup_id`\
     \ is deterministic and chosen by ai-service; `open_setups` echoes setups exactly as\n  last returned.\
     \ A response carries the current state of every setup in `new_setups` and its\n  full history in `transitions`\
     \ (the backend dedupes by `(setup_id, to, at)`; a state never\n  goes backwards).\n- Transitions:\
     \ DEVELOPING -> ARMED -> ACTIVE -> CLOSED; DEVELOPING or ARMED -> EXPIRED or\n  INVALIDATED. ARMED\
-    \ and ACTIVE may share an `at`.\n- `grade` is A-D and always null in v1. Money is USD only in v1.\n\
-    - Responses may carry fields this document does not list (the backend ignores them).\n- 422: the request\
-    \ does not match the contract (never retried). 5xx, timeouts and connection\n  errors are retried\
-    \ by the backend with the same body. No model: 200 with\n  `status: model_unavailable`.\n"
+    \ and ACTIVE may share an `at`.\n- v1 has no model: the rules run alone, so `status` is `ok` with\
+    \ `versions.model`,\n  `probability`, `ev_r`, `ev_r_lower` and `grade` null (not available, never\
+    \ 0).\n  `grade` is A-D and always null in v1. Money is USD only in v1.\n- Responses may carry fields\
+    \ this document does not list (the backend ignores them).\n- 422: the request does not match the contract\
+    \ (never retried). 5xx, timeouts and connection\n  errors are retried by the backend with the same\
+    \ body. A model is registered but not\n  loaded: 200 with `status: model_unavailable` (nothing is\
+    \ stored).\n"
 servers:
 - url: http://ai-service:8001
   description: inside the compose network
@@ -249,6 +253,83 @@ paths:
                         side: sell
                         ev_r_lower: -0.12
                         threshold: 0.0
+                ok_rules_only:
+                  value:
+                    request_id: xauusd-intraday-2026-10-19T14:15:00Z
+                    status: ok
+                    versions:
+                      strategy: xau-intraday-1.0.0
+                      model: null
+                      features: f-3
+                    new_setups:
+                    - setup_id: xauusd-intraday-2026-10-19T14:15:00Z-buy
+                      state: ARMED
+                      direction: buy
+                      entry: 2400.0
+                      sl: 2395.0
+                      tp: 2410.0
+                      r_multiple: 2.0
+                      probability: null
+                      ev_r: null
+                      ev_r_lower: null
+                      grade: null
+                      valid_until: '2026-10-19T15:15:00Z'
+                      horizon_until: '2026-10-19T20:15:00Z'
+                      created_at: '2026-10-19T14:15:00Z'
+                      evidence:
+                        trend_4h: up
+                        breakout: range_high_1h
+                        news_clear_minutes: 165
+                      features:
+                        atr_15m: 2.4
+                        rsi_15m: 58.2
+                        spread_pts: 26
+                    - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                      state: CLOSED
+                      direction: buy
+                      entry: 2390.0
+                      sl: 2386.0
+                      tp: 2398.0
+                      r_multiple: 2.0
+                      probability: null
+                      ev_r: null
+                      ev_r_lower: null
+                      grade: null
+                      valid_until: '2026-10-19T10:30:00Z'
+                      horizon_until: '2026-10-19T17:30:00Z'
+                      created_at: '2026-10-19T09:30:00Z'
+                      evidence:
+                        trend_4h: up
+                        pullback_to: ema50_1h
+                      features:
+                        atr_15m: 2.1
+                        rsi_15m: 41.3
+                    transitions:
+                    - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                      from: DEVELOPING
+                      to: ARMED
+                      at: '2026-10-19T09:30:00Z'
+                      reason: trigger
+                      realized_r: null
+                    - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                      from: ARMED
+                      to: ACTIVE
+                      at: '2026-10-19T09:37:00Z'
+                      reason: entry_filled
+                      realized_r: null
+                    - setup_id: xauusd-intraday-2026-10-19T09:30:00Z-buy
+                      from: ACTIVE
+                      to: CLOSED
+                      at: '2026-10-19T14:07:00Z'
+                      reason: tp_hit
+                      realized_r: 2.0
+                    - setup_id: xauusd-intraday-2026-10-19T14:15:00Z-buy
+                      from: DEVELOPING
+                      to: ARMED
+                      at: '2026-10-19T14:15:00Z'
+                      reason: trigger
+                      realized_r: null
+                    abstentions: []
                 model_unavailable:
                   value:
                     request_id: xauusd-intraday-2026-10-19T14:15:00Z
@@ -917,21 +998,21 @@ components:
             type: number
           - type: 'null'
           default: null
-          description: of reaching tp first
+          description: of reaching tp first; null without a model (v1)
           title: Probability
         ev_r:
           anyOf:
           - type: number
           - type: 'null'
           default: null
-          description: expected value in R
+          description: expected value in R; null without a model (v1)
           title: Ev R
         ev_r_lower:
           anyOf:
           - type: number
           - type: 'null'
           default: null
-          description: lower bound of ev_r
+          description: lower bound of ev_r; null without a model (v1)
           title: Ev R Lower
         grade:
           anyOf:
@@ -1078,9 +1159,14 @@ components:
       title: Transition
       type: object
     Versions:
-      description: 'Always present: ``strategy`` and ``features``. ``model`` is null only with
+      description: 'Always present: ``strategy`` and ``features`` (Fadi, point 12). ``model`` is null
+        when no
 
-        ``model_unavailable`` (Fadi, point 12).'
+        model runs: with ``ok`` that is v1, the rules alone (``probability``, ``ev_r`` and
+
+        ``grade`` null too); ``model_unavailable`` is only "a model is registered but not loaded"
+
+        (Fadi, 25 Oct; contract 0.2.1).'
       properties:
         strategy:
           maxLength: 64
@@ -1092,7 +1178,7 @@ components:
             type: string
           - type: 'null'
           default: null
-          description: null only with status model_unavailable
+          description: 'null: no model runs (ok: rules only, v1) or it is not loaded'
           title: Model
         features:
           maxLength: 64
