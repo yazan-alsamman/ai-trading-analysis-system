@@ -52,7 +52,38 @@ For each bar `i`:
 6. Equity is **marked to market** at the close, and the drawdown and daily-loss guards are
    updated.
 
-Every fill pays slippage against you and the fee on its notional, entry and each exit fill.
+Every fill pays slippage against you and the fee on its notional, entry and each exit fill,
+except on an instrument with a [fixed cost per unit](#fixed-cost-per-unit-per-instrument).
+
+## Fixed cost per unit (per instrument)
+
+Fadi's rule (25 Oct): for **XAU/USD**, the spread plus every trading cost is **always 0.25 in
+price units per unit (per oz), per round trip**, in backtests and in position sizing, whatever
+the real spread is. It is a cost, not a cap. It is stored **per instrument** in
+`instruments.cost_per_unit` (migration 0021; `null` = the bps fees as before), editable by an
+admin like the other spec fields (`PATCH /admin/instruments/{id}`), and shown in the
+instrument API. Only `fxpro:XAU/USD` has a value (0.25, set by the migration and by
+`seed-instruments` only while it is null; a manual value is never overwritten). Live candles
+keep their real spread, and `/v1/evaluate` requests are unchanged.
+
+When an instrument has `cost_per_unit`:
+
+- **Where it is charged (backtests).** The whole round trip, `cost_per_unit × quantity`, is
+  charged **at the entry, as the trade's fee**. There is no slippage and no bps fee, so every
+  fill is at the chart price (the bid for XAU/USD): the entry at the next open, the stop and the
+  targets exactly at their levels, and partial exits pay nothing more. A long's net P&L is
+  `(exit − entry − 0.25) × quantity`, a short's `(entry − exit − 0.25) × quantity`; the cost is
+  the trade's `fees` and in the run's `total_fees`. Equity drops by the cost at the entry. The
+  user's `fee_bps` and `slippage_bps` are **ignored** for that run (the engine treats them as 0).
+- **Sizing.** The risk per unit is `|entry − stop| + cost_per_unit` (instead of
+  `|entry − stop| + (entry + stop) × fee`); a unit costs `entry + cost_per_unit` for the
+  `fraction`/`fixed` modes and the `max_position_pct` cap. The breakeven stop is
+  `entry ± cost_per_unit`. Trade plans (live signals, calculator) say so in `sizing_warnings`
+  and carry `cost_per_unit`; `risk_amount` and `lots_risk_amount` include it.
+- **Example (by hand).** XAU/USD, 10,000 USD account, risk 0.2 % = 20 USD, entry 2400.00,
+  stop 2395.00: `(5.00 + 0.25) × 100 oz = 525 USD` per lot → 0.0381 → **0.03 lots**, 15.75 USD
+  at risk (0.04 lots without the cost). A long of 2 oz from 2400.00 to 2410.00: gross +20.00,
+  fees 0.50, net **+19.50**.
 
 ### The entry-bar change (`check_entry_bar`)
 
@@ -112,7 +143,8 @@ trailing rule moved it, and `breakeven_stop` once breakeven moved it.
   many R in your favour, i.e. `(highest high − entry) / R ≥ activation_r`. Once on, it stays on.
 - **`breakeven_r`**: once the best price moved that many R, the stop moves to the price at
   which an exit covers the entry and both fees after slippage:
-  `entry × (1 + fee) / ((1 − fee) × (1 − slippage))` for a long. If trailing later moves it
+  `entry × (1 + fee) / ((1 − fee) × (1 − slippage))` for a long (with a fixed cost per unit:
+  `entry + cost_per_unit`). If trailing later moves it
   higher, the exit becomes a `trailing_stop`.
 - Updated **at the bar close**, effective **from the next bar** (step 5).
 
@@ -146,6 +178,9 @@ short use the same quantity.
 | `fixed` (`value` quote) | `min(value, equity / (1 + fee)) / entry` |
 | `risk` (`risk_pct`, needs a stop) | `risk_pct/100 × equity / (|entry − stop| + (entry + stop) × fee)`, so the loss at the stop, both fees included, ≈ `risk_pct` % of equity |
 | `volatility` (`target_pct`, `length`) | `target_pct/100 × equity / ATR(length)`, so a 1-ATR move = `target_pct` % of equity |
+
+With a [fixed cost per unit](#fixed-cost-per-unit-per-instrument), `entry × (1 + fee)` becomes
+`entry + cost_per_unit` and the `risk` divisor `|entry − stop| + cost_per_unit`.
 
 Every mode is then capped:
 
@@ -398,8 +433,10 @@ account. Other states give 409, and so does an instrument without specs.
    logged.
 4. **Local formula**, the B4 lot sizing of docs/instruments.md:
    - risk amount = balance × `risk_per_trade_pct` / 100;
-   - lots = risk amount / (|entry − sl| × contract size × conversion rate), rounded **down** to
-     `lot_step`;
+   - lots = risk amount / ((|entry − sl| + `cost_per_unit`) × contract size × conversion
+     rate), rounded **down** to `lot_step`. `cost_per_unit` is the instrument's
+     [fixed cost](#fixed-cost-per-unit-per-instrument) (0 without one; XAU/USD 0.25: 20 USD at
+     entry 2400, sl 2395 gives 0.03 lots, not 0.04), and a warning says it was included;
    - below `min_lot`: 0 lots, `feasible: false` and a warning; above `max_lot`: capped, with a
      warning;
    - prices off the tick are rounded first with Fadi's rule: the stop **away from** the entry,
@@ -413,10 +450,11 @@ account. Other states give 409, and so does an instrument without specs.
    ai-service `/v1/size`, or `local`; a local size **always** carries a warning saying so,
    also with `AI_SIZE_MODE=local`) and `inputs`:
    - `inputs` holds the account, the risk, a hash of the specs, a hash of the setup payload,
-     the guards reached and the mode;
+     the guards reached and the mode, and `cost_per_unit` when the instrument has one (it is
+     in the specs hash too);
    - the same inputs give the stored result without a call;
-   - a new balance, risk or leverage, or a setup that moved (ARMED → ACTIVE, a new payload),
-     computes it again.
+   - a new balance, risk or leverage, a changed `cost_per_unit`, or a setup that moved
+     (ARMED → ACTIVE, a new payload), computes it again.
 
 The answer has `lots`, `risk_amount` (account currency; the contract calls it `risk_usd`),
 `margin_required`, `feasible`, `warnings`, `source`, `computed_at`, the `inputs` used with their
@@ -488,6 +526,11 @@ Worked examples, on 2,000 USD with 1 % risk (1R = 20 USD):
 `check_entry_bar` next to the Y11 fields (`exits.stop_loss_pct` and `exits.take_profit_pct` are
 still accepted). A 422 lists the errors with their paths
 (`{"loc": ["body", "config", "stop", "multiplier"], "path": "stop.multiplier", …}`).
+
+On an instrument with a [fixed cost per unit](#fixed-cost-per-unit-per-instrument) the server
+sets `config.cost_per_unit` from the instrument (a request may not set it: 422), the run
+ignores `fee_bps` and `slippage_bps`, and the result says `cost_model: "fixed_per_unit"` and
+`cost_per_unit: 0.25` (otherwise `cost_model: "bps"`, `cost_per_unit: null`).
 
 `"risk_profile": true` applies your profile: its rules, `fee_bps` and `account_size` (as
 `initial_capital`, converted when the profile's currency is not the instrument's quote
