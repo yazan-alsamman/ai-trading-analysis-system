@@ -6,7 +6,7 @@
 The schemas come from ``app/ai/contract.py`` (pydantic only: this script needs nothing else
 from the backend, so the api-contract CI job runs it with just pydantic and PyYAML). The
 example payloads of docs/api/ai-service-examples/ are embedded, so they cannot drift either.
-Version 0.2.0 applies Fadi's answers (docs/ai-contract.md).
+Version 0.2.0 applies Fadi's answers (docs/ai-contract.md); 0.2.1 accepts ``ok`` without a model.
 """
 
 from __future__ import annotations
@@ -42,9 +42,10 @@ DESCRIPTION = """\
 The stateless trading engine (ai-service, owned by Fadi). The backend owns the data,
 the schedule, the storage and the delivery; ai-service decides setups and their states.
 
-**Version 0.2.0**: Fadi's answers to the 17 open points of 0.1.0-draft are applied
-(docs/ai-contract.md, section 7). `/v1` changes only by adding fields; `info.version` follows
-semver; ai-service reports its versions in every answer and in `/health`. Generated from
+**Version 0.2.1**: Fadi's answers to the 17 open points of 0.1.0-draft are applied
+(docs/ai-contract.md, section 7); 0.2.1 accepts `status: ok` with `versions.model` null.
+`/v1` changes only by adding fields; `info.version` follows semver; ai-service reports its
+versions in every answer and in `/health`. Generated from
 backend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by hand).
 
 - Every timestamp is UTC, ISO-8601 with `Z`. Every bar is closed; `ts` is its open time.
@@ -59,11 +60,13 @@ backend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by han
   goes backwards).
 - Transitions: DEVELOPING -> ARMED -> ACTIVE -> CLOSED; DEVELOPING or ARMED -> EXPIRED or
   INVALIDATED. ARMED and ACTIVE may share an `at`.
-- `grade` is A-D and always null in v1. Money is USD only in v1.
+- v1 has no model: the rules run alone, so `status` is `ok` with `versions.model`,
+  `probability`, `ev_r`, `ev_r_lower` and `grade` null (not available, never 0).
+  `grade` is A-D and always null in v1. Money is USD only in v1.
 - Responses may carry fields this document does not list (the backend ignores them).
 - 422: the request does not match the contract (never retried). 5xx, timeouts and connection
-  errors are retried by the backend with the same body. No model: 200 with
-  `status: model_unavailable`.
+  errors are retried by the backend with the same body. A model is registered but not
+  loaded: 200 with `status: model_unavailable` (nothing is stored).
 """
 
 
@@ -136,6 +139,7 @@ def build() -> dict[str, Any]:
                 {"intraday": "evaluate-request"},
                 {
                     "ok": "evaluate-response-ok",
+                    "ok_rules_only": "evaluate-response-ok-rules-only",
                     "model_unavailable": "evaluate-response-model-unavailable",
                 },
             ),

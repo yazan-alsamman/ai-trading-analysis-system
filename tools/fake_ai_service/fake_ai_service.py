@@ -6,7 +6,10 @@ the committed examples (docs/api/ai-service-examples) or deterministic answers, 
 driven with ``POST /_fake/mode`` to return what a test needs:
 
 - ``evaluate``: ``lifecycle`` (default: a DEVELOPING setup, then ARMED, ACTIVE and CLOSED on
-  the next requests, with the full history in ``transitions``), ``same_at`` (DEVELOPING, then
+  the next requests, with the full history in ``transitions``), ``rules_only`` (the same life
+  cycle as Fadi's v1 answers it, contract 0.2.1: ``ok`` with ``versions.model`` null and
+  ``probability``, ``ev_r``, ``ev_r_lower`` and ``grade`` null; ``/health`` reports no model
+  either), ``same_at`` (DEVELOPING, then
   ARMED and ACTIVE with the same ``at``, then CLOSED), ``examples`` (the ok example),
   ``model_unavailable``, ``backwards`` (the lifecycle, then the setup sent back as
   DEVELOPING), ``422``, ``503``, ``404``;
@@ -44,9 +47,11 @@ EXAMPLES = (
     else Path(__file__).resolve().parents[2] / "docs" / "api" / "ai-service-examples"
 )
 VERSIONS = {"strategy": "fake-1.0.0", "model": "fake-model-1", "features": "fake-f1"}
+RULES_ONLY_VERSIONS = {**VERSIONS, "model": None}  # v1: the rules alone (contract 0.2.1)
+MODEL_SCORES = ("probability", "ev_r", "ev_r_lower", "grade")
 DEFAULT_MODES = {"evaluate": "lifecycle", "size": "404", "explain": "404"}
 
-app = FastAPI(title="fake ai-service (dev/CI only)", version="0.2.0")
+app = FastAPI(title="fake ai-service (dev/CI only)", version="0.2.1")
 
 
 class _State:
@@ -163,6 +168,8 @@ def _lifecycle(body: dict[str, Any], mode: str) -> dict[str, Any]:
         "evidence": {"fake": True},
         "features": {"step": k},
     }
+    if mode == "rules_only":  # no model: no scores
+        setup.update(dict.fromkeys(MODEL_SCORES))
     transitions = [
         {
             "setup_id": setup_id,
@@ -177,16 +184,20 @@ def _lifecycle(body: dict[str, Any], mode: str) -> dict[str, Any]:
     return {
         "request_id": body["request_id"],
         "status": "ok",
-        "versions": VERSIONS,
+        "versions": _versions(),
         "new_setups": [setup],
         "transitions": transitions,
         "abstentions": [],
     }
 
 
+def _versions() -> dict[str, Any]:
+    return RULES_ONLY_VERSIONS if STATE.modes["evaluate"] == "rules_only" else VERSIONS
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"status": "ok", "versions": VERSIONS, "fake": True}
+    return {"status": "ok", "versions": _versions(), "fake": True}
 
 
 @app.post("/v1/evaluate")

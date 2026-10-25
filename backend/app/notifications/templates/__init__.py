@@ -288,10 +288,12 @@ def _ai_setup(data: dict[str, Any], lang: str) -> tuple[str, str]:
     if state == "ARMED":
         probability = data.get("probability")
         grade = data.get("grade")  # always null in v1 (Fadi): the line leaves it out
+        # v1 runs the rules alone (contract 0.2.1): no probability reads "n/a", never "0%"
+        key = "ai_setup.scores" if grade else "ai_setup.scores_no_grade"
         lines.append(
             t(
                 lang,
-                "ai_setup.scores" if grade else "ai_setup.scores_no_grade",
+                key if probability is not None else "ai_setup.scores_no_model",
                 grade=grade,
                 probability=num(probability * 100 if probability is not None else None, 0),
                 r_multiple=num(data.get("r_multiple"), 1),

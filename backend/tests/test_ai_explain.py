@@ -138,3 +138,27 @@ def test_alert_text_says_unavailable() -> None:
     assert "الشرح غير متاح" in body and "التقييم" not in body  # no grade line in v1
     _, body = inbox("ai_setup", {**data, "explanation": "Template: buy"}, "en")
     assert "Template: buy" in body and "Explanation unavailable" not in body
+
+
+def test_alert_text_without_a_model_says_not_available() -> None:
+    """Contract 0.2.1: v1 runs the rules alone, so the probability is null. The ARMED alert
+    says it is not available, never "0%" or "-%"."""
+    data = {
+        "state": "ARMED",
+        "direction": "buy",
+        "entry": 2400.0,
+        "sl": 2395.0,
+        "tp": 2410.0,
+        "grade": None,
+        "probability": None,
+        "ev_r": None,
+        "r_multiple": 2.0,
+        "instrument": {"symbol": "XAU/USD", "price_precision": 2},
+        "explanation_status": "unavailable",
+    }
+    _, en = inbox("ai_setup", data, "en")
+    assert "Probability n/a · 2.0R" in en and "%" not in en
+    _, ar = inbox("ai_setup", data, "ar")
+    assert "الاحتمال غير متاح · 2.0R" in ar and "%" not in ar
+    _, en = inbox("ai_setup", {**data, "probability": 0.58}, "en")
+    assert "Probability 58% · 2.0R" in en  # with a model: as before

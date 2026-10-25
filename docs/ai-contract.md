@@ -1,8 +1,9 @@
 # ai-service contract (B7), AI storage (B8) and the evaluate task (B9)
 
-> **Version `0.2.0`.** Fadi's answers to the 17 open points of `0.1.0-draft` are applied; each
-> point and its decision is in [section 7](#7-the-17-points-answered-by-fadi). `/v1` only ever
-> gains fields and the version follows semver. What still waits on Fadi (final bar counts and
+> **Version `0.2.1`.** Fadi's answers to the 17 open points of `0.1.0-draft` are applied; each
+> point and its decision is in [section 7](#7-the-17-points-answered-by-fadi). 0.2.1 (Fadi, 25
+> Oct): v1 has no model, the rules run alone, so `ok` comes with `versions.model` null
+> ([changelog](#13-changelog)). `/v1` only ever gains fields and the version follows semver. What still waits on Fadi (final bar counts and
 > a maximum request size with his P6, the explain timeout with his P7) is in
 > [section 12](#12-open-issues); how to turn the evaluation on is in
 > [section 11](#11-enabling-it-on-the-server).
@@ -94,8 +95,8 @@ Rules checked on every request:
 | `direction` | `buy`, `sell` | |
 | `entry`, `sl`, `tp` | price or null | **required in `ARMED` and `ACTIVE`**: buy `sl < entry < tp`, sell `tp < entry < sl`. Rounded to `tick_size`: the stop away from the entry, the target toward it |
 | `r_multiple` | number or null | reward / risk at entry |
-| `probability` | 0..1 or null | of reaching `tp` first |
-| `ev_r`, `ev_r_lower` | number or null | expected value in R and its lower bound |
+| `probability` | 0..1 or null | of reaching `tp` first. **Null without a model (v1)** |
+| `ev_r`, `ev_r_lower` | number or null | expected value in R and its lower bound. **Null without a model (v1)** |
 | `grade` | `A`, `B`, `C`, `D` or null | A best. **Always null in v1** (no model has passed the gate) |
 | `valid_until` | UTC or null | the entry is no longer valid after it |
 | `horizon_until` | UTC or null | the end of the trade horizon |
@@ -107,8 +108,8 @@ Rules checked on every request:
 | Field | |
 |---|---|
 | `request_id` | must equal the request's (the client checks it) |
-| `status` | `ok`, `data_quality_failed`, `model_unavailable` (no model: a **200** with this status, not a 503) |
-| `versions` | `{strategy, model, features}`: `strategy` and `features` always present; `model` null **only** with `model_unavailable` |
+| `status` | `ok`, `data_quality_failed`, `model_unavailable` (a model is registered but not loaded: a **200** with this status, not a 503) |
+| `versions` | `{strategy, model, features}`: `strategy` and `features` always present; `model` null when no model runs: with `ok` in v1 (the rules alone), and with `model_unavailable` |
 | `new_setups` | `[Setup]`: the **current state of every setup** ai-service knows about |
 | `transitions` | `[{setup_id, from, to, at, reason, realized_r}]`: the **full history** of their state changes (`from` is `from_` in Python) |
 | `abstentions` | `[{reason, detail}]`: why nothing was proposed; `detail` is an **object** |
@@ -177,8 +178,16 @@ carries about 3,000 bars.
   transaction**:
   1. **Versions.** A model version that is not in `ai_model_versions` yet is added there,
      inactive, with a note. A version that differs from the active model is logged. (No model
-     is registered by hand in v1.)
-  2. **`status != ok`:** nothing else is stored. The result carries the status.
+     is registered by hand in v1.) **`versions.model` null registers nothing.**
+  2. **`status != ok`:** nothing else is stored. The result carries the status. This includes
+     `model_unavailable`, which only means "a model is registered but not loaded".
+
+  **v1 runs the rules alone (Fadi, 25 Oct; contract 0.2.1).** ai-service answers `status: ok`
+  with `versions.model: null`, and every setup has `probability`, `ev_r`, `ev_r_lower` and
+  `grade` null. The backend stores those setups and transitions like any `ok` answer: the run
+  row's `detail.versions.model` and each setup's `model_version` are null, and no model row is
+  added. Readers show a null score as "not available", never as 0: the API returns `null`,
+  and the ARMED alert says "Probability n/a" (Arabic: "الاحتمال غير متاح").
   3. **New `setup_id`s** in `new_setups`: a row in `ai_setups` and a first event `null →
      state`, where the state is the **start of its history** in `transitions` (or its current
      state without history), at its **`created_at`** when ai-service sends it, else at
@@ -283,16 +292,16 @@ The production memory cap of `ai-service` is 512m.
 | 5 | payload size and bar counts | ~**2,000 × 15m** (~20 trading days) and ~**a year of D1**; D1 = **17:00 to 17:00 America/New_York** (DST). Final counts and a max size with his P6 | `AI_BARS_15M=2000`, `AI_BARS_1D=260`; `1d` validated at 17:00 New York (`d1_open`, `d1_close`, `bar_close`); built on the fly (section 8); size measured (section 8) |
 | 6 | `open_setups` content | as proposed; the engine is stateless and may ignore them | – |
 | 7 | `spread` | price units, the bar average. **The decision bar must have a spread**; without it the backend does not call ai-service and records a local abstention `data_quality_failed` | section 8 |
-| 8 | errors | 422 FastAPI style: no retry; any 5xx: retry; no model: **200 + `model_unavailable`** | as before; a run with `model_unavailable` is `abstained` |
+| 8 | errors | 422 FastAPI style: no retry; any 5xx: retry; a model registered but not loaded: **200 + `model_unavailable`** (corrected 25 Oct: no model at all is `ok`, point 12) | as before; a run with `model_unavailable` is `abstained`, nothing stored |
 | 9 | transitions | DEVELOPING → ARMED → ACTIVE → CLOSED; DEVELOPING or ARMED → EXPIRED or INVALIDATED. **ACTIVE → INVALIDATED removed**. No DEVELOPING → ACTIVE, but ARMED and ACTIVE may share an `at` (applied in order) | `ALLOWED_TRANSITIONS`; `store.ALLOWED`; ordering by `(at, state)` |
 | 10 | states in `new_setups` | each response carries the **current state** of every setup in `new_setups` and its **full history** in `transitions`; dedupe by `(setup_id, to, at)`; a state never goes backwards: a backwards state is a **contract error**, ours is kept | section 5 |
 | 11 | the time of the first event | `Setup.created_at` (close of the bar where DEVELOPING became known); optional for now; used when present, else `bar_close_ts` | `Setup.created_at` |
-| 12 | versions | `strategy` and `features` always present; `model` null **only** with `model_unavailable`. No model registered now | validated on `ok` responses |
+| 12 | versions | `strategy` and `features` always present. **Corrected 25 Oct:** v1 has no model, the rules run alone: `ok` with `model` null (and `probability`, `ev_r`, `grade` null); `model_unavailable` only when a model is registered but not loaded | 0.2.1: the rule "`ok` needs a model" is removed; `ok` without a model is stored |
 | 13 | `template_used` | a boolean | – |
 | 14 | `Abstention.detail` | an object | `detail: dict` (a string is refused) |
 | 15 | `daily_loss_limit_pct` / `max_drawdown_pct` | the backend applies them (B10) | optional in `SizeRequest` |
 | 16 | determinism | the same body gives a byte-identical response | our storage tolerates both |
-| 17 | versioning | accepted: `/v1` changes only by adding fields, `info.version` semver, versions in every answer and `/health` | contract **0.2.0**, OpenAPI regenerated |
+| 17 | versioning | accepted: `/v1` changes only by adding fields, `info.version` semver, versions in every answer and `/health` | contract **0.2.0**, then **0.2.1** (point 12); OpenAPI regenerated |
 
 Fadi's extras:
 
@@ -363,7 +372,7 @@ peaks at about **6 MB** of Python memory in the worker (cap 384 MB). The test
 
 | Outcome | Run status | Logged |
 |---|---|---|
-| 200, `ok` | `ok` | info |
+| 200, `ok` (with or without a model) | `ok` | info |
 | 200, `model_unavailable` / `data_quality_failed` | `abstained` (reason = the status) | info |
 | 404 or connection refused (no `/v1/evaluate` yet) | `unavailable` (`no_evaluate_endpoint` / `connection_refused`) | a warning **at most once an hour**, not an error, the task succeeds |
 | 5xx or timeouts after the retries | `unavailable` (the last error) | a warning |
@@ -427,8 +436,10 @@ in `ai-service/` and **never** in the production compose (`infra/deploy/docker-c
 - It serves the committed examples, or a deterministic life cycle: a DEVELOPING setup, then
   ARMED, ACTIVE and CLOSED on the next bars, with the full history in `transitions`.
 - `POST /_fake/mode {"evaluate": ..., "size": ..., "explain": ...}` drives it:
-  `evaluate` = `lifecycle` (default), `same_at`, `examples`, `model_unavailable`, `backwards`,
-  `422`, `503`, `404`; `size` = `404` (default), `ok`, `503`; `explain` = `404` (default),
+  `evaluate` = `lifecycle` (default), `rules_only` (the lifecycle as Fadi's v1 answers it:
+  `ok`, `versions.model` null, `probability`, `ev_r`, `ev_r_lower` and `grade` null; `/health`
+  reports the null model too), `same_at`, `examples`, `model_unavailable`, `backwards`, `422`,
+  `503`, `404`; `size` = `404` (default), `ok`, `503`; `explain` = `404` (default),
   `verified`, `template`, `unverified`, `503`. `GET /_fake/requests` lists what it received;
   `POST /_fake/reset` starts again. Gzip request bodies are accepted.
 - The backend tests use it in-process (`tests/test_ai_evaluate.py`, `tests/test_ai_explain.py`).
@@ -471,3 +482,11 @@ and the same restart.
 - **`/v1/size`:** once P6 ships it, set `AI_SIZE_LOCAL_FALLBACK_ON_404=false`.
 - **`/v1/explain`** and its final timeout come with P7.
 - `created_at` is optional until ai-service sends it.
+
+## 13. Changelog
+
+| Version | Date | Change |
+|---|---|---|
+| 0.1.0-draft | | first draft (B7) |
+| 0.2.0 | | Fadi's answers to the 17 points (section 7) |
+| 0.2.1 | 25 Oct 2026 | `status: ok` with `versions.model: null` is valid: v1 runs the rules alone, with `probability`, `ev_r`, `ev_r_lower` and `grade` null; the backend stores those setups. `model_unavailable` only means "a model is registered but not loaded" (Fadi). Example `evaluate-response-ok-rules-only.json` |
