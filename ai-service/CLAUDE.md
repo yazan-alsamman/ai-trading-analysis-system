@@ -174,8 +174,11 @@ E0 (20 random replications) gains 5th / median / 95th -0.085 / -0.018 / +0.103; 
 -0.007 (about the 61st percentile of random): **the SMC pattern adds no information** beyond
 session, volatility and cost context. Thesis notes: the yearly condition of H2 passes trivially for
 a filter that trades less in losing years; label uniqueness median 1.0 (no AFML weights needed).
-Open: LightGBM and MLP control arms (registered, not needed for H2); what P4's failed gate means
-for P5 (Fadi).
+**P4 closed 2026-10-25 (Fadi): gate not passed, documented** (`docs/phase4/CLOSEOUT_P4.md`), as P2 v1
+was. Left open, not needed for H2: E3 / E4 control arms. **Decision (Fadi, 2026-10-25): P6 before P5**
+(P6 needs no model; it unblocks the backend's B9). v1 ships rules with abstention and no probability
+(`model`, `grade`, `probability`, `ev_r` null) until a model passes a gate. P6 started on branch
+`ai/p6-live-scanner` (plan: `docs/phase6/PLAN.md`).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
