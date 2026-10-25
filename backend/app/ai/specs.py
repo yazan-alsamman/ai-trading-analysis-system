@@ -31,10 +31,13 @@ def instrument_spec(instrument: Instrument) -> InstrumentSpec:
         session_calendar=instrument.session_calendar,
         quote_currency=instrument.pnl_currency,
         margin_rate=instrument.margin_rate,
+        cost_per_unit=instrument.cost_per_unit,
     )
 
 
 def spec_hash(spec: InstrumentSpec) -> str:
+    """The cached sizes' key part for the specs: a changed ``cost_per_unit`` changes it (so the
+    size is computed again); without one (no key in the dump) the hash is as before 0.2.2."""
     return hashlib.sha256(
         json.dumps(spec.model_dump(mode="json"), sort_keys=True).encode()
     ).hexdigest()

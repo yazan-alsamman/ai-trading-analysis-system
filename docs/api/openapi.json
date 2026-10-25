@@ -18811,7 +18811,7 @@
               }
             ],
             "title": "Config",
-            "description": "initial_capital, fee_bps, slippage_bps, direction, sizing, stop, trailing, take_profit, guards, check_entry_bar, exits {max_bars_held, exit_on_opposite_signal, stop_loss_pct, take_profit_pct} (docs/risk-management.md); risk_profile: true uses your risk profile"
+            "description": "initial_capital, fee_bps, slippage_bps, direction, sizing, stop, trailing, take_profit, guards, check_entry_bar, exits {max_bars_held, exit_on_opposite_signal, stop_loss_pct, take_profit_pct} (docs/risk-management.md); risk_profile: true uses your risk profile. An instrument with a fixed cost per unit (XAU/USD: 0.25) gets config.cost_per_unit from the server, and fee_bps / slippage_bps are then ignored"
           }
         },
         "additionalProperties": false,
@@ -18951,6 +18951,27 @@
             "type": "object",
             "title": "Config"
           },
+          "cost_model": {
+            "type": "string",
+            "enum": [
+              "bps",
+              "fixed_per_unit"
+            ],
+            "title": "Cost Model",
+            "description": "bps: fee_bps + slippage_bps of notional; fixed_per_unit: the instrument's cost_per_unit x quantity per round trip, charged at the entry (fees and slippage ignored)"
+          },
+          "cost_per_unit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Per Unit",
+            "description": "price units per unit, round trip (fixed_per_unit only)"
+          },
           "first_bar": {
             "anyOf": [
               {
@@ -19062,6 +19083,8 @@
           "finished_at",
           "params_hash",
           "config",
+          "cost_model",
+          "cost_per_unit",
           "first_bar",
           "last_bar",
           "metrics",
@@ -22325,6 +22348,20 @@
               }
             ]
           },
+          "cost_per_unit": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Per Unit",
+            "description": "fixed trading cost per unit of quantity, in price units, per round trip (XAU/USD: 0.25 per oz). Backtests and sizing use it instead of fee_bps and slippage_bps; null: the bps fees"
+          },
           "symbol": {
             "type": "string",
             "maxLength": 32,
@@ -22660,6 +22697,18 @@
               }
             ]
           },
+          "cost_per_unit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Per Unit",
+            "description": "fixed round-trip trading cost per unit, price units (null: bps fees)"
+          },
           "spec_source": {
             "anyOf": [
               {
@@ -22908,6 +22957,20 @@
                 "type": "null"
               }
             ]
+          },
+          "cost_per_unit": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Per Unit",
+            "description": "fixed trading cost per unit of quantity, in price units, per round trip (XAU/USD: 0.25 per oz). Backtests and sizing use it instead of fee_bps and slippage_bps; null: the bps fees"
           },
           "base_asset": {
             "anyOf": [

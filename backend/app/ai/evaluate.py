@@ -274,7 +274,8 @@ async def build_request(
             "bars": bars,
             "open_setups": open_setups,
             "calendar": calendar[:MAX_CALENDAR],
-            "instrument_spec": spec.model_dump(mode="json"),
+            # unchanged by contract 0.2.2: the fixed cost goes with /v1/size only
+            "instrument_spec": spec.model_dump(mode="json", exclude={"cost_per_unit"}),
         }
     )
     return Built(request, coverage, body_bytes=len(AIServiceClient.encode(request)))

@@ -222,6 +222,18 @@ async def test_a_duplicate_task_is_a_no_op(
 # --- the request ---------------------------------------------------------------------------------
 
 
+async def test_the_fixed_cost_is_never_sent_with_evaluate(session, gold, settings) -> None:
+    """Contract 0.2.2: ``instrument_spec.cost_per_unit`` goes with /v1/size only; the evaluate
+    body of an instrument with a cost stays as it was."""
+    gold.cost_per_unit = 0.25
+    await session.commit()
+    await write(session, gold, CLOSE - timedelta(days=3), CLOSE + 5 * MIN)
+    built = await evaluate.build_request(session, gold, "intraday", CLOSE, CLOSE + 5 * MIN)
+    assert built.skip is None
+    assert built.request.instrument_spec.cost_per_unit is None
+    assert b"cost_per_unit" not in AIServiceClient.encode(built.request)
+
+
 async def test_counts_and_the_cut_at_the_last_closed_bar(
     session, gold, settings, monkeypatch
 ) -> None:

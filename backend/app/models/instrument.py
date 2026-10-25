@@ -56,6 +56,7 @@ SPEC_FIELDS = (
     "margin_rate",
     "price_basis",
     "session_calendar",
+    "cost_per_unit",
 )
 
 
@@ -87,6 +88,9 @@ class Instrument(Base):
             "price_basis IS NULL OR price_basis IN ('bid', 'mid', 'last')",
             name="ck_instruments_price_basis",
         ),
+        CheckConstraint(
+            "cost_per_unit IS NULL OR cost_per_unit >= 0", name="ck_instruments_cost_per_unit"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -114,6 +118,10 @@ class Instrument(Base):
     margin_rate: Mapped[float | None] = mapped_column(Double)
     price_basis: Mapped[str | None] = mapped_column(String(8))  # PriceBasis
     session_calendar: Mapped[dict[str, Any] | None] = mapped_column(JSONB)  # SessionCalendar
+    # fixed trading cost per unit of quantity, price units, round trip (migration 0021; XAU/USD
+    # 0.25 per oz, Fadi): backtests and sizing use it instead of fee_bps / slippage_bps;
+    # null = the bps fees as before. Candles keep their real spread
+    cost_per_unit: Mapped[float | None] = mapped_column(Double)
     spec_source: Mapped[str | None] = mapped_column(String(32))  # SpecSource
     spec_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

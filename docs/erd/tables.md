@@ -126,6 +126,7 @@ A market (symbol on a data source) with its price and quantity precision and, wh
 | `margin_rate` | double precision | yes |  |  |
 | `price_basis` | varchar(8) | yes |  |  |
 | `session_calendar` | jsonb | yes |  |  |
+| `cost_per_unit` | double precision | yes |  |  |
 | `spec_source` | varchar(32) | yes |  |  |
 | `spec_updated_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `now()` |  |
@@ -135,6 +136,7 @@ A market (symbol on a data source) with its price and quantity precision and, wh
 
 - PK `pk` (id)
 - CHECK `ck_instruments_contract_size`: `contract_size IS NULL OR contract_size > 0`
+- CHECK `ck_instruments_cost_per_unit`: `cost_per_unit IS NULL OR cost_per_unit >= 0`
 - CHECK `ck_instruments_lot_range`: `min_lot IS NULL OR max_lot IS NULL OR min_lot <= max_lot`
 - CHECK `ck_instruments_lot_step`: `lot_step IS NULL OR lot_step > 0`
 - CHECK `ck_instruments_margin_rate`: `margin_rate IS NULL OR (margin_rate > 0 AND margin_rate <= 1)`

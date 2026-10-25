@@ -6,7 +6,8 @@
 The schemas come from ``app/ai/contract.py`` (pydantic only: this script needs nothing else
 from the backend, so the api-contract CI job runs it with just pydantic and PyYAML). The
 example payloads of docs/api/ai-service-examples/ are embedded, so they cannot drift either.
-Version 0.2.0 applies Fadi's answers (docs/ai-contract.md); 0.2.1 accepts ``ok`` without a model.
+Version 0.2.0 applies Fadi's answers (docs/ai-contract.md); 0.2.1 accepts ``ok`` without a model;
+0.2.2 adds ``InstrumentSpec.cost_per_unit``.
 """
 
 from __future__ import annotations
@@ -42,8 +43,9 @@ DESCRIPTION = """\
 The stateless trading engine (ai-service, owned by Fadi). The backend owns the data,
 the schedule, the storage and the delivery; ai-service decides setups and their states.
 
-**Version 0.2.1**: Fadi's answers to the 17 open points of 0.1.0-draft are applied
-(docs/ai-contract.md, section 7); 0.2.1 accepts `status: ok` with `versions.model` null.
+**Version 0.2.2**: Fadi's answers to the 17 open points of 0.1.0-draft are applied
+(docs/ai-contract.md, section 7); 0.2.1 accepts `status: ok` with `versions.model` null; 0.2.2
+adds the optional `instrument_spec.cost_per_unit` to `/v1/size`.
 `/v1` changes only by adding fields; `info.version` follows semver; ai-service reports its
 versions in every answer and in `/health`. Generated from
 backend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by hand).
@@ -63,6 +65,9 @@ backend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by han
 - v1 has no model: the rules run alone, so `status` is `ok` with `versions.model`,
   `probability`, `ev_r`, `ev_r_lower` and `grade` null (not available, never 0).
   `grade` is A-D and always null in v1. Money is USD only in v1.
+- `instrument_spec.cost_per_unit` (0.2.2, `/v1/size` only): the instrument's fixed trading
+  cost per unit, price units, per round trip (XAU/USD 0.25 per oz, whatever the real
+  spread). Size with a risk per unit of `|entry - sl| + cost_per_unit`; absent: none.
 - Responses may carry fields this document does not list (the backend ignores them).
 - 422: the request does not match the contract (never retried). 5xx, timeouts and connection
   errors are retried by the backend with the same body. A model is registered but not
@@ -148,8 +153,8 @@ def build() -> dict[str, Any]:
                 "Position size of a setup for one account",
                 c.SizeRequest,
                 c.SizeResponse,
-                {"xauusd": "size-request"},
-                {"xauusd": "size-response"},
+                {"xauusd": "size-request", "xauusd_fixed_cost": "size-request-fixed-cost"},
+                {"xauusd": "size-response", "xauusd_fixed_cost": "size-response-fixed-cost"},
             ),
             "/v1/explain": operation(
                 "explain",

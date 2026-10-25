@@ -1,9 +1,11 @@
 # ai-service contract (B7), AI storage (B8) and the evaluate task (B9)
 
-> **Version `0.2.1`.** Fadi's answers to the 17 open points of `0.1.0-draft` are applied; each
+> **Version `0.2.2`.** Fadi's answers to the 17 open points of `0.1.0-draft` are applied; each
 > point and its decision is in [section 7](#7-the-17-points-answered-by-fadi). 0.2.1 (Fadi, 25
-> Oct): v1 has no model, the rules run alone, so `ok` comes with `versions.model` null
-> ([changelog](#13-changelog)). `/v1` only ever gains fields and the version follows semver. What still waits on Fadi (final bar counts and
+> Oct): v1 has no model, the rules run alone, so `ok` comes with `versions.model` null. 0.2.2:
+> `/v1/size` gets the instrument's fixed trading cost, `instrument_spec.cost_per_unit`
+> ([changelog](#13-changelog)). `/v1` only ever gains fields and the version follows semver.
+> What still waits on Fadi (final bar counts and
 > a maximum request size with his P6, the explain timeout with his P7) is in
 > [section 12](#12-open-issues); how to turn the evaluation on is in
 > [section 11](#11-enabling-it-on-the-server).
@@ -74,7 +76,7 @@ Every bar is **closed**.
 | `bars` | `{timeframe: [Bar]}` | oldest first, strictly increasing. Default counts: **2,000 × 15m, 500 × 1h, 300 × 4h, 260 × 1d** (`AI_BARS_15M/1H/4H/1D`); at most 5,000 per timeframe. Fewer when the history is shorter (section 8) |
 | `open_setups` | `[Setup]` | every non-final setup of this instrument and profile, **exactly as last returned** (at most 200) |
 | `calendar` | `[{ts, currency, impact, title}]` | B6 `for_evaluate`: events within ±6 h, `CALENDAR_CURRENCIES`, impact medium or high (at most 500) |
-| `instrument_spec` | `InstrumentSpec` | B4 specs: `contract_size`, `tick_size`, `lot_step`, `min_lot`, `max_lot`, `price_basis`, `session_calendar`, `quote_currency`, `margin_rate` |
+| `instrument_spec` | `InstrumentSpec` | B4 specs: `contract_size`, `tick_size`, `lot_step`, `min_lot`, `max_lot`, `price_basis`, `session_calendar`, `quote_currency`, `margin_rate`; in `/v1/size` also `cost_per_unit` when the instrument has one (below) |
 
 Rules checked on every request:
 
@@ -120,7 +122,7 @@ The same body always gets a byte-identical response.
 
 | Model | Fields |
 |---|---|
-| `SizeRequest` | `setup`, `instrument_spec`, `account {balance, currency, leverage}`, `risk {risk_per_trade_pct, daily_loss_limit_pct?, max_drawdown_pct?}` (the two guards are optional: the backend applies them, B10) |
+| `SizeRequest` | `setup`, `instrument_spec`, `account {balance, currency, leverage}`, `risk {risk_per_trade_pct, daily_loss_limit_pct?, max_drawdown_pct?}` (the two guards are optional: the backend applies them, B10). `instrument_spec.cost_per_unit` (0.2.2, optional, absent when null): the instrument's fixed trading cost per unit, price units, per round trip (XAU/USD 0.25 per oz, Fadi); size with a risk per unit of `|entry − sl| + cost_per_unit` (example `size-request-fixed-cost` → `size-response-fixed-cost`: 0.03 lots, 15.75 USD). Never sent with `/v1/evaluate` |
 | `SizeResponse` | `lots`, `risk_usd` (**always USD**: ai-service converts from the quote currency, e.g. JPY), `margin_required` (null allowed), `feasible`, `warnings[]` |
 | `ExplainRequest` | `setup`, `lang` (`ar` or `en`) |
 | `ExplainResponse` | `text`, `verified` (checked against the setup's numbers), `template_used` (boolean: the fixed template was used) |
@@ -490,3 +492,4 @@ and the same restart.
 | 0.1.0-draft | | first draft (B7) |
 | 0.2.0 | | Fadi's answers to the 17 points (section 7) |
 | 0.2.1 | 25 Oct 2026 | `status: ok` with `versions.model: null` is valid: v1 runs the rules alone, with `probability`, `ev_r`, `ev_r_lower` and `grade` null; the backend stores those setups. `model_unavailable` only means "a model is registered but not loaded" (Fadi). Example `evaluate-response-ok-rules-only.json` |
+| 0.2.2 | 25 Oct 2026 | `InstrumentSpec.cost_per_unit` (optional, additive): the instrument's fixed trading cost per unit, price units, per round trip (XAU/USD 0.25 per oz, Fadi), sent with `/v1/size` only (an evaluate body is unchanged; a spec without a cost serialises as in 0.2.1). Examples `size-request-fixed-cost.json` and `size-response-fixed-cost.json` |

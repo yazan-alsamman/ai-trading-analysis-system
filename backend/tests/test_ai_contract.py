@@ -21,6 +21,8 @@ MODELS = {
     "evaluate-response-model-unavailable": c.EvaluateResponse,
     "size-request": c.SizeRequest,
     "size-response": c.SizeResponse,
+    "size-request-fixed-cost": c.SizeRequest,
+    "size-response-fixed-cost": c.SizeResponse,
     "explain-request": c.ExplainRequest,
     "explain-response": c.ExplainResponse,
 }
@@ -186,8 +188,51 @@ def test_contract_module_needs_only_pydantic() -> None:
 # --- contract 0.2.0 (Fadi's answers) ------------------------------------------------------------
 
 
-def test_version_is_0_2_1() -> None:
-    assert c.CONTRACT_VERSION == "0.2.1"
+def test_version_is_0_2_2() -> None:
+    assert c.CONTRACT_VERSION == "0.2.2"
+
+
+def test_cost_per_unit_is_optional_and_sent_when_set() -> None:
+    """0.2.2: ``InstrumentSpec.cost_per_unit`` (the fixed round-trip cost per unit). Without it
+    the spec serialises exactly as in 0.2.1 (no key); with it, the key is there."""
+    spec = load("size-request")["instrument_spec"]
+    plain = c.InstrumentSpec.model_validate(spec)
+    assert plain.cost_per_unit is None and "cost_per_unit" not in plain.model_dump(mode="json")
+    costly = c.InstrumentSpec.model_validate({**spec, "cost_per_unit": 0.25})
+    assert costly.model_dump(mode="json")["cost_per_unit"] == 0.25
+    body = json.loads(json.dumps(c.SizeRequest.model_validate(load("size-request-fixed-cost"))
+                                 .model_dump(mode="json", by_alias=True)))  # fmt: skip
+    assert body["instrument_spec"]["cost_per_unit"] == 0.25
+    with pytest.raises(ValidationError):
+        c.InstrumentSpec.model_validate({**spec, "cost_per_unit": -0.25})
+    assert (
+        "cost_per_unit"
+        not in c.EvaluateRequest.model_validate(load("evaluate-request")).model_dump(mode="json")[
+            "instrument_spec"
+        ]
+    )
+
+
+def test_size_example_with_the_fixed_cost_matches_b4() -> None:
+    """XAU/USD, balance 2,000, 1 % = 20 USD, entry 2400, sl 2395, cost 0.25: (5 + 0.25) x 100 =
+    525 USD per lot -> 0.03 lots, 15.75 USD at risk, margin 0.03 x 100 x 2400 / 100 = 72."""
+    req = c.SizeRequest.model_validate(load("size-request-fixed-cost"))
+    resp = c.SizeResponse.model_validate(load("size-response-fixed-cost"))
+    spec = req.instrument_spec
+    risk = req.account.balance * req.risk.risk_per_trade_pct / 100
+    sized = lots_for_risk(
+        risk,
+        req.setup.entry,
+        req.setup.sl,
+        ContractSpec(spec.contract_size, spec.lot_step, "USD", spec.min_lot, spec.max_lot),
+        req.account.currency,
+        1.0,
+        cost_per_unit=spec.cost_per_unit,
+    )
+    assert (sized.lots, resp.lots) == (0.03, 0.03)
+    assert resp.risk_usd == pytest.approx(sized.risk_amount) == 15.75
+    notional = resp.lots * spec.contract_size * req.setup.entry
+    assert resp.margin_required == pytest.approx(notional / req.account.leverage)
 
 
 @pytest.mark.parametrize(

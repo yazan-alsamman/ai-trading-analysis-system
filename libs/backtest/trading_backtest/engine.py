@@ -20,6 +20,12 @@ Execution model (also in README.md, docs/backtesting.md and docs/risk-management
 * An open position is closed at the last close (``end_of_data``).
 * Every fill pays slippage against you (buy at ``price * (1 + s)``, sell at ``price * (1 - s)``)
   and the fee ``fill * quantity * fee_rate``, on entry and on every exit fill.
+* With ``config.cost_per_unit`` (a fixed round-trip cost per unit, per instrument: XAU/USD 0.25)
+  there is no slippage and no bps fee: every fill is at the chart price (the stop and the
+  targets fill exactly at their levels) and the whole round trip, ``cost_per_unit * quantity``,
+  is charged **at the entry** as the trade's fee (partial exits pay nothing more). A long's net
+  P&L is ``(exit - entry - cost) * quantity``, a short's ``(entry - exit - cost) * quantity``.
+  The breakeven stop is ``entry + side * cost``.
 * Accounting: ``cash`` plus the position's value (longs: ``+q * price``; shorts: the sale
   proceeds are in cash and ``-q * price`` is owed).
 * With ``config.conversion`` (an account currency that is not the quote currency) the money is
@@ -117,7 +123,8 @@ def simulate(
     why = reasons.tolist() if reasons is not None else [None] * n
     index = df.index
 
-    fee, slip = config.fee_rate, config.slippage_rate
+    fee, slip = config.fee_rate, config.slippage_rate  # both 0 with cost_per_unit
+    cost = config.cost_per_unit
     exits, guards = config.exits, config.guards
     conv = config.conversion
     ctx = RiskContext(df, config)
@@ -183,7 +190,7 @@ def simulate(
             return skip(plan.invalid_reason)
         q = plan.quantity
         entry_equity = cash
-        entry_fee = fill * q * fee
+        entry_fee = fill * q * fee if cost is None else cost * q  # the whole round trip
         if conv is None:
             cash -= s * fill * q + entry_fee
         else:
@@ -209,7 +216,7 @@ def simulate(
     def exit_fill(i: int, price: float, q: float, reason: str, at_open: bool) -> None:
         nonlocal cash, side, qty, gross, exit_fees, blocked_until, block_reason, streak
         fill = price * (1 - side * slip)  # a long sells lower, a short buys back higher
-        fee_paid = fill * q * fee
+        fee_paid = fill * q * fee if cost is None else 0.0  # a fixed cost was paid at entry
         if conv is None:
             cash += side * fill * q - fee_paid
             gross += side * (fill - entry_px) * q
@@ -331,7 +338,7 @@ def simulate(
             moved = side * (extreme - entry_px) / per_unit if per_unit else None
             if trail.breakeven_r is not None and not be_done and moved >= trail.breakeven_r:
                 be_done = True
-                level = breakeven_level(side, entry_px, fee, slip)
+                level = breakeven_level(side, entry_px, fee, slip, cost)
                 if stop != stop or side * (level - stop) > 0:
                     stop, stop_kind = level, "breakeven_stop"
             if trail.type != "breakeven":
