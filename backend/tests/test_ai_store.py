@@ -273,6 +273,53 @@ async def test_status_not_ok_stores_only_the_versions(
         await store.apply_evaluation(session, gold, request_at(utc(2026, 1, 5, 10)), failed)
 
 
+async def test_ok_without_a_model_stores_the_setups(
+    session: AsyncSession, gold: Instrument, client: AsyncClient, admin_headers
+) -> None:
+    """Contract 0.2.1 (Fadi, 25 Oct): v1 runs the rules alone. ``ok`` with ``versions.model``
+    null is stored like any ``ok``: setups and transitions, null scores, no model row."""
+    rules = {**VERSIONS, "model": None}
+    earlier = request_at(utc(2026, 10, 19, 9, 30))
+    opened = {**load("evaluate-request")["open_setups"][0], "probability": None, "ev_r": None,
+              "ev_r_lower": None}  # fmt: skip
+    await store.apply_evaluation(session, gold, earlier, response(earlier, new=[opened],
+                                                                  versions=rules))  # fmt: skip
+    req = c.EvaluateRequest.model_validate(load("evaluate-request"))
+    resp = c.EvaluateResponse.model_validate(load("evaluate-response-ok-rules-only"))
+    assert resp.status == c.EvaluateStatus.ok and resp.versions.model is None
+
+    result = await store.apply_evaluation(session, gold, req, resp)
+    assert result.status == "ok" and result.versions["model"] is None
+    assert result.rejected == result.contract_errors == []
+    assert [(s.setup_id, s.from_state, s.to_state) for s in result.state_changes] == [
+        (NEW_ID, None, "DEVELOPING"),
+        (OPEN_ID, "ACTIVE", "CLOSED"),
+        (NEW_ID, "DEVELOPING", "ARMED"),
+    ]
+    assert await counts(session) == (2, 4)
+    for setup_id, state in ((NEW_ID, "ARMED"), (OPEN_ID, "CLOSED")):
+        row = await session.get(AISetup, setup_id, populate_existing=True)
+        assert row.state == state and row.model_version is None
+        assert row.strategy_version == "xau-intraday-1.0.0" and row.features_version == "f-3"
+        assert (row.probability, row.ev_r, row.ev_r_lower, row.grade) == (None,) * 4
+    # no model reported: none registered
+    assert await session.scalar(select(func.count()).select_from(AIModelVersion)) == 0
+
+    # the API says "not available" (null), never 0
+    res = await client.get(f"/api/v1/admin/ai/setups/{NEW_ID}", headers=admin_headers)
+    body = res.json()
+    assert res.status_code == 200 and body["model_version"] is None
+    assert [body[k] for k in ("probability", "ev_r", "ev_r_lower", "grade")] == [None] * 4
+
+    # model_unavailable (a model registered but not loaded) still stores nothing
+    later = request_at(utc(2026, 10, 19, 14, 30))
+    unavailable = response(later, new=[setup("other", "ARMED")], status="model_unavailable",
+                           versions=rules)  # fmt: skip
+    result = await store.apply_evaluation(session, gold, later, unavailable)
+    assert result.status == "model_unavailable" and result.state_changes == []
+    assert await counts(session) == (2, 4)
+
+
 async def test_open_setups_echo_last_payload(session: AsyncSession, gold: Instrument) -> None:
     other = await make_instrument(session, symbol="EUR/USD", source="fxpro")
     t0 = utc(2026, 10, 19, 14, 15)

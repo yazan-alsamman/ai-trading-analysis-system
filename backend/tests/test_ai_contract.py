@@ -17,6 +17,7 @@ EXAMPLES = Path(__file__).resolve().parents[2] / "docs" / "api" / "ai-service-ex
 MODELS = {
     "evaluate-request": c.EvaluateRequest,
     "evaluate-response-ok": c.EvaluateResponse,
+    "evaluate-response-ok-rules-only": c.EvaluateResponse,
     "evaluate-response-model-unavailable": c.EvaluateResponse,
     "size-request": c.SizeRequest,
     "size-response": c.SizeResponse,
@@ -185,8 +186,8 @@ def test_contract_module_needs_only_pydantic() -> None:
 # --- contract 0.2.0 (Fadi's answers) ------------------------------------------------------------
 
 
-def test_version_is_0_2_0() -> None:
-    assert c.CONTRACT_VERSION == "0.2.0"
+def test_version_is_0_2_1() -> None:
+    assert c.CONTRACT_VERSION == "0.2.1"
 
 
 @pytest.mark.parametrize(
@@ -225,12 +226,19 @@ def test_1d_bars_must_open_at_17_00_new_york() -> None:
         c.EvaluateRequest.model_validate(req)
 
 
-def test_model_is_null_only_when_unavailable() -> None:
+def test_ok_without_a_model_is_valid() -> None:
+    """0.2.1 (Fadi, 25 Oct): v1 runs the rules alone, so ``ok`` comes with ``model`` null (this
+    test asserted the opposite rule until 0.2.0)."""
     ok = load("evaluate-response-ok")
     ok["versions"]["model"] = None
-    with pytest.raises(ValidationError, match="null only with status model_unavailable"):
-        c.EvaluateResponse.model_validate(ok)
-    c.EvaluateResponse.model_validate(load("evaluate-response-model-unavailable"))
+    assert c.EvaluateResponse.model_validate(ok).versions.model is None
+    rules = c.EvaluateResponse.model_validate(load("evaluate-response-ok-rules-only"))
+    assert rules.status == c.EvaluateStatus.ok and rules.versions.model is None
+    assert rules.versions.strategy and rules.versions.features  # always present
+    for s in rules.new_setups:
+        assert (s.probability, s.ev_r, s.ev_r_lower, s.grade) == (None, None, None, None)
+    unavailable = c.EvaluateResponse.model_validate(load("evaluate-response-model-unavailable"))
+    assert unavailable.versions.model is None
 
 
 def test_abstention_detail_is_an_object() -> None:

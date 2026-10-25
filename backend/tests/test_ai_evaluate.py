@@ -26,6 +26,7 @@ from app.core.config import get_settings
 from app.models.ai import (
     AIAlertFollow,
     AIEvaluationRun,
+    AIModelVersion,
     AISetup,
     AISetupEvent,
     AISetupSize,
@@ -410,6 +411,39 @@ async def test_a_backwards_state_is_a_contract_error(
     assert row.state == "ARMED"  # ours is kept
     status = await evaluate.status(session, redis_client)
     assert status["last_contract_error"]["error"] == "state went backwards"
+
+
+async def test_rules_only_ok_without_a_model_is_stored(
+    session, session_factory, redis_client, gold, settings, after
+) -> None:
+    """Contract 0.2.1 (Fadi, 25 Oct): v1 answers ``ok`` with ``versions.model`` null and no
+    scores. The setups and transitions are stored, the run records the null model, and no
+    model row is registered."""
+    fake.STATE.modes["evaluate"] = "rules_only"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=fake.app)) as http:
+        health = (await http.get("http://fake/health")).json()
+    assert health["versions"]["model"] is None
+    await history(session, gold, CLOSE + M15)
+    for k in range(2):
+        result = await run(session_factory, redis_client, after, CLOSE + k * M15)
+        assert (result.status, result.reason) == ("ok", None), result.detail
+    assert [(c.from_state, c.to_state) for c in result.applied.state_changes] == [
+        ("DEVELOPING", "ARMED")
+    ]
+    row = await session.scalar(select(AISetup).execution_options(populate_existing=True))
+    assert row.state == "ARMED" and row.model_version is None
+    assert (row.probability, row.ev_r, row.ev_r_lower, row.grade) == (None,) * 4
+    assert await session.scalar(select(func.count()).select_from(AISetupEvent)) == 2
+    runs = (await session.scalars(select(AIEvaluationRun).order_by(AIEvaluationRun.id))).all()
+    assert [r.status for r in runs] == ["ok", "ok"]
+    for r in runs:
+        assert r.detail["response_status"] == "ok"
+        assert r.detail["versions"] == {"strategy": "fake-1.0.0", "model": None,
+                                        "features": "fake-f1"}  # fmt: skip
+    assert await session.scalar(select(func.count()).select_from(AIModelVersion)) == 0
+    assert after.kicks == 2 and after.explains == [(row.setup_id, "ar"), (row.setup_id, "en")]
+    status = await evaluate.status(session, redis_client)
+    assert status["last_contract_error"] is None
 
 
 async def test_model_unavailable_is_an_abstention(
