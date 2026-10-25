@@ -3,7 +3,7 @@
 The value of a price move depends on the contract and on the account currency::
 
     value_per_price_unit = contract_size * conversion_rate
-    risk_per_lot         = |entry - stop| * value_per_price_unit
+    risk_per_lot         = (|entry - stop| + cost_per_unit) * value_per_price_unit
     lots                 = risk_amount / risk_per_lot   (rounded DOWN to lot_step, then clamped)
 
 ``conversion_rate`` is how much one unit of the instrument's quote (P&L) currency is worth in
@@ -15,6 +15,10 @@ the size is not feasible: a rate of 1 is never assumed.
 Examples (docs/instruments.md): XAU/USD, 100 oz per lot, USD account, entry 2400, stop 2395,
 risk 20 USD -> 500 USD per lot -> 0.04 lots. USD/JPY at 150.000, stop 149.500, risk 100 USD ->
 0.5 * 100,000 / 150 = 333.33 USD per lot -> 0.30 lots.
+
+``cost_per_unit`` is the instrument's fixed round-trip trading cost in price units (XAU/USD:
+0.25 per oz, Fadi), 0 when it has none: XAU/USD entry 2400, stop 2395, risk 20 USD ->
+(5 + 0.25) * 100 = 525 USD per lot -> 0.0380 -> 0.03 lots.
 """
 
 from __future__ import annotations
@@ -134,15 +138,19 @@ def lots_for_risk(
     spec: ContractSpec,
     account_currency: str,
     conversion_rate: float | None,
+    cost_per_unit: float | None = None,
 ) -> LotSize:
     """Lots that lose at most ``risk_amount`` (account currency) if the stop is hit, rounded
-    down to ``lot_step`` and clamped to ``min_lot``/``max_lot``. Price-move risk only: costs
-    (spread, commission) are not included."""
+    down to ``lot_step`` and clamped to ``min_lot``/``max_lot``. The risk per unit is the price
+    move plus ``cost_per_unit`` (the instrument's fixed round-trip cost, price units) when it
+    is given; without it, price-move risk only (spread and commission not included)."""
     if not risk_amount > 0:
         return LotSize(0.0, False, ["the risk amount must be > 0"])
     move = abs(entry - stop)
     if not move > 0:
         return LotSize(0.0, False, ["the stop must differ from the entry"])
+    if cost_per_unit is not None:
+        move += cost_per_unit
     try:
         per_unit = value_per_price_unit(
             spec.contract_size, spec.quote_currency, account_currency, conversion_rate

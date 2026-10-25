@@ -8,6 +8,11 @@ JSON (``BacktestConfig.from_dict``; unknown fields are errors, messages carry th
      "check_entry_bar": true,
      "exits": {"max_bars_held": null, "exit_on_opposite_signal": true}}
 
+``cost_per_unit`` (optional, price units per unit of quantity, round trip) is a fixed trading
+cost per instrument (XAU/USD: 0.25 per oz, Fadi): when set it **replaces** ``fee_bps`` and
+``slippage_bps`` (both ignored for the run), it is charged in full at the entry as a fee (fills
+stay at the chart prices) and sizing counts it in the risk per unit. Without it nothing changes.
+
 ``conversion`` (optional) says the account currency is not the quote currency: then
 ``initial_capital`` and every money result (equity, P&L, fees, risk) are in the account currency,
 while prices and notional stay in the quote currency (:class:`Conversion`). Without it everything
@@ -70,25 +75,36 @@ class Sizer:
         fee_rate: float,
         stop: float | None = None,
         atr: float | None = None,
+        cost_per_unit: float | None = None,
     ) -> tuple[float, str | None]:
-        """(quantity, invalid reason or None)."""
+        """(quantity, invalid reason or None). ``cost_per_unit`` (a fixed round-trip cost per
+        unit, paid at the entry) replaces the fee: the risk per unit is ``|entry - stop| +
+        cost`` and a unit costs ``entry + cost`` (then ``fee_rate`` is 0)."""
         if equity <= 0 or entry <= 0:
             return 0.0, "no_equity"
+        # what one unit costs at the entry, its fee or fixed cost included
+        unit = entry * (1 + fee_rate) if cost_per_unit is None else entry + cost_per_unit
         if self.mode == "fraction":
-            qty = self.value * equity / (entry * (1 + fee_rate))
+            qty = self.value * equity / unit
         elif self.mode == "fixed":
-            notional = min(self.value, equity / (1 + fee_rate))
+            if cost_per_unit is None:
+                notional = min(self.value, equity / (1 + fee_rate))
+            else:
+                notional = min(self.value, equity * entry / unit)
             qty = notional / entry
         elif self.mode == "risk":
             if stop is None:
                 return 0.0, "stop_unavailable"
-            per_unit = abs(entry - stop) + (entry + stop) * fee_rate
+            if cost_per_unit is None:
+                per_unit = abs(entry - stop) + (entry + stop) * fee_rate
+            else:
+                per_unit = abs(entry - stop) + cost_per_unit
             qty = self.risk_pct / 100 * equity / per_unit
         else:
             if atr is None or not atr > 0:
                 return 0.0, "atr_unavailable"
             qty = self.target_pct / 100 * equity / atr
-        cap = self.max_position_pct / 100 * equity / (entry * (1 + fee_rate))
+        cap = self.max_position_pct / 100 * equity / unit
         if qty > cap * (1 + CAP_TOLERANCE):
             qty = cap
         if qty * entry < self.min_notional or qty <= 0:
@@ -201,6 +217,14 @@ class BacktestConfigIn(rk._M):
     check_entry_bar: bool = Field(default=True, strict=True)
     exits: _Exits = _Exits()
     conversion: ConversionIn | None = None
+    cost_per_unit: float | None = Field(
+        default=None,
+        ge=0,
+        le=1e9,
+        allow_inf_nan=False,
+        description="fixed round-trip cost per unit, in price units (XAU/USD: 0.25 per oz); "
+        "replaces fee_bps and slippage_bps",
+    )
 
     @model_validator(mode="after")
     def _aliases(self) -> BacktestConfigIn:
@@ -221,14 +245,22 @@ class BacktestConfig:
     exits: ExitRules = field(default_factory=ExitRules)
     guards: Guards = field(default_factory=Guards)
     conversion: Conversion | None = None  # None: the capital is in the quote currency
+    # fixed round-trip cost per unit (price units), charged at the entry; when set, fee_bps and
+    # slippage_bps are ignored (fee_rate and slippage_rate are 0)
+    cost_per_unit: float | None = None
 
     @property
     def fee_rate(self) -> float:
-        return self.fee_bps / 10_000
+        return 0.0 if self.cost_per_unit is not None else self.fee_bps / 10_000
 
     @property
     def slippage_rate(self) -> float:
-        return self.slippage_bps / 10_000
+        return 0.0 if self.cost_per_unit is not None else self.slippage_bps / 10_000
+
+    @property
+    def cost_model(self) -> str:
+        """``fixed_per_unit`` (``cost_per_unit``) or ``bps`` (``fee_bps`` + ``slippage_bps``)."""
+        return "bps" if self.cost_per_unit is None else "fixed_per_unit"
 
     def to_dict(self) -> dict[str, Any]:
         """Normalised JSON (``from_dict(to_dict())`` gives the same config)."""
@@ -251,6 +283,8 @@ class BacktestConfig:
         }
         if self.conversion is not None:  # only when set: older configs stay as they were
             out["conversion"] = self.conversion.to_dict()
+        if self.cost_per_unit is not None:  # the same
+            out["cost_per_unit"] = self.cost_per_unit
         return out
 
     def risk_dict(self) -> dict[str, Any]:
@@ -296,6 +330,7 @@ class BacktestConfig:
                 if model.conversion is not None
                 else None
             ),
+            cost_per_unit=None if model.cost_per_unit is None else float(model.cost_per_unit),
         )
 
     @classmethod
