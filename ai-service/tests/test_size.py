@@ -31,6 +31,19 @@ def test_the_contract_hand_example() -> None:
     assert post(load("size-request")) == load("size-response")
 
 
+def test_the_fixed_cost_example() -> None:
+    """Contract 0.2.2: ``cost_per_unit`` is added to the risk per unit."""
+    assert post(load("size-request-fixed-cost")) == load("size-response-fixed-cost")
+
+
+def test_without_a_daily_loss_limit() -> None:
+    """Contract 0.2.0: the daily loss and drawdown limits are optional."""
+    body = copy.deepcopy(load("size-request"))
+    body["risk"].pop("daily_loss_limit_pct", None)
+    body["risk"].pop("max_drawdown_pct", None)
+    assert post(body)["lots"] == load("size-response")["lots"]
+
+
 def usdjpy(**account) -> dict:
     body = copy.deepcopy(load("size-request"))
     body["setup"] |= {

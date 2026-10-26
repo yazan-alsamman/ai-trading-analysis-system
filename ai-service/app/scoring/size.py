@@ -15,8 +15,9 @@ same way:
 * ``margin_required = lots * contract_size * entry * rate * max(margin_rate, 1 / leverage)``.
 
 Warnings, none of which changes the lots: the margin is above the balance (not feasible), and one
-stop-out would lose more than the daily loss limit. Costs (spread, slippage) are not in the risk,
-as in B4."""
+stop-out would lose more than the daily loss limit (when one is sent: it is optional since
+contract 0.2.0). The instrument's fixed ``cost_per_unit`` (contract 0.2.2) is added to the risk per
+unit when it is sent, as in B4; without it, costs are not in the risk."""
 
 from __future__ import annotations
 
@@ -59,6 +60,7 @@ def size(req: SizeRequest) -> SizeResponse:
         ContractSpec(spec.contract_size, spec.lot_step, quote, spec.min_lot, spec.max_lot),
         account.currency,
         rate,
+        spec.cost_per_unit,
     )
     warnings = list(sized.warnings)
     feasible = sized.feasible
@@ -72,10 +74,11 @@ def size(req: SizeRequest) -> SizeResponse:
                 f"the margin {margin:.2f} {account.currency} is above the balance"
                 f" {account.balance:.2f} {account.currency}"
             )
-    if risk.risk_per_trade_pct > risk.daily_loss_limit_pct:
+    limit = risk.daily_loss_limit_pct
+    if limit is not None and risk.risk_per_trade_pct > limit:
         warnings.append(
             f"one stop-out ({risk.risk_per_trade_pct:g}%) would exceed the daily loss limit"
-            f" ({risk.daily_loss_limit_pct:g}%)"
+            f" ({limit:g}%)"
         )
     return SizeResponse(
         lots=sized.lots if feasible else 0.0,

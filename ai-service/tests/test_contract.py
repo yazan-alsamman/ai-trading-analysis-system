@@ -14,9 +14,12 @@ BACKEND_CONTRACT = REPO / "backend" / "app" / "ai" / "contract.py"
 MODELS = {
     "evaluate-request": c.EvaluateRequest,
     "evaluate-response-ok": c.EvaluateResponse,
+    "evaluate-response-ok-rules-only": c.EvaluateResponse,
     "evaluate-response-model-unavailable": c.EvaluateResponse,
     "size-request": c.SizeRequest,
     "size-response": c.SizeResponse,
+    "size-request-fixed-cost": c.SizeRequest,
+    "size-response-fixed-cost": c.SizeResponse,
     "explain-request": c.ExplainRequest,
     "explain-response": c.ExplainResponse,
 }

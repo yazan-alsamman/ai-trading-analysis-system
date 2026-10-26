@@ -17,9 +17,11 @@ rejected on it (``detail``: the rule), otherwise ``no_pattern``. v1 has no model
 ``status: ok``. Bars that fail the data-quality checks give ``data_quality_failed`` with one
 abstention and nothing else.
 
-Prices in a setup are rounded to the request's ``tick_size``; the exact research values are in
-``evidence.plan`` (the replay of task 5 compares those). The same request always gives the same
-response: nothing here reads a clock, a random source or a file other than the configuration."""
+Prices in a setup are rounded to the request's ``tick_size`` by the contract's rule
+(``round_levels``: the entry to the nearest tick, the stop away from it, the target toward it);
+the exact research values are in ``evidence.plan`` (the replay of task 5 compares those). The
+same request always gives the same response: nothing here reads a clock, a random source or a
+file other than the configuration."""
 
 from __future__ import annotations
 
@@ -44,6 +46,7 @@ from app.contract import (
     Transition,
     Versions,
     iso_z,
+    round_levels,
 )
 from app.live.frames import DataQualityError, build_frames
 from app.live.scanner import LiveSetup, Step, scan
@@ -104,7 +107,7 @@ def config_for(req: EvaluateRequest) -> tuple[Profile, Instrument]:
 
 def to_tick(x: float, tick: float) -> float:
     places = max(0, -Decimal(str(tick)).as_tuple().exponent)
-    return round(round(x / tick) * tick, places)
+    return round(x, places)
 
 
 def _ts(t: pd.Timestamp) -> str:
@@ -120,15 +123,16 @@ def payload(req: EvaluateRequest, ls: LiveSetup, step: Step) -> dict[str, Any]:
     st, pl, pt = ls.setup, ls.setup.plan, ls.setup.pattern
     tick = req.instrument_spec.tick_size
     lv = pt.primary
+    entry, sl, tp = round_levels(pt.direction, pl.entry, pl.sl, pl.tp, tick)
     out: dict[str, Any] = {
         "setup_id": setup_id(req, ls),
         "instrument": req.instrument,
         "profile": req.profile,
         "state": step.state.value,
         "direction": pt.direction,
-        "entry": to_tick(pl.entry, tick),
-        "sl": to_tick(pl.sl, tick),
-        "tp": to_tick(pl.tp, tick),
+        "entry": to_tick(entry, tick),
+        "sl": to_tick(sl, tick),
+        "tp": to_tick(tp, tick),
         "r_multiple": round(pl.r_multiple, 4),
         "probability": None,
         "ev_r": None,

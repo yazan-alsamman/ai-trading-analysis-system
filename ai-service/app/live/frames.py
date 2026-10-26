@@ -36,7 +36,7 @@ FRAMES = ("15m", "1h", "4h", "D1")
 
 
 class DataQualityError(Exception):
-    def __init__(self, reason: str, detail: str | dict):
+    def __init__(self, reason: str, detail: dict):
         super().__init__(reason)
         self.reason = reason
         self.detail = detail
@@ -88,17 +88,19 @@ def build_frames(req: EvaluateRequest, inst: Instrument, p: Strategy, prof: Prof
     tf = p.entry_timeframe
     step = pd.Timedelta(TIMEFRAMES[tf])
     if tf not in req.bars:
-        raise DataQualityError("missing_timeframe", f"bars[{tf!r}] is required")
+        raise DataQualityError("missing_timeframe", {"timeframe": tf})
     bars = bars_frame(req, tf)
     as_of = pd.Timestamp(req.bar_close_ts).tz_convert("UTC").as_unit("ns")
 
     off_grid = bars["ts_utc"] != bars["ts_utc"].dt.floor(step)
     if off_grid.any():
         first = bars["ts_utc"][off_grid].iloc[0]
-        raise DataQualityError("misaligned_bars", f"{tf} bar at {first.isoformat()} is off grid")
+        raise DataQualityError(
+            "misaligned_bars", {"timeframe": tf, "first_off_grid": first.isoformat()}
+        )
     if bars["spread"].isna().any():
         n = int(bars["spread"].isna().sum())
-        raise DataQualityError("missing_spread", f"{n} {tf} bars without a spread")
+        raise DataQualityError("missing_spread", {"timeframe": tf, "bars_without_spread": n})
     # from the last bar before the gap window, so a gap across its start counts
     cutoff = as_of - pd.Timedelta(hours=prof.gap_window_hours)
     i = max(int(np.searchsorted(bars["ts_utc"], cutoff)) - 1, 0)
