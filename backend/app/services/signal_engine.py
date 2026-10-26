@@ -278,10 +278,11 @@ async def _lot_sizing(
     profiles: dict,
     result: EvaluationResult,
 ) -> dict[str, risk_service.LotSizing]:
-    """Account currency -> lot sizing on this instrument (empty without contract specs)."""
+    """Account currency -> lot sizing on this instrument (without contract specs: only a
+    conversion rate other than 1, so the equity is converted; no lots)."""
     try:
         instrument = await session.get(Instrument, job.instrument_id)
-        if instrument is None or not instrument.has_specs:
+        if instrument is None:
             return {}
         entry = float(df["close"].iloc[-1])
         currencies = {

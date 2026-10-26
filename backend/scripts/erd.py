@@ -57,7 +57,14 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
     (
         "market",
         "Market data, signals and price alerts",
-        ["instruments", "candles_1m", "signals", "price_alerts", "economic_events"],
+        [
+            "instruments",
+            "candles_1m",
+            "signals",
+            "price_alerts",
+            "economic_events",
+            "feed_credentials",
+        ],
     ),
     (
         "strategies",
@@ -79,7 +86,11 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "ai_setup_events",
             "ai_model_versions",
             "ai_setup_sizes",
+            "ai_setup_takes",
             "ai_setup_explanations",
+            "ai_setup_outbox",
+            "ai_alert_follows",
+            "ai_evaluation_runs",
         ],
     ),
     ("workspaces", "Workspaces", ["workspaces"]),

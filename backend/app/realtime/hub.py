@@ -10,10 +10,12 @@ Back-pressure: every client has a bounded outgoing queue drained by its own send
 fan-out only does ``put_nowait``; a client whose queue is full is dropped (close 1013) instead
 of slowing everyone else down.
 
-Re-authorisation: the hub also listens on ``AUTH_CHANNEL``. When a key is revoked or a user is
-deactivated or changes role, ``auth_events.publish`` sends ``{"user_id"}`` / ``{"key_id"}``
-there and every API process wakes the matching connections' watchdogs (``Client.recheck``),
-which re-check the identity in the database and close or trim the connection.
+Re-authorisation: the hub also listens on ``AUTH_CHANNEL``. When a key is revoked, a user is
+deactivated, deleted or changes role, a login session ends (logout) or every session of a user
+ends (password change, refresh reuse), ``auth_events.publish`` sends ``{"user_id"}`` /
+``{"key_id"}`` / ``{"session_id"}`` there and every API process wakes the matching connections'
+watchdogs (``Client.recheck``), which re-check the identity in the database and close or trim
+the connection.
 """
 
 import asyncio
@@ -36,7 +38,7 @@ logger = logging.getLogger(__name__)
 CLOSE_NORMAL = 1000
 CLOSE_GOING_AWAY = 1001  # idle timeout / server shutdown
 CLOSE_TRY_AGAIN_LATER = 1013  # client too slow (queue full)
-CLOSE_UNAUTHORIZED = 4401  # invalid/expired token, revoked key, deactivated user
+CLOSE_UNAUTHORIZED = 4401  # invalid/expired token, revoked key/session, deactivated user
 CLOSE_RATE_LIMITED = 4429  # too many connections (per identity) or new connections (per IP)
 
 SUBSCRIBE_CONFIRM_TIMEOUT = 1.0  # seconds to wait for Redis to confirm a SUBSCRIBE
@@ -71,11 +73,15 @@ class Client:
         user_id: uuid.UUID,
         queue_size: int,
         key_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> None:
         self.id = uuid.uuid4()
         self.websocket = websocket
         self.user_id = user_id
         self.key_id = key_id  # the API key it connected with (None: a login)
+        # the login session of its access token (the JWT's sid; None: an API key, or an older
+        # token without one)
+        self.session_id = session_id
         self.is_admin = False  # kept current by the watchdog's re-check
         self.recheck = asyncio.Event()  # set by an auth event: re-check the identity now
         self.queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=queue_size)
@@ -194,24 +200,32 @@ class WebSocketHub:
     # --- clients ---------------------------------------------------------------------------
 
     def new_client(
-        self, websocket: WebSocket, user_id: uuid.UUID, key_id: uuid.UUID | None = None
+        self,
+        websocket: WebSocket,
+        user_id: uuid.UUID,
+        key_id: uuid.UUID | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> Client:
-        return Client(websocket, user_id, self.config.queue_size, key_id)
+        return Client(websocket, user_id, self.config.queue_size, key_id, session_id)
 
     def auth_changed(self, data: str) -> int:
-        """Wake the connections of the user / API key named in an ``AUTH_CHANNEL`` message, so
-        their watchdogs re-check them now. Returns how many were woken."""
+        """Wake the connections of the user / API key / login session named in an
+        ``AUTH_CHANNEL`` message, so their watchdogs re-check them now. Returns how many were
+        woken."""
         try:
             event = json.loads(data)
             user_id = uuid.UUID(event["user_id"]) if event.get("user_id") else None
             key_id = uuid.UUID(event["key_id"]) if event.get("key_id") else None
+            session_id = uuid.UUID(event["session_id"]) if event.get("session_id") else None
         except (ValueError, TypeError, KeyError, AttributeError):
             logger.warning("Ignoring a malformed %s message", AUTH_CHANNEL)
             return 0
         woken = 0
         for client in list(self._clients):
-            if (user_id is not None and client.user_id == user_id) or (
-                key_id is not None and client.key_id == key_id
+            if (
+                (user_id is not None and client.user_id == user_id)
+                or (key_id is not None and client.key_id == key_id)
+                or (session_id is not None and client.session_id == session_id)
             ):
                 client.recheck.set()
                 woken += 1

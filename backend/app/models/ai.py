@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -135,10 +136,14 @@ class AIModelVersion(Base):
 
 
 class AISetupSize(Base):
-    """A setup sized for one user by ai-service ``/v1/size`` (filled by B10). ``inputs`` is the
-    account and risk that were sent."""
+    """A setup sized for one user (B10, ``app/ai/sizing.py``): by ai-service ``/v1/size`` or,
+    when it is unavailable, by the backend's B4 lot sizing (``source``). ``inputs`` is what the
+    size depends on (account, risk, spec and setup hashes, guard): the same inputs reuse it."""
 
     __tablename__ = "ai_setup_sizes"
+    __table_args__ = (
+        CheckConstraint("source IN ('remote', 'local')", name="ck_ai_setup_sizes_source"),
+    )
 
     setup_id: Mapped[str] = mapped_column(
         String(128), ForeignKey("ai_setups.setup_id", ondelete="CASCADE"), primary_key=True
@@ -147,11 +152,108 @@ class AISetupSize(Base):
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     lots: Mapped[float] = mapped_column(Double)
-    risk_usd: Mapped[float] = mapped_column(Double)
+    risk_usd: Mapped[float] = mapped_column(Double)  # in the account currency (contract name)
     margin_required: Mapped[float | None] = mapped_column(Double)
     feasible: Mapped[bool] = mapped_column(Boolean)
     warnings: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     inputs: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    source: Mapped[str] = mapped_column(String(16), server_default="local")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+
+
+class AISetupTake(Base):
+    """A user says they took a setup (B10). ``lots`` / ``risk_amount`` default to their stored
+    size; when the setup ends, ``apply_evaluation`` fills ``closed_at``, ``realized_r``,
+    ``pnl = realized_r * risk_amount`` and ``close_reason`` (EXPIRED / INVALIDATED: 0)."""
+
+    __tablename__ = "ai_setup_takes"
+    __table_args__ = (Index("ix_ai_setup_takes_user", "user_id", text("taken_at DESC")),)
+
+    setup_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("ai_setups.setup_id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    taken_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    lots: Mapped[float | None] = mapped_column(Double)
+    risk_amount: Mapped[float | None] = mapped_column(Double)
+    entry_price: Mapped[float | None] = mapped_column(Double)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    realized_r: Mapped[float | None] = mapped_column(Double)
+    pnl: Mapped[float | None] = mapped_column(Double)
+    close_reason: Mapped[str | None] = mapped_column(String(64))
+
+
+class AISetupOutbox(Base):
+    """A setup state change to notify (B11): written by ``apply_evaluation`` in its own
+    transaction, so no alert is lost on a crash; sent by the ``ai_alerts.dispatch`` task.
+    Unique ``(setup_id, to_state)``: a replayed evaluation never enqueues twice. DEVELOPING is
+    never written."""
+
+    __tablename__ = "ai_setup_outbox"
+    __table_args__ = (
+        UniqueConstraint("setup_id", "to_state", name="uq_ai_setup_outbox_setup_state"),
+        CheckConstraint(
+            "status IN ('pending', 'done', 'skipped', 'failed')", name="ck_ai_setup_outbox_status"
+        ),
+        CheckConstraint(f"to_state IN ({STATES})", name="ck_ai_setup_outbox_to"),
+        Index(
+            "ix_ai_setup_outbox_due",
+            "next_attempt_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    setup_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("ai_setups.setup_id", ondelete="CASCADE")
+    )
+    from_state: Mapped[str | None] = mapped_column(String(16))
+    to_state: Mapped[str] = mapped_column(String(16))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reason: Mapped[str | None] = mapped_column(String(255))
+    realized_r: Mapped[float | None] = mapped_column(Double)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    status: Mapped[str] = mapped_column(String(16), server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    last_error: Mapped[str | None] = mapped_column(String(500))
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AIAlertFollow(Base):
+    """A user wants ARMED alerts of an instrument and profile (B11), optionally only from a
+    grade (``min_grade``: A best; null: any grade). No automatic follow."""
+
+    __tablename__ = "ai_alert_follows"
+    __table_args__ = (
+        CheckConstraint(
+            "min_grade IS NULL OR min_grade IN ('A', 'B', 'C', 'D')",
+            name="ck_ai_alert_follows_grade",
+        ),
+        Index("ix_ai_alert_follows_market", "instrument_id", "profile"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("instruments.id", ondelete="CASCADE"), primary_key=True
+    )
+    profile: Mapped[str] = mapped_column(String(32), primary_key=True)
+    min_grade: Mapped[str | None] = mapped_column(String(1))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp()
     )
@@ -173,5 +275,44 @@ class AISetupExplanation(Base):
     verified: Mapped[bool] = mapped_column(Boolean)
     template_used: Mapped[bool] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+
+
+class AIEvaluationRun(Base):
+    """One ``ai.evaluate`` run (B9, ``app/ai/evaluate.py``) of an instrument, profile and bar:
+    what happened (``status``: ok, abstained, skipped, unavailable, contract_error, error), why
+    (``reason``), the request size and bar coverage, and a summary of the answer (or of the
+    local abstention when ai-service was not called). Read by ``/admin/system/status``."""
+
+    __tablename__ = "ai_evaluation_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "instrument_id", "profile", "bar_close_ts", name="uq_ai_evaluation_runs_key"
+        ),
+        CheckConstraint(
+            "status IN ('ok', 'abstained', 'skipped', 'unavailable', 'contract_error', 'error')",
+            name="ck_ai_evaluation_runs_status",
+        ),
+        Index("ix_ai_evaluation_runs_finished", "finished_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("instruments.id", ondelete="CASCADE")
+    )
+    profile: Mapped[str] = mapped_column(String(32))
+    bar_close_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    request_id: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(24))
+    reason: Mapped[str | None] = mapped_column(String(64))
+    request_bytes: Mapped[int | None] = mapped_column(Integer)
+    coverage: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    finished_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp()
     )

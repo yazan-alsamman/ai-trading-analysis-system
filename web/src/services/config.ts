@@ -6,7 +6,10 @@ import { z } from 'zod';
  */
 const EnvSchema = z.object({
   VITE_DATA_SOURCE: z.enum(['demo', 'api']).default('demo'),
-  VITE_API_BASE_URL: z.url().default('http://localhost:8000/api/v1'),
+  // an absolute URL, or a path on the page's own origin (e.g. /api/v1: https on an https page)
+  VITE_API_BASE_URL: z
+    .union([z.url(), z.string().regex(/^\/[^/]/, 'a path such as /api/v1')])
+    .default('http://localhost:8000/api/v1'),
   VITE_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 });
 

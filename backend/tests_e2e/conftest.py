@@ -94,19 +94,40 @@ def register(http: httpx.Client, role: str) -> str:
     return email
 
 
+def _ready(res: httpx.Response) -> bool:
+    try:
+        body = res.json()
+    except ValueError:  # e.g. Nginx's HTML 502 while the backend is still starting
+        return False
+    return res.status_code == 200 and isinstance(body, dict) and body.get("status") == "ok"
+
+
+def wait_until_ready(http: httpx.Client, timeout: float = 120, every: float = 2) -> None:
+    """Until ``/health/ready`` answers 200 with ``{"status": "ok"}``. Anything else (connection
+    refused, Nginx's 502 HTML, a 503, a ``degraded`` body) means not ready yet. On timeout the
+    error names the last answer."""
+    deadline = time.time() + timeout
+    attempts, last = 0, "no answer"
+    while True:
+        attempts += 1
+        try:
+            res = http.get("/health/ready")
+            if _ready(res):
+                if attempts > 1:
+                    print(f"\nstack ready after {attempts} probes")
+                return
+            last = f"HTTP {res.status_code}: {res.text[:200]!r}"
+        except httpx.HTTPError as exc:
+            last = f"{type(exc).__name__}: {str(exc)[:200]}"
+        if time.time() > deadline:
+            raise RuntimeError(f"stack not ready at {API} after {timeout:g} s; last answer: {last}")
+        time.sleep(every)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def stack(http: httpx.Client, world: World):
     """Wait for the stack, log in the admin, clean up the run's data at the end."""
-    deadline = time.time() + 120
-    while True:
-        try:
-            if http.get("/health/ready").json().get("status") == "ok":
-                break
-        except httpx.HTTPError:
-            pass
-        if time.time() > deadline:
-            raise RuntimeError(f"stack not ready at {API}")
-        time.sleep(2)
+    wait_until_ready(http)
     world.admin = login(http, ADMIN_EMAIL, ADMIN_PASSWORD)
     yield
     purge = os.environ.get(

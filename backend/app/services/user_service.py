@@ -58,6 +58,8 @@ async def change_password(session: AsyncSession, user: User, data: PasswordChang
     user.hashed_password = hash_password(data.new_password)
     await auth_service.revoke_all_refresh_tokens(session, user.id)
     await session.commit()
+    # every login session ended: their WebSockets close (API keys are not revoked: theirs stay)
+    await auth_events.publish(user_id=user.id)
     from app.notifications import security  # noqa: PLC0415
 
     await security.password_changed(session, user.id)

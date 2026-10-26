@@ -83,6 +83,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataHealth'
+  /api/v1/admin/feeds/ctrader/callback:
+    get:
+      tags:
+      - admin
+      summary: Ctrader Callback
+      description: 'Where cTrader sends the admin back with ``?code=``: the state must be one /connect
+        issued
+
+        (see docs/ctrader-feed.md for a callback without state). Exchanges the code, stores the
+
+        tokens encrypted, lists the accounts and chooses one when it can.'
+      operationId: admin_ctrader_callback
+      parameters:
+      - name: code
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 2048
+          default: ''
+          title: Code
+      - name: state
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: State
+      - name: error
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Error
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Ctrader Callback Api V1 Admin Feeds Ctrader Callback Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '400':
+          description: Bad request (a rule of the endpoint, see the message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/pay/demo/{checkout_id}:
     get:
       tags:
@@ -418,6 +480,11 @@ paths:
       tags:
       - auth
       summary: Refresh
+      description: 'Rotate the refresh token: a new pair in the same login session (the access token keeps
+
+        its ``sid``). A refresh token presented again after its rotation is treated as stolen:
+
+        every session of the user ends and their WebSockets close (4401 ``session ended``).'
       operationId: auth_refresh
       requestBody:
         content:
@@ -467,6 +534,11 @@ paths:
       tags:
       - auth
       summary: Logout
+      description: 'End this login session: its whole refresh-token family is revoked and its WebSockets
+
+        close at once (4401 ``session ended``). Sessions on other devices stay. Access tokens are
+
+        stateless: REST calls with one keep working until it expires. Idempotent.'
       operationId: auth_logout
       requestBody:
         content:
@@ -585,6 +657,11 @@ paths:
       tags:
       - users
       summary: Change Password
+      description: 'Change your password. Every login session ends (refresh tokens revoked) and every
+
+        WebSocket opened with a login closes (4401 ``session ended``); API keys and their sockets
+
+        are not affected.'
       operationId: users_change_password
       requestBody:
         content:
@@ -1436,7 +1513,9 @@ paths:
       tags:
       - admin
       summary: Get Setup
-      description: A setup with its last payload and every state event (oldest first).
+      description: 'A setup with its last payload, every state event (oldest first), the stored per-user
+
+        sizes, how many users took it, and its alerts (outbox).'
       operationId: admin_get_setup
       parameters:
       - name: setup_id
@@ -1473,6 +1552,136 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/ai/outbox:
+    get:
+      tags:
+      - admin
+      summary: List Outbox
+      description: The AI setup alerts (B11), newest first, with attempts and errors.
+      operationId: admin_list_outbox
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - pending
+            - done
+            - skipped
+            - failed
+            type: string
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_OutboxRead_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/ai/outbox/{row_id}/retry:
+    post:
+      tags:
+      - admin
+      summary: Retry Outbox
+      description: A ``failed`` alert back to ``pending``, due now (``attempts`` kept). 409 otherwise.
+      operationId: admin_retry_outbox
+      parameters:
+      - name: row_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Row Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with the current state (version, duplicate, already done)
           content:
             application/json:
               schema:
@@ -1609,6 +1818,751 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/feeds/ctrader:
+    get:
+      tags:
+      - admin
+      summary: Ctrader Status
+      description: 'Enabled, linked (account, environment, token expiry), connected, the last tick and
+        bar,
+
+        reconnects in 24 h, the last error and the last manual backfill. Never the tokens.'
+      operationId: admin_ctrader_status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Ctrader Status Api V1 Admin Feeds Ctrader Get
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+    patch:
+      tags:
+      - admin
+      summary: Ctrader Choose Account
+      description: 'Choose the trader account to stream (one of the linked token''s accounts). Restart
+
+        feed-ctrader afterwards. CTRADER_ACCOUNT_ID, when set, wins.'
+      operationId: admin_ctrader_choose_account
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Ctrader Choose Account Api V1 Admin Feeds Ctrader Patch
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/feeds/ctrader/connect:
+    get:
+      tags:
+      - admin
+      summary: Ctrader Connect
+      description: 'The cTrader authorization URL to open (scope ``accounts``: view only) with a one-time
+
+        ``state`` valid 10 minutes, and the redirect URI it returns to (register it in the cTrader
+
+        app first). 409 when the app credentials are not set on the server.'
+      operationId: admin_ctrader_connect
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Ctrader Connect Api V1 Admin Feeds Ctrader Connect Get
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/feeds/ctrader/code:
+    post:
+      tags:
+      - admin
+      summary: Ctrader Code
+      description: 'The same as the callback, for a code pasted by hand (when the redirect cannot reach
+        the
+
+        server, or came back without state). The code lives one minute.'
+      operationId: admin_ctrader_code
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Ctrader Code Api V1 Admin Feeds Ctrader Code Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/feeds/ctrader/backfill:
+    post:
+      tags:
+      - admin
+      summary: Ctrader Backfill
+      description: 'Backfill M1 bars for ``[from, to]`` (at most 400 days) as a background task, a day
+        per
+
+        request; a bar built live (with a spread) is never overwritten. Its progress is in the
+
+        status (``backfill``).'
+      operationId: admin_ctrader_backfill
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackfillIn'
+        required: true
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Ctrader Backfill Api V1 Admin Feeds Ctrader Backfill Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/ai/setups/{setup_id}/size:
+    get:
+      tags:
+      - ai
+      summary: Setup Size
+      description: 'The setup sized for your account: by ai-service ``/v1/size`` or, when it is not
+
+        available, by the backend (``source``). The daily-loss and drawdown guards of your taken
+
+        trades apply first. Stored, and reused while the inputs are the same. 404 unknown setup,
+
+        409 when it has no prices (not ARMED or ACTIVE) or its instrument no specs, 422 when your
+
+        risk profile cannot be used, 502 when ai-service answers outside the contract, 503 when it
+
+        is unavailable and no fallback is allowed (``AI_SIZE_MODE=remote``).'
+      operationId: ai_setup_size
+      parameters:
+      - name: setup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          title: Setup Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISizeRead'
+        '409':
+          description: the setup has no prices (not ARMED or ACTIVE), or no specs
+        '502':
+          description: ai-service answered outside the contract (no fallback)
+        '503':
+          description: ai-service unavailable and AI_SIZE_MODE=remote
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+      - ApiKey: []
+  /api/v1/ai/setups/{setup_id}/explanation:
+    get:
+      tags:
+      - ai
+      summary: Setup Explanation
+      description: 'The setup''s explanation in ``lang``, when it may be shown: verified by ai-service
+
+        against the setup''s numbers, or the fixed template filled with them. Otherwise
+
+        ``explanation`` is null and ``explanation_status`` is ``unavailable`` (show "الشرح غير
+
+        متاح" / "Explanation unavailable"). 404 unknown setup.'
+      operationId: ai_setup_explanation
+      parameters:
+      - name: setup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          title: Setup Id
+      - name: lang
+        in: query
+        required: false
+        schema:
+          enum:
+          - ar
+          - en
+          type: string
+          default: en
+          title: Lang
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIExplanationRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+      - ApiKey: []
+  /api/v1/ai/setups/{setup_id}/take:
+    post:
+      tags:
+      - ai
+      summary: Take Setup
+      description: 'I took this trade: only while the setup is ARMED or ACTIVE (409 otherwise). ``lots``
+
+        defaults to your stored size. 201 the first time, 200 with the same take afterwards. The
+
+        result (``realized_r``, ``pnl``) is filled when the setup ends.'
+      operationId: ai_take_setup
+      parameters:
+      - name: setup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          title: Setup Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/TakeIn'
+              - type: 'null'
+              title: Data
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TakeRead'
+        '200':
+          description: already taken (unchanged)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TakeRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with the current state (version, duplicate, already done)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+    delete:
+      tags:
+      - ai
+      summary: Untake Setup
+      description: Undo it, while the setup has not ended (409 after; 404 when not taken).
+      operationId: ai_untake_setup
+      parameters:
+      - name: setup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          title: Setup Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with the current state (version, duplicate, already done)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/me/ai/follows:
+    get:
+      tags:
+      - ai
+      summary: My Ai Follows
+      description: The instruments and profiles whose ARMED setups you are alerted about.
+      operationId: ai_my_ai_follows
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/app__schemas__ai__FollowRead'
+                type: array
+                title: Response My Ai Follows Api V1 Me Ai Follows Get
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/me/ai/follows/{instrument_id}/{profile}:
+    put:
+      tags:
+      - ai
+      summary: Follow Ai Setups
+      description: 'Alert me when a setup of this instrument and profile becomes ARMED (optionally only
+
+        from ``min_grade``). Idempotent: calling it again only changes ``min_grade``. 404 unknown
+
+        instrument, 422 unknown profile. After ARMED you hear about a setup only if you took it.'
+      operationId: ai_follow_ai_setups
+      parameters:
+      - name: instrument_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Instrument Id
+      - name: profile
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 32
+          title: Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/FollowIn'
+              - type: 'null'
+              title: Data
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/app__schemas__ai__FollowRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+    delete:
+      tags:
+      - ai
+      summary: Unfollow Ai Setups
+      description: Stop the ARMED alerts of this instrument and profile (404 when not followed).
+      operationId: ai_unfollow_ai_setups
+      parameters:
+      - name: instrument_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Instrument Id
+      - name: profile
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 32
+          title: Profile
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/me/ai/trades:
+    get:
+      tags:
+      - ai
+      summary: My Ai Trades
+      description: Your taken AI setups, newest first, with the setup's state and your result.
+      operationId: ai_my_ai_trades
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_AITradeRead_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
           content:
             application/json:
               schema:
@@ -4519,7 +5473,9 @@ paths:
       tags:
       - risk
       summary: Get Risk Profile
-      description: Created with the ``balanced`` template and 10,000 USDT on first read.
+      description: 'Created with the ``balanced`` template, 10,000 USDT and leverage 100 on first read.
+
+        ``ai_risk``: the values AI setups are sized with, and where each one comes from.'
       operationId: risk_get_risk_profile
       responses:
         '200':
@@ -4552,9 +5508,12 @@ paths:
       tags:
       - risk
       summary: Put Risk Profile
-      description: '``{account_size, quote_currency, config}`` or ``{template}``; 422 lists every config
+      description: '``{account_size, quote_currency, leverage, config}`` or ``{template}``; 422 lists
+        every
 
-        error with its path (e.g. ``stop.multiplier``).'
+        config error with its path (e.g. ``stop.multiplier``). A new ``account_size`` restarts the
+
+        drawdown guard of AI setups. ``ai_risk`` (read-only) is what AI setups are sized with.'
       operationId: risk_put_risk_profile
       requestBody:
         content:
@@ -9303,6 +10262,38 @@ paths:
       - BearerJWT: []
 components:
   schemas:
+    AIExplanationRead:
+      properties:
+        setup_id:
+          type: string
+          title: Setup Id
+        lang:
+          type: string
+          enum:
+          - ar
+          - en
+          title: Lang
+        explanation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Explanation
+          description: null unless verified or the fixed template (no unverified number is shown)
+        explanation_status:
+          type: string
+          enum:
+          - verified
+          - template
+          - unavailable
+          title: Explanation Status
+          description: 'unavailable: show ''الشرح غير متاح'' / ''Explanation unavailable'''
+      type: object
+      required:
+      - setup_id
+      - lang
+      - explanation
+      - explanation_status
+      title: AIExplanationRead
     AIModelIn:
       properties:
         model_id:
@@ -9393,6 +10384,59 @@ components:
       - is_active
       - notes
       title: AIModelRead
+    AIRiskRead:
+      properties:
+        balance:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Balance
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+        leverage:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Leverage
+        risk_per_trade_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Risk Per Trade Pct
+        daily_loss_limit_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Daily Loss Limit Pct
+        max_drawdown_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Max Drawdown Pct
+        sources:
+          additionalProperties:
+            type: string
+          type: object
+          title: Sources
+          description: 'per field: profile (a profile column), config (the risk config) or default (a
+            server setting)'
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+          description: why the profile cannot be used
+      type: object
+      title: AIRiskRead
+      description: The risk values AI setups are sized with (read-only; docs/risk-management.md).
     AISetupDetail:
       properties:
         setup_id:
@@ -9515,6 +10559,22 @@ components:
           type: array
           title: Events
           description: oldest first
+        sizes:
+          items:
+            $ref: '#/components/schemas/AISetupSizeBrief'
+          type: array
+          title: Sizes
+          description: the stored per-user sizes (B10)
+        takes_count:
+          type: integer
+          title: Takes Count
+          description: users who said they took it
+        outbox:
+          items:
+            $ref: '#/components/schemas/OutboxRead'
+          type: array
+          title: Outbox
+          description: its alerts (B11), oldest first
       type: object
       required:
       - setup_id
@@ -9544,6 +10604,9 @@ components:
       - features
       - last_payload
       - events
+      - sizes
+      - takes_count
+      - outbox
       title: AISetupDetail
     AISetupEventRead:
       properties:
@@ -9714,6 +10777,227 @@ components:
       - created_at
       - updated_at
       title: AISetupRead
+    AISetupSizeBrief:
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          title: User Id
+        lots:
+          type: number
+          title: Lots
+        feasible:
+          type: boolean
+          title: Feasible
+        source:
+          type: string
+          title: Source
+        computed_at:
+          type: string
+          format: date-time
+          title: Computed At
+      type: object
+      required:
+      - user_id
+      - lots
+      - feasible
+      - source
+      - computed_at
+      title: AISetupSizeBrief
+    AISizeInputs:
+      properties:
+        balance:
+          type: number
+          title: Balance
+        currency:
+          type: string
+          title: Currency
+        leverage:
+          type: number
+          title: Leverage
+        risk_per_trade_pct:
+          type: number
+          title: Risk Per Trade Pct
+        daily_loss_limit_pct:
+          type: number
+          title: Daily Loss Limit Pct
+        max_drawdown_pct:
+          type: number
+          title: Max Drawdown Pct
+        sources:
+          additionalProperties:
+            type: string
+          type: object
+          title: Sources
+          description: 'per field: profile, config or default'
+      type: object
+      required:
+      - balance
+      - currency
+      - leverage
+      - risk_per_trade_pct
+      - daily_loss_limit_pct
+      - max_drawdown_pct
+      - sources
+      title: AISizeInputs
+    AISizeRead:
+      properties:
+        setup_id:
+          type: string
+          title: Setup Id
+        lots:
+          type: number
+          title: Lots
+        risk_amount:
+          type: number
+          title: Risk Amount
+          description: money at risk at the stop, in the account currency
+        margin_required:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Margin Required
+          description: 'account currency; null: no rate'
+        feasible:
+          type: boolean
+          title: Feasible
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+        source:
+          type: string
+          title: Source
+          description: remote (ai-service /v1/size) or local (the backend's B4 lot sizing; a local size
+            always has a warning saying so)
+        computed_at:
+          type: string
+          format: date-time
+          title: Computed At
+        inputs:
+          $ref: '#/components/schemas/AISizeInputs'
+        taken:
+          type: boolean
+          title: Taken
+          description: you said you took this setup
+      type: object
+      required:
+      - setup_id
+      - lots
+      - risk_amount
+      - margin_required
+      - feasible
+      - warnings
+      - source
+      - computed_at
+      - inputs
+      - taken
+      title: AISizeRead
+    AITradeRead:
+      properties:
+        setup_id:
+          type: string
+          title: Setup Id
+        taken_at:
+          type: string
+          format: date-time
+          title: Taken At
+        lots:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lots
+        risk_amount:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Risk Amount
+          description: account currency, at the setup's stop
+        entry_price:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Entry Price
+        closed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Closed At
+        realized_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Realized R
+        pnl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Pnl
+          description: realized_r x risk_amount
+        close_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Close Reason
+        instrument_id:
+          type: string
+          format: uuid
+          title: Instrument Id
+        profile:
+          type: string
+          title: Profile
+        direction:
+          type: string
+          title: Direction
+        state:
+          $ref: '#/components/schemas/SetupState'
+          description: the setup's state now
+        entry:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Entry
+        sl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sl
+        tp:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Tp
+      type: object
+      required:
+      - setup_id
+      - taken_at
+      - lots
+      - risk_amount
+      - entry_price
+      - closed_at
+      - realized_r
+      - pnl
+      - close_reason
+      - instrument_id
+      - profile
+      - direction
+      - state
+      - entry
+      - sl
+      - tp
+      title: AITradeRead
+    AccountIn:
+      properties:
+        account_id:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Account Id
+      type: object
+      required:
+      - account_id
+      title: AccountIn
     AdminApiKeyRead:
       properties:
         id:
@@ -10252,6 +11536,21 @@ components:
       - display_name
       - role
       title: AuthorRead
+    BackfillIn:
+      properties:
+        from:
+          type: string
+          format: date-time
+          title: From
+        to:
+          type: string
+          format: date-time
+          title: To
+      type: object
+      required:
+      - from
+      - to
+      title: BackfillIn
     BacktestAccepted:
       properties:
         id:
@@ -10300,7 +11599,9 @@ components:
           title: Config
           description: 'initial_capital, fee_bps, slippage_bps, direction, sizing, stop, trailing, take_profit,
             guards, check_entry_bar, exits {max_bars_held, exit_on_opposite_signal, stop_loss_pct, take_profit_pct}
-            (docs/risk-management.md); risk_profile: true uses your risk profile'
+            (docs/risk-management.md); risk_profile: true uses your risk profile. An instrument with a
+            fixed cost per unit (XAU/USD: 0.25) gets config.cost_per_unit from the server, and fee_bps
+            / slippage_bps are then ignored'
       additionalProperties: false
       type: object
       required:
@@ -10393,6 +11694,20 @@ components:
           additionalProperties: true
           type: object
           title: Config
+        cost_model:
+          type: string
+          enum:
+          - bps
+          - fixed_per_unit
+          title: Cost Model
+          description: 'bps: fee_bps + slippage_bps of notional; fixed_per_unit: the instrument''s cost_per_unit
+            x quantity per round trip, charged at the entry (fees and slippage ignored)'
+        cost_per_unit:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Cost Per Unit
+          description: price units per unit, round trip (fixed_per_unit only)
         first_bar:
           anyOf:
           - type: string
@@ -10461,6 +11776,8 @@ components:
       - finished_at
       - params_hash
       - config
+      - cost_model
+      - cost_per_unit
       - first_bar
       - last_bar
       - metrics
@@ -10913,6 +12230,23 @@ components:
       examples:
       - plan_id: 9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
         return_url: http://localhost:5173/billing/done
+    CodeIn:
+      properties:
+        code:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Code
+        state:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: State
+      type: object
+      required:
+      - code
+      - state
+      title: CodeIn
     CommentCreate:
       properties:
         body:
@@ -12219,19 +13553,22 @@ components:
       - outcome
       - subscription
       title: FastForwardResult
-    FollowRead:
+    FollowIn:
       properties:
-        user:
-          $ref: '#/components/schemas/AuthorRead'
-        since:
-          type: string
-          format: date-time
-          title: Since
+        min_grade:
+          anyOf:
+          - type: string
+            enum:
+            - A
+            - B
+            - C
+            - D
+          - type: 'null'
+          title: Min Grade
+          description: 'only setups of this grade or better (A best); null: all'
+      additionalProperties: false
       type: object
-      required:
-      - user
-      - since
-      title: FollowRead
+      title: FollowIn
     FollowState:
       properties:
         following:
@@ -12650,6 +13987,16 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SessionCalendar'
           - type: 'null'
+        cost_per_unit:
+          anyOf:
+          - type: number
+            maximum: 1000000000.0
+            minimum: 0.0
+          - type: 'null'
+          title: Cost Per Unit
+          description: 'fixed trading cost per unit of quantity, in price units, per round trip (XAU/USD:
+            0.25 per oz). Backtests and sizing use it instead of fee_bps and slippage_bps; null: the bps
+            fees'
         symbol:
           type: string
           maxLength: 32
@@ -12846,6 +14193,12 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SessionCalendar'
           - type: 'null'
+        cost_per_unit:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Cost Per Unit
+          description: 'fixed round-trip trading cost per unit, price units (null: bps fees)'
         spec_source:
           anyOf:
           - type: string
@@ -13002,6 +14355,16 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SessionCalendar'
           - type: 'null'
+        cost_per_unit:
+          anyOf:
+          - type: number
+            maximum: 1000000000.0
+            minimum: 0.0
+          - type: 'null'
+          title: Cost Per Unit
+          description: 'fixed trading cost per unit of quantity, in price units, per round trip (XAU/USD:
+            0.25 per oz). Backtests and sizing use it instead of fee_bps and slippage_bps; null: the bps
+            fees'
         base_asset:
           anyOf:
           - type: string
@@ -13444,7 +14807,107 @@ components:
       - subscription_payment_failed
       - subscription_canceled
       - new_subscriber
+      - ai_setup
       title: NotificationType
+    OutboxRead:
+      properties:
+        id:
+          type: integer
+          title: Id
+        setup_id:
+          type: string
+          title: Setup Id
+        from_state:
+          anyOf:
+          - $ref: '#/components/schemas/SetupState'
+          - type: 'null'
+        to_state:
+          $ref: '#/components/schemas/SetupState'
+        at:
+          type: string
+          format: date-time
+          title: At
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        realized_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Realized R
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        status:
+          type: string
+          enum:
+          - pending
+          - done
+          - skipped
+          - failed
+          title: Status
+        attempts:
+          type: integer
+          title: Attempts
+        next_attempt_at:
+          type: string
+          format: date-time
+          title: Next Attempt At
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+          description: the last failure, or why it was skipped
+        processed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Processed At
+      type: object
+      required:
+      - id
+      - setup_id
+      - from_state
+      - to_state
+      - at
+      - reason
+      - realized_r
+      - created_at
+      - status
+      - attempts
+      - next_attempt_at
+      - last_error
+      - processed_at
+      title: OutboxRead
+      description: 'An alert to send (B11): one per setup state change, DEVELOPING excepted.'
+    Page_AITradeRead_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AITradeRead'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: Page[AITradeRead]
     Page_AdminApiKeyRead_:
       properties:
         items:
@@ -13633,7 +15096,7 @@ components:
       properties:
         items:
           items:
-            $ref: '#/components/schemas/FollowRead'
+            $ref: '#/components/schemas/app__schemas__posts__FollowRead'
           type: array
           title: Items
         total:
@@ -13698,6 +15161,29 @@ components:
       - limit
       - offset
       title: Page[NotificationRead]
+    Page_OutboxRead_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/OutboxRead'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: Page[OutboxRead]
     Page_PostRead_:
       properties:
         items:
@@ -15331,6 +16817,10 @@ components:
         quote_currency:
           type: string
           title: Quote Currency
+        leverage:
+          type: number
+          title: Leverage
+          description: account leverage, for the margin of AI setups
         config:
           additionalProperties: true
           type: object
@@ -15346,13 +16836,17 @@ components:
           type: string
           format: date-time
           title: Updated At
+        ai_risk:
+          $ref: '#/components/schemas/AIRiskRead'
       type: object
       required:
       - account_size
       - quote_currency
+      - leverage
       - config
       - template
       - updated_at
+      - ai_risk
       title: RiskProfileRead
     RiskProfileUpdate:
       properties:
@@ -15371,6 +16865,13 @@ components:
             pattern: ^[A-Z0-9]+$
           - type: 'null'
           title: Quote Currency
+        leverage:
+          anyOf:
+          - type: number
+            maximum: 10000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Leverage
         config:
           anyOf:
           - additionalProperties: true
@@ -16188,6 +17689,84 @@ components:
       - symbol
       - relevance
       title: TagRead
+    TakeIn:
+      properties:
+        lots:
+          anyOf:
+          - type: number
+            maximum: 1000000.0
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Lots
+          description: 'default: your stored size'
+        entry_price:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Entry Price
+      additionalProperties: false
+      type: object
+      title: TakeIn
+    TakeRead:
+      properties:
+        setup_id:
+          type: string
+          title: Setup Id
+        taken_at:
+          type: string
+          format: date-time
+          title: Taken At
+        lots:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lots
+        risk_amount:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Risk Amount
+          description: account currency, at the setup's stop
+        entry_price:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Entry Price
+        closed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Closed At
+        realized_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Realized R
+        pnl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Pnl
+          description: realized_r x risk_amount
+        close_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Close Reason
+      type: object
+      required:
+      - setup_id
+      - taken_at
+      - lots
+      - risk_amount
+      - entry_price
+      - closed_at
+      - realized_r
+      - pnl
+      - close_reason
+      title: TakeRead
     TelegramLinkRead:
       properties:
         code:
@@ -17006,6 +18585,31 @@ components:
       additionalProperties: false
       type: object
       title: WorkspaceUpdate
+    app__schemas__ai__FollowRead:
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+          title: Instrument Id
+        profile:
+          type: string
+          title: Profile
+        min_grade:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Min Grade
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - instrument_id
+      - profile
+      - min_grade
+      - created_at
+      title: FollowRead
     app__schemas__backtests__InstrumentRef:
       properties:
         id:
@@ -17024,6 +18628,19 @@ components:
       - symbol
       - source
       title: InstrumentRef
+    app__schemas__posts__FollowRead:
+      properties:
+        user:
+          $ref: '#/components/schemas/AuthorRead'
+        since:
+          type: string
+          format: date-time
+          title: Since
+      type: object
+      required:
+      - user
+      - since
+      title: FollowRead
     app__schemas__posts__InstrumentRef:
       properties:
         id:
@@ -17121,6 +18738,8 @@ tags:
   description: Checkout, subscriptions, invoices (demo payments) and admin tools.
 - name: payments-demo
   description: The demo provider's hosted payment pages and the payment webhook (no login; no real money).
+- name: ai
+  description: 'AI setups for users: their size for your account (signals:read), taken trades.'
 - name: calendar
   description: 'Economic calendar: point-in-time events (market:read); history import and live refresh
     (admin).'

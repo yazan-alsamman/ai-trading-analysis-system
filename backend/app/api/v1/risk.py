@@ -43,14 +43,16 @@ async def position_size(
 
 @router.get("/me/risk-profile", response_model=RiskProfileRead)
 async def get_risk_profile(user: CurrentUser, session: SessionDep):
-    """Created with the ``balanced`` template and 10,000 USDT on first read."""
+    """Created with the ``balanced`` template, 10,000 USDT and leverage 100 on first read.
+    ``ai_risk``: the values AI setups are sized with, and where each one comes from."""
     return service.read(await service.get_or_create(session, user))
 
 
 @router.put("/me/risk-profile", response_model=RiskProfileRead)
 async def put_risk_profile(data: RiskProfileUpdate, user: CurrentUser, session: SessionDep):
-    """``{account_size, quote_currency, config}`` or ``{template}``; 422 lists every config
-    error with its path (e.g. ``stop.multiplier``)."""
+    """``{account_size, quote_currency, leverage, config}`` or ``{template}``; 422 lists every
+    config error with its path (e.g. ``stop.multiplier``). A new ``account_size`` restarts the
+    drawdown guard of AI setups. ``ai_risk`` (read-only) is what AI setups are sized with."""
     return service.read(await service.update(session, user, data))
 
 

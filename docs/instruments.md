@@ -19,13 +19,14 @@ All are nullable: `null` means unknown. `GET /api/v1/market/instruments` and
 | `min_lot`, `max_lot` | double > 0, `min_lot <= max_lot` | volume limits, in lots |
 | `quote_currency` | varchar(16) | currency of the P&L per price unit; set to `quote_asset` when an instrument is created, `null` on older rows means `quote_asset` |
 | `margin_rate` | double in (0, 1] | margin as a fraction of the notional at 1:1 (0.01 = 1:100); `null` = the user's leverage (`max_position_pct`). Stored, not used for sizing yet |
+| `cost_per_unit` | double ≥ 0 | fixed trading cost per unit of quantity, price units, per round trip (spread and every cost). Backtests and sizing use it instead of `fee_bps` / `slippage_bps` ([risk-management.md](risk-management.md#fixed-cost-per-unit-per-instrument)). `fxpro:XAU/USD`: 0.25 per oz (Fadi; migration 0021 and `seed-instruments`, only while null); others `null` |
 | `price_basis` | `bid` \| `mid` \| `last` | the price the candles are built from (FxPro bars are bid; Binance trades are last) |
 | `session_calendar` | jsonb | when the market trades (below) |
 | `spec_source` | varchar(32) | where the values came from: `typical`, `fxpro_ctrader`, `manual` |
 | `spec_updated_at` | timestamptz | when they were last set |
 
 The database enforces the checks (`ck_instruments_*`): positive values, `min_lot <= max_lot`,
-`margin_rate` in (0, 1], `price_basis` in the list. The API validates the same rules and answers
+`margin_rate` in (0, 1], `cost_per_unit` ≥ 0, `price_basis` in the list. The API validates the same rules and answers
 422 first. On a PATCH, `min_lot`/`max_lot` are checked against the stored values too.
 
 ### Where the values come from (`spec_source`)

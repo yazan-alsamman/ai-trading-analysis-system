@@ -62,6 +62,15 @@ class InstrumentSpecs(BaseModel):
     )
     price_basis: PriceBasis | None = Field(default=None, description="price the candles use")
     session_calendar: SessionCalendar | None = None
+    cost_per_unit: float | None = Field(
+        default=None,
+        ge=0,
+        le=1e9,
+        allow_inf_nan=False,
+        description="fixed trading cost per unit of quantity, in price units, per round trip "
+        "(XAU/USD: 0.25 per oz). Backtests and sizing use it instead of fee_bps and "
+        "slippage_bps; null: the bps fees",
+    )
 
     @model_validator(mode="after")
     def _lot_range(self) -> Self:
@@ -133,6 +142,10 @@ class InstrumentRead(BaseModel):
     margin_rate: float | None
     price_basis: PriceBasis | None
     session_calendar: SessionCalendar | None
+    cost_per_unit: float | None = Field(
+        default=None,
+        description="fixed round-trip trading cost per unit, price units (null: bps fees)",
+    )
     spec_source: str | None = Field(description="typical, fxpro_ctrader or manual")
     spec_updated_at: datetime | None
     created_at: datetime

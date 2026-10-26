@@ -49,7 +49,7 @@ PRE_REQUEST = r"""/**
  * Skipped for /health, the public /auth/* endpoints and requests sent with an X-API-Key.
  */
 const path = pm.request.url.getPath();
-const publicPath = /\/health(\/(ready|live|data))?$|\/auth\/(register|login|token|refresh)$/.test(path);
+const publicPath = /\/health(\/(ready|live|data))?$|\/auth\/(register|login|token|refresh)$|\/admin\/feeds\/ctrader\/callback$/.test(path);
 const withApiKey = pm.request.headers.has("X-API-Key");
 const store = pm.environment.name ? pm.environment : pm.collectionVariables;
 

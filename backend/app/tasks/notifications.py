@@ -4,6 +4,8 @@
 - ``notifications.fanout``: splits a big batch (one signal, many users) into send chunks.
 - ``notifications.digests`` (beat, every minute): digests of held deliveries whose quiet hours
   or hourly cap ended, and deliveries held by an open circuit going back to the queue.
+- ``notifications.sweep`` (beat, every minute): deliveries whose send task was lost go back to
+  the queue (``service.sweep_stuck``).
 - ``notifications.cleanup`` (beat, daily): inbox retention.
 - ``notifications.broadcast``: an admin broadcast, in batches.
 """
@@ -46,6 +48,16 @@ def digests() -> dict:
     if any(result.values()):
         logger.info("notifications.digests %s", result)
     return result
+
+
+@celery_app.task(name="notifications.sweep", ignore_result=True)
+def sweep() -> dict:
+    """Pending deliveries no task will send (a crash after the producer's commit, a lost retry):
+    enqueued again (the send claim makes a duplicate a no-op), or skipped when older than
+    ``NOTIFICATION_SWEEP_MAX_AGE_SECONDS``."""
+    swept = run_async(lambda factory, _redis: service.sweep_stuck(factory))
+    logger.info("notifications.sweep requeued=%d expired=%d", len(swept.requeued), swept.expired)
+    return {"requeued": len(swept.requeued), "expired": swept.expired}
 
 
 @celery_app.task(name="notifications.cleanup")

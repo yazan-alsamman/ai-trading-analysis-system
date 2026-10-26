@@ -1,5 +1,7 @@
 """Identity changes that open WebSocket connections must react to at once: an API key revoked
-or its scopes changed, a user deactivated or given another role.
+or its scopes changed, a user deactivated, deleted or given another role, a login session
+ended (logout: ``session_id``), or every session of a user ended (password change, refresh
+reuse: ``user_id``).
 
 The event only says *whose* connections to re-check; every API process's hub wakes the
 matching connections and their watchdogs re-read the user and key from the database, which
@@ -24,10 +26,15 @@ async def publish(
     *,
     user_id: uuid.UUID | None = None,
     key_id: uuid.UUID | None = None,
+    session_id: uuid.UUID | None = None,
     redis: Redis | None = None,
 ) -> None:
     """Never raises: the heartbeat re-check is the safety net."""
-    event = {"user_id": user_id and str(user_id), "key_id": key_id and str(key_id)}
+    event = {
+        "user_id": user_id and str(user_id),
+        "key_id": key_id and str(key_id),
+        "session_id": session_id and str(session_id),
+    }
     try:
         await (redis or get_redis()).publish(AUTH_CHANNEL, json.dumps(event))
     except Exception:  # noqa: BLE001

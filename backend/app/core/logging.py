@@ -7,7 +7,8 @@ import re
 from contextvars import ContextVar
 from datetime import UTC, datetime
 
-_TOKEN_IN_URL = re.compile(r"((?:token|api_key)=)[^&\s\"']+")
+# token / api_key (WebSocket credentials), and the cTrader OAuth callback's code and state
+_TOKEN_IN_URL = re.compile(r"((?:token|api_key|code|state|client_secret)=)[^&\s\"']+")
 _TELEGRAM_TOKEN = re.compile(r"bot\d+:[A-Za-z0-9_-]+")  # in Telegram API URLs
 _WEBHOOK_SECRET = re.compile(r"(/telegram/webhook/)[^/\s?\"']+")
 

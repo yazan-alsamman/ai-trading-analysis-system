@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import (
@@ -29,6 +31,9 @@ celery_app = Celery(
         "app.tasks.ops",
         "app.tasks.data_quality",
         "app.tasks.calendar",
+        "app.tasks.ai_alerts",
+        "app.tasks.ai",
+        "app.tasks.feeds",
     ],
 )
 celery_app.conf.update(
@@ -50,10 +55,13 @@ celery_app.conf.update(
         "notifications.cleanup": {"queue": "maintenance"},
         "backtests.*": {"queue": "backtests"},
         "notifications.*": {"queue": "notifications"},
+        "ai_alerts.*": {"queue": "notifications"},
+        "ai.explain": {"queue": "notifications"},  # up to 30 s per call: off the live queue
         "news.*": {"queue": "maintenance"},
         "housekeeping.*": {"queue": "maintenance"},
         "subscriptions.*": {"queue": "maintenance"},
         "ops.*": {"queue": "maintenance"},
+        "feeds.*": {"queue": "maintenance"},  # long backfills (worker-backtest)
     },
     task_ignore_result=True,
     beat_schedule={
@@ -68,6 +76,21 @@ celery_app.conf.update(
         },
         # digests of held notifications (quiet hours, hourly cap) and circuit-held retries
         "notifications-digests": {"task": "notifications.digests", "schedule": crontab(minute="*")},
+        # pending deliveries whose send task was lost (B11)
+        "notifications-sweep": {"task": "notifications.sweep", "schedule": crontab(minute="*")},
+        # AI evaluations (B9): at each 15m boundary, one ai.evaluate per instrument and profile
+        # AI_EVALUATE_DELAY_SECONDS later; nothing while AI_EVALUATE_ENABLED is false
+        "ai-evaluate-tick": {
+            "task": "ai.evaluate_tick",
+            "schedule": crontab(minute="0,15,30,45"),
+            "options": {"expires": 300},
+        },
+        # AI setup alerts from the outbox (B11), every 30 s
+        "ai-alerts-dispatch": {
+            "task": "ai_alerts.dispatch",
+            "schedule": timedelta(seconds=30),
+            "options": {"expires": 25},
+        },
         # inbox retention: read > 90 days, unread > 180 days
         "notifications-cleanup": {
             "task": "notifications.cleanup",

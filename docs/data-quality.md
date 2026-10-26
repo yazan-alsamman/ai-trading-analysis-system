@@ -115,6 +115,14 @@ assessed as `closed` and skipped: nobody could trade on it before the next open 
   Telegram/push by their preferences). Changes between `ok` and `closed` (the daily break,
   the weekend) and the first check after a fresh start are only logged. A status that does
   not change logs nothing, so a missing instrument does not spam the logs.
+- **Flapping cooldown (B9)**: after an alert, no other alert about the same instrument is sent
+  for `DATA_QUALITY_ALERT_COOLDOWN_SECONDS` (default 1800). The state itself
+  (`dq:status:…`, `/health/data`, the AI evaluation's gate) still changes at once. What the
+  admins were last told is kept at `dq:alerted:<source>:<symbol>` (`bad`/`good`) and the
+  cooldown at `dq:alert-cooldown:<source>:<symbol>`; the check runs every minute, so a change
+  held back by the cooldown is sent once when it ends if the instrument is still in that
+  state (ok → degraded → ok within 30 minutes sends one alert; staying ok sends the recovery
+  after the cooldown). `0` turns the cooldown off.
 - **`GET /api/v1/health/data`**: public and read-only, like `/health/ready`, with no rate limit.
   It reads the stored reports and computes a missing one on the spot (cached for 60 s).
 

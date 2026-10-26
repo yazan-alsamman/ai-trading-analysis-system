@@ -18,6 +18,7 @@ erDiagram
         double margin_rate
         varchar price_basis
         jsonb session_calendar
+        double cost_per_unit
         varchar spec_source
         timestamptz spec_updated_at
         timestamptz created_at
@@ -86,6 +87,19 @@ erDiagram
         double previous_value
         timestamptz fetched_at
         varchar content_hash
+    }
+    feed_credentials {
+        varchar provider PK
+        varchar env
+        text access_token_enc
+        text refresh_token_enc
+        timestamptz expires_at
+        varchar scope
+        bigint account_id
+        jsonb accounts
+        timestamptz linked_at
+        timestamptz refreshed_at
+        timestamptz updated_at
     }
     users
     candles_1m }o--|| instruments : "instrument_id"

@@ -19,8 +19,11 @@ docker compose ls 2>&1
 
 section "Docker networks + subnets"
 for n in $(docker network ls -q); do
-  docker network inspect "$n" --format '{{.Name}} {{range .IPAM.Config}}{{.Subnet}} {{end}}'
+  docker network inspect "$n" \
+    --format '{{.Name}} {{range .IPAM.Config}}{{.Subnet}} gw={{.Gateway}} {{end}}'
 done
+# published ports go through docker-proxy (the HTTPS entry trusts the network gateway, docs/https.md)
+pgrep -a docker-proxy 2>/dev/null | grep -E -- '-host-port (8080|8090)' || echo "no docker-proxy for 8080/8090"
 
 section "Container resource usage"
 docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}'

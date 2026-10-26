@@ -12,6 +12,7 @@
 | جودة البيانات | http://187.127.76.76:8080/api/v1/health/data (503 إذا كانت أداة `degraded` أو `no_data`؛ لا يؤثر على النشر، انظر [data-quality.md](data-quality.md)) |
 | التقويم الاقتصادي | `GET /api/v1/calendar/events` (بتسجيل دخول)، والاستيراد التاريخي `POST /api/v1/admin/calendar/import`، انظر [economic-calendar.md](economic-calendar.md) |
 | WebSocket | `ws://187.127.76.76:8080/ws/market` |
+| HTTPS (بعد خطوات [https.md](https.md)) | `https://trading.yazanalsamman.com` و `wss://trading.yazanalsamman.com/ws/market` عبر nginx السيرفر إلى `127.0.0.1:8090` |
 
 لا يوجد دومين حالياً، ولذلك لا يوجد HTTPS. عند إضافة دومين نضع أمامه موقع nginx للسيرفر مع certbot.
 
@@ -32,7 +33,7 @@
 - المنفذ العام الوحيد لمشروعنا هو `8080` (حاوية nginx). قاعدة البيانات مربوطة على `127.0.0.1:5435` فقط، وRedis والـ backend بلا منافذ على المضيف.
 - الشبكة المستخدمة `172.30.57.0/24`: العناوين الديناميكية من `172.30.57.128/25` فقط (`DOCKER_IP_RANGE`)، وعنوان Nginx
   الثابت `172.30.57.10` خارجها. منافذ المشاريع الأخرى المحجوزة هي 80، 443، 3000-3005، 5000، 5432-5434، 6380، 9000، 9001، 27017.
-- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3296MiB (≈3.22GiB من 7.8GB على السيرفر المشترك بلا swap)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
+- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3424MiB (≈3.34GiB، نحو 43% من 7.8GB على السيرفر المشترك بلا swap) بعد إضافة `feed-ctrader` (128m، 0.25 CPU، B1)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
 - `cpus:` سقف وليس حجزاً (مجموع سقوفنا 6.5 على سيرفر بـ 2 vCPU)، لذلك لكل خدماتنا `cpu_shares: 512` (الافتراضي 1024):
   عند انشغال السيرفر تأخذ المشاريع الأخرى ضعف وزننا من المعالج، وعندما يكون هادئاً نستطيع استخدام سقوفنا.
 
@@ -161,6 +162,44 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/ai/models
   curl -s -H "Authorization: Bearer $ADMIN_TOKEN" "http://187.127.76.76:8080/api/v1/admin/ai/setups?limit=5"
   ```
+
+## إعدادات مخاطرة AI والصفقات المأخوذة (B10)
+- لا خدمات جديدة ولا أسرار. Migration `0016` إضافية: `risk_profiles.leverage` (افتراضي 100 لكل الملفات الموجودة)
+  و`risk_profiles.balance_set_at` (فارغ)، و`source` و`computed_at` في `ai_setup_sizes`، وجدول جديد `ai_setup_takes`.
+- متغيرات جديدة بقيم افتراضية آمنة: `AI_SIZE_MODE=auto`، `AI_SIZE_CONCURRENCY=4`، `AI_DEFAULT_RISK_PCT=1.0`،
+  `AI_DEFAULT_DAILY_LOSS_PCT=3.0`، `AI_DEFAULT_MAX_DRAWDOWN_PCT=10.0`. التفاصيل في
+  [risk-management.md](risk-management.md#ai-setups-b10).
+- لا توجد إعدادات AI في الإنتاج بعد، لذلك `/ai/setups/{id}/size` و`/take` تعيد 404 وهذا متوقع.
+- فحص بعد النشر:
+  ```bash
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/risk-profile   # leverage 100 و ai_risk
+  curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/ai/setups/x/size  # 404
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/ai/trades   # {"items":[],"total":0,...}
+  ```
+
+## تنبيهات إعدادات AI والإشعارات العالقة (B11)
+- لا خدمات جديدة ولا أسرار. Migration `0017` إضافية: قيمة `ai_setup` لنوع الإشعار، وجدولا `ai_setup_outbox` و`ai_alert_follows`،
+  وعمود `next_attempt_at` (فارغ للصفوف الموجودة) وفهرس جزئي على `notification_deliveries`.
+- مهمتان جديدتان على طابور `notifications` (خدمة `worker`): `ai_alerts.dispatch` كل 30 ثانية (استعلام مفهرس واحد حين لا يوجد شيء)،
+  و`notifications.sweep` كل دقيقة (يعيد إرسال الإشعارات التي ضاعت مهمة إرسالها، ويعلّم ما هو أقدم من يوم `skipped` بدل
+  إرساله، ويكتب سطراً واحداً `requeued=N expired=M`).
+- متغيرات جديدة بقيم افتراضية آمنة: `AI_ALERTS_ENABLED=true`، `AI_ALERTS_BATCH=50`، `AI_ALERTS_MAX_ATTEMPTS=8`،
+  `AI_ALERTS_MAX_AGE_SECONDS=900`، `AI_EXPLAIN_LANGS=ar,en`، `NOTIFICATION_SWEEP_AFTER_SECONDS=120`، `NOTIFICATION_SWEEP_BATCH=500`، `NOTIFICATION_SWEEP_MAX_AGE_SECONDS=86400`.
+  التفاصيل في [notifications.md](notifications.md#ai-setup-alerts-b11).
+- فحص بعد النشر (حساب مدير):
+  ```bash
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" "http://187.127.76.76:8080/api/v1/admin/ai/outbox"   # total 0
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/system/status | python3 -c 'import sys,json;print(json.load(sys.stdin)["ai_alerts"])'
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/ai/follows   # []
+  ```
+
+## HTTPS على trading.yazanalsamman.com
+- حاوية nginx الخاصة بنا تستمع أيضاً على المنفذ 8090، منشوراً على `127.0.0.1:8090` فقط، و8080 لم يتغير. موقع واحد
+  جديد في nginx السيرفر يمرّر `https://trading.yazanalsamman.com` إليه.
+- القالب في `infra/host-nginx/`. النشر ينسخه إلى `/opt/trading/host-nginx/` ولا يطبّقه: الخطوات يدوية (root) في
+  [https.md](https.md).
+- النشر يفحص 8090 فحصاً إضافياً لا يُفشل النشر، فيكتب `Port 8090 (HTTPS proxy entry): ok` أو تحذيراً.
+- `CORS_ORIGINS` و`PUBLIC_BASE_URL` تُضبط يدوياً بعد نجاح HTTPS (https.md، الخطوة 8)، ولا يغيّرها النشر.
 
 ## توزيع المهام على الـ workers (T05/T07 + hardening)
 - `worker` (`-Q celery,notifications`): المسار الحي فقط: محرك الإشارات (`signals.*`)، تنبيهات الأسعار
@@ -301,3 +340,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.
 - أي خدمة جديدة تُضاف إلى `docker-compose.yml` (للتطوير) **وإلى** `infra/deploy/docker-compose.prod.yml` (للإنتاج) مع `mem_limit` و`cpus` و`cpu_shares: 512` و`restart: unless-stopped`، ومن دون أي منفذ عام.
 - الـ migrations تُطبَّق تلقائياً عند النشر، لذلك يجب أن تكون آمنة على بيانات موجودة.
+
+## بث cTrader الحي (B1)
+- خدمة جديدة **`feed-ctrader`** (نفس صورة الـ backend، `python -m app.feeds.ctrader`، 128m و0.25 CPU و`restart: unless-stopped`، بلا منفذ: اتصال WebSocket صادر فقط). مجموع حدود الذاكرة من 3296MiB إلى **3424MiB**، ومجموع سقوف المعالج من 6.5 إلى 6.75.
+- خاملة افتراضياً (`CTRADER_ENABLED=false`): تفحص كل دقيقة وتكتب سطراً واحداً في الساعة، ولا تتصل بـ cTrader حتى يُربط الحساب ويُفعَّل الإعداد.
+- النشر يكتب `CTRADER_CLIENT_ID` و`CTRADER_CLIENT_SECRET` من أسرار GitHub في `/opt/trading/.env` **فقط إذا كان المفتاح غير موجود أو فارغاً**، عبر `set-env-secrets.sh` على stdin ودون طباعة القيم. خطوات التفعيل في docs/ctrader-feed.md.

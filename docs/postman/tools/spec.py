@@ -354,8 +354,11 @@ if (!pm.variables.get("plan_id")) pm.execution.skipRequest();"""
 SKIP_NO_CALENDAR_EVENT = """// No calendar event in the listed range yet (import the sample CSV in Admin): nothing to show.
 if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
 
-SKIP_NO_AI_SETUP = """// The AI engine has stored no setup yet (ai-service not connected): nothing to show.
+SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
 if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
+
+SKIP_NO_OUTBOX_ROW = """// No AI alert in the outbox yet (send Admin → AI Engine → List AI alert outbox first): skip.
+if (!pm.variables.get("ai_outbox_id")) pm.execution.skipRequest();"""
 
 SKIP_NO_CHECKOUT = """// No checkout was opened (no expert with an active plan yet): nothing to pay.
 if (!pm.variables.get("checkout_id")) pm.execution.skipRequest();"""
@@ -537,8 +540,11 @@ FOLDERS: list[Folder] = [
                 "Refresh tokens",
                 "POST",
                 "/auth/refresh",
-                "Rotates the refresh token: the response holds a **new** pair and the old "
-                "refresh token is revoked. Reusing a revoked refresh token answers 401.",
+                "Rotates the refresh token: the response holds a **new** pair in the same login "
+                "session (the access token keeps its `sid` claim) and the old refresh token is "
+                "revoked. A refresh token presented again after its rotation is treated as "
+                "stolen: it answers 401, **every** session of the user ends and their WebSockets "
+                "close (4401 `session ended`).",
                 auth="none",
                 body={"refresh_token": "{{refresh_token}}"},
                 tests=LOGIN_TESTS,
@@ -555,8 +561,10 @@ FOLDERS: list[Folder] = [
                 "Logout",
                 "POST",
                 "/auth/logout",
-                "Revokes the given refresh token of the current user. The access token keeps "
-                "working until it expires, so clients should simply drop it.",
+                "Ends this login session: its whole refresh-token family is revoked and its "
+                "WebSockets close at once (4401 `session ended`). Sessions on other devices "
+                "stay. Access tokens are stateless: REST calls with one keep working until it "
+                "expires, so clients should simply drop it. Idempotent.",
                 body={"refresh_token": "{{refresh_token}}"},
                 expect=[204],
                 tests=LOGOUT_TESTS,
@@ -590,7 +598,9 @@ FOLDERS: list[Folder] = [
                 "Change my password",
                 "POST",
                 "/users/me/password",
-                "Needs the current password. The test script swaps `user_password` and "
+                "Needs the current password. Every login session ends (refresh tokens revoked) "
+                "and every WebSocket opened with a login closes (4401 `session ended`); API keys "
+                "and their sockets are not affected. The test script swaps `user_password` and "
                 "`user_new_password`, so running it twice restores the original password.",
                 body={
                     "current_password": "{{user_password}}",
@@ -928,7 +938,12 @@ FOLDERS: list[Folder] = [
         "attached to every live signal (entry, stop, targets, quantity, money at risk, R:R).\n\n"
         "* Risk profile and signal plans: JWT only.\n"
         "* Schema and position-size calculator: JWT or API key `strategies:read`.\n"
-        "* Templates: `conservative`, `balanced` (default), `aggressive`.",
+        "* Templates: `conservative`, `balanced` (default), `aggressive`.\n"
+        "* **AI setups** (`docs/risk-management.md#ai-setups`): the size of an AI setup for your "
+        'account, "I took this trade", your taken trades and the instruments whose ARMED '
+        "setups you are alerted about (follows). The setup id comes from "
+        "**Admin → AI Engine → List AI setups** (`ai_setup_id`); the size also accepts an API "
+        "key with `signals:read`.",
         [
             Req(
                 "risk_schema",
@@ -944,21 +959,27 @@ FOLDERS: list[Folder] = [
                 "Get my risk profile",
                 "GET",
                 "/me/risk-profile",
-                "Created on first read with the `balanced` template and 10,000 USDT. "
-                "`account_size` is what the user declares; the platform never connects to an "
-                "exchange. `template` is set while the config is unchanged from a template.",
+                "Created on first read with the `balanced` template, 10,000 USDT and leverage "
+                "100. `account_size` is what the user declares; the platform never connects to an "
+                "exchange. `template` is set while the config is unchanged from a template. "
+                "`ai_risk` (read-only) holds the values AI setups are sized with (balance, "
+                "currency, leverage, risk per trade, daily-loss limit, max drawdown) and where "
+                "each comes from (`sources`: `profile`, `config` or `default`), with `error` "
+                "set when the profile cannot be used.",
             ),
             Req(
                 "risk_profile_put",
                 "Update my risk profile",
                 "PUT",
                 "/me/risk-profile",
-                "`{account_size, quote_currency, config}` or `{template}` (not both; neither "
-                "changes only the account). The config is stored normalised. 422 lists every "
-                "config error with its `path` (e.g. `stop.multiplier`).",
+                "`{account_size, quote_currency, leverage, config}` or `{template}` (not both; "
+                "neither changes only the account). The config is stored normalised. 422 lists "
+                "every config error with its `path` (e.g. `stop.multiplier`). `leverage` (0–10,000) "
+                "sets the margin of AI setups; a new `account_size` restarts their drawdown guard.",
                 body={
                     "account_size": 25000,
                     "quote_currency": "USDT",
+                    "leverage": 100,
                     "config": RISK_CONFIG,
                 },
                 variants=[
@@ -989,7 +1010,9 @@ FOLDERS: list[Folder] = [
                 "the stop rule); omitted `config` / `account_size` from your risk profile. A "
                 "`stop` price replaces the stop rule. On an instrument with contract specs the "
                 "plan is sized in the account currency and adds `lots`, `lots_feasible`, "
-                "`lots_risk_amount`, `conversion_rate` and `sizing_warnings`.",
+                "`lots_risk_amount`, `conversion_rate` and `sizing_warnings`. An instrument with a "
+                "fixed cost per unit (XAU/USD: 0.25) counts it in the risk per unit instead of "
+                "`fee_bps` (the plan carries `cost_per_unit` and a warning).",
                 body={
                     "instrument_id": "{{instrument_id}}",
                     "timeframe": "{{timeframe}}",
@@ -1037,6 +1060,149 @@ FOLDERS: list[Folder] = [
                     ("strategy_key", "{{strategy_key}}", ""),
                     ("since", "2026-10-01T00:00:00Z", "bar_time >= since"),
                 ],
+            ),
+            Req(
+                "ai_setup_size",
+                "AI setup size for my account",
+                "GET",
+                "/ai/setups/:setup_id/size",
+                "The setup sized for your account: by ai-service `/v1/size` or, when it is not "
+                "available, by the backend (`source`: `remote` or `local`; a local size always has a "
+                "warning saying so). The daily-loss "
+                "and drawdown guards of your taken trades apply first. Returns `lots`, "
+                "`risk_amount`, `margin_required`, `feasible`, `warnings`, the `inputs` used "
+                "(with their `sources`) and whether you `taken` it. Stored and reused while the "
+                "inputs are the same.\n\n"
+                "409: the setup has no prices (not ARMED or ACTIVE) or its instrument no specs. "
+                "422: your risk profile cannot be used. 502: ai-service answered outside the "
+                "contract. 503: ai-service unavailable and `AI_SIZE_MODE=remote`.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                pre=SKIP_NO_AI_SETUP,
+                variants=[
+                    Variant(
+                        "404 Setup not found",
+                        404,
+                        path_vars={"setup_id": "unknown-setup"},
+                    )
+                ],
+            ),
+            Req(
+                "ai_setup_explanation",
+                "AI setup explanation",
+                "GET",
+                "/ai/setups/:setup_id/explanation",
+                "The setup explained in `lang` (`ar` or `en`, default `en`), only when it may be "
+                "shown: verified by ai-service against the setup's numbers "
+                "(`explanation_status`: `verified`) or the fixed template filled with them "
+                "(`template`). Otherwise `explanation` is null and `explanation_status` is "
+                '`unavailable`: show "الشرح غير متاح" / "Explanation unavailable". No '
+                "unverified number ever reaches a user. 404 unknown setup.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                query=[("lang", "ar", "ar or en (default en)")],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[
+                    Variant(
+                        "200 Unavailable (no shown explanation in English)",
+                        200,
+                        query={"lang": "en"},
+                    ),
+                    Variant(
+                        "422 Unknown language",
+                        422,
+                        query={"lang": "fr"},
+                    ),
+                    Variant(
+                        "404 Setup not found",
+                        404,
+                        path_vars={"setup_id": "unknown-setup"},
+                    ),
+                ],
+            ),
+            Req(
+                "ai_setup_take",
+                "I took this AI setup",
+                "POST",
+                "/ai/setups/:setup_id/take",
+                "Only while the setup is ARMED or ACTIVE (409 otherwise). The body is optional: "
+                "`lots` defaults to your stored size, `entry_price` to none. 201 the first time, "
+                "200 with the same take afterwards. `realized_r` and `pnl` (realized R × "
+                "`risk_amount`) are filled when the setup ends.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                body={"lots": 0.2, "entry_price": 2400.5},
+                expect=[201, 200],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[Variant("200 Already taken (unchanged)", 200)],
+            ),
+            Req(
+                "ai_follow",
+                "Follow AI setups",
+                "PUT",
+                "/me/ai/follows/:instrument_id/:profile",
+                "Alert me when a setup of this instrument and profile becomes **ARMED** (an "
+                "`ai_setup` notification and, live, the `ai_setups` WebSocket topic), optionally "
+                "only from `min_grade` (`A` best … `D`; null: all). Nobody follows anything until "
+                "they ask. Idempotent: calling it again only changes `min_grade`. After ARMED "
+                "you hear about a setup (ACTIVE, CLOSED, EXPIRED, INVALIDATED) only if you took "
+                "it. 404 unknown instrument, 422 unknown profile (today: `intraday`).",
+                path_vars={
+                    "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
+                    "profile": ("intraday", "The ai-service profile"),
+                },
+                body={"min_grade": "B"},
+                variants=[
+                    Variant(
+                        "422 Unknown profile",
+                        422,
+                        path_vars={"profile": "scalping"},
+                    ),
+                    Variant(
+                        "404 Instrument not found",
+                        404,
+                        path_vars={"instrument_id": "00000000-0000-0000-0000-000000000000"},
+                    ),
+                ],
+            ),
+            Req(
+                "ai_follows",
+                "My AI setup follows",
+                "GET",
+                "/me/ai/follows",
+                "The instruments and profiles whose ARMED setups you are alerted about, with "
+                "their `min_grade`.",
+            ),
+            Req(
+                "ai_unfollow",
+                "Unfollow AI setups",
+                "DELETE",
+                "/me/ai/follows/:instrument_id/:profile",
+                "Stop the ARMED alerts of this instrument and profile (404 when not followed). "
+                "Alerts of setups you took keep coming.",
+                path_vars={
+                    "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
+                    "profile": ("intraday", "The ai-service profile"),
+                },
+                expect=[204],
+                variants=[Variant("404 Not followed", 404)],
+            ),
+            Req(
+                "ai_trades",
+                "My AI trades",
+                "GET",
+                "/me/ai/trades",
+                "Your taken AI setups, newest first: the take (lots, risk, entry, result) with "
+                "the setup's current `state`, direction and prices.",
+                query=[("limit", "50", "1–100"), ("offset", "0", "")],
+            ),
+            Req(
+                "ai_setup_untake",
+                "Undo AI setup take",
+                "DELETE",
+                "/ai/setups/:setup_id/take",
+                "Undo it while the setup has not ended (409 after it ended; 404 when not taken).",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                expect=[204],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[Variant("404 Not taken", 404)],
             ),
         ],
     ),
@@ -1259,7 +1425,10 @@ FOLDERS: list[Folder] = [
                 "optional (defaults are stored resolved). `config` takes the risk rules of "
                 "`docs/risk-management.md` (`stop`, `trailing`, `take_profit` with partial "
                 '`levels`, `sizing`, `guards`, `check_entry_bar`); `"risk_profile": true` uses '
-                "your risk profile instead. 422: unknown strategy, bad params or config (with "
+                "your risk profile instead. An instrument with a fixed cost per unit (XAU/USD: "
+                "0.25) gets `config.cost_per_unit` from the server and `fee_bps` / "
+                "`slippage_bps` are then ignored; sending `cost_per_unit` yourself answers 422. "
+                "422: unknown strategy, bad params or config (with "
                 "`path`, e.g. `stop.multiplier`), `start ≥ end`, `end` in the future, no "
                 "candles in the range.",
                 body={
@@ -1307,7 +1476,19 @@ FOLDERS: list[Folder] = [
                             "start": "2026-10-10T00:00:00Z",
                             "end": "2026-10-01T00:00:00Z",
                         },
-                    )
+                    ),
+                    Variant(
+                        "422 cost_per_unit is set by the server",
+                        422,
+                        body={
+                            "instrument_id": "{{instrument_id}}",
+                            "timeframe": "{{timeframe}}",
+                            "strategy_key": "{{strategy_key}}",
+                            "start": "{{backtest_start}}",
+                            "end": "{{backtest_end}}",
+                            "config": {"cost_per_unit": 0.25},
+                        },
+                    ),
                 ],
             ),
             Req(
@@ -1315,7 +1496,9 @@ FOLDERS: list[Folder] = [
                 "Get backtest result",
                 "GET",
                 "/backtests/:backtest_id",
-                "Everything a results page needs: config, status/progress, metrics, equity and "
+                "Everything a results page needs: config, the cost model (`cost_model`: `bps` = "
+                "`fee_bps` + `slippage_bps` of notional, or `fixed_per_unit` = the instrument's "
+                "`cost_per_unit` × quantity per round trip), status/progress, metrics, equity and "
                 "drawdown curves (at most 2,000 Lightweight Charts points) and entry/exit "
                 "markers. In the Collection Runner this request repeats until the backtest has "
                 "finished.",
@@ -2719,7 +2902,9 @@ FOLDERS: list[Folder] = [
         "| `price_alert` | one of your price alerts fired |\n"
         "| `chat_message` | a chat message while you are not looking at the conversation (one external notification per conversation per 5 min) |\n"
         "| `subscription_started` / `_renewed` / `_payment_failed` / `_canceled` | your subscription to an expert |\n"
-        "| `new_subscriber` | someone subscribed to your plan (experts) |\n\n"
+        "| `new_subscriber` | someone subscribed to your plan (experts) |\n"
+        "| `ai_setup` | an AI setup became ARMED on an instrument you follow, or one you took "
+        "changed state (carries your size) |\n\n"
         "Every event is stored in the inbox and pushed on the WebSocket as `notification`. "
         "Telegram, email and push follow your preferences: event on for the channel → signal "
         "filters → quiet hours → hourly cap (held deliveries go out later as one digest). A "
@@ -3033,8 +3218,10 @@ FOLDERS: list[Folder] = [
                         "`quote_currency` (P&L currency, default `quote_asset`), `margin_rate` "
                         "(0–1, 0.01 = 1:100), `price_basis` (`bid` | `mid` | `last`) and "
                         "`session_calendar` (IANA `tz`, `week_open` / `week_close`, "
-                        "`daily_breaks`, `holidays`). Specs sent here get `spec_source` = "
-                        "`manual`.",
+                        "`daily_breaks`, `holidays`) and `cost_per_unit` (fixed round-trip trading "
+                        "cost per unit of quantity in price units, e.g. 0.25 for XAU/USD; "
+                        "backtests and sizing then use it instead of `fee_bps` / "
+                        "`slippage_bps`). Specs sent here get `spec_source` = `manual`.",
                         auth="admin",
                         body={
                             "symbol": "PM{{$timestamp}}/USDT",
@@ -3049,6 +3236,7 @@ FOLDERS: list[Folder] = [
                             "min_lot": 0.000001,
                             "max_lot": 1000.0,
                             "price_basis": "last",
+                            "cost_per_unit": 0.02,
                             "session_calendar": {
                                 "tz": "UTC",
                                 "daily_breaks": [{"start": "23:55", "end": "00:05"}],
@@ -3231,6 +3419,139 @@ FOLDERS: list[Folder] = [
                 ],
             ),
             Folder(
+                "cTrader Feed",
+                "The live XAU/USD feed from the cTrader Open API (FxPro; `docs/ctrader-feed.md`): "
+                "its status, linking the cTrader account by OAuth (view-only scope `accounts`), "
+                "choosing the trader account and a long backfill of M1 bars. Tokens are stored "
+                "encrypted and **never returned**. The feed ships disabled "
+                "(`CTRADER_ENABLED=false`): until the app credentials are set and an account is "
+                "linked, Connect and Choose account answer 409.\n\n"
+                "Linking: send **Connect**, open its `url` in a browser and approve; "
+                "cTrader sends you back to **OAuth callback** with `?code=&state=`. When the "
+                "redirect cannot reach the server, paste the code into **Link with a code** "
+                "(it lives one minute).",
+                [
+                    Req(
+                        "admin_feed_status",
+                        "cTrader feed status",
+                        "GET",
+                        "/admin/feeds/ctrader",
+                        "`enabled`, `env` (demo/live), `symbol`, `instrument`, whether the app "
+                        "credentials are set (`app_credentials`), the `redirect_uri` to register "
+                        "in the cTrader app, `linked` and the `link` (account, accounts the token "
+                        "sees, scope, linked/refreshed time, token expiry), what the running "
+                        "feed reports (`state`, `connected`, `last_tick_at`, `last_bar`, "
+                        "`reconnects_24h`, `last_error`, `updated_at`) and the last manual "
+                        "`backfill`. Never the tokens. Also in System status (`feeds.ctrader`).",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_feed_connect",
+                        "Connect cTrader account",
+                        "GET",
+                        "/admin/feeds/ctrader/connect",
+                        "The cTrader authorization URL to open (`url`, scope "
+                        "`accounts`: view only) with a one-time `state` valid 10 minutes and the "
+                        "`redirect_uri` it returns to (register it in the cTrader app first). "
+                        "409 when `CTRADER_CLIENT_ID` / `CTRADER_CLIENT_SECRET` are not set on "
+                        "the server (the saved example).",
+                        auth="admin",
+                        expect=[200, 409],
+                    ),
+                    Req(
+                        "admin_feed_callback",
+                        "OAuth callback (cTrader redirect)",
+                        "GET",
+                        "/admin/feeds/ctrader/callback",
+                        "Where cTrader sends the admin's browser back with `?code=&state=`. **No "
+                        "JWT**: the one-time `state` issued by Connect authorises it. Exchanges "
+                        "the code, stores the tokens encrypted, lists the accounts and chooses "
+                        "one when it can. 400: unknown or expired state, no code, or cTrader "
+                        "answered `?error=`; 502: cTrader refused the code. You normally never "
+                        "send this by hand.",
+                        auth="none",
+                        query=[
+                            ("code", "authorization-code-from-ctrader", "From the redirect"),
+                            ("state", "state-from-connect", "From Connect"),
+                        ],
+                        expect=[200, 400],
+                        variants=[
+                            Variant(
+                                "400 cTrader answered an error",
+                                400,
+                                query={"code": "", "state": "", "error": "access_denied"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_code",
+                        "Link with a code",
+                        "POST",
+                        "/admin/feeds/ctrader/code",
+                        "The same as the callback for a code pasted by hand (when the redirect "
+                        "cannot reach the server, or came back without state). The code lives "
+                        "one minute; the state must be one Connect issued (400 otherwise).",
+                        auth="admin",
+                        body={
+                            "code": "authorization-code-from-ctrader",
+                            "state": "state-from-connect",
+                        },
+                        expect=[200, 400],
+                        variants=[
+                            Variant(
+                                "422 Empty code",
+                                422,
+                                body={"code": "", "state": "state-from-connect"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_account",
+                        "Choose cTrader account",
+                        "PATCH",
+                        "/admin/feeds/ctrader",
+                        "Choose the trader account to stream: one of the linked token's "
+                        "`link.accounts` (422 otherwise). Restart `feed-ctrader` afterwards. "
+                        "`CTRADER_ACCOUNT_ID`, when set on the server, wins. 409 when no account "
+                        "is linked (the saved example).",
+                        auth="admin",
+                        body={"account_id": 12345678},
+                        expect=[200, 409],
+                        variants=[
+                            Variant("422 Invalid account id", 422, body={"account_id": 0}),
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_backfill",
+                        "Backfill cTrader bars",
+                        "POST",
+                        "/admin/feeds/ctrader/backfill",
+                        "Backfill M1 bars for `[from, to]` (time zone required, at most 400 "
+                        "days, `to` capped at now) as a background task, a day per request; a "
+                        "bar built live (with a spread) is never overwritten. Answers 202 with "
+                        "the `task_id`, the range and its length in `days`; progress is in the "
+                        "status (`backfill`). The task fails when no account is linked, or while "
+                        "the live feed is running on the same account.\n\n"
+                        "> On production this starts a real backfill against cTrader.",
+                        auth="admin",
+                        body={"from": "2026-10-01T00:00:00Z", "to": "2026-10-02T00:00:00Z"},
+                        expect=[202],
+                        variants=[
+                            Variant(
+                                "422 from after to",
+                                422,
+                                body={"from": "2026-10-02T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+                            ),
+                            Variant(
+                                "422 More than 400 days",
+                                422,
+                                body={"from": "2025-01-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            Folder(
                 "API Keys & Rate Limits",
                 "Every user's keys, rate-limit monitoring and the system status.",
                 [
@@ -3292,13 +3613,20 @@ FOLDERS: list[Folder] = [
                         "System status",
                         "GET",
                         "/admin/system/status",
-                        "The operations view in one call: version and uptime, database (size, "
+                        "The operations view in one call: version, uptime and the public HTTPS name "
+                        "(`public_hostname`, null when unset), database (size, "
                         "connections, migration, slowest queries when `pg_stat_statements` is "
                         "installed), Redis, Celery (queue lengths, live workers, last run of each "
                         "scheduled task), market data freshness per active instrument, the "
                         "data-quality report of every monitored instrument (`data_quality`), "
                         "the economic-calendar refresh (`calendar`: last success, last error, "
-                        "back-off, stored rows), "
+                        "back-off, stored rows), the AI alert outbox (`ai_alerts`: rows per "
+                        "status, oldest pending in seconds), the periodic AI evaluation "
+                        "(`ai_evaluate`: enabled, the last run of every instrument and profile "
+                        "with status, reason, duration, request size and bars sent, counts of "
+                        "the last 24 h, the last contract error), the cTrader live feed (`feeds.ctrader`: "
+                        "enabled, linked, connected, last tick and bar, reconnects, token expiry, "
+                        "last error; never the tokens), "
                         "WebSocket "
                         "clients summed over every API process (each reports every 30 s), "
                         "notification channels, unhandled errors in "
@@ -3323,7 +3651,10 @@ FOLDERS: list[Folder] = [
                         "`ev_r_lower`), `grade`, validity window and its `state` (DEVELOPING → "
                         "ARMED → ACTIVE → CLOSED, or EXPIRED / INVALIDATED). `realized_r` is set "
                         "once it closes; the strategy, model and features versions that produced "
-                        "it are kept. The first one is stored as `ai_setup_id`.",
+                        "it are kept. While ai-service runs the rules alone (v1, no model: "
+                        "`model_version` null), `probability`, `ev_r`, `ev_r_lower` and `grade` "
+                        'are null and alerts read "Probability n/a". The first one is stored as '
+                        "`ai_setup_id`.",
                         auth="admin",
                         query=[("limit", "50", "1–200")],
                         optional_query=[
@@ -3349,9 +3680,11 @@ FOLDERS: list[Folder] = [
                         "GET",
                         "/admin/ai/setups/:setup_id",
                         "A setup with its `evidence`, `features`, the payload exactly as "
-                        "ai-service last returned it (`last_payload`) and every state event, "
+                        "ai-service last returned it (`last_payload`), every state event, "
                         "oldest first (`from_state` null: the setup appeared; `reason` and "
-                        "`realized_r` on the move that closed it).",
+                        "`realized_r` on the move that closed it), the stored per-user sizes "
+                        "(`sizes`), how many users took it (`takes_count`) and its alerts "
+                        "(`outbox`, oldest first).",
                         auth="admin",
                         path_vars={"setup_id": ("{{ai_setup_id}}", "From the setups list")},
                         pre=SKIP_NO_AI_SETUP,
@@ -3360,6 +3693,51 @@ FOLDERS: list[Folder] = [
                                 "404 Setup not found",
                                 404,
                                 path_vars={"setup_id": "unknown-setup"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_outbox",
+                        "List AI alert outbox",
+                        "GET",
+                        "/admin/ai/outbox",
+                        "The AI setup alerts, newest first: one row per setup state change "
+                        "(DEVELOPING excepted), written with the change and sent by the "
+                        "`ai_alerts.dispatch` task to followers (ARMED) and takers (later "
+                        "states), plus the `ai_setups` WebSocket topic. `status`: `pending` "
+                        "(due at `next_attempt_at`), `done`, `skipped` (`last_error` says why, "
+                        "e.g. an ARMED alert older than `AI_ALERTS_MAX_AGE_SECONDS`) or "
+                        "`failed` after `AI_ALERTS_MAX_ATTEMPTS`. The first row is stored as "
+                        "`ai_outbox_id`.",
+                        auth="admin",
+                        query=[("limit", "50", "1–200"), ("offset", "0", "")],
+                        optional_query=[("status", "failed", "pending | done | skipped | failed")],
+                        captures={"ai_outbox_id": "items.0.id"},
+                        variants=[
+                            Variant(
+                                "422 Unknown status",
+                                422,
+                                query={"limit": "50", "offset": "0", "status": "sent"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_outbox_retry",
+                        "Retry AI alert",
+                        "POST",
+                        "/admin/ai/outbox/:row_id/retry",
+                        "Puts a `failed` alert back to `pending`, due now (`attempts` kept), and "
+                        "starts a dispatch. 409 when the row is not `failed` (sending it twice "
+                        "gives 409 the second time).",
+                        auth="admin",
+                        path_vars={"row_id": ("{{ai_outbox_id}}", "From the outbox list")},
+                        expect=[200, 409],
+                        pre=SKIP_NO_OUTBOX_ROW,
+                        variants=[
+                            Variant(
+                                "404 Outbox row not found",
+                                404,
+                                path_vars={"row_id": "999999999"},
                             )
                         ],
                     ),
@@ -3635,8 +4013,10 @@ and use the URL and messages below. Full protocol: `docs/websocket.md`.
 
 Invalid/expired credentials: the server accepts, then closes with **4401**. Refresh the token \
 and reconnect. Open sockets are re-checked on every heartbeat and at once when the API key is \
-revoked (or loses `stream`) or the user is deactivated: `error` `auth_revoked` (message = the \
-reason), then **4401**. A topic the role or key scopes no longer allow is dropped with \
+revoked (or loses `stream`), the user is deactivated or deleted, logs out (that session only), \
+changes the password or a stolen refresh token is detected (every login socket; API-key sockets \
+stay): `error` `auth_revoked` (message = the reason, e.g. `session ended`, `user not found`), \
+then **4401**. A topic the role or key scopes no longer allow is dropped with \
 `unsubscribed` + `reason: "forbidden"`.
 
 ### Client → server (JSON text frames, max 4 KB)
@@ -3648,6 +4028,7 @@ reason), then **4401**. A topic the role or key scopes no longer allow is droppe
 {"op": "subscribe",   "topic": "news"}                                    # every new article
 {"op": "subscribe",   "topic": "news", "instrument_id": "{{instrument_id}}"}  # articles tagged with it
 {"op": "subscribe",   "topic": "chat", "conversation_id": "{{conversation_id}}"}  # participants and admins
+{"op": "subscribe",   "topic": "ai_setups", "instrument_id": "{{instrument_id}}"}  # AI setup state changes
 {"op": "typing",      "conversation_id": "{{conversation_id}}"}               # while the user types, ≤ 1 per 3 s
 {"op": "ping"}
 ```
@@ -3666,11 +4047,15 @@ reason), then **4401**. A topic the role or key scopes no longer allow is droppe
 {"type": "chat_message_updated", "topic": "chat:<uuid>", "conversation_id": "<uuid>", "message": {"...": "edited, or a tombstone with deleted: true"}}
 {"type": "chat_read",            "topic": "chat:<uuid>", "conversation_id": "<uuid>", "user_id": "<uuid>", "read_at": "…"}
 {"type": "chat_typing",          "topic": "chat:<uuid>", "conversation_id": "<uuid>", "user_id": "<uuid>"}
+{"type": "ai_setup",   "topic": "ai:setups:<uuid>", "setup": {"setup_id": "xauusd-intraday-2026-10-19T14:15:00Z-buy", "state": "ARMED", "direction": "buy", "entry": 2400.0, "sl": 2395.0, "tp": 2410.0, "grade": "B", "...": "..."}, "transition": {"setup_id": "…", "from": null, "to": "ARMED", "at": "2026-10-19T14:15:00Z", "reason": null, "realized_r": null}}
 {"type": "pong"}
 {"type": "heartbeat"}
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
 {"type": "error", "code": "auth_revoked", "message": "API key revoked"}  # then close 4401
 ```
+
+`ai_setups` is open to whoever may read signals (otherwise `error` `forbidden`); no snapshot, \
+the REST API lists past setups.
 
 A private custom strategy's signals reach only its owner and admins on `signals:<uuid>` (same \
 frame and topic); public and global strategies reach every subscriber.
@@ -3695,11 +4080,11 @@ indicator after ~5 s without a new one.
 
 | | |
 |---|---|
-| Subscriptions per connection | 50 (candles, signals, news and chat topics) |
+| Subscriptions per connection | 50 (candles, signals, news, chat and ai_setups topics) |
 | Server heartbeat | every 25 s; send `{"op":"ping"}` every ~30 s |
 | Idle timeout | 75 s without a client frame → **1001** |
 | Slow consumer | > 256 undelivered messages → **1013** |
-| Bad / expired / revoked token or key, deactivated user | **4401** |
+| Bad / expired / revoked token or key, deactivated or deleted user, login session ended (logout, password change, stolen refresh token) | **4401** |
 | Connections | 5 per identity, 20 new per minute per IP → **4429** |
 | Server error on the connection (also when its periodic re-check stops) | **1011** |
 

@@ -5,7 +5,8 @@ Demo candles are synthetic. They exist so the web/mobile charts can be developed
 real collectors run; never use them for analysis or model training. Instruments of a real-feed
 source (``REAL_FEED_SOURCES``) never get demo candles.
 
-The typical specs match migration 0013 (which fills them on existing databases). They are only
+The typical specs match migration 0013 (which fills them on existing databases; 0021 does the
+same for the fxpro XAU/USD ``cost_per_unit``). They are only
 written into fields that are still null, with ``spec_source = typical``; the broker adapter
 replaces them with the broker's values later.
 """
@@ -97,6 +98,8 @@ DEFAULT_INSTRUMENTS: tuple[SeedInstrument, ...] = (
             "max_lot": 100.0,
             "price_basis": "bid",
             "session_calendar": FXPRO_SESSION_CALENDAR,
+            # spread and every trading cost, per oz, per round trip (Fadi, 25 Oct; 0021)
+            "cost_per_unit": 0.25,
         },
     ),
 )

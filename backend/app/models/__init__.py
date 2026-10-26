@@ -1,11 +1,15 @@
 # استورد النماذج هنا حتى يراها Alembic
 from app.db.base import Base
 from app.models.ai import (
+    AIAlertFollow,
+    AIEvaluationRun,
     AIModelVersion,
     AISetup,
     AISetupEvent,
     AISetupExplanation,
+    AISetupOutbox,
     AISetupSize,
+    AISetupTake,
 )
 from app.models.api_key import ApiKey, Scope
 from app.models.backtest import Backtest, BacktestStatus, BacktestTrade
@@ -25,6 +29,7 @@ from app.models.expert import (
     SubscriptionPlan,
     SubscriptionStatus,
 )
+from app.models.feed import FeedCredential
 from app.models.instrument import Instrument, MarketType
 from app.models.news import (
     NewsArticle,
@@ -66,11 +71,15 @@ from app.models.user import User, UserRole
 from app.models.workspace import Workspace
 
 __all__ = [
+    "AIAlertFollow",
+    "AIEvaluationRun",
+    "AISetupOutbox",
     "AIModelVersion",
     "AISetup",
     "AISetupEvent",
     "AISetupExplanation",
     "AISetupSize",
+    "AISetupTake",
     "CheckoutSession",
     "CheckoutStatus",
     "Conversation",
@@ -134,6 +143,7 @@ __all__ = [
     "SignalSide",
     "Timeframe",
     "User",
+    "FeedCredential",
     "UserRole",
     "UserStrategy",
     "Visibility",

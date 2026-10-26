@@ -36,6 +36,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     NotificationType.subscription_payment_failed: {"telegram": True, "email": True, "push": True},
     NotificationType.subscription_canceled: {"telegram": False, "email": True, "push": True},
     NotificationType.new_subscriber: {"telegram": False, "email": True, "push": True},
+    # B11
+    NotificationType.ai_setup: {"telegram": True, "email": False, "push": True},
 }
 # Events that never leave the app (no matrix entry, cannot be switched on): likes are batched
 # into one inbox row per post and day ("N people liked your post").

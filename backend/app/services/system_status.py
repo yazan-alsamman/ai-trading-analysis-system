@@ -17,6 +17,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai import evaluate as evaluation
 from app.calendar import service as calendar_service
 from app.core import ops
 from app.core.config import get_settings
@@ -37,6 +38,10 @@ BEAT_TASKS = (
     "ops.daily_summary",
     "data_quality.check",
     "calendar.refresh",
+    "ai_alerts.dispatch",
+    "notifications.sweep",
+    "ai.evaluate_tick",
+    "ai.evaluate",
 )
 
 
@@ -151,6 +156,40 @@ async def _calendar(session: AsyncSession, redis: Redis) -> dict[str, Any]:
     return {**await calendar_service.state(redis), **await calendar_service.table_stats(session)}
 
 
+async def _ai_alerts(session: AsyncSession) -> dict[str, Any]:
+    """The AI setup alert outbox (B11): rows by status, and how long the oldest pending one has
+    waited."""
+    rows = await session.execute(
+        text("SELECT status, count(*) FROM ai_setup_outbox GROUP BY status")
+    )
+    oldest = await session.scalar(
+        text(
+            "SELECT extract(epoch FROM clock_timestamp() - min(created_at)) "
+            "FROM ai_setup_outbox "
+            "WHERE status = 'pending'"
+        )
+    )
+    counts = {"pending": 0, "done": 0, "skipped": 0, "failed": 0, **dict(rows.all())}
+    return {
+        "outbox": counts,
+        "oldest_pending_seconds": round(float(oldest), 1) if oldest is not None else None,
+    }
+
+
+async def _ai_evaluate(session: AsyncSession, redis: Redis) -> dict[str, Any]:
+    """The periodic evaluation (B9): enabled, the last run of every instrument and profile
+    (time, status, reason, duration, request size, bars sent), the last contract error."""
+    return await evaluation.status(session, redis)
+
+
+async def _feeds(session: AsyncSession) -> dict[str, Any]:
+    """The cTrader live feed (B1): enabled, linked, connected, last tick and bar, reconnects,
+    token expiry, last error. Never the tokens."""
+    from app.api.v1.admin_feeds import feed_status  # noqa: PLC0415 - avoids an import cycle
+
+    return {"ctrader": await feed_status(session)}
+
+
 async def _notifications(redis: Redis) -> dict[str, Any]:
     server = enabled_channels()
     return {
@@ -195,6 +234,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
     out: dict[str, Any] = {
         "version": settings.app_version,
         "environment": settings.environment,
+        "public_hostname": settings.public_hostname or None,
         "time": datetime.now(UTC).isoformat(),
         "uptime_seconds": round(now - ops.STARTED_AT),
     }
@@ -205,6 +245,9 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
         "market_data": lambda: _market(session, now),
         "data_quality": lambda: _data_quality(session, redis),
         "calendar": lambda: _calendar(session, redis),
+        "ai_alerts": lambda: _ai_alerts(session),
+        "ai_evaluate": lambda: _ai_evaluate(session, redis),
+        "feeds": lambda: _feeds(session),
         "notifications": lambda: _notifications(redis),
         "errors_last_hour": lambda: ops.errors_last_hour(redis),
     }

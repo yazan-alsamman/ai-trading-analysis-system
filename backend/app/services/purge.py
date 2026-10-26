@@ -21,6 +21,7 @@ from app.db.base import Base
 from app.models.expert import Subscription
 from app.models.instrument import Instrument
 from app.models.user import User, UserRole
+from app.realtime import auth_events
 
 PREFIX = re.compile(r"^[a-z0-9][a-z0-9._+-]{2,63}$")
 
@@ -106,4 +107,7 @@ async def purge_demo(
                 await session.execute(delete(Instrument).where(Instrument.id.in_(instrument_ids)))
             await session.commit()
             report.deleted = True
+    if report.deleted:
+        for user_id in ids:  # after the commit: their WebSockets find no user and close
+            await auth_events.publish(user_id=user_id)
     return report

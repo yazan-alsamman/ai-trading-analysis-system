@@ -14,6 +14,8 @@ Sending (Celery, :func:`send_deliveries`): every delivery is claimed with ``FOR 
 LOCKED`` and only while ``pending``, so a duplicated task never sends twice. Retries use
 exponential backoff with jitter (max ``notification_max_attempts``), provider ``retry_after``
 is honoured, and a per-channel circuit breaker holds deliveries while a provider is down.
+A lost send task (a crash between the commit and the enqueue, a lost retry) is recovered by
+:func:`sweep_stuck` (``notifications.sweep``, every minute).
 """
 
 from __future__ import annotations
@@ -147,7 +149,7 @@ def _schedule(ids: Sequence[uuid.UUID], countdown: float | None = None) -> None:
         return
     try:
         enqueue(list(ids), countdown) if countdown else enqueue(list(ids))
-    except Exception:  # noqa: BLE001 - the rows stay pending; the pump re-dispatches them
+    except Exception:  # noqa: BLE001 - the rows stay pending; the sweeper re-sends them
         logger.exception("notifications: could not enqueue %d deliveries", len(ids))
 
 
@@ -466,6 +468,8 @@ async def _send_one(
             delivery.provider_message_id = (provider_id or "")[:255] or None
             delivery.last_error = None
             await breaker.success(redis, channel)
+        if retry is not None:  # the sweeper re-sends it if this retry's task is ever lost
+            delivery.next_attempt_at = datetime.now(UTC) + timedelta(seconds=retry)
         outcome = str(delivery.status) if retry is None else "retry"
         await session.commit()
     return outcome, retry
@@ -491,6 +495,87 @@ async def send_deliveries(
 
     await asyncio.gather(*(one(i) for i in ids))
     return dict(counts)
+
+
+# --- stuck deliveries ---------------------------------------------------------------------------
+
+
+EXPIRED = "expired: not sent within NOTIFICATION_SWEEP_MAX_AGE_SECONDS"
+
+
+@dataclass
+class Swept:
+    requeued: list[uuid.UUID] = field(default_factory=list)
+    expired: int = 0
+
+
+async def sweep_stuck(
+    factory: async_sessionmaker[AsyncSession], now: datetime | None = None
+) -> Swept:
+    """Re-enqueue deliveries whose send task was lost (the beat task ``notifications.sweep``).
+
+    :func:`after_commit` enqueues the sends after the producer commits: a crash in between, or
+    a lost retry task, leaves ``pending`` deliveries nobody sends.
+
+    1. Expired: ``pending`` without a hold and created more than
+       ``NOTIFICATION_SWEEP_MAX_AGE_SECONDS`` ago become ``skipped`` (``last_error`` says
+       why) and are never sent: a day-old signal is worse than none. One UPDATE of at most
+       ``NOTIFICATION_SWEEP_BATCH`` rows, claimed with ``FOR UPDATE SKIP LOCKED`` so a
+       delivery being sent right now is left alone.
+    2. Re-enqueued: ``pending``, no hold, not too old, due (``release_at`` null or past), and
+       due for at least ``NOTIFICATION_SWEEP_AFTER_SECONDS`` (``next_attempt_at`` of a
+       scheduled retry, else ``created_at``). At most ``NOTIFICATION_SWEEP_BATCH``, oldest
+       first.
+
+    Held deliveries (quiet hours, hourly cap, open circuit) are never touched: the digests and
+    the circuit release handle them. Re-enqueueing only enqueues: :func:`_send_one` claims a
+    delivery with ``FOR UPDATE SKIP LOCKED`` and only while ``pending`` without a hold, so a
+    delivery being sent right now, or already sent by its own task, is a no-op for the swept
+    task. That remains the one guarantee against double sends."""
+    settings = get_settings()
+    now = now or datetime.now(UTC)
+    batch = max(1, settings.notification_sweep_batch)
+    unsent = (
+        NotificationDelivery.status == DeliveryStatus.pending,
+        NotificationDelivery.hold.is_(None),
+    )
+    oldest = now - timedelta(seconds=settings.notification_sweep_max_age_seconds)
+    due_since = func.coalesce(NotificationDelivery.next_attempt_at, NotificationDelivery.created_at)
+    cutoff = now - timedelta(seconds=settings.notification_sweep_after_seconds)
+    async with factory() as session:
+        too_old = (
+            select(NotificationDelivery.id)
+            .where(*unsent, NotificationDelivery.created_at < oldest)
+            .order_by(NotificationDelivery.created_at)
+            .limit(batch)
+            .with_for_update(skip_locked=True)
+        )
+        expired = await session.scalars(
+            update(NotificationDelivery)
+            .where(NotificationDelivery.id.in_(too_old.scalar_subquery()))
+            .values(status=DeliveryStatus.skipped, last_error=EXPIRED)
+            .returning(NotificationDelivery.id)
+        )
+        result = Swept(expired=len(list(expired)))
+        await session.commit()
+        result.requeued = list(
+            await session.scalars(
+                select(NotificationDelivery.id)
+                .where(
+                    *unsent,
+                    due_since < cutoff,
+                    NotificationDelivery.created_at >= oldest,  # too old: expired, never sent
+                    or_(
+                        NotificationDelivery.release_at.is_(None),
+                        NotificationDelivery.release_at <= now,
+                    ),
+                )
+                .order_by(due_since)
+                .limit(batch)
+            )
+        )
+    _schedule(result.requeued)
+    return result
 
 
 # --- digests and held deliveries -----------------------------------------------------------------

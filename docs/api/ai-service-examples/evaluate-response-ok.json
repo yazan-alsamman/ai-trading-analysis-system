@@ -14,14 +14,49 @@
       "probability": 0.58,
       "ev_r": 0.74,
       "ev_r_lower": 0.31,
-      "grade": "B",
+      "grade": null,
       "valid_until": "2026-10-19T15:15:00Z",
       "horizon_until": "2026-10-19T20:15:00Z",
+      "created_at": "2026-10-19T14:15:00Z",
       "evidence": {"trend_4h": "up", "breakout": "range_high_1h", "news_clear_minutes": 165},
       "features": {"atr_15m": 2.4, "rsi_15m": 58.2, "spread_pts": 26}
+    },
+    {
+      "setup_id": "xauusd-intraday-2026-10-19T09:30:00Z-buy",
+      "state": "CLOSED",
+      "direction": "buy",
+      "entry": 2390.00,
+      "sl": 2386.00,
+      "tp": 2398.00,
+      "r_multiple": 2.0,
+      "probability": 0.55,
+      "ev_r": 0.65,
+      "ev_r_lower": 0.2,
+      "grade": null,
+      "valid_until": "2026-10-19T10:30:00Z",
+      "horizon_until": "2026-10-19T17:30:00Z",
+      "created_at": "2026-10-19T09:30:00Z",
+      "evidence": {"trend_4h": "up", "pullback_to": "ema50_1h"},
+      "features": {"atr_15m": 2.1, "rsi_15m": 41.3}
     }
   ],
   "transitions": [
+    {
+      "setup_id": "xauusd-intraday-2026-10-19T09:30:00Z-buy",
+      "from": "DEVELOPING",
+      "to": "ARMED",
+      "at": "2026-10-19T09:30:00Z",
+      "reason": "trigger",
+      "realized_r": null
+    },
+    {
+      "setup_id": "xauusd-intraday-2026-10-19T09:30:00Z-buy",
+      "from": "ARMED",
+      "to": "ACTIVE",
+      "at": "2026-10-19T09:37:00Z",
+      "reason": "entry_filled",
+      "realized_r": null
+    },
     {
       "setup_id": "xauusd-intraday-2026-10-19T09:30:00Z-buy",
       "from": "ACTIVE",
@@ -29,9 +64,17 @@
       "at": "2026-10-19T14:07:00Z",
       "reason": "tp_hit",
       "realized_r": 2.0
+    },
+    {
+      "setup_id": "xauusd-intraday-2026-10-19T14:15:00Z-buy",
+      "from": "DEVELOPING",
+      "to": "ARMED",
+      "at": "2026-10-19T14:15:00Z",
+      "reason": "trigger",
+      "realized_r": null
     }
   ],
   "abstentions": [
-    {"reason": "weak_edge", "detail": "sell side: ev_r_lower -0.12 below 0"}
+    {"reason": "weak_edge", "detail": {"side": "sell", "ev_r_lower": -0.12, "threshold": 0.0}}
   ]
 }

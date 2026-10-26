@@ -113,6 +113,18 @@ services:
     mem_limit: 128m
     cpus: 0.25
 
+  # B1: XAU/USD quotes from the cTrader Open API into 1m bars (docs/ctrader-feed.md). Idles
+  # (logs once an hour) until CTRADER_ENABLED=true and an account is linked; never crash-loops.
+  # No port: it only makes an outbound WebSocket connection.
+  feed-ctrader:
+    <<: *backend
+    command: python -m app.feeds.ctrader
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 128m
+    cpus: 0.25
+
   ai-service:
     image: ${AI_IMAGE:-ghcr.io/yazan-alsamman/ai-trading-ai-service}:${IMAGE_TAG:?}
     restart: unless-stopped
@@ -128,9 +140,14 @@ services:
     logging: *logging
     cpu_shares: 512
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # the whole directory (default.conf + trading-site.inc): a changed file is seen at once,
+      # never a stale copy as with single-file bind mounts
+      - ./nginx:/etc/nginx/conf.d:ro
     ports:
       - "8080:80"  # the public entry point: http://187.127.76.76:8080
+      # the host's nginx (HTTPS for trading.yazanalsamman.com) proxies here: loopback only,
+      # Docker publishes around ufw, so it must never be bound to 0.0.0.0 (docs/https.md)
+      - "127.0.0.1:8090:8090"
     networks:
       default:
         ipv4_address: ${NGINX_IP:-172.30.57.10}

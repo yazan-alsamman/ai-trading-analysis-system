@@ -14,6 +14,15 @@ Each item names where it lives in the code.
 - **Refresh tokens**: 14 days, one row each (`refresh_tokens`), **rotated** on every use. A token
   that is presented again after rotation is treated as stolen: all of the user's refresh tokens
   are revoked (`auth_service.refresh`). Changing the password signs out every other session.
+- **Login sessions** (B12 part 2): every login starts a session, the refresh-token **family**
+  (`refresh_tokens.family_id` = the first row's id; a rotation keeps it). Access tokens carry it
+  as the `sid` claim. **Logout** revokes the whole family (not only the presented row, so the
+  session cannot be refreshed from an older sibling). A **password change**, a **refresh-token
+  reuse** and a deactivation revoke every family and set `users.sessions_revoked_at`.
+- **REST is unchanged**: access tokens stay stateless JWTs, so a REST call with an access token
+  keeps working until it expires (at most `JWT_ACCESS_MINUTES`), even after a logout or a
+  password change. Only WebSockets live long enough to need more: they close when their session
+  ends (below).
 - **Login protection**: per-IP limits on the auth endpoints, 5 attempts per minute per e-mail,
   and a **lockout** (10 failures in 15 minutes lock that e-mail for 15 minutes, with a `critical`
   notification to the owner). The lockout fails closed: if Redis is down, login answers 503
@@ -77,6 +86,23 @@ Each item names where it lives in the code.
   **4401** with the reason, and its per-identity connection slot is released. A database error
   during a check keeps the socket until the next heartbeat. Access-token expiry is still
   checked as before (`token_expired`, 4401) (`app/api/ws.py`, `app/realtime/auth_events.py`).
+- **Ended sessions close their WebSockets** (B12 part 2). The check above also reads, in the
+  same query, whether the socket's login session (the token's `sid`) still has an unrevoked
+  refresh token (an indexed `EXISTS` on `refresh_tokens.family_id`). The rule:
+  - a socket whose session has no unrevoked refresh token left closes with `session ended`.
+    **Logout** ends that session only (event `{"session_id"}`): the user's sockets from other
+    logins stay. A **password change** or a **refresh-token reuse** ends every session (event
+    `{"user_id"}`), so every login socket of the user closes. A new login afterwards is a new
+    session and connects normally;
+  - an access token **without `sid`** (issued before this change; they expire within
+    `JWT_ACCESS_MINUTES` of the deploy) has no session: only the user-wide events close it,
+    when `users.sessions_revoked_at` is later than the token's `iat`;
+  - **API-key sockets are not tied to a login**: a password change does not revoke API keys, so
+    their sockets stay open. Revoke the keys (`DELETE /me/api-keys/{id}`) to close them;
+  - `purge-demo --yes` publishes the `user_id` event for each deleted user after its commit;
+    the re-check finds no user and closes with `user not found`;
+  - a new WebSocket with an access token whose session has ended is refused (4401,
+    `session ended`), although the token has not expired.
 
 ## 4. Rate limits
 
@@ -118,6 +144,15 @@ connections per IP (`app/core/rate_limit.py`).
 - Never committed: `.env.example` has empty placeholders; the server `.env` is created by the
   deploy with generated secrets (`chmod 600`). Channel secrets (Telegram, SMTP, FCM) are added by
   hand on the server; with them empty the channel is reported as disabled.
+- The cTrader app credentials (B1, docs/ctrader-feed.md) come from the GitHub secrets
+  `CTRADER_CLIENT_ID` / `CTRADER_CLIENT_SECRET`: the Deploy workflow masks them and sends them
+  over SSH on stdin to `infra/deploy/set-env-secrets.sh`, which writes a key into the server
+  `.env` only when it is missing or empty (never in argv, never printed).
+- The cTrader OAuth tokens live in `feed_credentials`, **encrypted** (Fernet, key derived from
+  `JWT_SECRET` with HKDF-SHA256 and its own label): never in `.env`, logs or API answers. The
+  feed's WebSocket library logger stays at WARNING (frames carry the client secret and token),
+  and the log filter redacts `code=`, `state=` and `client_secret=` in URLs. Rotating
+  `JWT_SECRET` means linking the account again.
 - Never logged: query-string credentials (`?token=`, `?api_key=`) are redacted by our Nginx log
   format and by the app's log filters; the Telegram bot token and webhook secret are redacted;
   HTTP client loggers are kept at WARNING (they would log URLs). CI runs the whole test suite with
@@ -136,6 +171,13 @@ connections per IP (`app/core/rate_limit.py`).
   the API, 10 MB on the news ingestion.
 - **Forwarded headers** are trusted only from the Nginx container address
   (`--forwarded-allow-ips`), so clients cannot spoof their IP for the rate limiter.
+  - Nginx itself overwrites `X-Forwarded-For` with the connection's address on port 80
+    (`:8080`).
+  - On port 8090, published on `127.0.0.1` only for the host's HTTPS proxy, it trusts the proxy's
+    `X-Forwarded-For` and `X-Forwarded-Proto`, but only from our compose network
+    ([https.md](https.md)).
+  - The HTTPS site sends `Strict-Transport-Security: max-age=31536000`, without
+    `includeSubDomains`.
 - **CORS**: an explicit allow-list from `CORS_ORIGINS`; the app refuses to start with `*` (it
   allows credentials).
 - **API docs**: Swagger UI, ReDoc and `/openapi.json` are **disabled in production**; the public
