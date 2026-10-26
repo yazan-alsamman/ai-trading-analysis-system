@@ -345,3 +345,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
 - خدمة جديدة **`feed-ctrader`** (نفس صورة الـ backend، `python -m app.feeds.ctrader`، 128m و0.25 CPU و`restart: unless-stopped`، بلا منفذ: اتصال WebSocket صادر فقط). مجموع حدود الذاكرة من 3296MiB إلى **3424MiB**، ومجموع سقوف المعالج من 6.5 إلى 6.75.
 - خاملة افتراضياً (`CTRADER_ENABLED=false`): تفحص كل دقيقة وتكتب سطراً واحداً في الساعة، ولا تتصل بـ cTrader حتى يُربط الحساب ويُفعَّل الإعداد.
 - النشر يكتب `CTRADER_CLIENT_ID` و`CTRADER_CLIENT_SECRET` من أسرار GitHub في `/opt/trading/.env` **فقط إذا كان المفتاح غير موجود أو فارغاً**، عبر `set-env-secrets.sh` على stdin ودون طباعة القيم. خطوات التفعيل في docs/ctrader-feed.md.
+
+## فلتر الدرجة في تنبيهات AI (B11b)
+- إعداد جديد `AI_GRADES_ENABLED=false` (في `.env.example`، يصل في النشر التالي). في v1 لا يُرجع ai-service درجات (`grade` دائماً null)، فلا يُطبَّق `min_grade` ويصل تنبيه ARMED لكل متابع. `min_grade` يبقى محفوظاً كما هو.
+- يُفعَّل (`true`) فقط حين يُرجع ai-service درجات، ثم إعادة تشغيل `worker` و`backend`. بلا migration وبلا خدمة جديدة.
