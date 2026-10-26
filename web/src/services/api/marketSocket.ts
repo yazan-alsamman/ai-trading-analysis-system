@@ -32,6 +32,11 @@ export interface MarketSocket {
   subscribeCandles(instrumentId: string, timeframe: string, listener: Listener): () => void;
   /** Server pushes on the user's own topic (notifications, price alerts…). */
   onUserEvent(type: string, handler: (msg: Record<string, unknown>) => void): () => void;
+  /**
+   * Any other instrument topic (e.g. `ai_setups`): `topicKey` is the topic name the
+   * server puts in its frames (`ai:setups:<id>`). Re-sent after every reconnect.
+   */
+  subscribeTopic(topic: string, instrumentId: string, topicKey: string, handler: (msg: Record<string, unknown>) => void): () => void;
   /** Number of open topic subscriptions (diagnostics and tests). */
   topicCount(): number;
 }
@@ -44,6 +49,7 @@ export function createMarketSocket(opts: MarketSocketOptions): MarketSocket {
   const idleCloseMs = opts.idleCloseMs ?? 5_000;
   const topics = new Map<string, { id: string; tf: string; listeners: Set<Listener> }>();
   const userHandlers = new Map<string, Set<(msg: Record<string, unknown>) => void>>();
+  const extraTopics = new Map<string, { sub: Record<string, string>; handlers: Set<(msg: Record<string, unknown>) => void> }>();
   let socket: WebSocket | null = null;
   let ping: ReturnType<typeof setInterval> | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -58,7 +64,7 @@ export function createMarketSocket(opts: MarketSocketOptions): MarketSocket {
   };
   const subscribeMsg = (id: string, tf: string) => ({ op: 'subscribe', topic: 'candles', instrument_id: id, timeframe: tf });
 
-  const wanted = () => topics.size > 0 || userHandlers.size > 0;
+  const wanted = () => topics.size > 0 || userHandlers.size > 0 || extraTopics.size > 0;
 
   async function connect() {
     if (socket || !Impl || !wanted()) return;
@@ -75,6 +81,7 @@ export function createMarketSocket(opts: MarketSocketOptions): MarketSocket {
     ws.onopen = () => {
       attempt = 0;
       for (const t of topics.values()) send(subscribeMsg(t.id, t.tf));
+      for (const t of extraTopics.values()) send({ op: 'subscribe', ...t.sub });
       ping = setInterval(() => send({ op: 'ping' }), pingMs);
     };
     ws.onmessage = (ev) => {
@@ -91,6 +98,8 @@ export function createMarketSocket(opts: MarketSocketOptions): MarketSocket {
         const t = topics.get(topic);
         t?.listeners.forEach((l) => l.onStatus('live'));
         if (c && typeof c.time === 'number') t?.listeners.forEach((l) => l.onCandle(c));
+      } else if (topic && extraTopics.has(topic) && type !== 'subscribed') {
+        extraTopics.get(topic)?.handlers.forEach((h) => h(msg));
       } else if (type === 'subscribed' && topics.has(topic)) {
         emitStatus('live', topic);
       } else if (type === 'error' && msg.code === 'unknown_instrument') {
@@ -179,6 +188,26 @@ export function createMarketSocket(opts: MarketSocketOptions): MarketSocket {
         maybeClose();
       };
     },
-    topicCount: () => topics.size,
+    subscribeTopic(topic, instrumentId, key, handler) {
+      let t = extraTopics.get(key);
+      if (!t) {
+        t = { sub: { topic, instrument_id: instrumentId }, handlers: new Set() };
+        extraTopics.set(key, t);
+        send({ op: 'subscribe', ...t.sub });
+      }
+      t.handlers.add(handler);
+      void connect();
+      return () => {
+        const cur = extraTopics.get(key);
+        if (!cur) return;
+        cur.handlers.delete(handler);
+        if (cur.handlers.size === 0) {
+          extraTopics.delete(key);
+          send({ op: 'unsubscribe', ...cur.sub });
+          maybeClose();
+        }
+      };
+    },
+    topicCount: () => topics.size + extraTopics.size,
   };
 }

@@ -290,4 +290,27 @@ run('live backend: full service layer', () => {
     await a.services.apiKeys.revoke(apiKey.id);
     expect((await a.services.apiKeys.list()).find((k) => k.id === apiKey.id)?.revoked).toBe(true);
   }, 30_000);
+
+  it('AI setups: follow (idempotent, per user), unknown profile refused, history and trades readable, unknown setup 404', async () => {
+    const f = await a.services.aiSetups.follow(eurusd, 'intraday', null);
+    expect(f).toMatchObject({ instrumentId: eurusd, profile: 'intraday', minGrade: null });
+    await a.services.aiSetups.follow(eurusd, 'intraday', 'B'); // upsert
+    expect((await a.services.aiSetups.follows()).filter((x) => x.instrumentId === eurusd)).toHaveLength(1);
+    expect(await b.services.aiSetups.follows()).toEqual([]);
+    await rejectsWith(a.services.aiSetups.follow(eurusd, 'scalping', null), 'validation');
+    expect(Array.isArray(await a.services.aiSetups.recent())).toBe(true);
+    expect((await a.services.aiSetups.trades({ limit: 10, offset: 0 })).items).toEqual([]);
+    await rejectsWith(a.services.aiSetups.size('no-such-setup'), 'not_found');
+    await a.services.aiSetups.unfollow(eurusd, 'intraday');
+    expect(await a.services.aiSetups.follows()).toEqual([]);
+  }, 30_000);
+
+  it('economic calendar: a week of events; windows over 31 days are refused', async () => {
+    const start = Date.now() - 3 * 86_400_000;
+    const res = await a.services.calendar.events({ start, end: start + 7 * 86_400_000, minImpact: 'low' });
+    expect(res.asOf).toBeGreaterThan(0);
+    for (const e of res.events) expect(['holiday', 'low', 'medium', 'high']).toContain(e.impact);
+    if (res.events[0]) expect((await a.services.calendar.history(res.events[0].key)).length).toBeGreaterThan(0);
+    await rejectsWith(a.services.calendar.events({ start, end: start + 40 * 86_400_000 }), 'validation');
+  }, 30_000);
 });

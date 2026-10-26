@@ -7,7 +7,9 @@ import type { Opportunity } from '@/domain/opportunity';
 import type { PredictionRecord } from '@/domain/predictions';
 import type { StrategySignal } from '@/domain/strategySignals';
 import type { LoginInput, RegisterInput, Session, User } from '@/domain/user';
+import type { AIExplanation, AIFollow, AIGrade, AISetup, AISetupEvent, AISetupInstrument, AISetupSize, AITake, AITrade } from '@/domain/aiSetups';
 import type { ApiKey, ApiKeyInput, ApiKeyScope, ApiKeyUsageDay } from '@/domain/apiKeys';
+import type { CalendarEvent, CalendarQuery, CalendarResult } from '@/domain/calendar';
 import type { BacktestComparison, BacktestInput, BacktestProgressEvent, BacktestResult, BacktestStatus, BacktestSummary, BacktestTrade } from '@/domain/backtests';
 import type { AlertTrigger, ChannelStatus, NotificationPreferences, TelegramLink, TestDelivery } from '@/domain/notificationSettings';
 import type { ServerWorkspace, ServerWorkspaceSummary, WorkspaceStateDoc, WorkspaceUpdatedEvent } from '@/domain/serverWorkspaces';
@@ -330,6 +332,34 @@ export interface ApiKeyService {
   usage(id: string, options?: CallOptions): Promise<ApiKeyUsageDay[]>;
 }
 
+/**
+ * AI setups (docs/ai-contract.md): follows, the setups the server told the user
+ * about, live state changes, sizing, explanation and the user's own "taken"
+ * record. v1 is rules-only: probability, EV and grade are null.
+ */
+export interface AISetupService {
+  follows(options?: CallOptions): Promise<AIFollow[]>;
+  follow(instrumentId: string, profile: string, minGrade: AIGrade | null): Promise<AIFollow>;
+  unfollow(instrumentId: string, profile: string): Promise<void>;
+  /** Latest state of every setup in the user's `ai_setup` notifications, newest first. */
+  recent(options?: CallOptions): Promise<AISetup[]>;
+  size(setupId: string, options?: CallOptions): Promise<AISetupSize>;
+  explanation(setupId: string, lang: 'ar' | 'en', options?: CallOptions): Promise<AIExplanation>;
+  /** Records that the user took the setup (nothing is executed). Null fields take the server defaults. */
+  take(setupId: string, input: { lots: number | null; entryPrice: number | null }): Promise<AITake>;
+  untake(setupId: string): Promise<void>;
+  trades(page: { limit: number; offset: number }, options?: CallOptions): Promise<{ items: AITrade[]; total: number }>;
+  /** State changes pushed on `ai:setups:{instrument_id}` (no snapshot: past setups come from `recent`). */
+  subscribe(instrument: AISetupInstrument, onEvent: (event: AISetupEvent) => void): Unsubscribe;
+}
+
+/** Economic calendar (docs/economic-calendar.md). */
+export interface CalendarService {
+  events(query: CalendarQuery, options?: CallOptions): Promise<CalendarResult>;
+  /** Every version of one event, oldest first. */
+  history(eventKey: string, options?: CallOptions): Promise<CalendarEvent[]>;
+}
+
 export interface Services {
   source: DataSource;
   market: MarketDataService;
@@ -351,4 +381,6 @@ export interface Services {
   social: SocialService;
   expertStudio: ExpertStudioService;
   apiKeys: ApiKeyService;
+  aiSetups: AISetupService;
+  calendar: CalendarService;
 }

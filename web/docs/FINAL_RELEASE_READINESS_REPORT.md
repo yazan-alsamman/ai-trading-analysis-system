@@ -8,7 +8,7 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 
 | Area | Status |
 | --- | --- |
-| Integration of the backend's capabilities | **Complete for the backend as of `5b91175`**: every feature in the table below has a screen. **New on `main` (`1afe445`), not yet connected:** AI setups (follows, size, explanation, take, taken trades), the economic calendar and data health. See REMAINING_BACKEND_AND_AI_REQUIREMENTS.md. |
+| Integration of the backend's capabilities | **Complete**: every user-facing backend feature in the table below has a screen, including **AI setups** and the **economic calendar**, which were added on `main` (`1afe445`) during this round. Not connected: data health (`/health/data`, an operations endpoint) and admin-only features. |
 | Verified against the **real** backend | **Two layers:**<br>• The service layer for all features: 9/9 live tests on 26 Oct 2026, plus the 29 API and 12 browser checks from 18 Oct.<br>• The **new pages**: verified in the browser against the backend's *recorded* responses only. A live browser run was not possible (see §4). |
 | Demo mode | Unchanged. All 103 browser tests pass, including the visual-regression screenshots. |
 | Ready to deploy | **No, configuration first** (§5): `deploy.yml` still builds demo mode. HTTPS now exists on `main` (trading.yazanalsamman.com, #51). |
@@ -47,8 +47,10 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 | Expert subscriptions (**demo payments**) | Subscribe → backend demo checkout → return page; Settings → Subscriptions (cancel/resume, invoices) | `/subscriptions/checkout`, `/me/subscriptions*` | **Live** (service: paid with test card 4242…, cancel/resume) + mocked | Real payments: backend R7 |
 | Expert studio (profile, plans, earnings) | Settings → Expert studio (expert role) | `/me/expert-profile`, `/me/plans*`, `/me/earnings` | **Live** (service) | Live browser run |
 | API keys (shown once) | Settings → API keys | `/me/api-keys*` | **Live** (service) + mocked (browser) | — |
-| AI opportunities, prediction history, model analytics | "Not available yet" | No per-instrument listing; AI setups (rules-only v1) are new on `main` | n/a | Connect AI setups (next round); model: R1, R2 |
-| Economic calendar, data health (new on `main`) | — | `/calendar/*`, `/health/data` | n/a | Next round |
+| **AI setups:** follows (min grade), setups the server sent, live state changes, size for your account, verified explanation (ar/en), "I took this trade" record, taken setups with results | AI setups page (`/ai-setups`); `ai_setup` notifications open it | `/me/ai/follows*`, `/ai/setups/{id}/size`, `/explanation`, `/take`, `/me/ai/trades`, `/me/notifications?type=ai_setup`, WebSocket `ai_setups` | Mocked (browser, incl. a live frame) + contract tests on recordings; live checks written, **not yet run** | v1 is rules-only: probability, EV and grade show "Not provided" |
+| **Economic calendar:** week view, currency and impact filters, revision history, next high-impact event | Economic calendar page (`/calendar`) | `/calendar/events`, `/calendar/events/{key}/history` | Mocked (browser) + contract tests; live check written, **not yet run** | — |
+| AI opportunities per instrument, prediction history, model analytics | "Not available yet" | No per-instrument listing; no model in v1 | n/a | Backend/AI R1, R2 |
+| Data health | — | `/health/data` | n/a | Optional operations view |
 | AI assistant (LLM) | Rule-based, labelled | — none | n/a | Backend R3 |
 | Platform membership | "Pricing to be announced", labelled preview | — none | n/a | Backend R6 |
 
@@ -58,9 +60,9 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 | --- | --- | --- |
 | `pnpm typecheck` (strict TS) | static | clean |
 | `pnpm lint` | static | clean (0 errors, 0 warnings) |
-| `vitest run` | unit, contract (recorded responses), config | **200 passed** after merging `main`; 9 live tests skipped without a backend |
+| `vitest run` | unit, contract (recorded responses), config | **209 passed**, including 9 contract tests for AI setups and the calendar; 11 live tests skipped without a backend |
 | `src/services/api/live.services.test.ts` | **live**, real backend, service layer of every new feature | **9/9 passed** (26 Oct 2026, before the local stack was stopped) |
-| `playwright test` (demo + api-mode projects) | browser, mocked backend from recordings | **103/103 passed** before the merge; the backend-mode project (14 tests) was re-run after merging `main` and passed. The tests include the new strategies, backtests, settings (workspace 409), community and alert-history tests |
+| `playwright test` (demo + api-mode projects) | browser, mocked backend from recordings | **Before the merge:** 103/103.<br>**After merging `main` and adding AI setups and the calendar, on fresh builds:**<br>• backend-mode project: 16/16, including the new AI-setup and calendar tests<br>• full run: 98 of 105 finished with no failure before the system stopped it for low memory; 6 demo visual screenshots and 1 other test did not run.<br>(An earlier post-merge run had hit stale preview servers; it is not counted.)<br>The tests include the new strategies, backtests, settings (workspace 409), community and alert-history tests |
 | `e2e-live/live.spec.ts` | **live** browser | 12/12 on 18 Oct for the originally connected features; **not re-run** for the new pages (see §4) |
 
 **What the live service suite exercised against the real server:**

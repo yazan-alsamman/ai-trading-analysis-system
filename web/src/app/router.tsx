@@ -35,6 +35,8 @@ const PeoplePage = lazy(() => import('@/features/community/PeoplePage').then((m)
 const ProfilePage = lazy(() => import('@/features/community/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const ExpertDetailPage = lazy(() => import('@/features/community/ExpertDetailPage').then((m) => ({ default: m.ExpertDetailPage })));
 const CheckoutReturnPage = lazy(() => import('@/features/subscriptions/CheckoutReturnPage').then((m) => ({ default: m.CheckoutReturnPage })));
+const AISetupsPage = lazy(() => import('@/features/aiSetups/AISetupsPage').then((m) => ({ default: m.AISetupsPage })));
+const CalendarPage = lazy(() => import('@/features/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('@/features/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })));
 
@@ -78,6 +80,8 @@ export const router = createBrowserRouter([
       { path: '/signals', element: page(<SignalsPage />) },
       { path: '/alerts', element: page(<AlertsPage />) },
       { path: '/insights', element: page(<InsightsPage />) },
+      { path: '/ai-setups', element: page(<AISetupsPage />) },
+      { path: '/calendar', element: page(<CalendarPage />) },
       { path: '/strategies', element: page(<StrategiesPage />) },
       { path: '/backtests', element: page(<BacktestsPage />) },
       { path: '/backtests/:backtestId', element: page(<BacktestDetailPage />) },

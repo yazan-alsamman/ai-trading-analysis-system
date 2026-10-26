@@ -174,8 +174,17 @@ export function toNotification(n: NotificationRead): AppNotification {
     read: n.read_at !== null,
     provenance: 'live',
     remote: true,
+    // Server notifications that have a screen open it.
+    ...(NOTIFICATION_HREF[n.type] ? { href: NOTIFICATION_HREF[n.type] } : {}),
   };
 }
+
+const NOTIFICATION_HREF: Record<string, string> = {
+  ai_setup: '/ai-setups',
+  price_alert: '/alerts',
+  backtest_completed: '/backtests',
+  backtest_failed: '/backtests',
+};
 
 export function toStrategySignal(s: SignalRead, instrumentsById: ReadonlyMap<string, InstrumentRead>): StrategySignal {
   const inst = instrumentsById.get(s.instrument_id);

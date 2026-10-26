@@ -14,7 +14,9 @@ import { OpportunityPreferencesSchema, PriceAlertSchema } from '../schemas';
 import type {
   AccountService,
   AlertService,
+  AISetupService,
   ApiKeyService,
+  CalendarService,
   AssistantService,
   AuthService,
   BacktestService,
@@ -383,6 +385,16 @@ const demoApiKeys = (): ApiKeyService => {
   return { list: no, scopes: no, create: no, update: no, revoke: no, usage: no };
 };
 
+const demoAISetups = (): AISetupService => {
+  const no = backendOnly('AI setups');
+  // Demo mode streams nothing: there is no simulated stand-in for the AI engine.
+  return { follows: no, follow: no, unfollow: no, recent: no, size: no, explanation: no, take: no, untake: no, trades: no, subscribe: () => () => undefined };
+};
+const demoCalendar = (): CalendarService => {
+  const no = backendOnly('The economic calendar');
+  return { events: no, history: no };
+};
+
 export function createDemoServices(getSession: () => Session | null): Services {
   const market = new DemoMarket();
   return {
@@ -406,5 +418,7 @@ export function createDemoServices(getSession: () => Session | null): Services {
     social: demoSocial(),
     expertStudio: demoExpertStudio(),
     apiKeys: demoApiKeys(),
+    aiSetups: demoAISetups(),
+    calendar: demoCalendar(),
   };
 }

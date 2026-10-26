@@ -109,3 +109,5 @@ Every backend capability now has a screen (FINAL_RELEASE_READINESS_REPORT.md). T
 | 53 | Custom strategies are edited as JSON | Validated by the server, with error paths and a reference of the builder catalog. A visual drag-and-drop builder is optional follow-up work. |
 | 54 | Server workspaces map one chart panel | The web chart has one panel. Extra server panels, drawings and strategy overlays are listed as not carried over when loading. |
 | 55 | Workspace reorder/share and backtest list filters have no UI | The backend supports them; the web service layer does not expose them yet |
+| 56 | AI setups v1 carry no probability, EV or grade | Rules-only engine (no trained model). Shown as "Not provided"; a minimum-grade follow receives nothing in v1, and the follow form says so |
+| 57 | AI setups page lists only setups the server sent you | There is no user-facing list endpoint; setups armed before you followed are not shown |

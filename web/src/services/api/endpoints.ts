@@ -121,6 +121,19 @@ export const endpoints = {
     plan: (planId: string) => `/me/plans/${id(planId)}`, // PATCH / DELETE (deactivates)
     earnings: '/me/earnings',
   },
+  aiSetups: {
+    follows: '/me/ai/follows', // GET [FollowRead]
+    follow: (instrumentId: string, profile: string) => `/me/ai/follows/${id(instrumentId)}/${id(profile)}`, // PUT {min_grade?} / DELETE
+    size: (setupId: string) => `/ai/setups/${id(setupId)}/size`, // GET: sized for the caller's account
+    explanation: (setupId: string) => `/ai/setups/${id(setupId)}/explanation`, // GET ?lang=ar|en
+    take: (setupId: string) => `/ai/setups/${id(setupId)}/take`, // POST {lots?, entry_price?} / DELETE
+    trades: '/me/ai/trades', // Page<AITradeRead>
+    // Setups the user was told about: GET /me/notifications?type=ai_setup (no other user-facing list exists).
+  },
+  calendar: {
+    events: '/calendar/events', // ?start&end (≤ 31 days)&currencies&min_impact&as_of
+    history: (eventKey: string) => `/calendar/events/${id(eventKey)}/history`,
+  },
   apiKeys: {
     list: '/me/api-keys', // GET / POST (the key is in the POST response only)
     scopes: '/me/api-keys/scopes',

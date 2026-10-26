@@ -27,6 +27,40 @@ const recVariant = (name: string, code: number): Record<string, unknown> =>
 
 const RECORDED_SIGNAL = (JSON.parse(readFileSync(resolve(process.cwd(), 'src/services/api/__fixtures__/recorded-signal.json'), 'utf8')) as { signal: Record<string, unknown> }).signal;
 const BACKTEST_ID = String(rec('backtests_get').id);
+export const AI_SETUP_ID = String(rec('ai_setup_size').setup_id);
+
+/** An `ai_setup` notification as the backend builds it (app/ai/alerts.py::_base_data); v1: no probability, EV or grade. */
+function aiSetupNotification(nowMs: number) {
+  const at = new Date(nowMs - 10 * 60_000).toISOString();
+  return {
+    id: '5b0f4a43-6f3e-4a8e-9a0c-1f2e3d4c5b6a',
+    type: 'ai_setup',
+    title: 'BUY setup XAU/USD: entry 2,400.00',
+    body: 'Entry 2,400.00 · stop 2,395.00 · target 2,410.00',
+    severity: 'warning',
+    created_at: at,
+    read_at: null,
+    data: {
+      setup_id: AI_SETUP_ID,
+      state: 'ARMED',
+      transition: { from: 'DEVELOPING', to: 'ARMED', at, reason: 'entry conditions met', realized_r: null },
+      direction: 'buy',
+      instrument: { id: 'i-xau', symbol: 'XAU/USD', source: 'twelvedata', price_precision: 2, quantity_precision: 2 },
+      profile: 'intraday',
+      entry: 2400,
+      sl: 2395,
+      tp: 2410,
+      r_multiple: 2,
+      probability: null,
+      ev_r: null,
+      grade: null,
+      valid_until: new Date(nowMs + 50 * 60_000).toISOString(),
+      reason: 'entry conditions met',
+      realized_r: null,
+      late: false,
+    },
+  };
+}
 const ID = '[^/]+';
 /**
  * Endpoints answered with the backend's recorded success response (method, path, recording, status).
@@ -97,6 +131,13 @@ const RECORDED_ROUTES: [string, RegExp, string, number][] = (
     ['PATCH', `/me/api-keys/${ID}`, 'keys_update', 200],
     ['DELETE', `/me/api-keys/${ID}`, '', 204],
     ['GET', '/conversations', 'chat_list', 200],
+    ['GET', `/ai/setups/${ID}/size`, 'ai_setup_size', 200],
+    ['GET', `/ai/setups/${ID}/explanation`, 'ai_setup_explanation', 200],
+    ['POST', `/ai/setups/${ID}/take`, 'ai_setup_take', 201],
+    ['DELETE', `/ai/setups/${ID}/take`, '', 204],
+    ['GET', '/me/ai/trades', 'ai_trades', 200],
+    ['GET', '/calendar/events', 'calendar_events', 200],
+    ['GET', `/calendar/events/${ID}/history`, 'calendar_event_history', 200],
   ] as const
 ).map(([m, p, name, status]) => [m, new RegExp(`^${p}$`), name, status]);
 
@@ -180,6 +221,7 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
   const page_ = (items: unknown[]) => ({ items, total: items.length, limit: 50, offset: 0 });
   /** The server version of the workspace edited in tests (bumped by `bumpWorkspaceVersion`, i.e. "another device"). */
   let workspaceVersion = Number(rec('ws_get').version ?? 1);
+  let follows = [{ ...(recRaw('ai_follows') as Record<string, unknown>[])[0], instrument_id: 'i-xau', min_grade: null }] as Record<string, unknown>[];
   state.bumpWorkspaceVersion = () => {
     workspaceVersion += 1;
   };
@@ -256,7 +298,22 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
       return reply(route, 201, { id: 'alert-new', instrument: { id: inst.id, symbol: inst.symbol }, condition: b.condition, value: b.value, window_minutes: null, repeat: b.repeat, cooldown_minutes: null, note: b.note ?? null, is_active: true, last_triggered_at: null, trigger_count: 0, expires_at: null, created_at: iso(nowMs), updated_at: iso(nowMs), current_price: inst.price, would_trigger_now: false });
     }
 
+    // The user's AI-setup history is their `ai_setup` notifications (none was recorded: built as alerts._base_data does).
+    if (method === 'GET' && path === '/me/notifications' && url.searchParams.get('type') === 'ai_setup') return reply(route, 200, page_([aiSetupNotification(nowMs)]));
     if (method === 'GET' && path === '/me/notifications') return reply(route, 200, rec('notif_list'));
+    // AI follows: the recorded responses, on the instrument the request names.
+    if (method === 'GET' && path === '/me/ai/follows') return reply(route, 200, follows);
+    const followMatch = /^\/me\/ai\/follows\/([^/]+)\/([^/]+)$/.exec(path);
+    if (followMatch && method === 'PUT') {
+      if (followMatch[2] !== 'intraday') return reply(route, 422, recVariant('ai_follow', 422));
+      const f = { ...rec('ai_follow'), instrument_id: followMatch[1], profile: followMatch[2], min_grade: b.min_grade ?? null };
+      follows = [f, ...follows.filter((x) => x.instrument_id !== f.instrument_id)];
+      return reply(route, 200, f);
+    }
+    if (followMatch && method === 'DELETE') {
+      follows = follows.filter((x) => x.instrument_id !== followMatch[1]);
+      return reply(route, 204);
+    }
     if (method === 'GET' && path === '/me/notifications/unread-count') return reply(route, 200, rec('notif_unread_count'));
     if (method === 'POST' && (path === '/me/notifications/read-all' || /^\/me\/notifications\/[^/]+\/read$/.test(path))) return reply(route, 204);
 
@@ -303,6 +360,7 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
       const msg = JSON.parse(String(raw)) as Record<string, unknown>;
       state.wsSent.push(msg);
       if (msg.op === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
+      if (msg.op === 'subscribe' && msg.topic === 'ai_setups') ws.send(JSON.stringify({ type: 'subscribed', topic: `ai:setups:${String(msg.instrument_id)}` }));
       if (msg.op === 'subscribe' && msg.topic === 'candles') {
         const inst = INSTRUMENTS.find((i) => i.id === msg.instrument_id);
         const topic = `candles:${String(msg.instrument_id)}:${String(msg.timeframe)}`;

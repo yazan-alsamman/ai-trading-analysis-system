@@ -1,6 +1,8 @@
 import {
   BellRing,
   Bot,
+  CalendarDays,
+  Crosshair,
   CandlestickChart,
   FlaskConical,
   Workflow,
@@ -53,14 +55,23 @@ const STRATEGIES: NavItem = {
   shortcut: 'g t',
   backendOnly: true,
 };
+const AI_SETUPS: NavItem = {
+  to: '/ai-setups',
+  label: 'AI setups',
+  icon: Crosshair,
+  description: 'Follow instruments, see setups the AI engine armed, size and record them',
+  shortcut: 'g e',
+  backendOnly: true,
+};
+const CALENDAR: NavItem = { to: '/calendar', label: 'Economic calendar', icon: CalendarDays, description: 'Scheduled macro events by currency and impact', shortcut: 'g n', backendOnly: true };
 const BACKTESTS: NavItem = { to: '/backtests', label: 'Backtests', icon: FlaskConical, description: 'Replay a strategy on historical candles', shortcut: 'g b', backendOnly: true };
 
 /** Primary navigation, grouped by the research workflow. */
 export const NAV_GROUPS: readonly NavGroup[] = [
-  { label: 'Research', items: [WORKSPACE, SIGNALS, STRATEGIES, ASSISTANT] },
+  { label: 'Research', items: [WORKSPACE, SIGNALS, AI_SETUPS, STRATEGIES, ASSISTANT] },
   { label: 'Risk & monitoring', items: [RISK, ALERTS] },
   { label: 'Review', items: [BACKTESTS, INSIGHTS] },
-  { label: 'Market intelligence', items: [COMMUNITY] },
+  { label: 'Market intelligence', items: [CALENDAR, COMMUNITY] },
 ];
 
 /** The groups shown for a data source (backend-only pages are hidden in demo mode). */

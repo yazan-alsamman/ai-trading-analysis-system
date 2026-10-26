@@ -261,3 +261,70 @@ test('alerts: the server trigger history is shown', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Alert trigger history' })).toBeVisible();
   expect(api.unexpected).toEqual([]);
 });
+
+test('AI setups: follow, setups from notifications and live frames, server size and explanation, record as taken; no model values invented', async ({ page }) => {
+  const api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/ai-setups');
+  await expect(page.getByRole('heading', { name: 'AI setups', level: 1 })).toBeVisible();
+  await expect(page.getByText(/no trained model/).first()).toBeVisible();
+
+  // Follow: the backend contract, and the honest warning about grades in v1.
+  await page.getByLabel('Instrument', { exact: true }).selectOption({ label: 'EUR/USD' });
+  await page.getByLabel('Minimum grade').selectOption('B');
+  await expect(page.getByRole('note').filter({ hasText: /assigns no grades/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Follow', exact: true }).click();
+  await expect.poll(() => api.calls.find((c) => c.method === 'PUT' && /^\/me\/ai\/follows\/i-eur\/intraday$/.test(c.path))?.body).toEqual({ min_grade: 'B' });
+  await expect(page.getByRole('list', { name: 'Your follows' }).getByText('EUR/USD', { exact: true })).toBeVisible();
+
+  // The setup the server told the user about (ai_setup notification).
+  const table = page.getByRole('region', { name: 'AI setups' });
+  await expect(table.getByText('XAU/USD')).toBeVisible();
+  await expect(table.getByText('Armed: entry valid')).toBeVisible();
+  await expect(table.getByText('2,400.00')).toBeVisible();
+
+  // A live state change on a followed instrument updates the row.
+  await expect.poll(() => api.wsSent.some((m) => m.op === 'subscribe' && m.topic === 'ai_setups' && m.instrument_id === 'i-xau')).toBe(true);
+  api.ws?.send(
+    JSON.stringify({
+      type: 'ai_setup',
+      topic: 'ai:setups:i-xau',
+      setup: { setup_id: 'live-setup-1', state: 'ARMED', direction: 'sell', entry: 2420, sl: 2425, tp: 2410, r_multiple: 2, probability: null, ev_r: null, grade: null, valid_until: null },
+      transition: { setup_id: 'live-setup-1', from: 'DEVELOPING', to: 'ARMED', at: new Date().toISOString(), reason: 'rules', realized_r: null },
+    }),
+  );
+  await expect(table.getByText('2,420.00')).toBeVisible();
+
+  // Details: the server's size and explanation; nothing the model would provide is shown as a number.
+  await table.getByRole('row').filter({ hasText: '2,400.00' }).getByRole('button', { name: 'Details' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Size for your account')).toBeVisible();
+  await expect(dialog.getByText('0.09')).toBeVisible();
+  await expect(dialog.getByText(/ai-service is unavailable; sized by the backend/)).toBeVisible();
+  await expect(dialog.getByText('Not provided').first()).toBeVisible();
+  await dialog.getByRole('radio', { name: 'العربية' }).click();
+  await expect(dialog.locator('p[lang="ar"]')).toBeVisible();
+  await dialog.getByLabel(/Your entry price/).fill('2400.5');
+  await dialog.getByRole('button', { name: 'I took this trade' }).click();
+  await expect.poll(() => api.calls.find((c) => c.method === 'POST' && /^\/ai\/setups\/[^/]+\/take$/.test(c.path))?.body).toEqual({ entry_price: 2400.5 });
+  await dialog.getByRole('button', { name: 'Close' }).last().click();
+
+  await expect(page.getByRole('region', { name: 'Setups you took' }).getByText('Active: entry reached')).toBeVisible();
+  expect(api.unexpected).toEqual([]);
+});
+
+test('economic calendar: week of events with impact filter and revision history', async ({ page }) => {
+  const api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/calendar');
+  await expect(page.getByRole('heading', { name: 'Economic calendar', level: 1 })).toBeVisible();
+  const events = page.getByRole('region', { name: 'Economic events' });
+  await expect(events.getByText('Federal Funds Rate').first()).toBeVisible();
+  const first = api.calls.find((c) => c.path === '/calendar/events');
+  expect(first).toBeDefined();
+  await page.getByRole('radio', { name: 'High' }).click();
+  await expect.poll(() => api.calls.filter((c) => c.path === '/calendar/events').length).toBeGreaterThan(1);
+  await events.getByRole('button', { name: /Revisions of USD Federal Funds Rate/ }).first().click();
+  await expect(page.getByRole('region', { name: 'Event versions' })).toBeVisible();
+  expect(api.unexpected).toEqual([]);
+});

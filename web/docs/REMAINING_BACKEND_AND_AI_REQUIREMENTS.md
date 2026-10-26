@@ -6,7 +6,7 @@ This lists what the web client needs that the backend in this repository (`backe
 
 Every capability the backend provided when this integration round started (`main` `5b91175`) is now connected in the web client (see `FINAL_RELEASE_READINESS_REPORT.md`).
 
-**New on `main` while this round ran (not yet connected in the web client).** `main` gained 77 commits on 26 October, now merged into the branch. They add the following backend capabilities, which have no web screen yet:
+**New on `main` while this round ran.** `main` gained 77 commits on 26 October, now merged into the branch. **AI setups and the economic calendar are now connected** (the AI setups and Economic calendar pages). The rest of this table has no web screen:
 
 | Capability | Endpoints | Notes |
 | --- | --- | --- |
@@ -16,7 +16,13 @@ Every capability the backend provided when this integration round started (`main
 | AI risk inputs, leverage | `ai_risk` and `leverage` on `/me/risk-profile` | — |
 | XAU/USD live feed from cTrader (B1) | admin only | Shipped **disabled** until the cTrader app is approved |
 
-These are the next integration round. Until then, the AI panels in backend mode keep saying "Not available yet": the backend still has no endpoint for the opportunity per instrument and timeframe that those panels show (R1). The items below are the only reasons a screen still says "Not available yet", "Pricing to be announced" or "rule-based".
+The Workspace, Overview and Signals AI panels keep saying "Not available yet" in backend mode. The backend still has no endpoint for the opportunity per instrument and timeframe that those panels show, and v1 has no model to supply their probability (R1). AI setups have their own page instead.
+
+**AI setups in v1 — what the web shows and why:**
+
+- **Probability, expected value and grade:** shown as "Not provided". They are null without a model, and the UI never fills them in.
+- **Minimum grade on a follow:** a follow with a minimum grade receives **no** setups in v1. The backend's `meets_grade` refuses a null grade, so the follow form warns about this.
+- **No list of all setups:** a user sees only the setups the server told them about (`GET /me/notifications?type=ai_setup`), plus live changes on followed instruments. A per-user "open setups" endpoint would let the page show setups armed before the user followed. The items below are the only reasons a screen still says "Not available yet", "Pricing to be announced" or "rule-based".
 
 Nothing here was added to the backend by the web work. The contracts proposed below are suggestions for the owning team; the web client already has the matching domain types (`web/src/domain/*`), so each one becomes one adapter in `web/src/services/api/`.
 
