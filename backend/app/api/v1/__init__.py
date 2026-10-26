@@ -23,6 +23,7 @@ from app.api.v1 import (
     news,
     notifications,
     posts,
+    predictions,
     price_alerts,
     risk,
     strategies,
@@ -69,6 +70,8 @@ limited_router.include_router(chat.router)
 limited_router.include_router(chat.admin_router)
 limited_router.include_router(calendar.router)
 limited_router.include_router(calendar.admin_router)
+limited_router.include_router(predictions.router)
+limited_router.include_router(predictions.admin_router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)

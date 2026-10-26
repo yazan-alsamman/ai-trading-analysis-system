@@ -61,6 +61,7 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "instruments",
             "candles_1m",
             "signals",
+            "signal_outcomes",
             "price_alerts",
             "economic_events",
             "feed_credentials",
