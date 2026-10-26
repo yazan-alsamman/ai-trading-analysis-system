@@ -91,7 +91,7 @@ function readSessionFlag(key: string): boolean {
 
 export function AppShell() {
   const { source } = useServices();
-  const { session } = useAuth();
+  const role = useAuth().session?.user.role;
   const { resolvedTheme, setTheme } = usePreferences();
   const online = useOnlineStatus();
   const navigate = useNavigate();
@@ -120,9 +120,9 @@ export function AppShell() {
     () => ({
       '?': () => setShortcutsOpen(true),
       t: () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'),
-      ...Object.fromEntries(Object.entries(navShortcutsFor(source, session?.user.role)).map(([keys, to]) => [keys, () => navigate(to)])),
+      ...Object.fromEntries(Object.entries(navShortcutsFor(source, role)).map(([keys, to]) => [keys, () => navigate(to)])),
     }),
-    [navigate, resolvedTheme, setTheme, source],
+    [navigate, resolvedTheme, setTheme, source, role],
   );
   useHotkeys(hotkeys);
 

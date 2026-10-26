@@ -23,7 +23,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navigate = useNavigate();
   const { updateWorkspace } = usePreferences();
   const { source } = useServices();
-  const { session } = useAuth();
+  const role = useAuth().session?.user.role;
   const listId = useId();
 
   useEffect(() => {
@@ -48,11 +48,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         navigate('/workspace');
       },
     }));
-    const pages: Item[] = allNavFor(source, session?.user.role)
+    const pages: Item[] = allNavFor(source, role)
       .filter((p) => !q || p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q))
       .map((p) => ({ id: `p-${p.to}`, group: 'Pages', label: p.label, hint: p.description, run: () => navigate(p.to) }));
     return [...instruments, ...pages];
-  }, [query, navigate, updateWorkspace, source]);
+  }, [query, navigate, updateWorkspace, source, role]);
 
   const choose = (item: Item | undefined) => {
     if (!item) return;
