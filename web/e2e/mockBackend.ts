@@ -28,6 +28,8 @@ const recVariant = (name: string, code: number): Record<string, unknown> =>
 const RECORDED_SIGNAL = (JSON.parse(readFileSync(resolve(process.cwd(), 'src/services/api/__fixtures__/recorded-signal.json'), 'utf8')) as { signal: Record<string, unknown> }).signal;
 const BACKTEST_ID = String(rec('backtests_get').id);
 export const AI_SETUP_ID = String(rec('ai_setup_size').setup_id);
+/** The recorded share slug (changes whenever the examples are re-captured). */
+export const SHARE_SLUG = String(rec('ws_share').share_slug);
 
 /** An `ai_setup` notification as the backend builds it (app/ai/alerts.py::_base_data); v1: no probability, EV or grade. */
 function aiSetupNotification(nowMs: number) {

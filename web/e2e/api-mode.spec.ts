@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { atTime, useTheme, WEEKDAY } from './fixtures';
-import { mockBackend, PASSWORD, seedSession, USER } from './mockBackend';
+import { mockBackend, PASSWORD, seedSession, SHARE_SLUG, USER } from './mockBackend';
 
 /**
  * The production bundle built with VITE_DATA_SOURCE=api and a same-origin
@@ -366,15 +366,15 @@ test('admin console: hidden from non-admins; every section loads from the backen
 test('workspace sharing: a shared link shows a read-only copy that can be imported', async ({ page }) => {
   const api = await mockBackend(page, { role: 'expert' });
   await seedSession(page, { role: 'expert' });
-  await page.goto('/workspaces/shared/lw70_hvGpjdW0Pnu');
+  await page.goto(`/workspaces/shared/${SHARE_SLUG}`);
   await expect(page.getByText('Yazan Alsamman').first()).toBeVisible();
   await page.getByRole('button', { name: /Copy to my workspaces/ }).click();
-  await expect.poll(() => api.calls.some((c) => c.method === 'POST' && c.path === '/workspaces/shared/lw70_hvGpjdW0Pnu/import')).toBe(true);
+  await expect.poll(() => api.calls.some((c) => c.method === 'POST' && c.path === `/workspaces/shared/${SHARE_SLUG}/import`)).toBe(true);
   await page.goto('/settings');
   const ws = page.locator('#server-workspaces');
   await ws.getByRole('button', { name: /^Share / }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: 'Create share link' }).click();
-  await expect(page.getByRole('dialog').getByLabel('Share link', { exact: true })).toHaveValue(/\/workspaces\/shared\/lw70_hvGpjdW0Pnu$/);
+  await expect(page.getByRole('dialog').getByLabel('Share link', { exact: true })).toHaveValue(new RegExp(`/workspaces/shared/${SHARE_SLUG}$`));
   expect(api.unexpected).toEqual([]);
 });
 

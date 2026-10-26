@@ -1143,7 +1143,12 @@ FOLDERS: list[Folder] = [
                 "only from `min_grade` (`A` best … `D`; null: all). Nobody follows anything until "
                 "they ask. Idempotent: calling it again only changes `min_grade`. After ARMED "
                 "you hear about a setup (ACTIVE, CLOSED, EXPIRED, INVALIDATED) only if you took "
-                "it. 404 unknown instrument, 422 unknown profile (today: `intraday`).",
+                "it. 404 unknown instrument, 422 unknown profile (today: `intraday`).\n\n"
+                "`min_grade` is always stored but applied only while grades are enabled "
+                "(`AI_GRADES_ENABLED`): the response's `min_grade_active` says which. In v1 "
+                "(rules only, no model) every grade is null, so `min_grade_active` is false and "
+                'every follower gets every ARMED alert; show "grade filter available when grades '
+                'are enabled".',
                 path_vars={
                     "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
                     "profile": ("intraday", "The ai-service profile"),
@@ -1168,7 +1173,8 @@ FOLDERS: list[Folder] = [
                 "GET",
                 "/me/ai/follows",
                 "The instruments and profiles whose ARMED setups you are alerted about, with "
-                "their `min_grade`.",
+                "their `min_grade` and `min_grade_active` (whether `min_grade` filters the alerts "
+                "now; false in v1).",
             ),
             Req(
                 "ai_unfollow",
