@@ -18,10 +18,13 @@ channels:
   socket:
     address: /ws/market
     title: The WebSocket connection
-    description: One connection carries every topic. Authenticate with ?token=<access JWT> or ?api_key=<key
+    description: 'One connection carries every topic. Authenticate with ?token=<access JWT> or ?api_key=<key
       with the stream scope>; refused connections are closed with 4401 (4429 over the connection limits).
       At most 50 topic subscriptions per connection, 4 KB per client frame; idle 75 s closes with 1001;
-      a client that falls 256 messages behind is closed with 1013.
+      a client that falls 256 messages behind is closed with 1013. The user, API key and login session
+      are re-checked on every heartbeat and at once when a key is revoked, the user is deactivated or
+      deleted, logs out (that session only), changes the password or a stolen refresh token is detected
+      (every login socket; API-key sockets stay): error auth_revoked, then 4401.'
     messages:
       Subscribe:
         $ref: '#/components/messages/Subscribe'
@@ -117,6 +120,15 @@ channels:
     messages:
       News:
         $ref: '#/components/messages/News'
+  aiSetups:
+    address: ai:setups:{instrument_id}
+    title: AI setups topic (state changes of one instrument)
+    parameters:
+      instrument_id:
+        description: instrument id
+    messages:
+      AISetup:
+        $ref: '#/components/messages/AISetup'
   chat:
     address: chat:{conversation_id}
     title: chat topic (participants and admins)
@@ -207,6 +219,13 @@ operations:
     summary: New articles
     messages:
     - $ref: '#/channels/news/messages/News'
+  receiveAISetups:
+    action: receive
+    channel:
+      $ref: '#/channels/aiSetups'
+    summary: AI setup state changes of an instrument
+    messages:
+    - $ref: '#/channels/aiSetups/messages/AISetup'
   receiveNewsInstrument:
     action: receive
     channel:
@@ -231,7 +250,8 @@ components:
       title: Subscribe
       summary: 'Subscribe to a topic. candles: instrument_id + timeframe; signals: instrument_id; user:
         user_id (your own; automatic anyway); news: optional instrument_id; chat: conversation_id (participants
-        and admins only). Answer: subscribed (+ snapshot for candles) or error.'
+        and admins only); ai_setups: instrument_id (AI setup state changes). Answer: subscribed (+ snapshot
+        for candles) or error.'
       contentType: application/json
       payload:
         additionalProperties: false
@@ -243,6 +263,7 @@ components:
             - user
             - news
             - chat
+            - ai_setups
             title: Topic
             type: string
           instrument_id:
@@ -295,6 +316,7 @@ components:
             - user
             - news
             - chat
+            - ai_setups
             title: Topic
             type: string
           instrument_id:
@@ -392,7 +414,7 @@ components:
     Unsubscribed:
       name: Unsubscribed
       title: Unsubscribed
-      summary: An unsubscribe was done.
+      summary: An unsubscribe was done (by the client, or by the server with a reason).
       contentType: application/json
       payload:
         type: object
@@ -405,6 +427,12 @@ components:
           topic:
             type: string
           sent_at: *id001
+          reason:
+            type: string
+            enum:
+            - forbidden
+            description: 'set when the server dropped the topic itself: the role or the API key''s scopes
+              no longer allow it'
     Snapshot:
       name: Snapshot
       title: Snapshot
@@ -427,7 +455,9 @@ components:
             - type: 'null'
             - &id002
               description: 'Lightweight Charts friendly: ``time`` is unix seconds (UTC) of the bucket
-                start.'
+                start.
+
+                ``spread`` is only present on 1m candles that have one.'
               properties:
                 time:
                   title: Time
@@ -447,6 +477,13 @@ components:
                 volume:
                   title: Volume
                   type: number
+                spread:
+                  anyOf:
+                  - type: number
+                  - type: 'null'
+                  default: null
+                  description: 1m only, price units
+                  title: Spread
               required:
               - time
               - open
@@ -489,7 +526,10 @@ components:
     Error:
       name: Error
       title: Error
-      summary: A rejected client message; the socket stays open (token_expired closes it).
+      summary: 'A rejected client message; the socket stays open. token_expired (the token or key expired)
+        and auth_revoked (API key revoked, expired or without stream; user deactivated or deleted; the
+        login session ended: logout of that session, password change or a stolen refresh token, message
+        ''session ended''; message = the reason) are followed by a close with 4401.'
       contentType: application/json
       payload:
         type: object
@@ -512,6 +552,7 @@ components:
             - forbidden
             - too_many_subscriptions
             - token_expired
+            - auth_revoked
             - unavailable
           message:
             type: string
@@ -542,7 +583,8 @@ components:
     Signal:
       name: Signal
       title: Signal
-      summary: A live strategy signal.
+      summary: A live strategy signal. A private custom strategy's signals reach only its owner and admins
+        (same frame and topic).
       contentType: application/json
       payload:
         type: object
@@ -797,6 +839,61 @@ components:
             - reordered
             - shared
             - unshared
+    AISetup:
+      name: AISetup
+      title: AISetup
+      summary: An AI setup changed state (B11; DEVELOPING is never published). Sent once per change, after
+        it is stored.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+        - type
+        - setup
+        - transition
+        properties:
+          type:
+            const: ai_setup
+          topic:
+            type: string
+          sent_at: *id001
+          setup:
+            type: object
+            description: the setup as ai-service last returned it (state updated)
+          transition:
+            type: object
+            properties:
+              setup_id:
+                type: string
+              from:
+                type:
+                - string
+                - 'null'
+                description: 'null: new setup'
+              to:
+                type: string
+                enum:
+                - ARMED
+                - ACTIVE
+                - CLOSED
+                - EXPIRED
+                - INVALIDATED
+              at:
+                type: string
+                format: date-time
+              reason:
+                type:
+                - string
+                - 'null'
+              realized_r:
+                type:
+                - number
+                - 'null'
+            required:
+            - setup_id
+            - from
+            - to
+            - at
     PriceAlert:
       name: PriceAlert
       title: PriceAlert
@@ -1067,6 +1164,7 @@ components:
       - subscription_payment_failed
       - subscription_canceled
       - new_subscriber
+      - ai_setup
       title: NotificationType
       type: string
     Severity:

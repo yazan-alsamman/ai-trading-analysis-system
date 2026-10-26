@@ -47,6 +47,7 @@ class Req:
     headers: list[tuple[str, str, str]] = field(default_factory=list)
     body: Any = None
     form: list[tuple[str, str, str]] | None = None  # x-www-form-urlencoded
+    files: list[tuple[str, str, str]] | None = None  # multipart: key, file under docs/postman, desc
     expect: list[int] = field(default_factory=lambda: [200])
     captures: dict[str, str] = field(default_factory=dict)
     pre: str = ""  # extra pre-request JS
@@ -350,6 +351,15 @@ if (!pm.variables.get("expert_id")) pm.execution.skipRequest();"""
 SKIP_NO_PLAN = """// The expert has no active plan: nothing to buy.
 if (!pm.variables.get("plan_id")) pm.execution.skipRequest();"""
 
+SKIP_NO_CALENDAR_EVENT = """// No calendar event in the listed range yet (import the sample CSV in Admin): nothing to show.
+if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
+
+SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
+if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
+
+SKIP_NO_OUTBOX_ROW = """// No AI alert in the outbox yet (send Admin → AI Engine → List AI alert outbox first): skip.
+if (!pm.variables.get("ai_outbox_id")) pm.execution.skipRequest();"""
+
 SKIP_NO_CHECKOUT = """// No checkout was opened (no expert with an active plan yet): nothing to pay.
 if (!pm.variables.get("checkout_id")) pm.execution.skipRequest();"""
 
@@ -421,8 +431,26 @@ FOLDERS: list[Folder] = [
                 "/health/ready",
                 "Checks PostgreSQL/TimescaleDB and Redis. `status` is `ok` or `degraded`; the "
                 "per-dependency result is in `checks`. Always answers 200 so dashboards can read "
-                "the body.",
+                "the body. `data` is the worst stored data-quality status (`ok`, `closed`, "
+                "`degraded`, `no_data`, `unknown` or `disabled`; see **Data health**), for "
+                "information only: it never changes `status` or the HTTP code.",
                 auth="none",
+            ),
+            Req(
+                "health_data",
+                "Data health (market data quality)",
+                "GET",
+                "/health/data",
+                "Data quality of every monitored instrument (`DATA_QUALITY_INSTRUMENTS`, default "
+                "`fxpro:XAU/USD`): the latest report of the `data_quality.check` task, which runs "
+                "every minute (computed now if there is none). Each instrument has `status` "
+                "(`ok`, `closed`, `degraded` or `no_data`), `last_closed_bar`, `lag_seconds`, "
+                "`next_open` and the `failed_checks` (lag, missing bars, spikes…). **503** when "
+                "any instrument is `degraded` or `no_data`, 200 when all are `ok` or `closed`; "
+                "the top-level `status` is the worst one (`disabled` when nothing is monitored). "
+                "Public and read-only; `/health/ready` does not depend on it.",
+                auth="none",
+                expect=[200, 503],
             ),
         ],
     ),
@@ -512,8 +540,11 @@ FOLDERS: list[Folder] = [
                 "Refresh tokens",
                 "POST",
                 "/auth/refresh",
-                "Rotates the refresh token: the response holds a **new** pair and the old "
-                "refresh token is revoked. Reusing a revoked refresh token answers 401.",
+                "Rotates the refresh token: the response holds a **new** pair in the same login "
+                "session (the access token keeps its `sid` claim) and the old refresh token is "
+                "revoked. A refresh token presented again after its rotation is treated as "
+                "stolen: it answers 401, **every** session of the user ends and their WebSockets "
+                "close (4401 `session ended`).",
                 auth="none",
                 body={"refresh_token": "{{refresh_token}}"},
                 tests=LOGIN_TESTS,
@@ -530,8 +561,10 @@ FOLDERS: list[Folder] = [
                 "Logout",
                 "POST",
                 "/auth/logout",
-                "Revokes the given refresh token of the current user. The access token keeps "
-                "working until it expires, so clients should simply drop it.",
+                "Ends this login session: its whole refresh-token family is revoked and its "
+                "WebSockets close at once (4401 `session ended`). Sessions on other devices "
+                "stay. Access tokens are stateless: REST calls with one keep working until it "
+                "expires, so clients should simply drop it. Idempotent.",
                 body={"refresh_token": "{{refresh_token}}"},
                 expect=[204],
                 tests=LOGOUT_TESTS,
@@ -565,7 +598,9 @@ FOLDERS: list[Folder] = [
                 "Change my password",
                 "POST",
                 "/users/me/password",
-                "Needs the current password. The test script swaps `user_password` and "
+                "Needs the current password. Every login session ends (refresh tokens revoked) "
+                "and every WebSocket opened with a login closes (4401 `session ended`); API keys "
+                "and their sockets are not affected. The test script swaps `user_password` and "
                 "`user_new_password`, so running it twice restores the original password.",
                 body={
                     "current_password": "{{user_password}}",
@@ -593,7 +628,8 @@ FOLDERS: list[Folder] = [
         "* JWT, or an API key with the `market:read` scope.\n"
         "* Candle `time` is the bucket start in **unix seconds (UTC)**: the format Lightweight "
         "Charts expects (`series.setData(candles)`).\n"
-        "* Naive datetimes in queries are taken as UTC.",
+        "* Naive datetimes in queries are taken as UTC.\n"
+        "* The **economic calendar** (`/calendar/*`) uses the same access.",
         [
             Req(
                 "market_instruments",
@@ -636,7 +672,13 @@ FOLDERS: list[Folder] = [
                 "/market/instruments/:instrument_id/candles",
                 "Candles ascending by time. With `start`: the first `limit` candles from "
                 "`start`; otherwise the latest `limit` candles (up to `end` if given). "
-                "`limit` max 5,000.",
+                "`limit` max 5,000. 1m candles also carry `spread` (price units) when the "
+                "feed sent one.\n\n"
+                "`closed_only=true` returns only bars that have ended (`time + timeframe` <= the "
+                "end of the last closed 1m bar) and adds `last_closed_bar` (unix seconds). At "
+                "10:07 with 1m data up to 10:06, the 15m bar of 10:00 is still forming and 09:45 "
+                "is the last closed one. Strategies and analysis should use it; charts keep the "
+                "default.",
                 query=[
                     ("timeframe", "{{timeframe}}", "1m | 5m | 15m | 1h | 4h | 1d"),
                     ("limit", "200", "1–5000"),
@@ -644,9 +686,72 @@ FOLDERS: list[Folder] = [
                 optional_query=[
                     ("start", "2026-10-01T00:00:00Z", "ISO 8601, inclusive"),
                     ("end", "2026-10-15T00:00:00Z", "ISO 8601, inclusive"),
+                    (
+                        "closed_only",
+                        "true",
+                        "Only bars that have ended (default false includes the forming bar); "
+                        "adds `last_closed_bar`",
+                    ),
                 ],
                 path_vars={"instrument_id": ("{{instrument_id}}", "Instrument UUID")},
-                variants=[Variant("422 Invalid timeframe", 422, query={"timeframe": "2h"})],
+                variants=[
+                    Variant(
+                        "200 Closed bars only",
+                        200,
+                        query={"timeframe": "15m", "limit": "3", "closed_only": "true"},
+                    ),
+                    Variant("422 Invalid timeframe", 422, query={"timeframe": "2h"}),
+                ],
+            ),
+            Req(
+                "calendar_events",
+                "Economic calendar events",
+                "GET",
+                "/calendar/events",
+                "Economic events (ForexFactory: CPI, NFP, FOMC…) scheduled between `start` and "
+                "`end` (at most 31 days; default today 00:00 UTC + 7 days), sorted by time. "
+                "Point in time: per event the newest version known at `as_of` (default now; "
+                "`as_of` is honoured for admins only). `currencies` is a comma list (default "
+                "`USD`; `ALL` = every currency); `min_impact` is `holiday` < `low` < `medium` < "
+                "`high`. Events without a time (All Day, Tentative) have `scheduled_at: null` "
+                "and are placed by their New York `scheduled_date`. `actual_value` / "
+                "`forecast_value` / `previous_value` are parsed numbers (% stripped, K/M/B "
+                "multiplied).\n\n"
+                "Here: a past week of the sample history imported in **Admin → Market Data**.",
+                query=[
+                    ("start", "2024-12-16T00:00:00Z", "ISO 8601 (default today 00:00 UTC)"),
+                    ("end", "2024-12-23T00:00:00Z", "ISO 8601 (default start + 7 days)"),
+                    ("currencies", "USD", "comma list, or ALL"),
+                    ("min_impact", "low", "holiday | low | medium | high"),
+                ],
+                optional_query=[
+                    ("as_of", "2024-12-18T12:00:00Z", "admins only: what was known then"),
+                ],
+                captures={"calendar_event_key": "events.0.event_key"},
+                variants=[
+                    Variant(
+                        "422 More than 31 days",
+                        422,
+                        query={"start": "2024-01-01T00:00:00Z", "end": "2024-03-01T00:00:00Z"},
+                    )
+                ],
+            ),
+            Req(
+                "calendar_event_history",
+                "Economic event history",
+                "GET",
+                "/calendar/events/:event_key/history",
+                "Every stored version of one event, oldest first: the time moved, the actual was "
+                "released, the impact changed. `event_key` comes from the list.",
+                path_vars={"event_key": ("{{calendar_event_key}}", "From the events list")},
+                pre=SKIP_NO_CALENDAR_EVENT,
+                variants=[
+                    Variant(
+                        "404 Event not found",
+                        404,
+                        path_vars={"event_key": "unknown-event"},
+                    )
+                ],
             ),
         ],
     ),
@@ -800,7 +905,10 @@ FOLDERS: list[Folder] = [
                 "List signals",
                 "GET",
                 "/signals",
-                "Signals, newest bar first. `mine=true`: only signals of my active strategies. "
+                "Signals you may see, newest bar first: global strategies and custom strategies "
+                "you may use (your own or public ones). A private custom strategy's signals are "
+                "left out of the page and of `total`; admins see every signal. `mine=true`: only "
+                "signals of my active strategies. "
                 "`time` is `bar_time` in unix seconds; a signal is actionable at the open of the "
                 "next bar.",
                 query=[("limit", "20", "1–100"), ("offset", "0", "")],
@@ -830,7 +938,12 @@ FOLDERS: list[Folder] = [
         "attached to every live signal (entry, stop, targets, quantity, money at risk, R:R).\n\n"
         "* Risk profile and signal plans: JWT only.\n"
         "* Schema and position-size calculator: JWT or API key `strategies:read`.\n"
-        "* Templates: `conservative`, `balanced` (default), `aggressive`.",
+        "* Templates: `conservative`, `balanced` (default), `aggressive`.\n"
+        "* **AI setups** (`docs/risk-management.md#ai-setups`): the size of an AI setup for your "
+        'account, "I took this trade", your taken trades and the instruments whose ARMED '
+        "setups you are alerted about (follows). The setup id comes from "
+        "**Admin → AI Engine → List AI setups** (`ai_setup_id`); the size also accepts an API "
+        "key with `signals:read`.",
         [
             Req(
                 "risk_schema",
@@ -846,21 +959,27 @@ FOLDERS: list[Folder] = [
                 "Get my risk profile",
                 "GET",
                 "/me/risk-profile",
-                "Created on first read with the `balanced` template and 10,000 USDT. "
-                "`account_size` is what the user declares; the platform never connects to an "
-                "exchange. `template` is set while the config is unchanged from a template.",
+                "Created on first read with the `balanced` template, 10,000 USDT and leverage "
+                "100. `account_size` is what the user declares; the platform never connects to an "
+                "exchange. `template` is set while the config is unchanged from a template. "
+                "`ai_risk` (read-only) holds the values AI setups are sized with (balance, "
+                "currency, leverage, risk per trade, daily-loss limit, max drawdown) and where "
+                "each comes from (`sources`: `profile`, `config` or `default`), with `error` "
+                "set when the profile cannot be used.",
             ),
             Req(
                 "risk_profile_put",
                 "Update my risk profile",
                 "PUT",
                 "/me/risk-profile",
-                "`{account_size, quote_currency, config}` or `{template}` (not both; neither "
-                "changes only the account). The config is stored normalised. 422 lists every "
-                "config error with its `path` (e.g. `stop.multiplier`).",
+                "`{account_size, quote_currency, leverage, config}` or `{template}` (not both; "
+                "neither changes only the account). The config is stored normalised. 422 lists "
+                "every config error with its `path` (e.g. `stop.multiplier`). `leverage` (0–10,000) "
+                "sets the margin of AI setups; a new `account_size` restarts their drawdown guard.",
                 body={
                     "account_size": 25000,
                     "quote_currency": "USDT",
+                    "leverage": 100,
                     "config": RISK_CONFIG,
                 },
                 variants=[
@@ -889,7 +1008,11 @@ FOLDERS: list[Folder] = [
                 "A trade plan on the **last closed bar**: stop, targets, quantity, notional, "
                 "money at risk and R:R. Omitted `entry` / `stop` come from that bar (its close and "
                 "the stop rule); omitted `config` / `account_size` from your risk profile. A "
-                "`stop` price replaces the stop rule.",
+                "`stop` price replaces the stop rule. On an instrument with contract specs the "
+                "plan is sized in the account currency and adds `lots`, `lots_feasible`, "
+                "`lots_risk_amount`, `conversion_rate` and `sizing_warnings`. An instrument with a "
+                "fixed cost per unit (XAU/USD: 0.25) counts it in the risk per unit instead of "
+                "`fee_bps` (the plan carries `cost_per_unit` and a warning).",
                 body={
                     "instrument_id": "{{instrument_id}}",
                     "timeframe": "{{timeframe}}",
@@ -928,7 +1051,8 @@ FOLDERS: list[Folder] = [
                 "The trade plans of your live signals (one per signal and activation), newest "
                 "bar first, each with its `signal`. A plan with `invalid_reason` set (e.g. "
                 "`stop_unavailable`) should not be traded. Each plan carries `risk_source` "
-                "(`override`, `profile` or `default`) and the exact `risk_config` used.",
+                "(`override`, `profile` or `default`) and the exact `risk_config` used. Plans of "
+                "a strategy you may no longer use (made private by its author) are left out.",
                 query=[("limit", "20", "1–100"), ("offset", "0", "")],
                 optional_query=[
                     ("instrument_id", "{{instrument_id}}", ""),
@@ -936,6 +1060,149 @@ FOLDERS: list[Folder] = [
                     ("strategy_key", "{{strategy_key}}", ""),
                     ("since", "2026-10-01T00:00:00Z", "bar_time >= since"),
                 ],
+            ),
+            Req(
+                "ai_setup_size",
+                "AI setup size for my account",
+                "GET",
+                "/ai/setups/:setup_id/size",
+                "The setup sized for your account: by ai-service `/v1/size` or, when it is not "
+                "available, by the backend (`source`: `remote` or `local`; a local size always has a "
+                "warning saying so). The daily-loss "
+                "and drawdown guards of your taken trades apply first. Returns `lots`, "
+                "`risk_amount`, `margin_required`, `feasible`, `warnings`, the `inputs` used "
+                "(with their `sources`) and whether you `taken` it. Stored and reused while the "
+                "inputs are the same.\n\n"
+                "409: the setup has no prices (not ARMED or ACTIVE) or its instrument no specs. "
+                "422: your risk profile cannot be used. 502: ai-service answered outside the "
+                "contract. 503: ai-service unavailable and `AI_SIZE_MODE=remote`.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                pre=SKIP_NO_AI_SETUP,
+                variants=[
+                    Variant(
+                        "404 Setup not found",
+                        404,
+                        path_vars={"setup_id": "unknown-setup"},
+                    )
+                ],
+            ),
+            Req(
+                "ai_setup_explanation",
+                "AI setup explanation",
+                "GET",
+                "/ai/setups/:setup_id/explanation",
+                "The setup explained in `lang` (`ar` or `en`, default `en`), only when it may be "
+                "shown: verified by ai-service against the setup's numbers "
+                "(`explanation_status`: `verified`) or the fixed template filled with them "
+                "(`template`). Otherwise `explanation` is null and `explanation_status` is "
+                '`unavailable`: show "الشرح غير متاح" / "Explanation unavailable". No '
+                "unverified number ever reaches a user. 404 unknown setup.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                query=[("lang", "ar", "ar or en (default en)")],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[
+                    Variant(
+                        "200 Unavailable (no shown explanation in English)",
+                        200,
+                        query={"lang": "en"},
+                    ),
+                    Variant(
+                        "422 Unknown language",
+                        422,
+                        query={"lang": "fr"},
+                    ),
+                    Variant(
+                        "404 Setup not found",
+                        404,
+                        path_vars={"setup_id": "unknown-setup"},
+                    ),
+                ],
+            ),
+            Req(
+                "ai_setup_take",
+                "I took this AI setup",
+                "POST",
+                "/ai/setups/:setup_id/take",
+                "Only while the setup is ARMED or ACTIVE (409 otherwise). The body is optional: "
+                "`lots` defaults to your stored size, `entry_price` to none. 201 the first time, "
+                "200 with the same take afterwards. `realized_r` and `pnl` (realized R × "
+                "`risk_amount`) are filled when the setup ends.",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                body={"lots": 0.2, "entry_price": 2400.5},
+                expect=[201, 200],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[Variant("200 Already taken (unchanged)", 200)],
+            ),
+            Req(
+                "ai_follow",
+                "Follow AI setups",
+                "PUT",
+                "/me/ai/follows/:instrument_id/:profile",
+                "Alert me when a setup of this instrument and profile becomes **ARMED** (an "
+                "`ai_setup` notification and, live, the `ai_setups` WebSocket topic), optionally "
+                "only from `min_grade` (`A` best … `D`; null: all). Nobody follows anything until "
+                "they ask. Idempotent: calling it again only changes `min_grade`. After ARMED "
+                "you hear about a setup (ACTIVE, CLOSED, EXPIRED, INVALIDATED) only if you took "
+                "it. 404 unknown instrument, 422 unknown profile (today: `intraday`).",
+                path_vars={
+                    "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
+                    "profile": ("intraday", "The ai-service profile"),
+                },
+                body={"min_grade": "B"},
+                variants=[
+                    Variant(
+                        "422 Unknown profile",
+                        422,
+                        path_vars={"profile": "scalping"},
+                    ),
+                    Variant(
+                        "404 Instrument not found",
+                        404,
+                        path_vars={"instrument_id": "00000000-0000-0000-0000-000000000000"},
+                    ),
+                ],
+            ),
+            Req(
+                "ai_follows",
+                "My AI setup follows",
+                "GET",
+                "/me/ai/follows",
+                "The instruments and profiles whose ARMED setups you are alerted about, with "
+                "their `min_grade`.",
+            ),
+            Req(
+                "ai_unfollow",
+                "Unfollow AI setups",
+                "DELETE",
+                "/me/ai/follows/:instrument_id/:profile",
+                "Stop the ARMED alerts of this instrument and profile (404 when not followed). "
+                "Alerts of setups you took keep coming.",
+                path_vars={
+                    "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
+                    "profile": ("intraday", "The ai-service profile"),
+                },
+                expect=[204],
+                variants=[Variant("404 Not followed", 404)],
+            ),
+            Req(
+                "ai_trades",
+                "My AI trades",
+                "GET",
+                "/me/ai/trades",
+                "Your taken AI setups, newest first: the take (lots, risk, entry, result) with "
+                "the setup's current `state`, direction and prices.",
+                query=[("limit", "50", "1–100"), ("offset", "0", "")],
+            ),
+            Req(
+                "ai_setup_untake",
+                "Undo AI setup take",
+                "DELETE",
+                "/ai/setups/:setup_id/take",
+                "Undo it while the setup has not ended (409 after it ended; 404 when not taken).",
+                path_vars={"setup_id": ("{{ai_setup_id}}", "From Admin → AI Engine")},
+                expect=[204],
+                pre=SKIP_NO_AI_SETUP,
+                variants=[Variant("404 Not taken", 404)],
             ),
         ],
     ),
@@ -1158,7 +1425,10 @@ FOLDERS: list[Folder] = [
                 "optional (defaults are stored resolved). `config` takes the risk rules of "
                 "`docs/risk-management.md` (`stop`, `trailing`, `take_profit` with partial "
                 '`levels`, `sizing`, `guards`, `check_entry_bar`); `"risk_profile": true` uses '
-                "your risk profile instead. 422: unknown strategy, bad params or config (with "
+                "your risk profile instead. An instrument with a fixed cost per unit (XAU/USD: "
+                "0.25) gets `config.cost_per_unit` from the server and `fee_bps` / "
+                "`slippage_bps` are then ignored; sending `cost_per_unit` yourself answers 422. "
+                "422: unknown strategy, bad params or config (with "
                 "`path`, e.g. `stop.multiplier`), `start ≥ end`, `end` in the future, no "
                 "candles in the range.",
                 body={
@@ -1206,7 +1476,19 @@ FOLDERS: list[Folder] = [
                             "start": "2026-10-10T00:00:00Z",
                             "end": "2026-10-01T00:00:00Z",
                         },
-                    )
+                    ),
+                    Variant(
+                        "422 cost_per_unit is set by the server",
+                        422,
+                        body={
+                            "instrument_id": "{{instrument_id}}",
+                            "timeframe": "{{timeframe}}",
+                            "strategy_key": "{{strategy_key}}",
+                            "start": "{{backtest_start}}",
+                            "end": "{{backtest_end}}",
+                            "config": {"cost_per_unit": 0.25},
+                        },
+                    ),
                 ],
             ),
             Req(
@@ -1214,7 +1496,9 @@ FOLDERS: list[Folder] = [
                 "Get backtest result",
                 "GET",
                 "/backtests/:backtest_id",
-                "Everything a results page needs: config, status/progress, metrics, equity and "
+                "Everything a results page needs: config, the cost model (`cost_model`: `bps` = "
+                "`fee_bps` + `slippage_bps` of notional, or `fixed_per_unit` = the instrument's "
+                "`cost_per_unit` × quantity per round trip), status/progress, metrics, equity and "
                 "drawdown curves (at most 2,000 Lightweight Charts points) and entry/exit "
                 "markers. In the Collection Runner this request repeats until the backtest has "
                 "finished.",
@@ -1585,6 +1869,7 @@ FOLDERS: list[Folder] = [
                         optional_query=[
                             ("start", "2026-10-01T00:00:00Z", "ISO 8601, inclusive"),
                             ("end", "2026-10-15T00:00:00Z", "ISO 8601, inclusive"),
+                            ("closed_only", "true", "Only bars that have ended"),
                         ],
                     ),
                     Req(
@@ -1650,7 +1935,8 @@ FOLDERS: list[Folder] = [
                 "Revoke API key",
                 "DELETE",
                 "/me/api-keys/:key_id",
-                "Immediate and permanent. Requests with the key answer 401 afterwards.",
+                "Immediate and permanent. Requests with the key answer 401 afterwards, and open "
+                "WebSocket connections using it get `auth_revoked` and are closed with 4401.",
                 path_vars={"key_id": ("{{api_key_id}}", "API key UUID")},
                 expect=[204],
             ),
@@ -2616,7 +2902,9 @@ FOLDERS: list[Folder] = [
         "| `price_alert` | one of your price alerts fired |\n"
         "| `chat_message` | a chat message while you are not looking at the conversation (one external notification per conversation per 5 min) |\n"
         "| `subscription_started` / `_renewed` / `_payment_failed` / `_canceled` | your subscription to an expert |\n"
-        "| `new_subscriber` | someone subscribed to your plan (experts) |\n\n"
+        "| `new_subscriber` | someone subscribed to your plan (experts) |\n"
+        "| `ai_setup` | an AI setup became ARMED on an instrument you follow, or one you took "
+        "changed state (carries your size) |\n\n"
         "Every event is stored in the inbox and pushed on the WebSocket as `notification`. "
         "Telegram, email and push follow your preferences: event on for the channel → signal "
         "filters → quiet hours → hourly cap (held deliveries go out later as one digest). A "
@@ -2915,7 +3203,8 @@ FOLDERS: list[Folder] = [
             ),
             Folder(
                 "Market Data",
-                "Instrument catalogue and candle ingestion (backfill scripts, collectors).",
+                "Instrument catalogue, candle ingestion (backfill scripts, collectors) and the "
+                "economic calendar (live refresh, CSV history import).",
                 [
                     Req(
                         "admin_instrument_create",
@@ -2923,7 +3212,16 @@ FOLDERS: list[Folder] = [
                         "POST",
                         "/admin/instruments",
                         "`symbol` + `source` are unique. `BASE/QUOTE` symbols derive "
-                        "`base_asset` / `quote_asset`; other symbols must send both.",
+                        "`base_asset` / `quote_asset`; other symbols must send both.\n\n"
+                        "Contract specs are optional (null = unknown): `contract_size` (units "
+                        "per lot), `tick_size`, `lot_step`, `min_lot`, `max_lot`, "
+                        "`quote_currency` (P&L currency, default `quote_asset`), `margin_rate` "
+                        "(0–1, 0.01 = 1:100), `price_basis` (`bid` | `mid` | `last`) and "
+                        "`session_calendar` (IANA `tz`, `week_open` / `week_close`, "
+                        "`daily_breaks`, `holidays`) and `cost_per_unit` (fixed round-trip trading "
+                        "cost per unit of quantity in price units, e.g. 0.25 for XAU/USD; "
+                        "backtests and sizing then use it instead of `fee_bps` / "
+                        "`slippage_bps`). Specs sent here get `spec_source` = `manual`.",
                         auth="admin",
                         body={
                             "symbol": "PM{{$timestamp}}/USDT",
@@ -2932,6 +3230,18 @@ FOLDERS: list[Folder] = [
                             "price_precision": 2,
                             "quantity_precision": 6,
                             "is_active": True,
+                            "contract_size": 1.0,
+                            "tick_size": 0.01,
+                            "lot_step": 0.000001,
+                            "min_lot": 0.000001,
+                            "max_lot": 1000.0,
+                            "price_basis": "last",
+                            "cost_per_unit": 0.02,
+                            "session_calendar": {
+                                "tz": "UTC",
+                                "daily_breaks": [{"start": "23:55", "end": "00:05"}],
+                                "holidays": [{"name": "Maintenance", "date": "2026-12-25"}],
+                            },
                         },
                         expect=[201],
                         captures={"admin_instrument_id": "id"},
@@ -2944,7 +3254,18 @@ FOLDERS: list[Folder] = [
                                     "source": "nasdaq",
                                     "market": "stock",
                                 },
-                            )
+                            ),
+                            Variant(
+                                "422 min_lot above max_lot",
+                                422,
+                                body={
+                                    "symbol": "PM{{$timestamp}}/USDT",
+                                    "source": "postman",
+                                    "market": "crypto",
+                                    "min_lot": 10,
+                                    "max_lot": 1,
+                                },
+                            ),
                         ],
                     ),
                     Req(
@@ -2952,8 +3273,10 @@ FOLDERS: list[Folder] = [
                         "Update instrument",
                         "PATCH",
                         "/admin/instruments/:instrument_id",
-                        "Precisions, assets and `is_active`. Here: deactivates the instrument "
-                        "created above (it disappears from charts and live feeds).",
+                        "Precisions, assets, `is_active` and the contract specs (see Create). "
+                        "Changing any spec sets `spec_source` to `manual`; send null to clear a "
+                        "spec. Here: sets a margin rate and deactivates the instrument created "
+                        "above (it disappears from charts and live feeds).",
                         auth="admin",
                         path_vars={
                             "instrument_id": (
@@ -2961,7 +3284,7 @@ FOLDERS: list[Folder] = [
                                 "Instrument UUID",
                             )
                         },
-                        body={"price_precision": 4, "is_active": False},
+                        body={"price_precision": 4, "margin_rate": 0.5, "is_active": False},
                     ),
                     Req(
                         "admin_candles_upsert",
@@ -2971,7 +3294,9 @@ FOLDERS: list[Folder] = [
                         "Bulk upsert of **1m** candles (max 5,000 per request). `ts` (alias "
                         "`time`) is the UTC minute start, ISO 8601 or unix seconds. Old batches "
                         "also refresh the higher-timeframe aggregates; recent candles are pushed "
-                        "to WebSocket subscribers.",
+                        "to WebSocket subscribers. Optional per candle: `spread` (price units), "
+                        "`source` (e.g. `fxpro_ctrader`, `binance`) and `received_at` (default: "
+                        "now).",
                         auth="admin",
                         path_vars={
                             "instrument_id": (
@@ -2989,6 +3314,8 @@ FOLDERS: list[Folder] = [
                                     "close": 101.2,
                                     "volume": 12.5,
                                     "trades": 41,
+                                    "spread": 0.02,
+                                    "source": "postman",
                                 },
                                 {
                                     "ts": "{{candle_ts_1}}",
@@ -3030,6 +3357,198 @@ FOLDERS: list[Folder] = [
                             )
                         ],
                     ),
+                    Req(
+                        "admin_calendar_refresh",
+                        "Refresh economic calendar now",
+                        "POST",
+                        "/admin/calendar/refresh",
+                        "Fetches the ForexFactory week now (one request), whatever the interval "
+                        "(`CALENDAR_FETCH_INTERVAL_MINUTES`, default 240), and stores the new "
+                        "versions. `status`: `ok`, `not_modified`, `blocked` (429/403, starts a "
+                        "back-off), `backoff` (still backing off, with `until`), `error`, "
+                        "`locked` (a fetch is already running) or `disabled`. The last success, "
+                        "error and back-off are in **System status** → `calendar`.",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_calendar_import",
+                        "Import economic calendar CSV",
+                        "POST",
+                        "/admin/calendar/import",
+                        "Loads calendar history from a CSV sent as the multipart field `file` "
+                        "(UTF-8, header row first, at most 50 MB; 413 above). Same import as "
+                        "`scripts/load_calendar_csv.py`: idempotent (a second upload inserts "
+                        "nothing), read in batches, never held in memory.\n\n"
+                        "* `tz`: timezone of the CSV times (required unless the times carry "
+                        "offsets). The Kaggle ForexFactory export is `America/New_York`.\n"
+                        "* `from`: skip rows before this date (default 2018-01-01).\n"
+                        "* `source`: `forexfactory_kaggle` (default) or `manual`.\n"
+                        "* `map`: column mapping `field=Column,…` (e.g. `title=Name`); "
+                        "`date_format` for unusual dates.\n"
+                        "* `dry_run=true` parses and reports without writing.\n\n"
+                        "The response counts rows read, versions inserted / unchanged, skipped "
+                        "rows by reason (with examples) and shows the first parsed rows. The "
+                        "file is `docs/postman/samples/calendar_history_sample.csv`: run Newman "
+                        "with `--working-dir docs/postman`, or pick the file in Postman.",
+                        auth="admin",
+                        query=[
+                            ("tz", "America/New_York", "IANA timezone of the CSV times"),
+                            ("from", "2018-01-01", "skip rows before this date"),
+                            ("dry_run", "false", "true: parse and report only"),
+                        ],
+                        optional_query=[
+                            ("source", "forexfactory_kaggle", "forexfactory_kaggle | manual"),
+                            ("map", "title=Event", "field=Column,…"),
+                            ("date_format", "%Y-%m-%d", "strptime format of the date column"),
+                        ],
+                        files=[
+                            (
+                                "file",
+                                "samples/calendar_history_sample.csv",
+                                "the CSV (UTF-8, header row first)",
+                            )
+                        ],
+                        variants=[
+                            Variant(
+                                "422 Unknown time zone",
+                                422,
+                                query={"tz": "Mars/Olympus_Mons"},
+                            )
+                        ],
+                    ),
+                ],
+            ),
+            Folder(
+                "cTrader Feed",
+                "The live XAU/USD feed from the cTrader Open API (FxPro; `docs/ctrader-feed.md`): "
+                "its status, linking the cTrader account by OAuth (view-only scope `accounts`), "
+                "choosing the trader account and a long backfill of M1 bars. Tokens are stored "
+                "encrypted and **never returned**. The feed ships disabled "
+                "(`CTRADER_ENABLED=false`): until the app credentials are set and an account is "
+                "linked, Connect and Choose account answer 409.\n\n"
+                "Linking: send **Connect**, open its `url` in a browser and approve; "
+                "cTrader sends you back to **OAuth callback** with `?code=&state=`. When the "
+                "redirect cannot reach the server, paste the code into **Link with a code** "
+                "(it lives one minute).",
+                [
+                    Req(
+                        "admin_feed_status",
+                        "cTrader feed status",
+                        "GET",
+                        "/admin/feeds/ctrader",
+                        "`enabled`, `env` (demo/live), `symbol`, `instrument`, whether the app "
+                        "credentials are set (`app_credentials`), the `redirect_uri` to register "
+                        "in the cTrader app, `linked` and the `link` (account, accounts the token "
+                        "sees, scope, linked/refreshed time, token expiry), what the running "
+                        "feed reports (`state`, `connected`, `last_tick_at`, `last_bar`, "
+                        "`reconnects_24h`, `last_error`, `updated_at`) and the last manual "
+                        "`backfill`. Never the tokens. Also in System status (`feeds.ctrader`).",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_feed_connect",
+                        "Connect cTrader account",
+                        "GET",
+                        "/admin/feeds/ctrader/connect",
+                        "The cTrader authorization URL to open (`url`, scope "
+                        "`accounts`: view only) with a one-time `state` valid 10 minutes and the "
+                        "`redirect_uri` it returns to (register it in the cTrader app first). "
+                        "409 when `CTRADER_CLIENT_ID` / `CTRADER_CLIENT_SECRET` are not set on "
+                        "the server (the saved example).",
+                        auth="admin",
+                        expect=[200, 409],
+                    ),
+                    Req(
+                        "admin_feed_callback",
+                        "OAuth callback (cTrader redirect)",
+                        "GET",
+                        "/admin/feeds/ctrader/callback",
+                        "Where cTrader sends the admin's browser back with `?code=&state=`. **No "
+                        "JWT**: the one-time `state` issued by Connect authorises it. Exchanges "
+                        "the code, stores the tokens encrypted, lists the accounts and chooses "
+                        "one when it can. 400: unknown or expired state, no code, or cTrader "
+                        "answered `?error=`; 502: cTrader refused the code. You normally never "
+                        "send this by hand.",
+                        auth="none",
+                        query=[
+                            ("code", "authorization-code-from-ctrader", "From the redirect"),
+                            ("state", "state-from-connect", "From Connect"),
+                        ],
+                        expect=[200, 400],
+                        variants=[
+                            Variant(
+                                "400 cTrader answered an error",
+                                400,
+                                query={"code": "", "state": "", "error": "access_denied"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_code",
+                        "Link with a code",
+                        "POST",
+                        "/admin/feeds/ctrader/code",
+                        "The same as the callback for a code pasted by hand (when the redirect "
+                        "cannot reach the server, or came back without state). The code lives "
+                        "one minute; the state must be one Connect issued (400 otherwise).",
+                        auth="admin",
+                        body={
+                            "code": "authorization-code-from-ctrader",
+                            "state": "state-from-connect",
+                        },
+                        expect=[200, 400],
+                        variants=[
+                            Variant(
+                                "422 Empty code",
+                                422,
+                                body={"code": "", "state": "state-from-connect"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_account",
+                        "Choose cTrader account",
+                        "PATCH",
+                        "/admin/feeds/ctrader",
+                        "Choose the trader account to stream: one of the linked token's "
+                        "`link.accounts` (422 otherwise). Restart `feed-ctrader` afterwards. "
+                        "`CTRADER_ACCOUNT_ID`, when set on the server, wins. 409 when no account "
+                        "is linked (the saved example).",
+                        auth="admin",
+                        body={"account_id": 12345678},
+                        expect=[200, 409],
+                        variants=[
+                            Variant("422 Invalid account id", 422, body={"account_id": 0}),
+                        ],
+                    ),
+                    Req(
+                        "admin_feed_backfill",
+                        "Backfill cTrader bars",
+                        "POST",
+                        "/admin/feeds/ctrader/backfill",
+                        "Backfill M1 bars for `[from, to]` (time zone required, at most 400 "
+                        "days, `to` capped at now) as a background task, a day per request; a "
+                        "bar built live (with a spread) is never overwritten. Answers 202 with "
+                        "the `task_id`, the range and its length in `days`; progress is in the "
+                        "status (`backfill`). The task fails when no account is linked, or while "
+                        "the live feed is running on the same account.\n\n"
+                        "> On production this starts a real backfill against cTrader.",
+                        auth="admin",
+                        body={"from": "2026-10-01T00:00:00Z", "to": "2026-10-02T00:00:00Z"},
+                        expect=[202],
+                        variants=[
+                            Variant(
+                                "422 from after to",
+                                422,
+                                body={"from": "2026-10-02T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+                            ),
+                            Variant(
+                                "422 More than 400 days",
+                                422,
+                                body={"from": "2025-01-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+                            ),
+                        ],
+                    ),
                 ],
             ),
             Folder(
@@ -3055,7 +3574,8 @@ FOLDERS: list[Folder] = [
                         "Revoke any API key",
                         "DELETE",
                         "/admin/api-keys/:key_id",
-                        "Revokes another user's key (e.g. a leaked one). Points at `api_key_id` "
+                        "Revokes another user's key (e.g. a leaked one); its open WebSocket "
+                        "connections are closed at once. Points at `api_key_id` "
                         "(the key created in **API Keys**, already revoked there), so running the "
                         "collection never revokes someone else's key by accident.",
                         auth="admin",
@@ -3093,14 +3613,187 @@ FOLDERS: list[Folder] = [
                         "System status",
                         "GET",
                         "/admin/system/status",
-                        "The operations view in one call: version and uptime, database (size, "
+                        "The operations view in one call: version, uptime and the public HTTPS name "
+                        "(`public_hostname`, null when unset), database (size, "
                         "connections, migration, slowest queries when `pg_stat_statements` is "
                         "installed), Redis, Celery (queue lengths, live workers, last run of each "
-                        "scheduled task), market data freshness per active instrument, WebSocket "
+                        "scheduled task), market data freshness per active instrument, the "
+                        "data-quality report of every monitored instrument (`data_quality`), "
+                        "the economic-calendar refresh (`calendar`: last success, last error, "
+                        "back-off, stored rows), the AI alert outbox (`ai_alerts`: rows per "
+                        "status, oldest pending in seconds), the periodic AI evaluation "
+                        "(`ai_evaluate`: enabled, the last run of every instrument and profile "
+                        "with status, reason, duration, request size and bars sent, counts of "
+                        "the last 24 h, the last contract error), the cTrader live feed (`feeds.ctrader`: "
+                        "enabled, linked, connected, last tick and bar, reconnects, token expiry, "
+                        "last error; never the tokens), "
+                        "WebSocket "
                         "clients summed over every API process (each reports every 30 s), "
                         "notification channels, unhandled errors in "
                         "the last hour and the last daily summary.",
                         auth="admin",
+                    ),
+                ],
+            ),
+            Folder(
+                "AI Engine",
+                "What the backend stored from ai-service (`docs/ai-contract.md`): trade setups "
+                "with their state events, and the model registry. Read-only for setups; the "
+                "backend writes them from each evaluate response. User-facing reads come later.",
+                [
+                    Req(
+                        "admin_ai_setups",
+                        "List AI setups",
+                        "GET",
+                        "/admin/ai/setups",
+                        "Newest first. A setup is one trade idea of the engine: direction, entry, "
+                        "stop (`sl`), target (`tp`), `probability`, expected value in R (`ev_r`, "
+                        "`ev_r_lower`), `grade`, validity window and its `state` (DEVELOPING → "
+                        "ARMED → ACTIVE → CLOSED, or EXPIRED / INVALIDATED). `realized_r` is set "
+                        "once it closes; the strategy, model and features versions that produced "
+                        "it are kept. While ai-service runs the rules alone (v1, no model: "
+                        "`model_version` null), `probability`, `ev_r`, `ev_r_lower` and `grade` "
+                        'are null and alerts read "Probability n/a". The first one is stored as '
+                        "`ai_setup_id`.",
+                        auth="admin",
+                        query=[("limit", "50", "1–200")],
+                        optional_query=[
+                            (
+                                "state",
+                                "ARMED",
+                                "DEVELOPING | ARMED | ACTIVE | CLOSED | EXPIRED | INVALIDATED",
+                            ),
+                            ("instrument_id", "{{instrument_id}}", "Instrument UUID"),
+                        ],
+                        captures={"ai_setup_id": "0.setup_id"},
+                        variants=[
+                            Variant(
+                                "422 Unknown state",
+                                422,
+                                query={"limit": "50", "state": "OPEN"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_setup",
+                        "Get AI setup",
+                        "GET",
+                        "/admin/ai/setups/:setup_id",
+                        "A setup with its `evidence`, `features`, the payload exactly as "
+                        "ai-service last returned it (`last_payload`), every state event, "
+                        "oldest first (`from_state` null: the setup appeared; `reason` and "
+                        "`realized_r` on the move that closed it), the stored per-user sizes "
+                        "(`sizes`), how many users took it (`takes_count`) and its alerts "
+                        "(`outbox`, oldest first).",
+                        auth="admin",
+                        path_vars={"setup_id": ("{{ai_setup_id}}", "From the setups list")},
+                        pre=SKIP_NO_AI_SETUP,
+                        variants=[
+                            Variant(
+                                "404 Setup not found",
+                                404,
+                                path_vars={"setup_id": "unknown-setup"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_outbox",
+                        "List AI alert outbox",
+                        "GET",
+                        "/admin/ai/outbox",
+                        "The AI setup alerts, newest first: one row per setup state change "
+                        "(DEVELOPING excepted), written with the change and sent by the "
+                        "`ai_alerts.dispatch` task to followers (ARMED) and takers (later "
+                        "states), plus the `ai_setups` WebSocket topic. `status`: `pending` "
+                        "(due at `next_attempt_at`), `done`, `skipped` (`last_error` says why, "
+                        "e.g. an ARMED alert older than `AI_ALERTS_MAX_AGE_SECONDS`) or "
+                        "`failed` after `AI_ALERTS_MAX_ATTEMPTS`. The first row is stored as "
+                        "`ai_outbox_id`.",
+                        auth="admin",
+                        query=[("limit", "50", "1–200"), ("offset", "0", "")],
+                        optional_query=[("status", "failed", "pending | done | skipped | failed")],
+                        captures={"ai_outbox_id": "items.0.id"},
+                        variants=[
+                            Variant(
+                                "422 Unknown status",
+                                422,
+                                query={"limit": "50", "offset": "0", "status": "sent"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_outbox_retry",
+                        "Retry AI alert",
+                        "POST",
+                        "/admin/ai/outbox/:row_id/retry",
+                        "Puts a `failed` alert back to `pending`, due now (`attempts` kept), and "
+                        "starts a dispatch. 409 when the row is not `failed` (sending it twice "
+                        "gives 409 the second time).",
+                        auth="admin",
+                        path_vars={"row_id": ("{{ai_outbox_id}}", "From the outbox list")},
+                        expect=[200, 409],
+                        pre=SKIP_NO_OUTBOX_ROW,
+                        variants=[
+                            Variant(
+                                "404 Outbox row not found",
+                                404,
+                                path_vars={"row_id": "999999999"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_models",
+                        "List AI models",
+                        "GET",
+                        "/admin/ai/models",
+                        "The model registry, newest first, with training window, data hash, "
+                        "metrics and notes; the one model in use has `is_active: true`. A model "
+                        "named in an evaluate response is registered automatically.",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_ai_model_register",
+                        "Register AI model",
+                        "POST",
+                        "/admin/ai/models",
+                        "Registers a model as **inactive**, or updates the description of a known "
+                        "`model_id` (letters, digits, `.`, `_`, `:`, `-`). Stored as "
+                        "`ai_model_id`.",
+                        auth="admin",
+                        body={
+                            "model_id": "postman-demo-model",
+                            "training_from": "2018-01-01T00:00:00Z",
+                            "training_to": "2026-09-30T00:00:00Z",
+                            "data_hash": "sha256:5f2c0e",
+                            "metrics": {"auc": 0.61, "brier": 0.231, "ev_r_test": 0.18},
+                            "notes": "Registered from Postman.",
+                        },
+                        captures={"ai_model_id": "model_id"},
+                        variants=[
+                            Variant(
+                                "422 Invalid model_id",
+                                422,
+                                body={"model_id": "my model!"},
+                            )
+                        ],
+                    ),
+                    Req(
+                        "admin_ai_model_activate",
+                        "Activate AI model",
+                        "POST",
+                        "/admin/ai/models/:model_id/activate",
+                        "Makes this model the only active one (every other one is deactivated).\n\n"
+                        "> ⚠️ On production this switches the model the engine reports as in use: "
+                        "set `model_id` to the model you mean.",
+                        auth="admin",
+                        path_vars={"model_id": ("{{ai_model_id}}", "From Register AI model")},
+                        variants=[
+                            Variant(
+                                "404 Model not found",
+                                404,
+                                path_vars={"model_id": "unknown-model"},
+                            )
+                        ],
                     ),
                 ],
             ),
@@ -3319,7 +4012,12 @@ and use the URL and messages below. Full protocol: `docs/websocket.md`.
 ```
 
 Invalid/expired credentials: the server accepts, then closes with **4401**. Refresh the token \
-and reconnect.
+and reconnect. Open sockets are re-checked on every heartbeat and at once when the API key is \
+revoked (or loses `stream`), the user is deactivated or deleted, logs out (that session only), \
+changes the password or a stolen refresh token is detected (every login socket; API-key sockets \
+stay): `error` `auth_revoked` (message = the reason, e.g. `session ended`, `user not found`), \
+then **4401**. A topic the role or key scopes no longer allow is dropped with \
+`unsubscribed` + `reason: "forbidden"`.
 
 ### Client → server (JSON text frames, max 4 KB)
 
@@ -3330,6 +4028,7 @@ and reconnect.
 {"op": "subscribe",   "topic": "news"}                                    # every new article
 {"op": "subscribe",   "topic": "news", "instrument_id": "{{instrument_id}}"}  # articles tagged with it
 {"op": "subscribe",   "topic": "chat", "conversation_id": "{{conversation_id}}"}  # participants and admins
+{"op": "subscribe",   "topic": "ai_setups", "instrument_id": "{{instrument_id}}"}  # AI setup state changes
 {"op": "typing",      "conversation_id": "{{conversation_id}}"}               # while the user types, ≤ 1 per 3 s
 {"op": "ping"}
 ```
@@ -3339,18 +4038,29 @@ and reconnect.
 ```json
 {"type": "subscribed", "topic": "candles:<uuid>:1m"}
 {"type": "unsubscribed", "topic": "candles:<uuid>:1m"}
-{"type": "snapshot",   "topic": "candles:<uuid>:1m", "candle": {"time": 1760000000, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}}
-{"type": "candle",     "topic": "candles:<uuid>:1m", "instrument_id": "<uuid>", "timeframe": "1m", "candle": {"time": 1760000040, "open": 1.0, "high": 1.2, "low": 0.9, "close": 1.1, "volume": 3.5}, "sent_at": 1760000041234}
+{"type": "unsubscribed", "topic": "chat:<uuid>", "reason": "forbidden"}   # dropped by the server
+{"type": "snapshot",   "topic": "candles:<uuid>:1m", "candle": {"time": 1760000000, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0, "spread": 0.02}}
+{"type": "candle",     "topic": "candles:<uuid>:1m", "instrument_id": "<uuid>", "timeframe": "1m", "candle": {"time": 1760000040, "open": 1.0, "high": 1.2, "low": 0.9, "close": 1.1, "volume": 3.5, "spread": 0.02}, "sent_at": 1760000041234}
 {"type": "signal",     "topic": "signals:<uuid>", "signal": {"strategy_key": "rsi_reversal", "side": "buy", "time": 1760000000, "price": 61234.5, "...": "..."}}
 {"type": "news",       "topic": "news", "article": {"id": "<uuid>", "source": {"key": "coindesk_rss", "name": "CoinDesk"}, "title": "…", "url": "…", "sentiment": {"label": "positive", "score": 0.82}, "instruments": [{"instrument_id": "<uuid>", "symbol": "BTC/USDT", "relevance": 1.0}], "...": "..."}}
 {"type": "chat_message",         "topic": "chat:<uuid>", "conversation_id": "<uuid>", "message": {"id": "<uuid>", "sender_id": "<uuid>", "body": "…", "attachments": [], "client_id": "<uuid>", "edited_at": null, "deleted": false, "created_at": "…"}}
 {"type": "chat_message_updated", "topic": "chat:<uuid>", "conversation_id": "<uuid>", "message": {"...": "edited, or a tombstone with deleted: true"}}
 {"type": "chat_read",            "topic": "chat:<uuid>", "conversation_id": "<uuid>", "user_id": "<uuid>", "read_at": "…"}
 {"type": "chat_typing",          "topic": "chat:<uuid>", "conversation_id": "<uuid>", "user_id": "<uuid>"}
+{"type": "ai_setup",   "topic": "ai:setups:<uuid>", "setup": {"setup_id": "xauusd-intraday-2026-10-19T14:15:00Z-buy", "state": "ARMED", "direction": "buy", "entry": 2400.0, "sl": 2395.0, "tp": 2410.0, "grade": "B", "...": "..."}, "transition": {"setup_id": "…", "from": null, "to": "ARMED", "at": "2026-10-19T14:15:00Z", "reason": null, "realized_r": null}}
 {"type": "pong"}
 {"type": "heartbeat"}
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
+{"type": "error", "code": "auth_revoked", "message": "API key revoked"}  # then close 4401
 ```
+
+`ai_setups` is open to whoever may read signals (otherwise `error` `forbidden`); no snapshot, \
+the REST API lists past setups.
+
+A private custom strategy's signals reach only its owner and admins on `signals:<uuid>` (same \
+frame and topic); public and global strategies reach every subscriber.
+
+`spread` (price units) is only present on 1m candles that have one.
 
 Pushed to the user's own topic without subscribing: `notification` (every inbox item, see \
 the **Notifications** folder), `signal` (with `user_strategy_ids`, the user's trade `plan` and \
@@ -3370,12 +4080,13 @@ indicator after ~5 s without a new one.
 
 | | |
 |---|---|
-| Subscriptions per connection | 50 (candles, signals, news and chat topics) |
+| Subscriptions per connection | 50 (candles, signals, news, chat and ai_setups topics) |
 | Server heartbeat | every 25 s; send `{"op":"ping"}` every ~30 s |
 | Idle timeout | 75 s without a client frame → **1001** |
 | Slow consumer | > 256 undelivered messages → **1013** |
-| Bad / expired token or key | **4401** |
+| Bad / expired / revoked token or key, deactivated or deleted user, login session ended (logout, password change, stolen refresh token) | **4401** |
 | Connections | 5 per identity, 20 new per minute per IP → **4429** |
+| Server error on the connection (also when its periodic re-check stops) | **1011** |
 
 Reconnect with exponential backoff (1 s → 30 s, with jitter) and send your `subscribe` ops \
 again after every reconnect."""

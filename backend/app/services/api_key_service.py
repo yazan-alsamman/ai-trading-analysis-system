@@ -25,6 +25,7 @@ from app.core.config import get_settings
 from app.core.security import credentials_exception
 from app.models.api_key import ADMIN_ONLY_SCOPES, MAX_KEYS_PER_ROLE, ApiKey
 from app.models.user import User, UserRole
+from app.realtime import auth_events
 from app.schemas.api_keys import ApiKeyCreate, ApiKeyUpdate
 
 KEY_TYPE = "tk"
@@ -191,6 +192,8 @@ async def update(session: AsyncSession, user: User, row: ApiKey, data: ApiKeyUpd
         _check_rate_limit(user, data.rate_limit_per_minute)
         row.rate_limit_per_minute = data.rate_limit_per_minute
     await session.commit()
+    if "scopes" in fields:  # open WebSockets lose what the key no longer allows
+        await auth_events.publish(key_id=row.id)
     return row
 
 
@@ -199,6 +202,7 @@ async def revoke(session: AsyncSession, row: ApiKey) -> None:
     if row.revoked_at is None:
         row.revoked_at = datetime.now(UTC)
         await session.commit()
+        await auth_events.publish(key_id=row.id)  # its WebSockets close now
         from app.notifications import security  # noqa: PLC0415
 
         await security.api_key(session, row.user_id, False, row.name, row.prefix)

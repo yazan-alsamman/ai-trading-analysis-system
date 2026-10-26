@@ -1,10 +1,22 @@
 # استورد النماذج هنا حتى يراها Alembic
 from app.db.base import Base
+from app.models.ai import (
+    AIAlertFollow,
+    AIEvaluationRun,
+    AIModelVersion,
+    AISetup,
+    AISetupEvent,
+    AISetupExplanation,
+    AISetupOutbox,
+    AISetupSize,
+    AISetupTake,
+)
 from app.models.api_key import ApiKey, Scope
 from app.models.backtest import Backtest, BacktestStatus, BacktestTrade
 from app.models.candle import Candle, Timeframe
 from app.models.chat import Conversation, ConversationStatus, Message
 from app.models.custom_strategy import CustomStrategy, CustomStrategyKind, Visibility
+from app.models.economic_event import EconomicEvent, EventImpact, EventSource
 from app.models.expert import (
     CheckoutSession,
     CheckoutStatus,
@@ -17,6 +29,7 @@ from app.models.expert import (
     SubscriptionPlan,
     SubscriptionStatus,
 )
+from app.models.feed import FeedCredential
 from app.models.instrument import Instrument, MarketType
 from app.models.news import (
     NewsArticle,
@@ -58,6 +71,15 @@ from app.models.user import User, UserRole
 from app.models.workspace import Workspace
 
 __all__ = [
+    "AIAlertFollow",
+    "AIEvaluationRun",
+    "AISetupOutbox",
+    "AIModelVersion",
+    "AISetup",
+    "AISetupEvent",
+    "AISetupExplanation",
+    "AISetupSize",
+    "AISetupTake",
     "CheckoutSession",
     "CheckoutStatus",
     "Conversation",
@@ -108,6 +130,9 @@ __all__ = [
     "Candle",
     "CustomStrategy",
     "CustomStrategyKind",
+    "EconomicEvent",
+    "EventImpact",
+    "EventSource",
     "Instrument",
     "MarketType",
     "RefreshToken",
@@ -118,6 +143,7 @@ __all__ = [
     "SignalSide",
     "Timeframe",
     "User",
+    "FeedCredential",
     "UserRole",
     "UserStrategy",
     "Visibility",

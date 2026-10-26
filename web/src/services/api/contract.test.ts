@@ -77,9 +77,12 @@ describe('mapping recorded responses to the UI domain', () => {
   });
 
   it('strategy signals keep what the backend says and nothing more', () => {
-    const instruments = page(InstrumentRead).parse(body('market_instruments')).items;
-    const s = page(SignalRead).parse(body('signals_list')).items[0];
-    if (!s) throw new Error('no signal');
+    // Since private-signal isolation (backend B12) the recording user may see no signal; then use one
+    // recorded from the real backend earlier (__fixtures__/recorded-signal.json says where it came from).
+    const fallback = JSON.parse(readFileSync(resolve(__dirname, '__fixtures__/recorded-signal.json'), 'utf8')) as { signal: unknown; instruments: unknown[] };
+    const current = page(SignalRead).parse(body('signals_list')).items[0];
+    const instruments = current ? page(InstrumentRead).parse(body('market_instruments')).items : InstrumentRead.array().parse(fallback.instruments);
+    const s = current ?? SignalRead.parse(fallback.signal);
     const byId = new Map(instruments.map((i) => [i.id, i]));
     const mapped = toStrategySignal(s, byId);
     // Compared with the recording itself, so a re-recorded example (different strategy) stays valid.

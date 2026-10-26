@@ -1,10 +1,22 @@
 # Remaining backend and AI requirements
 
-_26 October 2026 · branch `e/backend-integration` · backend at `main` `5b91175`._
+_26 October 2026 · branch `e/backend-integration` · backend at `main` `1afe445` (merged into the branch)._
 
 This lists what the web client needs that the backend in this repository (`backend/`, FastAPI) and the AI service (`ai-service/`) **do not provide yet**. Each entry was checked against the source and the OpenAPI document (`docs/api/openapi.json`, 155 operations). It was not taken from the web client's assumptions.
 
-Every capability the backend *does* provide is now connected in the web client (see `FINAL_RELEASE_READINESS_REPORT.md`). The items below are the only reasons a screen still says "Not available yet", "Pricing to be announced" or "rule-based".
+Every capability the backend provided when this integration round started (`main` `5b91175`) is now connected in the web client (see `FINAL_RELEASE_READINESS_REPORT.md`).
+
+**New on `main` while this round ran (not yet connected in the web client).** `main` gained 77 commits on 26 October, now merged into the branch. They add the following backend capabilities, which have no web screen yet:
+
+| Capability | Endpoints | Notes |
+| --- | --- | --- |
+| **AI setups** (B7–B11, ai-service P6) | `GET/PUT/DELETE /me/ai/follows*`, `GET /ai/setups/{id}/size`, `GET /ai/setups/{id}/explanation`, `POST/DELETE /ai/setups/{id}/take`, `GET /me/ai/trades`; `ai_setup` notifications | v1 is **rules-only** (`versions.model` is null, `docs/ai-contract.md`). Setups reach a user through follows and notifications; there is no per-instrument "latest analysis" listing. |
+| Economic calendar (B6) | `GET /calendar/events`, `GET /calendar/events/{key}/history` | — |
+| Data health, instrument specs, session calendar (B4, B5) | `GET /health/data`, new fields on instruments and candles | The web client accepts the added fields |
+| AI risk inputs, leverage | `ai_risk` and `leverage` on `/me/risk-profile` | — |
+| XAU/USD live feed from cTrader (B1) | admin only | Shipped **disabled** until the cTrader app is approved |
+
+These are the next integration round. Until then, the AI panels in backend mode keep saying "Not available yet": the backend still has no endpoint for the opportunity per instrument and timeframe that those panels show (R1). The items below are the only reasons a screen still says "Not available yet", "Pricing to be announced" or "rule-based".
 
 Nothing here was added to the backend by the web work. The contracts proposed below are suggestions for the owning team; the web client already has the matching domain types (`web/src/domain/*`), so each one becomes one adapter in `web/src/services/api/`.
 
@@ -24,12 +36,11 @@ Nothing here was added to the backend by the web work. The contracts proposed be
 
 ## R1 — AI trading opportunities
 
-**Evidence:**
+**Evidence (updated for `main` `1afe445`):**
 
-- `ai-service/app/main.py`: `POST /v1/signal` always returns `direction: "hold"`, `confidence: 0.0` and `model_version: "placeholder"`.
-- `ai-service/notebooks/` is empty.
-- `backend/app/core/config.py` defines `ai_service_url`, but no backend code calls it.
-- No backend route exposes model output.
+- ai-service now serves `POST /v1/evaluate` and `POST /v1/size` (P6). v1 runs the setup rules without a trained model (`versions.model` is null, contract 0.2.1). The P4 model gate was not passed (documented in the ai-service history).
+- The backend evaluates on a schedule (B9) and stores AI setups (B8). It delivers them to followers (B11) and exposes per-setup size, explanation and take (see the table above).
+- No backend route returns **the latest analysis per instrument and timeframe** with probability, zones and factors, which is what the web Opportunity panels show.
 
 **What the web client shows today:**
 
@@ -38,8 +49,8 @@ Nothing here was added to the backend by the web work. The contracts proposed be
 
 **Needed:**
 
-1. A trained model behind the AI service (feature F06/F12).
-2. A backend endpoint that stores and serves the model output. Proposed contract, matching `web/src/domain/opportunity.ts`:
+1. A trained model behind the AI service (the probability fields need one; v1 is rules-only).
+2. Either connect the web client to the AI-setup endpoints now on `main`, which is the next web round, or add a per-instrument listing that serves the model output. Proposed contract, matching `web/src/domain/opportunity.ts`:
 
 ```
 GET /api/v1/opportunities?instrument_id=&timeframe=      → list (latest per instrument/timeframe)
@@ -104,6 +115,7 @@ The web interface `AssistantService` (`services/types.ts`) already has this shap
 **Evidence:**
 
 - `seed_service.py` describes demo candles as "until real collectors run".
+- `main` now has an XAU/USD live feed from the cTrader Open API (B1, `docs/ctrader-feed.md`). It ships **disabled** until the cTrader app is approved and an account is linked.
 - There is no Twelve Data or Binance fetch code.
 - Prices come only from `seed-demo-candles` / `simulate-live` (synthetic) or `POST /admin/instruments/{id}/candles` (an external push).
 

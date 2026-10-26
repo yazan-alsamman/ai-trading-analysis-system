@@ -176,6 +176,16 @@ jobs:
           java-version: "17"
       - name: Validate the AsyncAPI document
         run: npx -y @asyncapi/cli@2.16.0 validate docs/api/asyncapi.yaml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ai-service contract (draft) is up to date and parses
+        # app/ai/contract.py needs only pydantic; the examples are embedded in the document
+        run: |
+          pip install "pydantic>=2.11" pyyaml
+          python backend/scripts/ai_contract.py --check
+          npx -y openapi-typescript@7.4.4 docs/api/ai-service.openapi.yaml -o /tmp/ts/ai-service.d.ts
+          wc -l /tmp/ts/ai-service.d.ts
       - name: TypeScript client (openapi-typescript)
         run: |
           npx -y openapi-typescript@7.4.4 docs/api/openapi.json -o /tmp/ts/schema.d.ts
@@ -211,6 +221,38 @@ jobs:
       - name: End-to-end suite
         working-directory: backend
         run: python -m pytest tests_e2e -v -p no:cacheprovider
+      - name: Fake ai-service over the compose network (B9; dev/CI only, never in prod)
+        # the backend's client in the worker container against tools/fake_ai_service (gzip
+        # bodies, determinism, 503 retried, 422 contract error, explain 404)
+        run: |
+          docker compose --profile fake-ai up -d fake-ai
+          docker compose cp docs/api/ai-service-examples/evaluate-request.json worker:/tmp/req.json
+          docker compose cp tools/fake_ai_service/e2e_check.py worker:/tmp/e2e_check.py
+          docker compose exec -T -e AI_SERVICE_URL=http://fake-ai:8001 -e AI_REQUEST_GZIP=true \
+            worker python /tmp/e2e_check.py /tmp/req.json \
+            || { docker compose --profile fake-ai logs fake-ai; exit 1; }
+          docker compose --profile fake-ai rm -sf fake-ai
+      - name: Host-proxy entry 8090 (real client IP from the proxy only; 80 ignores it)
+        # Linux Docker with docker-proxy, as on the VPS: a connection to the loopback-published
+        # 127.0.0.1:8090 reaches nginx from the compose network's gateway, inside DOCKER_SUBNET
+        # (Docker takes it from DOCKER_IP_RANGE: 172.30.57.128; docs/https.md)
+        run: |
+          net="$(docker network ls -q --filter label=com.docker.compose.network=default \
+            --filter label=com.docker.compose.project=ai-trading-analysis-system)"
+          docker network inspect "$net" \
+            --format '{{range .IPAM.Config}}subnet={{.Subnet}} gateway={{.Gateway}}{{end}}'
+          curl -fsS -H 'X-Forwarded-For: 203.0.113.7' -H 'X-Forwarded-Proto: https' \
+            http://127.0.0.1:8090/api/v1/health/ready
+          curl -sS -o /dev/null -H 'X-Forwarded-For: 203.0.113.7' http://127.0.0.1:8090/api/v1/proxy-check
+          curl -sS -o /dev/null -H 'X-Forwarded-For: 198.51.100.9' http://localhost/api/v1/proxy-check
+          sleep 1
+          docker compose logs nginx | grep -E 'health/ready|proxy-check' | tail -4
+          docker compose logs nginx | grep -q '203.0.113.7 via=172\.30\.57\.[0-9]* .* proto=https'
+          docker compose logs backend | grep 'proxy-check' | tail -2
+          docker compose logs backend | grep -q 'client=203.0.113.7'
+          if docker compose logs backend | grep -q 'client=198.51.100.9'; then
+            echo "::error::a spoofed X-Forwarded-For on port 80 reached the backend"; exit 1
+          fi
       - name: Stack logs
         if: failure()
         run: docker compose logs --tail 150 backend worker worker-backtest beat
@@ -221,6 +263,10 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
       - run: docker compose config -q
+      - name: Nginx configs pass nginx -t (the stack's, and the host site templates)
+        run: |
+          docker run --rm -v "$PWD/infra/nginx:/etc/nginx/conf.d:ro" nginx:1.27-alpine nginx -t
+          bash infra/host-nginx/check.sh
       - name: Validate the production stack
         run: |
           echo IMAGE_TAG=ci > image.env

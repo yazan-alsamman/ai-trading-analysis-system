@@ -31,6 +31,7 @@ class RiskProfile(Base):
     __tablename__ = "risk_profiles"
     __table_args__ = (
         CheckConstraint("account_size > 0", name="ck_risk_profiles_account_size_positive"),
+        CheckConstraint("leverage > 0 AND leverage <= 10000", name="ck_risk_profiles_leverage"),
     )
     __mapper_args__ = {"eager_defaults": True}
 
@@ -41,6 +42,10 @@ class RiskProfile(Base):
         Double, default=10_000.0, server_default=text("10000")
     )
     quote_currency: Mapped[str] = mapped_column(String(10), default="USDT", server_default="USDT")
+    # B10: the account's leverage (AI setup margin), and when account_size last changed (the
+    # drawdown guard counts the taken trades closed since then; null: all of them)
+    leverage: Mapped[float] = mapped_column(Double, default=100.0, server_default=text("100"))
+    balance_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     config: Mapped[dict[str, Any]] = mapped_column(JSONB)
     template: Mapped[str | None] = mapped_column(String(20))  # set when made from a template
     updated_at: Mapped[datetime] = mapped_column(

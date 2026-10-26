@@ -8,6 +8,8 @@ live signal engine (instead of calling the ``trading_strategies`` registry direc
 - Custom members of a composite are resolved with the **composite owner's** access (their own
   strategies and public ones), recursively, and loaded from the database before the
   library's synchronous resolver runs.
+- Signals follow the same rule (``visible_signal``): a ``custom:<uuid>`` signal is shown only
+  to users who may use that strategy now (and to admins); global strategies' signals to all.
 """
 
 import logging
@@ -18,13 +20,13 @@ from typing import Any
 
 import trading_strategies as ts
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, Text, cast, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from trading_strategies.composite import MAX_NESTING
 from trading_strategies.custom import Validation
 
 from app.models.custom_strategy import KEY_PREFIX, CustomStrategy, CustomStrategyKind, Visibility
-from app.models.user import User
+from app.models.user import User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,72 @@ def custom_id(key: str) -> uuid.UUID | None:
 
 def can_use(row: CustomStrategy, user_id: uuid.UUID) -> bool:
     return row.user_id == user_id or row.visibility == Visibility.public
+
+
+def sees_all_signals(user: User) -> bool:
+    """Admins see every signal (moderation); everyone else only those of strategies they may
+    use."""
+    return user.role == UserRole.admin
+
+
+def may_read_ai_setup(user: User, setup: object | None) -> bool:
+    """Who may read (and size, take, be alerted about) an AI setup; ``setup=None``: the live
+    ``ai:setups:{instrument_id}`` topic. AI setups are global, not a custom strategy: everyone
+    who may read signals may use them. The one place B12's isolation rules would change."""
+    return True
+
+
+def usable_keys(user_id: uuid.UUID):
+    """SQL: the ``custom:<uuid>`` keys ``user_id`` may use (their own and public ones)."""
+    return select(func.concat(KEY_PREFIX, cast(CustomStrategy.id, Text))).where(
+        or_(CustomStrategy.user_id == user_id, CustomStrategy.visibility == Visibility.public)
+    )
+
+
+def visible_signal(key: ColumnElement[str], user: User) -> ColumnElement[bool]:
+    """SQL condition: a signal with strategy key ``key`` is visible to ``user``. A custom key
+    needs a strategy the user may use (a deleted one is hidden); global keys are visible to
+    everyone. Used as a WHERE clause, so pagination and totals stay right."""
+    if sees_all_signals(user):
+        return true()
+    key = func.coalesce(key, "")
+    return or_(~key.startswith(KEY_PREFIX), key.in_(usable_keys(user.id)))
+
+
+async def visible_keys(session: AsyncSession, keys: Iterable[str], user: User | None) -> set[str]:
+    """The strategy keys among ``keys`` whose signals ``user`` may see (``None``: what every
+    user may see, i.e. global and public strategies)."""
+    keys = set(keys)
+    if user is not None and sees_all_signals(user):
+        return keys
+    owners = await signal_owners(session, keys)
+    return {
+        key
+        for key, owner in owners.items()
+        if owner is None or (user is not None and owner == user.id)
+    }
+
+
+async def signal_owners(session: AsyncSession, keys: Iterable[str]) -> dict[str, uuid.UUID | None]:
+    """Who may receive the live signals of these strategy keys: ``None`` for everyone (a
+    global or a public custom strategy), else the owner of the private custom strategy. Keys
+    of deleted (or malformed) custom strategies are missing: their signals go to no one."""
+    out: dict[str, uuid.UUID | None] = {}
+    ids = {}
+    for key in set(keys):
+        if not is_custom(key):
+            out[key] = None
+        elif (cid := custom_id(key)) is not None:
+            ids[cid] = key
+    if ids:
+        rows = await session.execute(
+            select(CustomStrategy.id, CustomStrategy.user_id, CustomStrategy.visibility).where(
+                CustomStrategy.id.in_(list(ids))
+            )
+        )
+        for cid, owner, visibility in rows.all():
+            out[ids[cid]] = None if visibility == Visibility.public else owner
+    return out
 
 
 def member_refs(kind: CustomStrategyKind | str, definition: dict[str, Any]) -> set[str]:

@@ -79,7 +79,9 @@ async def list_signals(
     since: Annotated[datetime | None, Query(description="bar_time >= since (ISO 8601)")] = None,
     mine: Annotated[bool, Query(description="only signals of my active strategies")] = False,
 ):
-    """Signals, newest bar first."""
+    """Signals you may see, newest bar first: those of global strategies and of custom
+    strategies you may use (your own, or public ones). A private custom strategy's signals
+    are left out of the page and of ``total``; admins see every signal."""
     if since is not None and since.tzinfo is None:
         since = since.replace(tzinfo=UTC)  # naive = UTC, like everywhere else
     rows, total = await strategy_service.list_signals(

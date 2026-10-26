@@ -1,0 +1,45 @@
+{
+  "_source": "docs/postman/tools/examples.json signals_list + market_instruments at 6e6def7 (recorded from the real backend); used when the current recording has no signal visible to the recording user (private-signal isolation, B12)",
+  "signal": {
+    "id": "986e29a6-e648-4bb4-af59-981b25a425b8",
+    "instrument_id": "47c12ee8-4bf7-4f11-b8ec-9e3458a4212d",
+    "timeframe": "1h",
+    "strategy_key": "ma_crossover",
+    "params": {
+      "fast": 9,
+      "slow": 21,
+      "adx_min": 0.0
+    },
+    "params_hash": "6ec78406b9c4ac7cd438989c1d828234",
+    "bar_time": "2026-10-17T00:00:00Z",
+    "side": "buy",
+    "strength": 0.30905739607502314,
+    "price": 67835.35,
+    "reason": "ema_cross_up",
+    "details": {
+      "adx": 15.45,
+      "fast": 67320.974588,
+      "slow": 67292.225939,
+      "adx_min": 0.0,
+      "fast_prev": 67192.380735,
+      "slow_prev": 67237.913533
+    },
+    "created_at": "2026-10-17T21:38:53.985396Z",
+    "time": 1792195200
+  },
+  "instruments": [
+    {
+      "id": "47c12ee8-4bf7-4f11-b8ec-9e3458a4212d",
+      "symbol": "BTC/USDT",
+      "source": "binance",
+      "market": "crypto",
+      "base_asset": "BTC",
+      "quote_asset": "USDT",
+      "price_precision": 2,
+      "quantity_precision": 5,
+      "is_active": true,
+      "created_at": "2026-10-17T21:38:30.808998Z",
+      "updated_at": "2026-10-17T21:38:30.808998Z"
+    }
+  ]
+}

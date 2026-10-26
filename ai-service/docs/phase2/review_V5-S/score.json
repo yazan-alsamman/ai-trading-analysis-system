@@ -1,0 +1,13 @@
+{
+  "rows": 50,
+  "yes": 46,
+  "no": 4,
+  "not_reviewed": 0,
+  "precision": 0.92,
+  "wilson_95": [
+    0.8116,
+    0.9685
+  ],
+  "gate": 0.9,
+  "passed": true
+}

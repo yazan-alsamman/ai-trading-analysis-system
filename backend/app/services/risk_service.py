@@ -4,35 +4,44 @@ calculator and the per-user trade plans of live signals.
 - A profile is created on first read with the ``balanced`` template and 10,000 USDT.
 - The rules of a plan come from the activation's ``risk_override`` if set, else the profile,
   else the default template (a user who never opened the profile).
+- Instruments with contract specs are sized in the account currency (the profile's
+  ``quote_currency``) and get ``lots`` (``lot_sizing``; docs/instruments.md).
 """
 
 import json
 import logging
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 import pandas as pd
 import trading_backtest as tb
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import and_, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.contract import Account, RiskSettings
+from app.core.config import get_settings
 from app.models.candle import Timeframe
+from app.models.instrument import Instrument
 from app.models.risk import RiskProfile, SignalPlan
 from app.models.strategy import Signal
 from app.models.user import User
 from app.schemas.risk import PositionSizeRequest, RiskProfileUpdate
-from app.services import indicator_service, market_service
+from app.services import indicator_service, market_service, strategy_resolver
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_ACCOUNT_SIZE = 10_000.0
 DEFAULT_CURRENCY = "USDT"
 PLACEHOLDER_STOP = {"type": "percent", "value": 1.0}  # replaced by an explicit stop price
+# Dollar stablecoins count as USD when no exact conversion exists (with a warning on the plan).
+USD_ALIASES = frozenset({"USD", "USDT", "USDC"})
 
 
 def templates() -> dict[str, dict[str, Any]]:
@@ -96,9 +105,11 @@ def read(row: RiskProfile) -> dict[str, Any]:
     return {
         "account_size": row.account_size,
         "quote_currency": row.quote_currency,
+        "leverage": row.leverage,
         "config": row.config,
         "template": row.template,
         "updated_at": row.updated_at,
+        "ai_risk": ai_risk_view(row),
     }
 
 
@@ -112,9 +123,13 @@ async def update(session: AsyncSession, user: User, data: RiskProfileUpdate) -> 
         named = templates()
         row.template = next((n for n, c in named.items() if c == row.config), None)
     if data.account_size is not None:
+        if data.account_size != row.account_size:
+            row.balance_set_at = datetime.now(UTC)  # the drawdown guard starts again
         row.account_size = data.account_size
     if data.quote_currency is not None:
         row.quote_currency = data.quote_currency
+    if data.leverage is not None:
+        row.leverage = data.leverage
     try:
         await session.commit()
     except IntegrityError:  # pragma: no cover - the check constraint mirrors the schema
@@ -132,6 +147,81 @@ async def profiles_for(
         return {}
     rows = await session.scalars(select(RiskProfile).where(RiskProfile.user_id.in_(user_ids)))
     return {r.user_id: r for r in rows}
+
+
+# --- AI setups (B10) --------------------------------------------------------------------------
+
+
+class AIRiskInputs(NamedTuple):
+    """What ai-service ``/v1/size`` gets for one user, where each value came from (``profile``:
+    a column of the profile, ``config``: its risk config, ``default``: an AI_DEFAULT_* setting)
+    and the warnings of the mapping."""
+
+    account: Account
+    risk: RiskSettings
+    warnings: list[str]
+    sources: dict[str, str]
+
+
+def ai_risk_inputs(profile: RiskProfile) -> AIRiskInputs:
+    """The five AI risk fields mapped onto the existing profile (no parallel model):
+
+    - ``balance`` = ``account_size``, ``currency`` = ``quote_currency``, ``leverage``;
+    - ``risk_per_trade_pct`` = ``config.sizing.risk_pct`` when ``sizing.mode`` is ``risk``,
+      else ``AI_DEFAULT_RISK_PCT`` with a warning;
+    - ``daily_loss_limit_pct`` = ``config.guards.max_daily_loss_pct``, else
+      ``AI_DEFAULT_DAILY_LOSS_PCT``;
+    - ``max_drawdown_pct`` = ``config.guards.max_drawdown_pct``, else
+      ``AI_DEFAULT_MAX_DRAWDOWN_PCT``.
+
+    Raises ``pydantic.ValidationError`` when the profile cannot be expressed in the contract
+    (e.g. a one-letter currency)."""
+    settings = get_settings()
+    config = profile.config or {}
+    sizing, guards = config.get("sizing") or {}, config.get("guards") or {}
+    warnings: list[str] = []
+    sources = {"balance": "profile", "currency": "profile", "leverage": "profile"}
+    if sizing.get("mode") == "risk" and sizing.get("risk_pct"):
+        risk_pct, sources["risk_per_trade_pct"] = float(sizing["risk_pct"]), "config"
+    else:
+        risk_pct, sources["risk_per_trade_pct"] = settings.ai_default_risk_pct, "default"
+        warnings.append(f"sizing mode is not risk-based; used {risk_pct:g}%")
+    daily = guards.get("max_daily_loss_pct")
+    sources["daily_loss_limit_pct"] = "config" if daily else "default"
+    drawdown = guards.get("max_drawdown_pct")
+    sources["max_drawdown_pct"] = "config" if drawdown else "default"
+    account = Account(
+        balance=profile.account_size,
+        currency=profile.quote_currency,
+        leverage=profile.leverage if profile.leverage is not None else 100.0,
+    )
+    risk = RiskSettings(
+        risk_per_trade_pct=risk_pct,
+        daily_loss_limit_pct=float(daily) if daily else settings.ai_default_daily_loss_pct,
+        max_drawdown_pct=float(drawdown) if drawdown else settings.ai_default_max_drawdown_pct,
+    )
+    return AIRiskInputs(account, risk, warnings, sources)
+
+
+def ai_risk_problem(exc: ValidationError) -> str:
+    """Why a profile cannot be sent to ai-service, e.g. ``currency: String should match ...``."""
+    return "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors())[
+        :200
+    ]
+
+
+def ai_risk_view(profile: RiskProfile) -> dict[str, Any]:
+    """``ai_risk`` of GET /me/risk-profile (read-only)."""
+    try:
+        inputs = ai_risk_inputs(profile)
+    except ValidationError as exc:  # the profile cannot be sent as it is
+        return {"error": ai_risk_problem(exc)}
+    return {
+        **inputs.account.model_dump(),
+        **inputs.risk.model_dump(),
+        "sources": inputs.sources,
+        "warnings": inputs.warnings,
+    }
 
 
 def effective(
@@ -152,11 +242,122 @@ def history_for(config: dict[str, Any]) -> int:
     return tb.risk.history(tb.BacktestConfig.from_risk(config))
 
 
+@dataclass(frozen=True)
+class LotSizing:
+    """How to size on an instrument for one account currency: the spec (None without contract
+    specs), the conversion rate (account currency per quote unit; None = not found) and notes
+    for the plan's ``sizing_warnings``. Without a spec there are no lots, but a rate other than
+    1 still converts the equity (a USD account on a USD/JPY without specs); a rate of 1 or none
+    leaves the plan as it was. ``cost_per_unit``: the instrument's fixed round-trip cost (XAU/USD
+    0.25), counted in the risk per unit instead of the profile's ``fee_bps``."""
+
+    spec: tb.ContractSpec | None = None
+    rate: float | None = None
+    notes: tuple[str, ...] = ()
+    cost_per_unit: float | None = None
+
+
+def contract_spec(instrument: Instrument) -> tb.ContractSpec | None:
+    if not instrument.has_specs:
+        return None
+    return tb.ContractSpec(
+        contract_size=instrument.contract_size,
+        lot_step=instrument.lot_step,
+        quote_currency=instrument.pnl_currency,
+        min_lot=instrument.min_lot,
+        max_lot=instrument.max_lot,
+    )
+
+
+def _usd(currency: str) -> str:
+    return "USD" if currency in USD_ALIASES else currency
+
+
+def _names(currency: str) -> set[str]:
+    return set(USD_ALIASES) if currency in USD_ALIASES else {currency}
+
+
+async def _market_rate(
+    session: AsyncSession, quote: set[str], account: set[str]
+) -> tuple[float, str] | None:
+    """Latest 1m close of an active QUOTE/ACCOUNT market (or 1 / that of ACCOUNT/QUOTE); the
+    freshest candle wins when several sources list the pair."""
+    rows = await session.scalars(
+        select(Instrument).where(
+            Instrument.is_active.is_(True),
+            ((Instrument.base_asset.in_(quote)) & (Instrument.quote_asset.in_(account)))
+            | ((Instrument.base_asset.in_(account)) & (Instrument.quote_asset.in_(quote))),
+        )
+    )
+    best = None
+    for market in rows.all():
+        latest = await market_service.get_latest_candle(session, market.id, Timeframe.m1)
+        if latest is None or not latest.close > 0:
+            continue
+        if best is None or latest.ts > best[0]:
+            inverted = market.base_asset in account
+            rate = 1 / latest.close if inverted else latest.close
+            best = (latest.ts, rate, f"{market.source}:{market.symbol}")
+    return None if best is None else (best[1], best[2])
+
+
+async def conversion_rate(
+    session: AsyncSession, instrument: Instrument, account_currency: str, entry: float
+) -> tuple[float | None, list[str]]:
+    """(account currency per unit of the instrument's quote currency, notes).
+
+    Same currency: 1. Account currency = base (USD/JPY, USD account): 1 / entry. Otherwise the
+    latest close of a matching market. USD, USDT and USDC count as one currency only when there
+    is no exact match, and the notes say so. None when nothing matches: never assumed 1."""
+    quote, base, account = instrument.pnl_currency, instrument.base_asset, account_currency
+    rate = tb.direct_rate(base, quote, account, entry)
+    if rate is not None:
+        return rate, []
+    found = await _market_rate(session, {quote}, {account})
+    if found is not None:
+        return found[0], []
+    if not USD_ALIASES & {quote, base, account}:
+        return None, []
+    note = "USD, USDT and USDC treated as the same dollar (1:1)"
+    rate = tb.direct_rate(_usd(base), _usd(quote), _usd(account), entry)
+    if rate is not None:
+        return rate, [note]
+    found = await _market_rate(session, _names(quote), _names(account))
+    if found is not None:
+        return found[0], [f"{note}; converted with {found[1]}"]
+    return None, []
+
+
+async def lot_sizing(
+    session: AsyncSession, instrument: Instrument, account_currency: str, entry: float
+) -> LotSizing:
+    spec = contract_spec(instrument)
+    rate, notes = await conversion_rate(session, instrument, account_currency, entry)
+    cost = instrument.cost_per_unit
+    if spec is None:
+        converts = rate if rate is not None and rate != 1.0 else None
+        return LotSizing(rate=converts, cost_per_unit=cost)
+    return LotSizing(spec, rate, tuple(notes), cost)
+
+
 def plan_dict(
-    df: pd.DataFrame, side: int, config: dict[str, Any], account_size: float, **kw: Any
+    df: pd.DataFrame,
+    side: int,
+    config: dict[str, Any],
+    account_size: float,
+    sizing: LotSizing | None = None,
+    **kw: Any,
 ) -> dict[str, Any]:
-    plan = tb.plan_trade(df, len(df) - 1, side, config, account_size, **kw)
-    return plan.to_dict()
+    if sizing is not None and sizing.spec is not None:
+        kw.update(spec=sizing.spec, conversion_rate=sizing.rate)
+    elif sizing is not None and sizing.rate is not None:
+        kw.update(conversion_rate=sizing.rate)
+    if sizing is not None and sizing.cost_per_unit is not None:
+        kw.update(cost_per_unit=sizing.cost_per_unit)
+    plan = tb.plan_trade(df, len(df) - 1, side, config, account_size, **kw).to_dict()
+    if sizing is not None and sizing.notes:
+        plan["sizing_warnings"] = [*sizing.notes, *plan["sizing_warnings"]]
+    return plan
 
 
 # --- calculator ------------------------------------------------------------------------------
@@ -173,7 +374,7 @@ async def position_size(
         {**(raw or {}), "stop": PLACEHOLDER_STOP} if needs_placeholder else raw
     )
     account_size = data.account_size or profile.account_size
-    await market_service.get_instrument_or_404(session, data.instrument_id)
+    instrument = await market_service.get_instrument_or_404(session, data.instrument_id)
     now = datetime.now(UTC)
     last_closed = market_service.floor_to_bucket(now, data.timeframe.interval)
     last_closed -= data.timeframe.interval
@@ -190,7 +391,10 @@ async def position_size(
         )
     df = indicator_service.frame(candles)
     side = 1 if data.side == "buy" else -1
-    plan = plan_dict(df, side, config, account_size, entry=data.entry, stop=data.stop)
+    sizing = await lot_sizing(
+        session, instrument, profile.quote_currency, data.entry or candles[-1].close
+    )
+    plan = plan_dict(df, side, config, account_size, sizing, entry=data.entry, stop=data.stop)
     if needs_placeholder:
         config = {**config, "stop": None}
     return {
@@ -218,7 +422,11 @@ async def list_plans(
     strategy_key: str | None = None,
     since: datetime | None = None,
 ) -> tuple[list[tuple[SignalPlan, Signal]], int]:
-    filters = [SignalPlan.user_id == user.id]
+    # your own plans, of signals you may still see (a strategy made private hides them)
+    filters = [
+        SignalPlan.user_id == user.id,
+        strategy_resolver.visible_signal(Signal.strategy_key, user),
+    ]
     if instrument_id is not None:
         filters.append(Signal.instrument_id == instrument_id)
     if timeframe is not None:

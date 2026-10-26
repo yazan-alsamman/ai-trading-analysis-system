@@ -73,6 +73,10 @@ curl -s "http://localhost/api/v1/market/instruments/$ID/candles?timeframe=1h&lim
   -H "X-API-Key: $TK_KEY"
 ```
 
+Add `&closed_only=true` to get only bars that have ended (the forming bar is left out; the
+answer also has `last_closed_bar`), as a model that trades on closed bars needs
+([data-quality.md](data-quality.md)).
+
 | Status | Meaning |
 |---|---|
 | 401 | unknown, malformed, revoked or expired key |
@@ -83,7 +87,7 @@ curl -s "http://localhost/api/v1/market/instruments/$ID/candles?timeframe=1h&lim
 
 | Scope | Endpoints |
 |---|---|
-| `market:read` | `GET /market/instruments`, `GET /market/instruments/{id}`, `GET /market/instruments/{id}/candles` |
+| `market:read` | `GET /market/instruments`, `GET /market/instruments/{id}`, `GET /market/instruments/{id}/candles`, `GET /calendar/events`, `GET /calendar/events/{event_key}/history` ([economic-calendar.md](economic-calendar.md)) |
 | `indicators:read` | `GET /indicators`, `POST /market/instruments/{id}/indicators` |
 | `strategies:read` | `GET /strategies`, `POST /strategies/{key}/preview` (global keys, and `custom:<uuid>` for your own or public custom strategies), `GET /custom-strategies/schema`, `GET /custom-strategies/public` |
 | `signals:read` | `GET /signals` (with `mine=true`: signals of the key owner's active strategies) |
@@ -201,6 +205,8 @@ The protocol is the same as with a login token ([websocket.md](websocket.md)). T
 acts as the key's owner, so it may also subscribe to the owner's `user:` topic.
 
 - Missing/invalid/revoked/expired key, or no `stream` scope → closed with **4401**.
+- Revoking the key (or removing `stream` from it, or deactivating its owner) closes its open
+  sockets right away: `{"type":"error","code":"auth_revoked",...}`, then **4401**.
 - More than 5 open connections for one key (or one user) → closed with **4429**.
 - More than 20 new connections per minute from one IP → closed with **4429**.
 

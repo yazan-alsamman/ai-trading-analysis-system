@@ -25,6 +25,7 @@ const recRaw = (name: string): unknown => JSON.parse(examples[name]?.[0]?.body ?
 const recVariant = (name: string, code: number): Record<string, unknown> =>
   JSON.parse(examples[name]?.find((e) => (e as { code?: number }).code === code)?.body ?? '{}') as Record<string, unknown>;
 
+const RECORDED_SIGNAL = (JSON.parse(readFileSync(resolve(process.cwd(), 'src/services/api/__fixtures__/recorded-signal.json'), 'utf8')) as { signal: Record<string, unknown> }).signal;
 const BACKTEST_ID = String(rec('backtests_get').id);
 const ID = '[^/]+';
 /**
@@ -239,7 +240,9 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
     }
 
     if (method === 'GET' && path === '/signals') {
-      const recorded = (rec('signals_list').items as Record<string, unknown>[]).slice(0, 3);
+      // The current recording may hold no signal (private-signal isolation, backend B12); then use one recorded earlier.
+      const current = rec('signals_list').items as Record<string, unknown>[];
+      const recorded = (current.length ? current : [RECORDED_SIGNAL, { ...RECORDED_SIGNAL, id: '0a7d6c1e-3f7b-4d55-9a51-1b2c3d4e5f60' }]).slice(0, 3);
       return reply(route, 200, page_(recorded.map((s, i) => ({ ...s, instrument_id: i === 0 ? 'i-xau' : 'i-btc', price: i === 0 ? 2398.4 : s.price }))));
     }
 

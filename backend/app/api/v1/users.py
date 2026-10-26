@@ -19,4 +19,7 @@ async def update_me(data: UserUpdate, user: CurrentUser, session: SessionDep):
 
 @router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(data: PasswordChange, user: CurrentUser, session: SessionDep) -> None:
+    """Change your password. Every login session ends (refresh tokens revoked) and every
+    WebSocket opened with a login closes (4401 ``session ended``); API keys and their sockets
+    are not affected."""
     await user_service.change_password(session, user, data)

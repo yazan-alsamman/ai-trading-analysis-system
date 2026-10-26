@@ -54,7 +54,11 @@ async def get_instrument(instrument_id: uuid.UUID, _: MarketReader, session: Ses
     return await market_service.get_instrument_or_404(session, instrument_id)
 
 
-@router.get("/instruments/{instrument_id}/candles", response_model=CandleSeries)
+@router.get(
+    "/instruments/{instrument_id}/candles",
+    response_model=CandleSeries,
+    response_model_exclude_none=True,  # spread only when the candle has one
+)
 async def get_candles(
     instrument_id: uuid.UUID,
     _: MarketReader,
@@ -63,12 +67,34 @@ async def get_candles(
     start: Annotated[datetime | None, Query(description="ISO 8601, inclusive")] = None,
     end: Annotated[datetime | None, Query(description="ISO 8601, inclusive")] = None,
     limit: Annotated[int, Query(ge=1, le=market_service.MAX_CANDLES_LIMIT)] = 500,
+    closed_only: Annotated[
+        bool,
+        Query(
+            description="Only closed bars: leave out the bar that is still forming (the "
+            "default includes it, as charts want). Adds `last_closed_bar`."
+        ),
+    ] = False,
 ):
     """Candles ascending by time. With ``start``: the first ``limit`` candles from ``start``;
-    otherwise the latest ``limit`` candles (up to ``end`` if given)."""
+    otherwise the latest ``limit`` candles (up to ``end`` if given).
+
+    With ``closed_only=true`` only bars that have ended are returned: ``time + timeframe <=``
+    the end of the last closed 1m bar (docs/data-quality.md). At 10:07 with 1m data up to
+    10:06, the 15m bar of 10:00 is still forming and 09:45 is the last closed one."""
     start, end = _as_utc(start), _as_utc(end)
     if start is not None and end is not None and start > end:
         raise HTTPException(422, "start must be <= end")
+    if closed_only:
+        closed = await market_service.get_closed_candles(
+            session, instrument_id, timeframe, start=start, end=end, limit=limit
+        )
+        last = closed.last_closed_bar_ts
+        return CandleSeries(
+            instrument_id=instrument_id,
+            timeframe=timeframe,
+            candles=[CandleOut.from_candle(r) for r in closed.candles],
+            last_closed_bar=int(last.timestamp()) if last else None,
+        )
     await market_service.get_instrument_or_404(session, instrument_id)
     rows = await market_service.get_candles(
         session, instrument_id, timeframe, start=start, end=end, limit=limit

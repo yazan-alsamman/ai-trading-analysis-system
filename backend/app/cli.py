@@ -62,6 +62,18 @@ async def seed_instruments(session_factory: async_sessionmaker[AsyncSession] | N
     return 0
 
 
+def _real_feed_only(instrument) -> bool:
+    """Real-feed instruments never get demo candles (prints why)."""
+    if instrument.source not in seed_service.REAL_FEED_SOURCES:
+        return False
+    print(
+        f"{instrument.source}:{instrument.symbol} only gets candles from the real feed, "
+        "not demo data",
+        file=sys.stderr,
+    )
+    return True
+
+
 async def seed_demo_candles(
     symbol: str,
     source: str,
@@ -86,6 +98,8 @@ async def seed_demo_candles(
                 file=sys.stderr,
             )
             return 1
+        if _real_feed_only(instrument):
+            return 2
         candles = seed_service.generate_demo_candles(
             instrument,
             minutes=round(days * 24 * 60),
@@ -131,6 +145,8 @@ async def simulate_live(
                 file=sys.stderr,
             )
             return 1
+        if _real_feed_only(instrument):
+            return 2
         last = await market_service.get_latest_candle(session, instrument.id, Timeframe.m1)
     seed_item = next(
         (s for s in seed_service.DEFAULT_INSTRUMENTS if s.symbol == instrument.symbol), None
@@ -162,6 +178,7 @@ async def simulate_live(
                     close=price,
                     volume=0,
                     trades=0,
+                    source="seed",
                 )
             else:
                 candle = candle.model_copy(

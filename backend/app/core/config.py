@@ -20,6 +20,51 @@ class Settings(BaseSettings):
     first_admin_email: str | None = None
     first_admin_password: str | None = None
     ai_service_url: str = "http://localhost:8001"
+    # ai-service client (B7, docs/ai-contract.md): per-attempt timeouts, retries on timeouts,
+    # connection errors and 5xx (same body and request_id), bars sent per timeframe
+    ai_evaluate_timeout_seconds: float = 10.0
+    ai_size_timeout_seconds: float = 5.0
+    ai_explain_timeout_seconds: float = 30.0
+    ai_max_retries: int = 2
+    # bars per timeframe of an evaluate request (Fadi, point 5: ~20 trading days of 15m and a
+    # year of New York trading days; final counts come with his P6). Shorter history: sent as
+    # it is, and the coverage is reported
+    ai_bars_15m: int = 2000
+    ai_bars_1h: int = 500
+    ai_bars_4h: int = 300
+    ai_bars_1d: int = 260
+    # gzip the request bodies (Content-Encoding: gzip); only once ai-service decompresses them
+    ai_request_gzip: bool = False
+    # The periodic evaluation (B9, docs/ai-contract.md#8-the-evaluate-task): off until enabled
+    # on the server. A beat tick at each 15m boundary schedules one ai.evaluate per instrument
+    # and profile, AI_EVALUATE_DELAY_SECONDS after the boundary (the bar is closed and stored)
+    ai_evaluate_enabled: bool = False
+    ai_evaluate_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
+    ai_profiles: str = "intraday"  # comma list; intraday only in v1 (Fadi)
+    ai_evaluate_delay_seconds: int = 20
+    # AI setup sizing (B10, docs/risk-management.md#ai-setups): auto = ai-service /v1/size, then
+    # the local B4 lot sizing if it is unavailable; remote = no fallback (503); local = never call
+    ai_size_mode: str = "auto"
+    # a 404 from /v1/size (ai-service has no /v1/size yet) falls back to the local sizing;
+    # turned off once Fadi's P6 ships it: then a 404 is a 503, never a silent local size
+    ai_size_local_fallback_on_404: bool = True
+    ai_size_concurrency: int = 4  # ai-service calls at once when one setup is sized for many users
+    # used when the risk config does not give the value (sizing mode not "risk", guard unset)
+    ai_default_risk_pct: float = 1.0
+    ai_default_daily_loss_pct: float = 3.0
+    ai_default_max_drawdown_pct: float = 10.0
+    # AI setup alerts (B11, docs/notifications.md#ai-setup-alerts): the outbox dispatcher
+    ai_alerts_enabled: bool = True
+    ai_alerts_batch: int = 50  # outbox rows per dispatcher run
+    ai_alerts_max_attempts: int = 8  # then the row is failed (admin retry)
+    ai_alerts_max_age_seconds: int = 900  # an older ARMED alert is skipped (stale)
+    ai_explain_langs: str = "ar,en"  # explanations asked of ai-service on ARMED
+    # Deliveries a lost send task left pending are sent again after this (notifications.sweep)
+    notification_sweep_after_seconds: int = 120
+    notification_sweep_batch: int = 500
+    # older unsent deliveries are not sent any more (skipped, "expired"): a day-old signal or
+    # price alert is worse than none
+    notification_sweep_max_age_seconds: int = 86400
     # WebSocket hub (/ws/market)
     ws_heartbeat_seconds: float = 25
     ws_idle_timeout_seconds: float = 75
@@ -108,6 +153,8 @@ class Settings(BaseSettings):
     payment_demo_tools: bool = False  # admin fast-forward in production (always on elsewhere)
     payment_return_url: str = ""  # where the demo page sends the browser after paying
     public_base_url: str = ""  # e.g. http://187.127.76.76:8080; empty: from the request (Host)
+    # the public HTTPS name (docs/https.md); for docs and links only, nothing depends on it
+    public_hostname: str = ""
     platform_fee_pct: float = 20.0  # kept from every paid invoice (expert earnings view)
     subscription_grace_days: int = 3  # past_due keeps access this long, then expired
     checkout_ttl_minutes: int = 30
@@ -129,8 +176,40 @@ class Settings(BaseSettings):
     db_pool_timeout: float = 10
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
+    # Data-quality gate (B5, docs/data-quality.md): checked every minute for these instruments
+    data_quality_enabled: bool = True
+    data_quality_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
+    data_quality_max_lag_seconds: int = 120  # watermark lag allowed while the market is open
+    data_quality_max_missing_pct: float = 1.0  # missing 1m bars over the lookback window
+    data_quality_spike_pct: float = 2.0  # largest 1m close-to-close move on the evaluated bar
+    # an instrument flapping between ok and degraded alerts the admins at most once per this
+    # (the state in /health/data still changes at once)
+    data_quality_alert_cooldown_seconds: int = 1800
+    # Economic calendar (B6, docs/economic-calendar.md): the ForexFactory weekly JSON, fetched
+    # at most once per interval (one request), with a back-off after a 429/403
+    calendar_enabled: bool = True
+    calendar_ff_url: str = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+    calendar_fetch_interval_minutes: int = 240
+    calendar_fetch_timeout_seconds: float = 15.0  # whole request
+    calendar_fetch_max_bytes: int = 2 * 1024 * 1024
+    calendar_backoff_hours: float = 6.0  # no request at all for this long after a 429/403
+    calendar_currencies: str = "USD"  # default filter of reads and of for_evaluate (comma list)
+    # cTrader Open API live feed (B1, docs/ctrader-feed.md): the feed-ctrader service idles
+    # until enabled AND an account is linked (GET /admin/feeds/ctrader/connect)
+    ctrader_enabled: bool = False
+    ctrader_env: str = "demo"  # demo | live: the host the account belongs to
+    ctrader_account_id: int | None = None  # empty: the account chosen when linking
+    ctrader_symbol: str = "XAUUSD"  # the broker's symbol name
+    ctrader_instrument: str = "fxpro:XAU/USD"  # source:symbol of the instrument the bars go to
+    ctrader_close_grace_seconds: float = 3.0  # a bar without a next tick closes this late
+    ctrader_backfill_max_days: int = 7  # gap filled on start and after a reconnect
+    # the Open API application (written by the deploy from GitHub secrets; never in git)
+    ctrader_client_id: str = ""
+    ctrader_client_secret: str = ""
+    # development and CI only: the mock server (tools/fake_ctrader); empty: the official host
+    ctrader_ws_url: str = ""
 
-    @field_validator("api_docs_enabled", mode="before")
+    @field_validator("api_docs_enabled", "ctrader_account_id", mode="before")
     @classmethod
     def _empty_is_auto(cls, value: object) -> object:
         # the deploy appends new keys to the server .env as `KEY=` (empty): that means automatic
@@ -182,12 +261,75 @@ class Settings(BaseSettings):
         return getattr(self, f"price_alert_limit_{role}")
 
     @property
+    def data_quality_instrument_list(self) -> list[tuple[str, str]]:
+        """``(source, symbol)`` of DATA_QUALITY_INSTRUMENTS (entries without ``:`` are
+        ignored), normalised like stored instruments."""
+        return _pairs(self.data_quality_instruments)
+
+    @property
+    def ai_explain_lang_list(self) -> list[str]:
+        return [x.strip() for x in self.ai_explain_langs.split(",") if x.strip() in ("ar", "en")]
+
+    @property
+    def ai_bar_counts(self) -> dict[str, int]:
+        """Bars per timeframe in an evaluate request, oldest first (0 leaves it out)."""
+        counts = {
+            "15m": self.ai_bars_15m,
+            "1h": self.ai_bars_1h,
+            "4h": self.ai_bars_4h,
+            "1d": self.ai_bars_1d,
+        }
+        return {tf: n for tf, n in counts.items() if n > 0}
+
+    @property
+    def ai_evaluate_instrument_list(self) -> list[tuple[str, str]]:
+        """``(source, symbol)`` of AI_EVALUATE_INSTRUMENTS, normalised like stored ones."""
+        return _pairs(self.ai_evaluate_instruments)
+
+    @property
+    def ai_profile_list(self) -> list[str]:
+        out = []
+        for item in self.ai_profiles.split(","):
+            name = item.strip().lower()
+            if name and name not in out:
+                out.append(name)
+        return out
+
+    @property
+    def ctrader_instrument_key(self) -> tuple[str, str] | None:
+        """``(source, SYMBOL)`` of CTRADER_INSTRUMENT (None when malformed)."""
+        pairs = _pairs(self.ctrader_instrument)
+        return pairs[0] if pairs else None
+
+    @property
+    def calendar_currency_list(self) -> list[str]:
+        out = []
+        for item in self.calendar_currencies.split(","):
+            code = item.strip().upper()
+            if code and code not in out:
+                out.append(code)
+        return out
+
+    @property
     def post_role_set(self) -> frozenset[str]:
         return frozenset(r.strip() for r in self.post_roles.split(",") if r.strip())
 
     def backtest_quota(self, role: str) -> tuple[int, int]:
         """(concurrent queued + running, per UTC day; 0 = unlimited)."""
         return getattr(self, f"backtest_concurrent_{role}"), getattr(self, f"backtest_daily_{role}")
+
+
+def _pairs(value: str) -> list[tuple[str, str]]:
+    """``source:symbol`` comma list -> ``(source, SYMBOL)`` pairs (entries without ``:`` are
+    ignored, duplicates dropped)."""
+    out = []
+    for item in value.split(","):
+        source, sep, symbol = item.strip().partition(":")
+        if sep and source.strip() and symbol.strip():
+            pair = (source.strip().lower(), symbol.strip().upper())
+            if pair not in out:
+                out.append(pair)
+    return out
 
 
 @lru_cache

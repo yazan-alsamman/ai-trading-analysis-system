@@ -16,6 +16,7 @@ An account: login e-mail, Argon2 password hash and one of four roles (trader, an
 | `full_name` | varchar(200) | yes |  |  |
 | `role` | enum user_role (trader, analyst, expert, admin) | no | `trader` |  |
 | `is_active` | boolean | no | `true` |  |
+| `sessions_revoked_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `now()` |  |
 | `updated_at` | timestamp with time zone | no | `now()` |  |
 
@@ -41,6 +42,7 @@ One row per issued refresh token; ``id`` is the token's ``jti`` claim.
 | `created_at` | timestamp with time zone | no | `now()` |  |
 | `revoked_at` | timestamp with time zone | yes |  |  |
 | `replaced_by` | uuid | yes |  |  |
+| `family_id` | uuid | yes |  |  |
 
 **Constraints**
 
@@ -49,6 +51,7 @@ One row per issued refresh token; ``id`` is the token's ``jti`` claim.
 
 **Indexes**
 
+- `ix_refresh_tokens_family_id` (refresh_tokens.family_id)
 - `ix_refresh_tokens_user_id` (refresh_tokens.user_id)
 
 ### `api_keys`
@@ -101,7 +104,7 @@ A key for external programs: ``tk_<prefix>_<secret>``. Only the SHA-256 of the f
 
 ### `instruments`
 
-A market (symbol on a data source) with its price and quantity precision.
+A market (symbol on a data source) with its price and quantity precision and, when known, its contract specs (lot size and limits, tick, margin, price basis, trading sessions).
 
 | Column | Type | Null | Default | Keys |
 |---|---|---|---|---|
@@ -114,14 +117,35 @@ A market (symbol on a data source) with its price and quantity precision.
 | `price_precision` | integer | yes |  |  |
 | `quantity_precision` | integer | yes |  |  |
 | `is_active` | boolean | no | `true` |  |
+| `contract_size` | double precision | yes |  |  |
+| `tick_size` | double precision | yes |  |  |
+| `lot_step` | double precision | yes |  |  |
+| `min_lot` | double precision | yes |  |  |
+| `max_lot` | double precision | yes |  |  |
+| `quote_currency` | varchar(16) | yes |  |  |
+| `margin_rate` | double precision | yes |  |  |
+| `price_basis` | varchar(8) | yes |  |  |
+| `session_calendar` | jsonb | yes |  |  |
+| `cost_per_unit` | double precision | yes |  |  |
+| `spec_source` | varchar(32) | yes |  |  |
+| `spec_updated_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `now()` |  |
 | `updated_at` | timestamp with time zone | no | `now()` |  |
 
 **Constraints**
 
 - PK `pk` (id)
+- CHECK `ck_instruments_contract_size`: `contract_size IS NULL OR contract_size > 0`
+- CHECK `ck_instruments_cost_per_unit`: `cost_per_unit IS NULL OR cost_per_unit >= 0`
+- CHECK `ck_instruments_lot_range`: `min_lot IS NULL OR max_lot IS NULL OR min_lot <= max_lot`
+- CHECK `ck_instruments_lot_step`: `lot_step IS NULL OR lot_step > 0`
+- CHECK `ck_instruments_margin_rate`: `margin_rate IS NULL OR (margin_rate > 0 AND margin_rate <= 1)`
+- CHECK `ck_instruments_max_lot`: `max_lot IS NULL OR max_lot > 0`
+- CHECK `ck_instruments_min_lot`: `min_lot IS NULL OR min_lot > 0`
+- CHECK `ck_instruments_price_basis`: `price_basis IS NULL OR price_basis IN ('bid', 'mid', 'last')`
 - CHECK `ck_instruments_source_lower`: `source = lower(source)`
 - CHECK `ck_instruments_symbol_upper`: `symbol = upper(symbol)`
+- CHECK `ck_instruments_tick_size`: `tick_size IS NULL OR tick_size > 0`
 - UNIQUE `uq_instruments_source_symbol` (source, symbol)
 
 ### `candles_1m`
@@ -138,6 +162,9 @@ A 1-minute candle (TimescaleDB hypertable). ``ts`` is the UTC start of the minut
 | `close` | double precision | no |  |  |
 | `volume` | double precision | no |  |  |
 | `trades` | integer | yes |  |  |
+| `spread` | double precision | yes |  |  |
+| `source` | varchar(32) | yes |  |  |
+| `received_at` | timestamp with time zone | yes |  |  |
 
 **Constraints**
 
@@ -214,6 +241,67 @@ A user's alert on an instrument's price, checked on every closed 1m bar.
 
 - `ix_price_alerts_active_instrument` (price_alerts.instrument_id) WHERE `is_active`
 - `ix_price_alerts_user_created` (price_alerts.user_id, created_at DESC)
+
+### `economic_events`
+
+A version of an economic-calendar event as it was known at ``fetched_at``. Revisions (time moved, actual released, impact changed) are new rows with the same ``event_key``; the newest row with ``fetched_at <= T`` is what was known at T (point in time).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` | PK |
+| `event_key` | varchar(64) | no |  |  |
+| `source` | varchar(32) | no |  |  |
+| `currency` | varchar(8) | no |  |  |
+| `title` | varchar(255) | no |  |  |
+| `impact` | varchar(8) | no |  |  |
+| `scheduled_at` | timestamp with time zone | yes |  |  |
+| `scheduled_date` | date | no |  |  |
+| `time_label` | varchar(32) | yes |  |  |
+| `actual` | varchar(32) | yes |  |  |
+| `forecast` | varchar(32) | yes |  |  |
+| `previous` | varchar(32) | yes |  |  |
+| `actual_value` | double precision | yes |  |  |
+| `forecast_value` | double precision | yes |  |  |
+| `previous_value` | double precision | yes |  |  |
+| `fetched_at` | timestamp with time zone | no |  |  |
+| `content_hash` | varchar(64) | no |  |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- CHECK `ck_economic_events_currency`: `currency = upper(currency)`
+- CHECK `ck_economic_events_impact`: `impact IN ('high', 'medium', 'low', 'holiday')`
+- CHECK `ck_economic_events_source`: `source IN ('forexfactory_live', 'forexfactory_kaggle', 'manual')`
+- UNIQUE `uq_economic_events_key_hash` (event_key, content_hash)
+
+**Indexes**
+
+- `ix_economic_events_currency_impact` (economic_events.currency, economic_events.impact, economic_events.scheduled_at)
+- `ix_economic_events_key_fetched` (economic_events.event_key, fetched_at DESC)
+- `ix_economic_events_scheduled` (economic_events.scheduled_at)
+
+### `feed_credentials`
+
+Base class used for declarative class definitions.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `provider` | varchar(32) | no |  | PK |
+| `env` | varchar(8) | no |  |  |
+| `access_token_enc` | text | no |  |  |
+| `refresh_token_enc` | text | no |  |  |
+| `expires_at` | timestamp with time zone | no |  |  |
+| `scope` | varchar(16) | no |  |  |
+| `account_id` | bigint | yes |  |  |
+| `accounts` | jsonb | no | `'[]'::jsonb` |  |
+| `linked_at` | timestamp with time zone | no | `now()` |  |
+| `refreshed_at` | timestamp with time zone | yes |  |  |
+| `updated_at` | timestamp with time zone | no | `now()` |  |
+
+**Constraints**
+
+- PK `pk` (provider)
+- CHECK `ck_feed_credentials_env`: `env IN ('demo', 'live')`
 
 ## Strategies, backtests and risk
 
@@ -370,6 +458,8 @@ A user's risk rules and declared account size (one per user, created on first re
 | `user_id` | uuid | no |  | PK, FK |
 | `account_size` | double precision | no | `10000` |  |
 | `quote_currency` | varchar(10) | no | `USDT` |  |
+| `leverage` | double precision | no | `100` |  |
+| `balance_set_at` | timestamp with time zone | yes |  |  |
 | `config` | jsonb | no |  |  |
 | `template` | varchar(20) | yes |  |  |
 | `updated_at` | timestamp with time zone | no | `clock_timestamp()` |  |
@@ -379,6 +469,7 @@ A user's risk rules and declared account size (one per user, created on first re
 - PK `pk` (user_id)
 - FK (user_id) → users (id) ON DELETE CASCADE
 - CHECK `ck_risk_profiles_account_size_positive`: `account_size > 0`
+- CHECK `ck_risk_profiles_leverage`: `leverage > 0 AND leverage <= 10000`
 
 ### `signal_plans`
 
@@ -404,6 +495,258 @@ The trade plan of one signal for one user (and activation): entry, stop, targets
 **Indexes**
 
 - `ix_signal_plans_user_created` (signal_plans.user_id, created_at DESC)
+
+## AI engine (ai-service setups and models)
+
+### `ai_setups`
+
+A setup as ai-service last described it. ``last_payload`` is the setup exactly as last returned (with ``state`` kept in step with transitions): the next evaluate request echoes it in ``open_setups``.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `setup_id` | varchar(128) | no |  | PK |
+| `instrument_id` | uuid | no |  | FK |
+| `profile` | varchar(32) | no |  |  |
+| `direction` | varchar(4) | no |  |  |
+| `state` | varchar(16) | no |  |  |
+| `entry` | double precision | yes |  |  |
+| `sl` | double precision | yes |  |  |
+| `tp` | double precision | yes |  |  |
+| `r_multiple` | double precision | yes |  |  |
+| `probability` | double precision | yes |  |  |
+| `ev_r` | double precision | yes |  |  |
+| `ev_r_lower` | double precision | yes |  |  |
+| `grade` | varchar(4) | yes |  |  |
+| `valid_until` | timestamp with time zone | yes |  |  |
+| `horizon_until` | timestamp with time zone | yes |  |  |
+| `realized_r` | double precision | yes |  |  |
+| `evidence` | jsonb | no | `'{}'::jsonb` |  |
+| `features` | jsonb | no | `'{}'::jsonb` |  |
+| `last_payload` | jsonb | no |  |  |
+| `strategy_version` | varchar(64) | yes |  |  |
+| `model_version` | varchar(128) | yes |  |  |
+| `features_version` | varchar(64) | yes |  |  |
+| `first_request_id` | varchar(160) | no |  |  |
+| `last_request_id` | varchar(160) | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `updated_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (setup_id)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
+- CHECK `ck_ai_setups_direction`: `direction IN ('buy', 'sell')`
+- CHECK `ck_ai_setups_probability`: `probability IS NULL OR probability BETWEEN 0 AND 1`
+- CHECK `ck_ai_setups_state`: `state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
+
+**Indexes**
+
+- `ix_ai_setups_created` (created_at DESC)
+- `ix_ai_setups_open` (ai_setups.instrument_id, ai_setups.profile, ai_setups.state)
+
+### `ai_setup_events`
+
+Append-only history of a setup's states. ``from_state`` is null for its first appearance. Unique ``(setup_id, to_state, at)``: re-applying a response adds nothing.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | bigint | no | `Identity()` | PK |
+| `setup_id` | varchar(128) | no |  | FK |
+| `from_state` | varchar(16) | yes |  |  |
+| `to_state` | varchar(16) | no |  |  |
+| `at` | timestamp with time zone | no |  |  |
+| `reason` | varchar(255) | yes |  |  |
+| `realized_r` | double precision | yes |  |  |
+| `request_id` | varchar(160) | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- CHECK `ck_ai_setup_events_from`: `from_state IS NULL OR from_state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
+- CHECK `ck_ai_setup_events_to`: `to_state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
+- UNIQUE `uq_ai_setup_events_setup_state_at` (setup_id, to_state, at)
+
+### `ai_model_versions`
+
+The model registry. At most one row is active (partial unique index). Versions that ai-service reports and nobody registered are added inactive, with a note.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `model_id` | varchar(128) | no |  | PK |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `training_from` | timestamp with time zone | yes |  |  |
+| `training_to` | timestamp with time zone | yes |  |  |
+| `data_hash` | varchar(128) | yes |  |  |
+| `metrics` | jsonb | no | `'{}'::jsonb` |  |
+| `is_active` | boolean | no | `false` |  |
+| `notes` | text | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (model_id)
+
+**Indexes**
+
+- `uq_ai_model_versions_one_active` UNIQUE (ai_model_versions.is_active) WHERE `is_active`
+
+### `ai_setup_sizes`
+
+A setup sized for one user (B10, ``app/ai/sizing.py``): by ai-service ``/v1/size`` or, when it is unavailable, by the backend's B4 lot sizing (``source``). ``inputs`` is what the size depends on (account, risk, spec and setup hashes, guard): the same inputs reuse it.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `setup_id` | varchar(128) | no |  | PK, FK |
+| `user_id` | uuid | no |  | PK, FK |
+| `lots` | double precision | no |  |  |
+| `risk_usd` | double precision | no |  |  |
+| `margin_required` | double precision | yes |  |  |
+| `feasible` | boolean | no |  |  |
+| `warnings` | jsonb | no | `'[]'::jsonb` |  |
+| `inputs` | jsonb | no |  |  |
+| `source` | varchar(16) | no | `local` |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `computed_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (setup_id, user_id)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- FK (user_id) → users (id) ON DELETE CASCADE
+- CHECK `ck_ai_setup_sizes_source`: `source IN ('remote', 'local')`
+
+### `ai_setup_takes`
+
+A user says they took a setup (B10). ``lots`` / ``risk_amount`` default to their stored size; when the setup ends, ``apply_evaluation`` fills ``closed_at``, ``realized_r``, ``pnl = realized_r * risk_amount`` and ``close_reason`` (EXPIRED / INVALIDATED: 0).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `setup_id` | varchar(128) | no |  | PK, FK |
+| `user_id` | uuid | no |  | PK, FK |
+| `taken_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `lots` | double precision | yes |  |  |
+| `risk_amount` | double precision | yes |  |  |
+| `entry_price` | double precision | yes |  |  |
+| `closed_at` | timestamp with time zone | yes |  |  |
+| `realized_r` | double precision | yes |  |  |
+| `pnl` | double precision | yes |  |  |
+| `close_reason` | varchar(64) | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (setup_id, user_id)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- FK (user_id) → users (id) ON DELETE CASCADE
+
+**Indexes**
+
+- `ix_ai_setup_takes_user` (ai_setup_takes.user_id, taken_at DESC)
+
+### `ai_setup_explanations`
+
+A setup explained by ai-service ``/v1/explain`` in one language (filled by B9/B11).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `setup_id` | varchar(128) | no |  | PK, FK |
+| `lang` | varchar(8) | no |  | PK |
+| `text` | text | no |  |  |
+| `verified` | boolean | no |  |  |
+| `template_used` | boolean | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (setup_id, lang)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- CHECK `ck_ai_setup_explanations_lang`: `lang IN ('ar', 'en')`
+
+### `ai_setup_outbox`
+
+A setup state change to notify (B11): written by ``apply_evaluation`` in its own transaction, so no alert is lost on a crash; sent by the ``ai_alerts.dispatch`` task. Unique ``(setup_id, to_state)``: a replayed evaluation never enqueues twice. DEVELOPING is never written.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | bigint | no | `Identity()` | PK |
+| `setup_id` | varchar(128) | no |  | FK |
+| `from_state` | varchar(16) | yes |  |  |
+| `to_state` | varchar(16) | no |  |  |
+| `at` | timestamp with time zone | no |  |  |
+| `reason` | varchar(255) | yes |  |  |
+| `realized_r` | double precision | yes |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `status` | varchar(16) | no | `pending` |  |
+| `attempts` | integer | no | `0` |  |
+| `next_attempt_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `last_error` | varchar(500) | yes |  |  |
+| `processed_at` | timestamp with time zone | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
+- CHECK `ck_ai_setup_outbox_status`: `status IN ('pending', 'done', 'skipped', 'failed')`
+- CHECK `ck_ai_setup_outbox_to`: `to_state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
+- UNIQUE `uq_ai_setup_outbox_setup_state` (setup_id, to_state)
+
+**Indexes**
+
+- `ix_ai_setup_outbox_due` (ai_setup_outbox.next_attempt_at) WHERE `status = 'pending'`
+
+### `ai_alert_follows`
+
+A user wants ARMED alerts of an instrument and profile (B11), optionally only from a grade (``min_grade``: A best; null: any grade). No automatic follow.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `user_id` | uuid | no |  | PK, FK |
+| `instrument_id` | uuid | no |  | PK, FK |
+| `profile` | varchar(32) | no |  | PK |
+| `min_grade` | varchar(1) | yes |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (user_id, instrument_id, profile)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
+- FK (user_id) → users (id) ON DELETE CASCADE
+- CHECK `ck_ai_alert_follows_grade`: `min_grade IS NULL OR min_grade IN ('A', 'B', 'C', 'D')`
+
+**Indexes**
+
+- `ix_ai_alert_follows_market` (ai_alert_follows.instrument_id, ai_alert_follows.profile)
+
+### `ai_evaluation_runs`
+
+One ``ai.evaluate`` run (B9, ``app/ai/evaluate.py``) of an instrument, profile and bar: what happened (``status``: ok, abstained, skipped, unavailable, contract_error, error), why (``reason``), the request size and bar coverage, and a summary of the answer (or of the local abstention when ai-service was not called). Read by ``/admin/system/status``.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | bigint | no | `Identity()` | PK |
+| `instrument_id` | uuid | no |  | FK |
+| `profile` | varchar(32) | no |  |  |
+| `bar_close_ts` | timestamp with time zone | no |  |  |
+| `request_id` | varchar(160) | no |  |  |
+| `status` | varchar(24) | no |  |  |
+| `reason` | varchar(64) | yes |  |  |
+| `request_bytes` | integer | yes |  |  |
+| `coverage` | jsonb | no | `'{}'::jsonb` |  |
+| `detail` | jsonb | no | `'{}'::jsonb` |  |
+| `duration_ms` | integer | yes |  |  |
+| `started_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `finished_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
+- CHECK `ck_ai_evaluation_runs_status`: `status IN ('ok', 'abstained', 'skipped', 'unavailable', 'contract_error', 'error')`
+- UNIQUE `uq_ai_evaluation_runs_key` (instrument_id, profile, bar_close_ts)
+
+**Indexes**
+
+- `ix_ai_evaluation_runs_finished` (ai_evaluation_runs.finished_at)
 
 ## Workspaces
 
@@ -451,7 +794,7 @@ One event for one user: the inbox row and the source of every external delivery.
 |---|---|---|---|---|
 | `id` | uuid | no | `gen_random_uuid()` | PK |
 | `user_id` | uuid | no |  | FK |
-| `type` | enum notification_type (signal, backtest_completed, backtest_failed, security, system, new_post, comment_reply, post_liked, content_hidden, price_alert, chat_message, subscription_started, subscription_renewed, subscription_payment_failed, subscription_canceled, new_subscriber) | no |  |  |
+| `type` | enum notification_type (signal, backtest_completed, backtest_failed, security, system, new_post, comment_reply, post_liked, content_hidden, price_alert, chat_message, subscription_started, subscription_renewed, subscription_payment_failed, subscription_canceled, new_subscriber, ai_setup) | no |  |  |
 | `title` | varchar(200) | no |  |  |
 | `body` | text | no |  |  |
 | `data` | jsonb | no |  |  |
@@ -489,6 +832,7 @@ One notification on one channel to one target (chat id, email, device id; never 
 | `release_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
 | `sent_at` | timestamp with time zone | yes |  |  |
+| `next_attempt_at` | timestamp with time zone | yes |  |  |
 
 **Constraints**
 
@@ -500,6 +844,7 @@ One notification on one channel to one target (chat id, email, device id; never 
 
 - `ix_notification_deliveries_created` (notification_deliveries.created_at)
 - `ix_notification_deliveries_due` (notification_deliveries.release_at) WHERE `status = 'pending' AND hold IS NOT NULL`
+- `ix_notification_deliveries_unsent` (coalesce(next_attempt_at, created_at)) WHERE `status = 'pending' AND hold IS NULL`
 
 ### `notification_preferences`
 

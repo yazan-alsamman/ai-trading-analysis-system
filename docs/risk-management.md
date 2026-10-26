@@ -52,7 +52,38 @@ For each bar `i`:
 6. Equity is **marked to market** at the close, and the drawdown and daily-loss guards are
    updated.
 
-Every fill pays slippage against you and the fee on its notional, entry and each exit fill.
+Every fill pays slippage against you and the fee on its notional, entry and each exit fill,
+except on an instrument with a [fixed cost per unit](#fixed-cost-per-unit-per-instrument).
+
+## Fixed cost per unit (per instrument)
+
+Fadi's rule (25 Oct): for **XAU/USD**, the spread plus every trading cost is **always 0.25 in
+price units per unit (per oz), per round trip**, in backtests and in position sizing, whatever
+the real spread is. It is a cost, not a cap. It is stored **per instrument** in
+`instruments.cost_per_unit` (migration 0021; `null` = the bps fees as before), editable by an
+admin like the other spec fields (`PATCH /admin/instruments/{id}`), and shown in the
+instrument API. Only `fxpro:XAU/USD` has a value (0.25, set by the migration and by
+`seed-instruments` only while it is null; a manual value is never overwritten). Live candles
+keep their real spread, and `/v1/evaluate` requests are unchanged.
+
+When an instrument has `cost_per_unit`:
+
+- **Where it is charged (backtests).** The whole round trip, `cost_per_unit × quantity`, is
+  charged **at the entry, as the trade's fee**. There is no slippage and no bps fee, so every
+  fill is at the chart price (the bid for XAU/USD): the entry at the next open, the stop and the
+  targets exactly at their levels, and partial exits pay nothing more. A long's net P&L is
+  `(exit − entry − 0.25) × quantity`, a short's `(entry − exit − 0.25) × quantity`; the cost is
+  the trade's `fees` and in the run's `total_fees`. Equity drops by the cost at the entry. The
+  user's `fee_bps` and `slippage_bps` are **ignored** for that run (the engine treats them as 0).
+- **Sizing.** The risk per unit is `|entry − stop| + cost_per_unit` (instead of
+  `|entry − stop| + (entry + stop) × fee`); a unit costs `entry + cost_per_unit` for the
+  `fraction`/`fixed` modes and the `max_position_pct` cap. The breakeven stop is
+  `entry ± cost_per_unit`. Trade plans (live signals, calculator) say so in `sizing_warnings`
+  and carry `cost_per_unit`; `risk_amount` and `lots_risk_amount` include it.
+- **Example (by hand).** XAU/USD, 10,000 USD account, risk 0.2 % = 20 USD, entry 2400.00,
+  stop 2395.00: `(5.00 + 0.25) × 100 oz = 525 USD` per lot → 0.0381 → **0.03 lots**, 15.75 USD
+  at risk (0.04 lots without the cost). A long of 2 oz from 2400.00 to 2410.00: gross +20.00,
+  fees 0.50, net **+19.50**.
 
 ### The entry-bar change (`check_entry_bar`)
 
@@ -112,7 +143,8 @@ trailing rule moved it, and `breakeven_stop` once breakeven moved it.
   many R in your favour, i.e. `(highest high − entry) / R ≥ activation_r`. Once on, it stays on.
 - **`breakeven_r`**: once the best price moved that many R, the stop moves to the price at
   which an exit covers the entry and both fees after slippage:
-  `entry × (1 + fee) / ((1 − fee) × (1 − slippage))` for a long. If trailing later moves it
+  `entry × (1 + fee) / ((1 − fee) × (1 − slippage))` for a long (with a fixed cost per unit:
+  `entry + cost_per_unit`). If trailing later moves it
   higher, the exit becomes a `trailing_stop`.
 - Updated **at the bar close**, effective **from the next bar** (step 5).
 
@@ -146,6 +178,9 @@ short use the same quantity.
 | `fixed` (`value` quote) | `min(value, equity / (1 + fee)) / entry` |
 | `risk` (`risk_pct`, needs a stop) | `risk_pct/100 × equity / (|entry − stop| + (entry + stop) × fee)`, so the loss at the stop, both fees included, ≈ `risk_pct` % of equity |
 | `volatility` (`target_pct`, `length`) | `target_pct/100 × equity / ATR(length)`, so a 1-ATR move = `target_pct` % of equity |
+
+With a [fixed cost per unit](#fixed-cost-per-unit-per-instrument), `entry × (1 + fee)` becomes
+`entry + cost_per_unit` and the `risk` divisor `|entry − stop| + cost_per_unit`.
 
 Every mode is then capped:
 
@@ -196,9 +231,74 @@ included), `risk_pct`, `r_multiple` and `fills`.
 | `rr` | reward:risk of the first target |
 | `invalid_reason` | `null`, or why it should not be traded (`stop_unavailable`, `stop_wrong_side`, `atr_unavailable`, `no_equity`, `size_below_min`) |
 | `equity`, `atr` (volatility sizing), `trailing` | inputs, for display |
+| `lots`, `lots_feasible` | instruments with contract specs only: `quantity / contract_size` rounded **down** to the lot step, 0 and `false` below the minimum lot or without a conversion rate; `null` without specs |
+| `lots_risk_amount` | price-move loss of `lots` at the stop, account currency |
+| `conversion_rate` | account currency per unit of the quote currency (1 for the same currency) |
+| `sizing_warnings` | what was adjusted or is missing (min/max lot, no conversion rate, USDT counted as USD) |
 
 It reads bars up to the signal bar only. The backtest engine computes every entry with the same
 code, passing the real fill as `entry`.
+
+### Account currency and lots (B4 sizing fix)
+
+Before B4 the size treated `account_size` as if it were in the instrument's **quote**
+currency. That is right for BTC/USDT with a USDT account, but a USD/JPY plan for a 10,000 USD
+account sized as if the account held 10,000 JPY, about 150× too small.
+
+Now, on an instrument with contract specs (`contract_size` and `lot_step`, see
+[instruments.md](instruments.md)), the plan converts the equity into the quote currency
+before sizing (`equity / conversion_rate`). The account currency is the profile's
+`quote_currency`. `risk_amount` and `risk_pct` come back in the account currency, `notional`
+stays in the quote currency, and the plan adds `lots`. The conversion rate is:
+
+1. 1 when the quote currency is the account currency;
+2. `1 / entry` when the account currency is the base (USD/JPY for a USD account);
+3. otherwise the latest 1m close of an active `QUOTE/ACCOUNT` market (or `1 /` that of
+   `ACCOUNT/QUOTE`);
+4. USD, USDT and USDC count as one dollar only when 1–3 find nothing exact, and
+   `sizing_warnings` says so (the default profile currency is USDT);
+5. nothing found: `lots = 0`, `lots_feasible = false` and a warning. The quantity is then the
+   unconverted one, as before. A rate of 1 is never assumed silently.
+
+Example: USD/JPY at 150.000, stop 149.500, account 10,000 USD, 1 % risk, no fees →
+quantity **30,000** USD (was 200) = **0.30 lots**; `risk_amount` = 100 USD. Every old field is
+kept. `fee_bps` still counts in `quantity`, so with the default 10 bps an XAU/USD plan gets
+fewer lots than the fee-free hand calculation in instruments.md. `margin_rate` is not used for
+the plan's size: the cap is still `max_position_pct` (the user's leverage).
+
+### Backtests and plans in another account currency (B9)
+
+Fadi reported that "the Sizer in libs/backtest" gave a USD/JPY size about 150× too small. A
+test with the hand example above (USD account 10,000, 1 % risk, USD/JPY 150.00, stop 50 pips
+away → **0.30 lots = 30,000 units**) was written first, against every path:
+
+| Path | Before | Now |
+|---|---|---|
+| AI setup sizing `local_size` (B10, `tb.lots_for_risk`) | right: 0.30 lots | unchanged |
+| plans and the calculator on an instrument **with** specs (B4) | right | unchanged |
+| plans and the calculator on an instrument **without** specs | 200 units (150× too small): the rate was ignored | 30,000 units (no lots: no specs) |
+| the backtest engine (`Sizer`, every mode) | 200 units (150× too small): the capital was taken as JPY | 30,000 units with `conversion` |
+| a backtest with `"risk_profile": true` | 150× too small (the profile's USD balance as JPY) | the profile's currency is converted |
+
+The fix:
+
+- **libs/backtest**: `BacktestConfig.conversion` (optional): `{"type": "inverse_price"}` when the
+  account currency is the instrument's base (a USD account on USD/JPY: 1 JPY = 1 / price USD
+  at each fill and close), or `{"type": "fixed", "rate": r}` (account currency per quote unit,
+  for the whole run). With it, `initial_capital` and every money result (equity, P&L, fees,
+  `risk_amount`) are in the account currency; prices and notional stay in the quote currency.
+  The size is computed on the equity converted to the quote currency, `cash` moves by the fees
+  and the P&L of each fill converted at that fill, and an open position adds its P&L at the
+  close. **Without it the engine runs the unchanged code path**: every USD-quoted and crypto
+  backtest, and every Y11 golden test, is bit-identical.
+- **Trade plans**: a conversion rate without contract specs converts the equity too (no lots).
+  Live plans and the calculator pass it when the rate is not 1, so USD-quoted and USDT plans
+  are unchanged.
+- **Backtests with the profile**: when the profile's currency is not the instrument's quote
+  currency (USD, USDT and USDC count as one), the stored config gets the `conversion`
+  (`inverse_price` when the account currency is the base, otherwise the latest rate of a
+  matching market, fixed for the run; none found: 422), and `config.risk_profile.conversion`
+  records it. An explicit `initial_capital` stays in the quote currency, as documented.
 
 ### Worked example
 
@@ -261,7 +361,7 @@ or `default`) and `risk_config`, the exact rules used.
 |---|---|---|---|
 | GET | `/risk/schema` | JWT / `strategies:read` | JSON Schema of the risk config, the normalised templates |
 | GET | `/me/risk-profile` | JWT | created with defaults on first read |
-| PUT | `/me/risk-profile` | JWT | `{account_size, quote_currency, config}` or `{template}`; 422 with paths |
+| PUT | `/me/risk-profile` | JWT | `{account_size, quote_currency, leverage, config}` or `{template}`; 422 with paths. GET and PUT also return `leverage` and `ai_risk` (AI setups, below) |
 | POST | `/risk/position-size` | JWT / `strategies:read` | calculator (below) |
 | GET | `/me/signal-plans` | JWT | your plans with their signal, `Page`; filters `instrument_id`, `timeframe`, `strategy_key`, `since` |
 | PATCH | `/me/strategies/{id}` | JWT | also `risk_override` (null clears) |
@@ -282,6 +382,144 @@ it was computed on and the rules used:
           "risk_pct": 1.0, "rr": 1.0, "invalid_reason": null, …}}
 ```
 
+## AI setups (B10)
+
+AI setups come from ai-service (docs/ai-contract.md). B10 adds four things: the per-user risk
+values they are sized with, their size for each user, the user's "I took this trade", and two
+account guards. Code: `risk_service.ai_risk_inputs`, `app/ai/sizing.py`, `app/ai/takes.py`,
+`store.apply_evaluation` (close-out).
+
+### The five fields, mapped onto the profile
+
+There is no parallel model: the values come from the existing profile, and
+`ai_risk_inputs(profile)` is the one place that maps them.
+
+| Field (contract) | Comes from | Otherwise |
+|---|---|---|
+| `balance` | `account_size` | – |
+| `currency` | `quote_currency` | – |
+| `leverage` | `leverage` (new column, default 100, `0 < leverage <= 10000`) | – |
+| `risk_per_trade_pct` | `config.sizing.risk_pct` when `sizing.mode` is `risk` | `AI_DEFAULT_RISK_PCT` (1.0), with the warning `sizing mode is not risk-based; used 1%` |
+| `daily_loss_limit_pct` | `config.guards.max_daily_loss_pct` | `AI_DEFAULT_DAILY_LOSS_PCT` (3.0) |
+| `max_drawdown_pct` | `config.guards.max_drawdown_pct` | `AI_DEFAULT_MAX_DRAWDOWN_PCT` (10.0) |
+
+`GET /me/risk-profile` returns them read-only as `ai_risk`, with `sources` per field: `profile`
+(a profile column), `config` (the risk config) or `default` (a setting), plus the warnings.
+`PUT /me/risk-profile` takes `leverage` (optional, `> 0` and `<= 10000`).
+
+Templates: `conservative` 0.5 % (config) / 3 % (default) / 10 % (config); `balanced` 1 %
+(config) / 3 % / 10 % (defaults); `aggressive` 2 % (config) / 3 % / 10 % (defaults).
+
+### Size
+
+`GET /ai/setups/{setup_id}/size` (JWT or an API key with `signals:read`: AI setups are global,
+so everyone who may read signals may size them) sizes an `ARMED` or `ACTIVE` setup for your
+account. Other states give 409, and so does an instrument without specs.
+
+1. **Guards** (below): if one is reached, the answer is `feasible: false`, `lots: 0` and the
+   guard in `warnings`. ai-service is not called.
+2. **ai-service `/v1/size`**, with the setup exactly as last returned, the instrument's B4
+   specs, the account and the risk.
+3. **`AI_SIZE_MODE`** decides what happens when ai-service cannot answer:
+   - `auto` (default): ai-service first. When it is unavailable (timeouts, connection errors,
+     5xx after the client's retries) or has no `/v1/size` yet (404), the backend sizes the
+     setup itself (`source: local`, with a warning). The 404 fallback is allowed only while
+     `AI_SIZE_LOCAL_FALLBACK_ON_404=true` (the default until Fadi's P6 ships `/v1/size`);
+     with `false` a 404 is a 503 like an unavailable ai-service, never a silent local size.
+   - `remote`: never falls back; 503 when ai-service is unavailable.
+   - `local`: never calls ai-service.
+
+   Another 4xx, or a body outside the contract, is a **contract error**: 502, no fallback,
+   logged.
+4. **Local formula**, the B4 lot sizing of docs/instruments.md:
+   - risk amount = balance × `risk_per_trade_pct` / 100;
+   - lots = risk amount / ((|entry − sl| + `cost_per_unit`) × contract size × conversion
+     rate), rounded **down** to `lot_step`. `cost_per_unit` is the instrument's
+     [fixed cost](#fixed-cost-per-unit-per-instrument) (0 without one; XAU/USD 0.25: 20 USD at
+     entry 2400, sl 2395 gives 0.03 lots, not 0.04), and a warning says it was included;
+   - below `min_lot`: 0 lots, `feasible: false` and a warning; above `max_lot`: capped, with a
+     warning;
+   - prices off the tick are rounded first with Fadi's rule: the stop **away from** the entry,
+     the target toward it (never a smaller risk);
+   - margin = notional in the account currency × **max(`margin_rate`, 1 / leverage)** (Fadi):
+     the broker's margin rate when it asks for more than the user's leverage; without a
+     margin rate, 1 / leverage. Without a conversion rate the size is not feasible and the
+     margin is null, both with a warning. USD, USDT and USDC count as one dollar when there is
+     no exact market, with a warning.
+5. **Stored** in `ai_setup_sizes`, one row per setup and user, with `source` (`remote`:
+   ai-service `/v1/size`, or `local`; a local size **always** carries a warning saying so,
+   also with `AI_SIZE_MODE=local`) and `inputs`:
+   - `inputs` holds the account, the risk, a hash of the specs, a hash of the setup payload,
+     the guards reached and the mode, and `cost_per_unit` when the instrument has one (it is
+     in the specs hash too);
+   - the same inputs give the stored result without a call;
+   - a new balance, risk or leverage, a changed `cost_per_unit`, or a setup that moved
+     (ARMED → ACTIVE, a new payload), computes it again.
+
+The answer has `lots`, `risk_amount` (account currency; the contract calls it `risk_usd`),
+`margin_required`, `feasible`, `warnings`, `source`, `computed_at`, the `inputs` used with their
+sources, and `taken`.
+
+**The B4 example**: balance 2,000 USD, risk 1 % = 20 USD, XAU/USD buy at 2400.00 with the stop
+at 2395.00. One lot risks 5.00 × 100 = 500 USD, so the size is 20 / 500 = **0.04** lots,
+`risk_amount` 20 USD, and margin 2400 × 100 × 0.04 / 100 = 96 USD at leverage 100 (9,600 USD at
+leverage 1). Both paths give this result.
+
+`size_setup_for_users(session, setup, user_ids)` is the batch form for B9/B11, used when a
+setup becomes ARMED:
+- it loads the profiles in one query;
+- it runs at most `AI_SIZE_CONCURRENCY` (4) ai-service calls at once;
+- it returns one result or one error per user, so one broken profile does not stop the others.
+
+### Taken trades
+
+| Method | Path | |
+|---|---|---|
+| POST | `/ai/setups/{setup_id}/take` | body `{lots?, entry_price?}`; only while `ARMED` or `ACTIVE` (409 otherwise); 201 the first time, 200 with the same take afterwards |
+| DELETE | `/ai/setups/{setup_id}/take` | undo, while the setup has not ended (409 after) |
+| GET | `/me/ai/trades` | your takes, newest first (`Page`), with the setup's state, `realized_r` and `pnl` |
+
+A take records:
+- **`lots`:** your stored size by default.
+- **`risk_amount`:** the risk of those lots at the setup's stop, in your account currency. It
+  comes from the stored size, or from the specs when there is none.
+- **`entry_price`:** optional.
+
+When `apply_evaluation` records the end of the setup, in the same transaction:
+
+| The setup becomes | The take gets |
+|---|---|
+| `CLOSED` | `closed_at`, `realized_r`, `pnl = realized_r × risk_amount`, `close_reason` (the transition's reason) |
+| `EXPIRED`, `INVALIDATED` | `realized_r = 0`, `pnl = 0`, `close_reason` (`expired`, `invalidated` or the reason) |
+
+A take already closed is never changed again, so a replayed response changes nothing.
+
+### Guards (checked before every size)
+
+The balance is declared and we never read a real account, so the rules are simple on purpose.
+They use the `pnl` of your **closed takes**, and they apply even if ai-service checks the same
+limits.
+
+- **Daily loss.** Add up the `pnl` of the takes closed since 00:00 UTC today. If the loss is at
+  least `daily_loss_limit_pct` of the balance: `daily_loss_limit_reached`.
+- **Drawdown.** Run a total of `pnl` over the takes closed since the balance was last set
+  (`risk_profiles.balance_set_at`, set by every PUT that changes `account_size`; null means all
+  takes count). The drawdown is the fall from the highest point of that total (0 at the start)
+  to now, as a % of the balance. At `max_drawdown_pct` or more: `max_drawdown_reached`.
+
+Worked examples, on 2,000 USD with 1 % risk (1R = 20 USD):
+
+- **Daily loss, 3 % limit (60 USD).**
+  - A −2R take today: −40 USD (2 %). Still feasible.
+  - A second −2R today: −80 USD (4 %). `daily_loss_limit_reached`, and ai-service is not
+    called.
+  - Takes closed yesterday do not count.
+- **Drawdown, 5 % limit (100 USD).** Three takes on earlier days: +1R, −3R, −3R.
+  - After the first, the total is +20 and the highest point is 20.
+  - After the second, the total is −40: 60 USD (3 %) below the highest point, still feasible.
+  - After the third, the total is −100: 120 USD (6 %) below it, so `max_drawdown_reached`.
+  - A new balance starts the window again.
+
 ## Backtests
 
 `POST /backtests` `config` accepts `stop`, `trailing`, `take_profit`, `sizing`, `guards` and
@@ -289,8 +527,14 @@ it was computed on and the rules used:
 still accepted). A 422 lists the errors with their paths
 (`{"loc": ["body", "config", "stop", "multiplier"], "path": "stop.multiplier", …}`).
 
+On an instrument with a [fixed cost per unit](#fixed-cost-per-unit-per-instrument) the server
+sets `config.cost_per_unit` from the instrument (a request may not set it: 422), the run
+ignores `fee_bps` and `slippage_bps`, and the result says `cost_model: "fixed_per_unit"` and
+`cost_per_unit: 0.25` (otherwise `cost_model: "bps"`, `cost_per_unit: null`).
+
 `"risk_profile": true` applies your profile: its rules, `fee_bps` and `account_size` (as
-`initial_capital`). Fields in the request win, and a Y11 `exits.stop_loss_pct` /
+`initial_capital`, converted when the profile's currency is not the instrument's quote
+currency: [above](#backtests-and-plans-in-another-account-currency-b9)). Fields in the request win, and a Y11 `exits.stop_loss_pct` /
 `take_profit_pct` replaces the profile's stop / take profit. The profile is snapshotted into
 the stored config (`config.risk_profile`: template, account size, currency, rules,
 `updated_at`), so the backtest stays reproducible after the profile changes. Results include

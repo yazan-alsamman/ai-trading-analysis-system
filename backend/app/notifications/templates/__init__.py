@@ -11,6 +11,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from app.ai.contract import round_levels
 from app.notifications.templates.messages import CHANNEL_NAMES, TEXTS
 
 LANGUAGES = ("ar", "en")
@@ -247,12 +248,99 @@ def _price_alert(data: dict[str, Any], lang: str) -> tuple[str, str]:
     return title, "\n".join(lines)
 
 
+def _ai_setup(data: dict[str, Any], lang: str) -> tuple[str, str]:
+    """An AI setup state change (B11): prices at the instrument's precision, the user's size on
+    ARMED, the result of their take when it ends."""
+    instrument = data.get("instrument") or {}
+    digits = instrument.get("price_precision")
+    digits = 2 if digits is None else int(digits)
+    state = str(data.get("state", "ARMED"))
+    side = t(lang, f"side.{data.get('direction', 'buy')}")
+    symbol = instrument.get("symbol", "?")
+    title = t(
+        lang,
+        f"ai_setup.{state}.title",
+        side=side,
+        symbol=symbol,
+        entry=num(data.get("entry"), digits),
+        r=_signed(data.get("realized_r")),
+    )
+    lines = []
+    if state in ("ARMED", "ACTIVE"):
+        # shown at the instrument's precision with Fadi's rule: the stop away from the entry,
+        # the target toward it (never a smaller risk or a larger reward than the real levels)
+        entry, sl, tp = round_levels(
+            str(data.get("direction", "buy")),
+            data.get("entry"),
+            data.get("sl"),
+            data.get("tp"),
+            10.0**-digits,
+        )
+        lines.append(
+            t(
+                lang,
+                "ai_setup.prices",
+                entry=num(entry, digits),
+                sl=num(sl, digits),
+                tp=num(tp, digits),
+            )
+        )
+    if state == "ARMED":
+        probability = data.get("probability")
+        grade = data.get("grade")  # always null in v1 (Fadi): the line leaves it out
+        # v1 runs the rules alone (contract 0.2.1): no probability reads "n/a", never "0%"
+        key = "ai_setup.scores" if grade else "ai_setup.scores_no_grade"
+        lines.append(
+            t(
+                lang,
+                key if probability is not None else "ai_setup.scores_no_model",
+                grade=grade,
+                probability=num(probability * 100 if probability is not None else None, 0),
+                r_multiple=num(data.get("r_multiple"), 1),
+            )
+        )
+        if data.get("valid_until"):
+            when = str(data["valid_until"])[11:16]
+            lines.append(t(lang, "ai_setup.valid_until", time=when))
+        size = data.get("size") or {}
+        if "error" in size:
+            lines.append(t(lang, "ai_setup.size_error"))
+        elif size.get("feasible"):
+            lines.append(
+                t(
+                    lang,
+                    "ai_setup.size",
+                    lots=num(size.get("lots"), 2),
+                    risk=num(size.get("risk_amount"), 2),
+                    currency=size.get("currency", ""),
+                )
+            )
+        elif size:
+            lines.append(t(lang, "ai_setup.size_infeasible"))
+        for warning in (size.get("warnings") or [])[:2]:
+            lines.append(t(lang, "ai_setup.warning", warning=warning))
+        if data.get("explanation"):
+            lines.append(str(data["explanation"]))
+        elif data.get("explanation_status") == "unavailable":
+            lines.append(t(lang, "ai_setup.explanation_unavailable"))
+    if data.get("reason") and state != "ARMED":
+        lines.append(t(lang, "ai_setup.reason", reason=data["reason"]))
+    if data.get("pnl") is not None:
+        lines.append(
+            t(lang, "ai_setup.pnl", pnl=_signed(data["pnl"]), r=_signed(data.get("realized_r")))
+        )
+    if data.get("late"):
+        lines.append(t(lang, "ai_setup.late"))
+    return title, "\n".join(lines)
+
+
 SOCIAL_RENDERERS = {
     "new_post": _new_post,
     "comment_reply": _comment_reply,
     "post_liked": _post_liked,
     "content_hidden": _content_hidden,
     "price_alert": _price_alert,
+    "ai_setup": _ai_setup,
 }
 
 
@@ -379,6 +467,13 @@ def deep_link(event: str, data: dict[str, Any], notification_id: str) -> dict[st
         out.update(screen="earnings", subscription_id=str(data.get("subscription_id", "")))
     elif event in SUBSCRIPTION_EVENTS:
         out.update(screen="subscription", subscription_id=str(data.get("subscription_id", "")))
+    elif event == "ai_setup":
+        out.update(
+            screen="ai_setup",
+            setup_id=str(data.get("setup_id", "")),
+            state=str(data.get("state", "")),
+            instrument_id=str((data.get("instrument") or {}).get("id", "")),
+        )
     elif event == "price_alert":
         out.update(
             screen="price_alert",

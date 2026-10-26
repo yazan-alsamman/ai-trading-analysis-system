@@ -1,6 +1,6 @@
 # Final release readiness report — frontend ↔ backend integration
 
-_26 October 2026 · branch `e/backend-integration` · backend at `main` `5b91175`_
+_26 October 2026 · branch `e/backend-integration` · integration round against `main` `5b91175`; `main` `1afe445` merged afterwards_
 
 The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its code, migrations or data were changed. The web client (`web/`) now uses **every capability the backend offers**. What the backend does not offer is listed in [`REMAINING_BACKEND_AND_AI_REQUIREMENTS.md`](REMAINING_BACKEND_AND_AI_REQUIREMENTS.md).
 
@@ -8,10 +8,10 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 
 | Area | Status |
 | --- | --- |
-| Integration of the backend's capabilities | **Complete.** Every backend feature listed in the table below has a screen. |
+| Integration of the backend's capabilities | **Complete for the backend as of `5b91175`**: every feature in the table below has a screen. **New on `main` (`1afe445`), not yet connected:** AI setups (follows, size, explanation, take, taken trades), the economic calendar and data health. See REMAINING_BACKEND_AND_AI_REQUIREMENTS.md. |
 | Verified against the **real** backend | **Two layers:**<br>• The service layer for all features: 9/9 live tests on 26 Oct 2026, plus the 29 API and 12 browser checks from 18 Oct.<br>• The **new pages**: verified in the browser against the backend's *recorded* responses only. A live browser run was not possible (see §4). |
 | Demo mode | Unchanged. All 103 browser tests pass, including the visual-regression screenshots. |
-| Ready to deploy | **No, configuration first** (§5): the build still uses demo mode, and HTTPS is required before real accounts are used. |
+| Ready to deploy | **No, configuration first** (§5): `deploy.yml` still builds demo mode. HTTPS now exists on `main` (trading.yazanalsamman.com, #51). |
 | AI predictions, real prices, password reset, LLM assistant, platform membership | **Backend gaps.** The screens say "Not available yet" and never show stand-in data (§6). |
 
 ## 2. Feature table
@@ -47,7 +47,8 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 | Expert subscriptions (**demo payments**) | Subscribe → backend demo checkout → return page; Settings → Subscriptions (cancel/resume, invoices) | `/subscriptions/checkout`, `/me/subscriptions*` | **Live** (service: paid with test card 4242…, cancel/resume) + mocked | Real payments: backend R7 |
 | Expert studio (profile, plans, earnings) | Settings → Expert studio (expert role) | `/me/expert-profile`, `/me/plans*`, `/me/earnings` | **Live** (service) | Live browser run |
 | API keys (shown once) | Settings → API keys | `/me/api-keys*` | **Live** (service) + mocked (browser) | — |
-| AI opportunities, prediction history, model analytics | "Not available yet" | — none | n/a | Backend/AI R1, R2 |
+| AI opportunities, prediction history, model analytics | "Not available yet" | No per-instrument listing; AI setups (rules-only v1) are new on `main` | n/a | Connect AI setups (next round); model: R1, R2 |
+| Economic calendar, data health (new on `main`) | — | `/calendar/*`, `/health/data` | n/a | Next round |
 | AI assistant (LLM) | Rule-based, labelled | — none | n/a | Backend R3 |
 | Platform membership | "Pricing to be announced", labelled preview | — none | n/a | Backend R6 |
 
@@ -57,9 +58,9 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 | --- | --- | --- |
 | `pnpm typecheck` (strict TS) | static | clean |
 | `pnpm lint` | static | clean (0 errors, 0 warnings) |
-| `vitest run` | unit, contract (recorded responses), config | **199 passed**; 9 live tests skipped without a backend |
+| `vitest run` | unit, contract (recorded responses), config | **200 passed** after merging `main`; 9 live tests skipped without a backend |
 | `src/services/api/live.services.test.ts` | **live**, real backend, service layer of every new feature | **9/9 passed** (26 Oct 2026, before the local stack was stopped) |
-| `playwright test` (demo + api-mode projects) | browser, mocked backend from recordings | **103/103 passed**, including the new strategies, backtests, settings (workspace 409), community and alert-history tests |
+| `playwright test` (demo + api-mode projects) | browser, mocked backend from recordings | **103/103 passed** before the merge; the backend-mode project (14 tests) was re-run after merging `main` and passed. The tests include the new strategies, backtests, settings (workspace 409), community and alert-history tests |
 | `e2e-live/live.spec.ts` | **live** browser | 12/12 on 18 Oct for the originally connected features; **not re-run** for the new pages (see §4) |
 
 **What the live service suite exercised against the real server:**
@@ -86,7 +87,7 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 ## 5. Before deploying
 
 1. **Switch the build to backend mode.** `deploy.yml` builds with `VITE_DATA_SOURCE=demo`. Set `VITE_DATA_SOURCE=api` and `VITE_API_BASE_URL=/api/v1`; the Dockerfile default is now `/api/v1`. An invalid value now shows a blocking configuration screen instead of silently falling back to demo mode.
-2. **HTTPS.** Tokens are sent on every request, and the WebSocket token is in its URL (the backend's design).
+2. **HTTPS.** `main` now serves the platform at `https://trading.yazanalsamman.com` (`docs/https.md`). Use that origin for real accounts: tokens are sent on every request, and the WebSocket token is in its URL.
 3. **Celery worker queues.** Run the worker with `-Q celery,notifications,backtests`. Without the `backtests` queue, backtests stay queued.
 4. Optional: Telegram, SMTP and FCM credentials in the server environment (never in the repository).
 

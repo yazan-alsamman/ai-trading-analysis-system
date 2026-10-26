@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from spec import FOLDERS, Folder, Req, Variant  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "examples.json"
+POSTMAN = Path(__file__).resolve().parents[1]  # files of multipart requests live here
 KEEP_HEADERS = {
     "content-type",
     "etag",
@@ -56,6 +57,68 @@ AUTHOR_PASSWORD = "Analyst12345"
 EXPERT_EMAIL = "sami@example.com"
 EXPERT_PASSWORD = "Expert12345"
 BACKEND = Path(__file__).resolve().parents[3] / "backend"
+
+
+AI_SETUP_ID = "xauusd-intraday-2026-10-19T14:15:00Z-buy"  # new_setups[0] of the example
+SEED_AI_SETUP = """
+import asyncio, json
+from datetime import timedelta
+from pathlib import Path
+from sqlalchemy import select, text
+from app.ai import contract as c, explain, store
+from app.db.session import SessionLocal
+from app.models.instrument import Instrument
+
+EXAMPLES = Path("../docs/api/ai-service-examples")
+
+
+def load(name):
+    return json.loads((EXAMPLES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+async def main():
+    async with SessionLocal() as session:
+        gold = await session.scalar(
+            select(Instrument).order_by((Instrument.symbol == "XAU/USD").desc(), Instrument.symbol)
+        )
+        req = c.EvaluateRequest.model_validate(load("evaluate-request"))
+        resp = load("evaluate-response-ok")
+        resp["transitions"] = []
+        first = await store.apply_evaluation(
+            session, gold, req, c.EvaluateResponse.model_validate(resp)
+        )
+        close = req.bar_close_ts + timedelta(minutes=15)
+        nxt = req.model_copy(
+            update={"request_id": c.make_request_id("XAUUSD", "intraday", close),
+                    "bar_close_ts": close}
+        )
+        setup_id = resp["new_setups"][0]["setup_id"]
+        move = {"setup_id": setup_id, "from": "ARMED", "to": "ACTIVE",
+                "at": c.iso_z(close - timedelta(minutes=6)), "reason": "entry_filled"}
+        second = await store.apply_evaluation(
+            session, gold, nxt, c.EvaluateResponse.model_validate(
+                {**resp, "request_id": nxt.request_id, "new_setups": [], "transitions": [move]}
+            )
+        )
+        # one failed alert for Admin -> AI Engine -> Retry outbox alert (no dispatch ran)
+        await session.execute(
+            text(
+                "UPDATE ai_setup_outbox SET status = 'failed', attempts = 8, "
+                "last_error = 'telegram: 502 Bad Gateway' "
+                "WHERE setup_id = :id AND to_state = 'ACTIVE' AND status = 'pending'"
+            ),
+            {"id": setup_id},
+        )
+        await session.commit()
+        # its Arabic explanation (the contract's example, verified) for AI setup explanation
+        await explain.store_answer(
+            session, setup_id, "ar", c.ExplainResponse.model_validate(load("explain-response"))
+        )
+        print(first.inserted, second.transitions_applied)
+
+
+asyncio.run(main())
+"""
 
 
 def get_path(data: Any, path: str) -> Any:
@@ -167,7 +230,12 @@ class Runner:
                     headers[k] = v
         body = variant.body if variant and variant.body is not None else req.body
         kwargs: dict[str, Any] = {"params": query, "headers": headers}
-        if req.form is not None:
+        if req.files is not None:
+            kwargs["files"] = {
+                k: (Path(src).name, (POSTMAN / src).read_bytes(), "text/csv")
+                for k, src, _ in req.files
+            }
+        elif req.form is not None:
             kwargs["data"] = {k: self.resolve(v) for k, v, _ in req.form}
         elif isinstance(body, str):
             kwargs["content"] = self.resolve(body)
@@ -353,6 +421,18 @@ class Runner:
         )
         print(f"   alert engine: {(out.stdout or out.stderr).strip()[-200:]}")
 
+    def seed_ai_setup(self) -> None:
+        """An AI setup with two events for the Admin → AI examples: the contract's example
+        evaluate response, then the setup going ARMED → ACTIVE (in-process, like the worker),
+        its ACTIVE alert marked failed so the outbox retry has a row to retry, and its
+        Arabic explanation."""
+        out = subprocess.run(
+            [sys.executable, "-c", SEED_AI_SETUP], cwd=BACKEND, capture_output=True, text=True
+        )
+        print(f"   ai setup: {(out.stdout or out.stderr).strip()[-200:]}")
+        # the user's AI requests (Risk Management) run before Admin → AI Engine stores the id
+        self.vars["ai_setup_id"] = AI_SETUP_ID
+
     def wait_backtest(self, var: str) -> None:
         for _ in range(60):
             res = self.http.get(
@@ -378,6 +458,21 @@ class Runner:
         if res.status_code not in (201, 409):
             res.raise_for_status()
         admin = self.auth_headers("admin")
+        # Calendar history (the sample CSV the admin import request also sends), so the events
+        # list and an event's history have something to show
+        self.http.post(
+            "/api/v1/admin/calendar/import",
+            params={"tz": "America/New_York"},
+            files={
+                "file": (
+                    "sample.csv",
+                    (POSTMAN / "samples/calendar_history_sample.csv").read_bytes(),
+                    "text/csv",
+                )
+            },
+            headers=admin,
+        ).raise_for_status()
+        self.seed_ai_setup()
         users = self.http.get(
             "/api/v1/admin/users", params={"q": CAPTURE_EMAIL}, headers=admin
         ).json()

@@ -8,6 +8,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 # Vite reads these at build time only (docs/DEPLOYMENT.md); changing them needs a rebuild.
 ARG VITE_DATA_SOURCE=demo
+# relative: the API is on the page's own origin (same nginx), so it follows http/https
 ARG VITE_API_BASE_URL=/api/v1
 ARG VITE_SITE_URL=
 ENV VITE_DATA_SOURCE=$VITE_DATA_SOURCE VITE_API_BASE_URL=$VITE_API_BASE_URL VITE_SITE_URL=$VITE_SITE_URL

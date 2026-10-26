@@ -16,7 +16,7 @@ class _ClientMessage(BaseModel):
 
 
 class _TopicRef(_ClientMessage):
-    topic: Literal["candles", "signals", "user", "news", "chat"]
+    topic: Literal["candles", "signals", "user", "news", "chat", "ai_setups"]
     instrument_id: uuid.UUID | None = None
     timeframe: Timeframe | None = None
     user_id: uuid.UUID | None = None
@@ -36,6 +36,7 @@ class _TopicRef(_ClientMessage):
         required = {
             "candles": {"instrument_id", "timeframe"},
             "signals": {"instrument_id"},
+            "ai_setups": {"instrument_id"},
             "user": {"user_id"},
             "chat": {"conversation_id"},
         }[self.topic]
@@ -78,6 +79,7 @@ INACTIVE_INSTRUMENT = "inactive_instrument"
 FORBIDDEN = "forbidden"
 TOO_MANY_SUBSCRIPTIONS = "too_many_subscriptions"
 TOKEN_EXPIRED = "token_expired"
+AUTH_REVOKED = "auth_revoked"  # key revoked/expired/no "stream", user gone, session ended
 UNAVAILABLE = "unavailable"
 
 
@@ -89,8 +91,13 @@ def subscribed(topic: str) -> str:
     return dump({"type": "subscribed", "topic": topic})
 
 
-def unsubscribed(topic: str) -> str:
-    return dump({"type": "unsubscribed", "topic": topic})
+def unsubscribed(topic: str, reason: str | None = None) -> str:
+    """``reason`` ("forbidden") when the server drops a topic the connection may no longer
+    receive (a role or API key scope change)."""
+    message = {"type": "unsubscribed", "topic": topic}
+    if reason is not None:
+        message["reason"] = reason
+    return dump(message)
 
 
 def snapshot(topic: str, candle: dict[str, Any] | None) -> str:
