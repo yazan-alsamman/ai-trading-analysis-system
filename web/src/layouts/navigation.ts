@@ -12,6 +12,7 @@ import {
   Radar,
   Scale,
   Settings,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import type { DataSource } from '@/services/config';
@@ -25,6 +26,8 @@ export interface NavItem {
   shortcut: string;
   /** Needs the backend (hidden in demo mode, where it could only say "not available"). */
   backendOnly?: boolean;
+  /** Shown to admins only (the server enforces it; this only keeps the menu honest). */
+  adminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -87,10 +90,21 @@ export const SETTINGS_NAV: NavItem = {
   shortcut: 'g ,',
 };
 
-export const ALL_NAV: readonly NavItem[] = [OVERVIEW_NAV, ...NAV_GROUPS.flatMap((g) => g.items), SETTINGS_NAV];
+export const ADMIN_NAV: NavItem = {
+  to: '/admin',
+  label: 'Admin',
+  icon: ShieldCheck,
+  description: 'Users, moderation, content, market data, AI engine, payments and system status',
+  shortcut: 'g m',
+  backendOnly: true,
+  adminOnly: true,
+};
 
-export function allNavFor(source: DataSource): NavItem[] {
-  return ALL_NAV.filter((n) => source === 'api' || !n.backendOnly);
+export const ALL_NAV: readonly NavItem[] = [OVERVIEW_NAV, ...NAV_GROUPS.flatMap((g) => g.items), SETTINGS_NAV, ADMIN_NAV];
+
+/** What a viewer may open: backend-only pages need api mode, admin pages the admin role. */
+export function allNavFor(source: DataSource, role?: string | null): NavItem[] {
+  return ALL_NAV.filter((n) => (source === 'api' || !n.backendOnly) && (!n.adminOnly || role === 'admin'));
 }
 
 const SUB_PAGES: Record<string, string> = {
@@ -98,23 +112,31 @@ const SUB_PAGES: Record<string, string> = {
   '/community/posts': 'Posts',
   '/community/experts': 'Experts',
   '/community/people': 'People',
+  '/admin/users': 'Users',
+  '/admin/moderation': 'Moderation',
+  '/admin/content': 'Content',
+  '/admin/market-data': 'Market data',
+  '/admin/ai': 'AI engine',
+  '/admin/payments': 'Payments',
+  '/admin/access': 'API access',
 };
 
 /** Breadcrumb for the top bar: group › page (› sub-page). */
 export function breadcrumbFor(pathname: string): string[] {
+  if (/^\/workspaces\/shared\/[^/]+$/.test(pathname)) return ['Shared workspace'];
   const item = ALL_NAV.find((n) => pathname === n.to || pathname.startsWith(`${n.to}/`));
   if (!item) return ['Not found'];
   const group = NAV_GROUPS.find((g) => g.items.includes(item))?.label;
   const crumbs = [...(group ? [group] : []), item.label];
-  const sub = SUB_PAGES[pathname] ?? (/^\/backtests\/[^/]+$/.test(pathname) ? 'Result' : /^\/community\/(experts|people)\/[^/]+$/.test(pathname) ? 'Profile' : undefined);
+  const sub = SUB_PAGES[pathname] ?? (/^\/backtests\/[^/]+$/.test(pathname) ? 'Result' : /^\/community\/(experts|people)\/[^/]+$/.test(pathname) ? 'Profile' : /^\/community\/news\/[^/]+$/.test(pathname) ? 'Article' : undefined);
   return sub ? [...crumbs, sub] : crumbs;
 }
 
 /** Shortcut-key → path, for the global hotkey handler. */
 export const NAV_SHORTCUTS: Record<string, string> = Object.fromEntries(ALL_NAV.map((n) => [n.shortcut, n.to]));
 
-export function navShortcutsFor(source: DataSource): Record<string, string> {
-  return Object.fromEntries(allNavFor(source).map((n) => [n.shortcut, n.to]));
+export function navShortcutsFor(source: DataSource, role?: string | null): Record<string, string> {
+  return Object.fromEntries(allNavFor(source, role).map((n) => [n.shortcut, n.to]));
 }
 
 /* ------------------------------------------------------------ modules */

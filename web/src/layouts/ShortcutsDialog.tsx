@@ -1,10 +1,10 @@
 import { Dialog } from '@/components/ui/Dialog';
-import { useServices } from '@/app/contexts';
+import { useAuth, useServices } from '@/app/contexts';
 import { allNavFor } from './navigation';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
-const groupsFor = (source: 'demo' | 'api'): { title: string; items: { keys: string[]; label: string }[] }[] => [
+const groupsFor = (source: 'demo' | 'api', role: string | null | undefined): { title: string; items: { keys: string[]; label: string }[] }[] => [
   {
     title: 'Global',
     items: [
@@ -13,7 +13,7 @@ const groupsFor = (source: 'demo' | 'api'): { title: string; items: { keys: stri
       { keys: ['T'], label: 'Toggle dark / light theme' },
     ],
   },
-  { title: 'Go to', items: allNavFor(source).map((n) => ({ keys: n.shortcut.toUpperCase().split(' '), label: n.label })) },
+  { title: 'Go to', items: allNavFor(source, role).map((n) => ({ keys: n.shortcut.toUpperCase().split(' '), label: n.label })) },
   {
     title: 'Workspace',
     items: [
@@ -30,10 +30,11 @@ const groupsFor = (source: 'demo' | 'api'): { title: string; items: { keys: stri
 
 export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { source } = useServices();
+  const { session } = useAuth();
   return (
     <Dialog open={open} onClose={onClose} title="Keyboard shortcuts" description="Shortcuts are disabled while typing in a field.">
       <div className="grid gap-5 sm:grid-cols-2">
-        {groupsFor(source).map((g) => (
+        {groupsFor(source, session?.user.role).map((g) => (
           <section key={g.title} className={g.title === 'Go to' ? 'sm:row-span-2' : ''}>
             <h3 className="mb-2 text-xs font-medium text-fg-3">{g.title}</h3>
             <dl className="flex flex-col gap-1.5">

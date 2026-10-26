@@ -11,11 +11,13 @@ import type { AIExplanation, AIFollow, AIGrade, AISetup, AISetupEvent, AISetupIn
 import type { ApiKey, ApiKeyInput, ApiKeyScope, ApiKeyUsageDay } from '@/domain/apiKeys';
 import type { CalendarEvent, CalendarQuery, CalendarResult } from '@/domain/calendar';
 import type { BacktestComparison, BacktestInput, BacktestProgressEvent, BacktestResult, BacktestStatus, BacktestSummary, BacktestTrade } from '@/domain/backtests';
-import type { AlertTrigger, ChannelStatus, NotificationPreferences, TelegramLink, TestDelivery } from '@/domain/notificationSettings';
-import type { ServerWorkspace, ServerWorkspaceSummary, WorkspaceStateDoc, WorkspaceUpdatedEvent } from '@/domain/serverWorkspaces';
+import type { AlertTrigger, ChannelStatus, NotificationPreferences, PushDevice, TelegramLink, TestDelivery } from '@/domain/notificationSettings';
+import type { ServerWorkspace, ServerWorkspaceSummary, SharedWorkspace, WorkspaceShare, WorkspaceStateDoc, WorkspaceUpdatedEvent } from '@/domain/serverWorkspaces';
 import type {
   Checkout,
   Conversation,
+  ConversationDetail,
+  EditedMessage,
   Earnings,
   ExpertDetail,
   ExpertPlan,
@@ -50,6 +52,24 @@ import type {
   StrategyPreview,
   StrategyVisibility,
 } from '@/domain/strategies';
+import type {
+  AdminAISetup,
+  AdminAISetupDetail,
+  AdminApiKey,
+  AdminInstrument,
+  AdminInvoice,
+  AdminReport,
+  AdminSubscription,
+  AdminUser,
+  AIModel,
+  AIOutboxRow,
+  ArticleInput,
+  IngestResult,
+  JsonObject,
+  NewsSource,
+  Paged,
+} from '@/domain/admin';
+import type { DataHealth, IndicatorDefinition, IndicatorResult, NewsArticle, RiskSchema, SentimentAggregate } from '@/domain/marketExtras';
 import type { AppNotification } from '@/app/notifications';
 import type { DataSource } from './config';
 
@@ -270,6 +290,13 @@ export interface WorkspaceSyncService {
   update(id: string, patch: { name?: string; isDefault?: true }): Promise<ServerWorkspace>;
   remove(id: string): Promise<void>;
   duplicate(id: string): Promise<ServerWorkspace>;
+  /** `ids`: every workspace id, in the new tab order. */
+  reorder(ids: string[]): Promise<ServerWorkspaceSummary[]>;
+  /** Analysts, experts and admins only (403 otherwise). */
+  share(id: string): Promise<WorkspaceShare>;
+  unshare(id: string): Promise<WorkspaceShare>;
+  shared(slug: string, options?: CallOptions): Promise<SharedWorkspace>;
+  importShared(slug: string, name?: string): Promise<ServerWorkspace>;
   subscribe(onEvent: (event: WorkspaceUpdatedEvent) => void): Unsubscribe;
 }
 
@@ -281,6 +308,9 @@ export interface NotificationSettingsService {
   sendTest(channel: 'in_app' | 'telegram' | 'email' | 'push'): Promise<TestDelivery[]>;
   linkTelegram(): Promise<TelegramLink>;
   unlinkTelegram(): Promise<void>;
+  /** Devices registered for push by the mobile app (registering needs the app's FCM token). */
+  devices(options?: CallOptions): Promise<PushDevice[]>;
+  removeDevice(id: string): Promise<void>;
 }
 
 /** Likes, follows, profiles, editing, reports, expert detail, demo-payment subscriptions and conversations. */
@@ -307,6 +337,13 @@ export interface SocialService {
   resumeSubscription(id: string): Promise<Subscription>;
   conversations(options?: CallOptions): Promise<Conversation[]>;
   markConversationRead(conversationId: string): Promise<void>;
+  conversation(conversationId: string, options?: CallOptions): Promise<ConversationDetail>;
+  blockConversation(conversationId: string): Promise<ConversationDetail>;
+  unblockConversation(conversationId: string): Promise<ConversationDetail>;
+  /** The sender, within 15 minutes of sending. */
+  editMessage(messageId: string, body: string): Promise<EditedMessage>;
+  /** The sender; a tombstone stays in the history. */
+  deleteMessage(messageId: string): Promise<void>;
 }
 
 /** An expert's own profile, plans and earnings (/me/expert-profile, /me/plans, /me/earnings). */
@@ -360,6 +397,71 @@ export interface CalendarService {
   history(eventKey: string, options?: CallOptions): Promise<CalendarEvent[]>;
 }
 
+/** Read-only market context: news detail, sentiment, sources, server indicators, risk schema, data health. */
+export interface MarketContextService {
+  article(articleId: string, options?: CallOptions): Promise<NewsArticle>;
+  sentiment(window: '1h' | '24h' | '7d', instrumentId: string | null, options?: CallOptions): Promise<SentimentAggregate>;
+  newsSources(options?: CallOptions): Promise<NewsSource[]>;
+  indicatorCatalog(options?: CallOptions): Promise<IndicatorDefinition[]>;
+  computeIndicators(
+    instrumentId: string,
+    input: { timeframe: string; limit: number; indicators: { name: string; params: Record<string, unknown> }[] },
+    options?: CallOptions,
+  ): Promise<IndicatorResult[]>;
+  riskSchema(options?: CallOptions): Promise<RiskSchema>;
+  /** Public; a 503 from the server (an instrument degraded) still returns the report. */
+  dataHealth(options?: CallOptions): Promise<DataHealth>;
+}
+
+type Page = { limit: number; offset: number };
+
+/** Administration (admin role; the server answers 403 to everyone else). */
+export interface AdminService {
+  systemStatus(options?: CallOptions): Promise<JsonObject>;
+  readiness(options?: CallOptions): Promise<JsonObject>;
+  realtimeStats(options?: CallOptions): Promise<JsonObject>;
+  rateLimitStats(options?: CallOptions): Promise<JsonObject>;
+  notificationStats(options?: CallOptions): Promise<JsonObject>;
+  paymentStats(options?: CallOptions): Promise<JsonObject>;
+  users(query: Page & { role?: string; isActive?: boolean; search?: string }, options?: CallOptions): Promise<Paged<AdminUser>>;
+  setRole(userId: string, role: string): Promise<AdminUser>;
+  setActive(userId: string, isActive: boolean): Promise<AdminUser>;
+  reports(query: Page & { status: 'open' | 'resolved' | 'all' }, options?: CallOptions): Promise<Paged<AdminReport>>;
+  /** `hide` hides the content for everyone but its author (who is notified); `dismiss` changes nothing. */
+  resolveReport(reportId: string, action: 'hide' | 'dismiss', note: string): Promise<AdminReport>;
+  conversations(query: Page & { status?: string }, options?: CallOptions): Promise<Paged<JsonObject>>;
+  subscriptions(query: Page & { status?: string }, options?: CallOptions): Promise<Paged<AdminSubscription>>;
+  refundInvoice(invoiceId: string): Promise<AdminInvoice>;
+  /** DEMO tools only (403 in production unless enabled). */
+  fastForward(subscriptionId: string, to: 'period_end' | 'grace_end'): Promise<{ outcome: string; subscription: AdminSubscription }>;
+  apiKeys(query: Page & { revoked?: boolean }, options?: CallOptions): Promise<Paged<AdminApiKey>>;
+  revokeApiKey(keyId: string): Promise<void>;
+  broadcast(input: { title: string; body: string; severity: 'info' | 'success' | 'warning' | 'critical'; roles: string[] | null }): Promise<{ broadcastId: string; recipients: number }>;
+  newsSources(options?: CallOptions): Promise<NewsSource[]>;
+  updateNewsSource(sourceId: string, patch: { isActive?: boolean; fetchIntervalMinutes?: number }): Promise<NewsSource>;
+  publishArticle(input: ArticleInput): Promise<IngestResult>;
+  setSentiment(articleId: string, sentiment: { label: 'positive' | 'neutral' | 'negative'; score: number; model: string }): Promise<{ updated: number; errors: string[] }>;
+  refreshCalendar(): Promise<JsonObject>;
+  importCalendar(file: File, query: { dryRun: boolean; source: 'forexfactory_kaggle' | 'manual'; tz?: string; from?: string }): Promise<JsonObject>;
+  instruments(options?: CallOptions): Promise<AdminInstrument[]>;
+  createInstrument(input: JsonObject): Promise<AdminInstrument>;
+  updateInstrument(instrumentId: string, patch: JsonObject): Promise<AdminInstrument>;
+  /** 1m candles, at most 5,000 per call; returns how many were written. */
+  uploadCandles(instrumentId: string, candles: JsonObject[]): Promise<number>;
+  ctraderStatus(options?: CallOptions): Promise<JsonObject>;
+  ctraderConnect(): Promise<JsonObject>;
+  ctraderCode(code: string, state: string): Promise<JsonObject>;
+  ctraderAccount(accountId: number): Promise<JsonObject>;
+  ctraderBackfill(from: string, to: string): Promise<JsonObject>;
+  aiSetups(query: { limit: number; state?: string; instrumentId?: string }, options?: CallOptions): Promise<AdminAISetup[]>;
+  aiSetup(setupId: string, options?: CallOptions): Promise<AdminAISetupDetail>;
+  aiOutbox(query: Page & { status?: string }, options?: CallOptions): Promise<Paged<AIOutboxRow>>;
+  retryOutbox(rowId: number): Promise<AIOutboxRow>;
+  aiModels(options?: CallOptions): Promise<AIModel[]>;
+  registerModel(input: { modelId: string; trainingFrom: string | null; trainingTo: string | null; dataHash: string | null; metrics: JsonObject; notes: string | null }): Promise<AIModel>;
+  activateModel(modelId: string): Promise<AIModel>;
+}
+
 export interface Services {
   source: DataSource;
   market: MarketDataService;
@@ -383,4 +485,6 @@ export interface Services {
   apiKeys: ApiKeyService;
   aiSetups: AISetupService;
   calendar: CalendarService;
+  marketContext: MarketContextService;
+  admin: AdminService;
 }

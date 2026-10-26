@@ -18,6 +18,8 @@ export interface HttpClientOptions {
 export interface RequestOptions<T> {
   query?: Record<string, string | number | boolean | undefined | null>;
   body?: unknown;
+  /** A multipart upload (e.g. a CSV file); the browser sets the boundary header. Not combined with `body`. */
+  formData?: FormData;
   signal?: AbortSignal;
   /** Every response is validated; contract drift becomes a clear error, not a broken UI. */
   schema: z.ZodType<T>;
@@ -27,6 +29,11 @@ export interface RequestOptions<T> {
   authFailureHandled?: boolean;
   /** Extra request headers (e.g. `If-Match` for optimistic concurrency). */
   headers?: Record<string, string>;
+  /**
+   * Error statuses whose body is a documented answer, validated by `schema` like a success
+   * (e.g. `/health/data` answers 503 with its quality report).
+   */
+  acceptStatus?: readonly number[];
   /** `text`: the body is returned as a string (CSV exports) and validated by `schema`. */
   responseType?: 'json' | 'text';
 }
@@ -112,11 +119,11 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
         credentials: 'omit',
         headers: {
           Accept: opts.responseType === 'text' ? 'text/csv, text/plain, */*' : 'application/json',
-          ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...(opts.body !== undefined && !opts.formData ? { 'Content-Type': 'application/json' } : {}),
           ...opts.headers,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+        ...(opts.formData ? { body: opts.formData } : opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
       });
     } catch (cause) {
       if (opts.signal?.aborted) throw new ApiError('aborted', 'Request cancelled', { cause });
@@ -138,7 +145,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
         if (fresh) ({ response, payload } = await send(method, path, opts, fresh));
       }
 
-      if (!response.ok) {
+      if (!response.ok && !opts.acceptStatus?.includes(response.status)) {
         if (response.status === 401 && !opts.authFailureHandled) options.onUnauthorized?.();
         throw errorFromResponse(response.status, payload, response.headers.get('x-request-id'));
       }

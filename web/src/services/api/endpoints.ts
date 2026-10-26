@@ -121,6 +121,75 @@ export const endpoints = {
     plan: (planId: string) => `/me/plans/${id(planId)}`, // PATCH / DELETE (deactivates)
     earnings: '/me/earnings',
   },
+  workspaceSharing: {
+    order: '/me/workspaces/order', // PUT {ids: every id, in tab order}
+    share: (workspaceId: string) => `/me/workspaces/${id(workspaceId)}/share`, // POST / DELETE (analysts, experts, admins)
+    shared: (slug: string) => `/workspaces/shared/${id(slug)}`, // GET read-only copy
+    importShared: (slug: string) => `/workspaces/shared/${id(slug)}/import`, // POST {name?}
+  },
+  chatExtra: {
+    conversation: (conversationId: string) => `/conversations/${id(conversationId)}`,
+    block: (conversationId: string) => `/conversations/${id(conversationId)}/block`,
+    unblock: (conversationId: string) => `/conversations/${id(conversationId)}/unblock`,
+    message: (messageId: string) => `/messages/${id(messageId)}`, // PATCH {body} (sender, 15 min) / DELETE (tombstone)
+  },
+  newsExtra: {
+    article: (articleId: string) => `/news/${id(articleId)}`,
+    sentiment: '/news/sentiment', // ?window=1h|24h|7d&instrument_id
+    sources: '/news/sources',
+  },
+  indicators: {
+    catalog: '/indicators',
+    compute: (instrumentId: string) => `/market/instruments/${id(instrumentId)}/indicators`, // POST
+  },
+  riskSchema: '/risk/schema',
+  health: {
+    ready: '/health/ready',
+    data: '/health/data', // 503 (with the report) when an instrument is degraded or has no data
+  },
+  devices: {
+    list: '/me/devices', // GET; POST registers an FCM token (mobile app)
+    item: (deviceId: string) => `/me/devices/${id(deviceId)}`, // DELETE
+  },
+  ingest: {
+    news: '/ingest/news', // POST {articles} (admin login or a news:write key)
+    sentiment: '/ingest/news/sentiment', // POST {items}
+  },
+  admin: {
+    systemStatus: '/admin/system/status',
+    realtimeStats: '/admin/realtime/stats',
+    rateLimitStats: '/admin/rate-limits/stats',
+    notificationStats: '/admin/notifications/stats',
+    broadcast: '/admin/notifications/broadcast',
+    paymentStats: '/admin/payments/stats',
+    users: '/admin/users',
+    userRole: (userId: string) => `/admin/users/${id(userId)}/role`,
+    userStatus: (userId: string) => `/admin/users/${id(userId)}/status`,
+    reports: '/admin/reports',
+    resolveReport: (reportId: string) => `/admin/reports/${id(reportId)}/resolve`,
+    conversations: '/admin/conversations',
+    subscriptions: '/admin/subscriptions',
+    refund: (invoiceId: string) => `/admin/invoices/${id(invoiceId)}/refund`,
+    fastForward: (subId: string) => `/admin/subscriptions/${id(subId)}/fast-forward`, // DEMO tools only
+    apiKeys: '/admin/api-keys',
+    apiKey: (keyId: string) => `/admin/api-keys/${id(keyId)}`,
+    newsSource: (sourceId: string) => `/admin/news/sources/${id(sourceId)}`,
+    calendarRefresh: '/admin/calendar/refresh',
+    calendarImport: '/admin/calendar/import', // multipart `file`
+    instruments: '/admin/instruments',
+    instrument: (instrumentId: string) => `/admin/instruments/${id(instrumentId)}`,
+    instrumentCandles: (instrumentId: string) => `/admin/instruments/${id(instrumentId)}/candles`,
+    ctrader: '/admin/feeds/ctrader', // GET status · PATCH {account_id}
+    ctraderConnect: '/admin/feeds/ctrader/connect',
+    ctraderCode: '/admin/feeds/ctrader/code',
+    ctraderBackfill: '/admin/feeds/ctrader/backfill',
+    aiSetups: '/admin/ai/setups',
+    aiSetup: (setupId: string) => `/admin/ai/setups/${id(setupId)}`,
+    aiOutbox: '/admin/ai/outbox',
+    aiOutboxRetry: (rowId: number) => `/admin/ai/outbox/${rowId}/retry`,
+    aiModels: '/admin/ai/models',
+    aiModelActivate: (modelId: string) => `/admin/ai/models/${id(modelId)}/activate`,
+  },
   aiSetups: {
     follows: '/me/ai/follows', // GET [FollowRead]
     follow: (instrumentId: string, profile: string) => `/me/ai/follows/${id(instrumentId)}/${id(profile)}`, // PUT {min_grade?} / DELETE

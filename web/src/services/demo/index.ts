@@ -17,6 +17,8 @@ import type {
   AISetupService,
   ApiKeyService,
   CalendarService,
+  AdminService,
+  MarketContextService,
   AssistantService,
   AuthService,
   BacktestService,
@@ -345,11 +347,11 @@ const demoBacktests = (): BacktestService => {
 };
 const demoWorkspaceSync = (): WorkspaceSyncService => {
   const no = backendOnly('Workspace synchronisation');
-  return { list: no, get: no, create: no, replaceState: no, update: no, remove: no, duplicate: no, subscribe: () => () => undefined };
+  return { list: no, get: no, create: no, replaceState: no, update: no, remove: no, duplicate: no, reorder: no, share: no, unshare: no, shared: no, importShared: no, subscribe: () => () => undefined };
 };
 const demoNotificationSettings = (): NotificationSettingsService => {
   const no = backendOnly('Notification delivery settings');
-  return { getPreferences: no, savePreferences: no, channels: no, sendTest: no, linkTelegram: no, unlinkTelegram: no };
+  return { getPreferences: no, savePreferences: no, channels: no, sendTest: no, linkTelegram: no, unlinkTelegram: no, devices: no, removeDevice: no };
 };
 const demoSocial = (): SocialService => {
   const no = backendOnly('This community feature');
@@ -374,6 +376,11 @@ const demoSocial = (): SocialService => {
     resumeSubscription: no,
     conversations: no,
     markConversationRead: no,
+    conversation: no,
+    blockConversation: no,
+    unblockConversation: no,
+    editMessage: no,
+    deleteMessage: no,
   };
 };
 const demoExpertStudio = (): ExpertStudioService => {
@@ -389,6 +396,15 @@ const demoAISetups = (): AISetupService => {
   const no = backendOnly('AI setups');
   // Demo mode streams nothing: there is no simulated stand-in for the AI engine.
   return { follows: no, follow: no, unfollow: no, recent: no, size: no, explanation: no, take: no, untake: no, trades: no, subscribe: () => () => undefined };
+};
+/** Every method rejects with `not_available`: an admin console has no meaning without a backend. */
+const demoAdmin = (): AdminService => {
+  const no = backendOnly('The admin console');
+  return { systemStatus: no, readiness: no, realtimeStats: no, rateLimitStats: no, notificationStats: no, paymentStats: no, users: no, setRole: no, setActive: no, reports: no, resolveReport: no, conversations: no, subscriptions: no, refundInvoice: no, fastForward: no, apiKeys: no, revokeApiKey: no, broadcast: no, newsSources: no, updateNewsSource: no, publishArticle: no, setSentiment: no, refreshCalendar: no, importCalendar: no, instruments: no, createInstrument: no, updateInstrument: no, uploadCandles: no, ctraderStatus: no, ctraderConnect: no, ctraderCode: no, ctraderAccount: no, ctraderBackfill: no, aiSetups: no, aiSetup: no, aiOutbox: no, retryOutbox: no, aiModels: no, registerModel: no, activateModel: no };
+};
+const demoMarketContext = (): MarketContextService => {
+  const no = backendOnly('This market data');
+  return { article: no, sentiment: no, newsSources: no, indicatorCatalog: no, computeIndicators: no, riskSchema: no, dataHealth: no };
 };
 const demoCalendar = (): CalendarService => {
   const no = backendOnly('The economic calendar');
@@ -420,5 +436,7 @@ export function createDemoServices(getSession: () => Session | null): Services {
     apiKeys: demoApiKeys(),
     aiSetups: demoAISetups(),
     calendar: demoCalendar(),
+    marketContext: demoMarketContext(),
+    admin: demoAdmin(),
   };
 }

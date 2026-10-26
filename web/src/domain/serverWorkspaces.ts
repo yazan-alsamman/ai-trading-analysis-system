@@ -36,3 +36,18 @@ export interface WorkspaceUpdatedEvent {
   version: number | null;
   action: string;
 }
+
+/** Sharing a server workspace (analysts, experts and admins): a read-only link. */
+export interface WorkspaceShare {
+  isShared: boolean;
+  slug: string | null;
+}
+
+/** A workspace someone shared (GET /workspaces/shared/{slug}): no ids, the owner's name and role only. */
+export interface SharedWorkspace {
+  name: string;
+  owner: { name: string; role: string };
+  state: WorkspaceStateDoc;
+  unavailableInstrumentIds: string[];
+  updatedAt: number;
+}

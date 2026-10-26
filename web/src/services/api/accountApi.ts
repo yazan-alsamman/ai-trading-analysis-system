@@ -103,6 +103,34 @@ export function apiNotificationSettings(http: HttpClient): NotificationSettingsS
     unlinkTelegram: async () => {
       await http.request('DELETE', endpoints.notificationSettings.telegram, { schema: Empty });
     },
+    devices: async (o) =>
+      (
+        await http.request('GET', endpoints.devices.list, {
+          schema: z.array(
+            z.object({
+              id: z.string(),
+              platform: z.enum(['android', 'ios', 'web']),
+              token_suffix: z.string(),
+              app_version: z.string().nullable(),
+              locale: z.string().nullable(),
+              last_seen_at: z.string(),
+              created_at: z.string(),
+            }),
+          ),
+          ...opt(o?.signal),
+        })
+      ).map((d) => ({
+        id: d.id,
+        platform: d.platform,
+        tokenSuffix: d.token_suffix,
+        appVersion: d.app_version,
+        locale: d.locale,
+        lastSeenAt: Date.parse(d.last_seen_at) || 0,
+        createdAt: Date.parse(d.created_at) || 0,
+      })),
+    removeDevice: async (id) => {
+      await http.request('DELETE', endpoints.devices.item(id), { schema: Empty });
+    },
   };
 }
 
@@ -156,6 +184,7 @@ const WorkspaceRead = WorkspaceSummaryRead.extend({
   share_slug: z.string().nullable(),
   unavailable_instrument_ids: z.array(z.string()).default([]),
 });
+const ShareRead = z.object({ is_shared: z.boolean(), share_slug: z.string().nullable() });
 const toWorkspaceSummary = (w: z.infer<typeof WorkspaceSummaryRead>): ServerWorkspaceSummary => ({
   id: w.id,
   name: w.name,
@@ -194,6 +223,30 @@ export function apiWorkspaceSync(http: HttpClient, socket: MarketSocket): Worksp
       await http.request('DELETE', endpoints.workspaces.item(id), { schema: Empty });
     },
     duplicate: async (id) => toWorkspace(await http.request('POST', endpoints.workspaces.duplicate(id), { schema: WorkspaceRead })),
+    reorder: async (ids) => (await http.request('PUT', endpoints.workspaceSharing.order, { body: { ids }, schema: z.array(WorkspaceSummaryRead) })).map(toWorkspaceSummary),
+    async share(id) {
+      const r = await http.request('POST', endpoints.workspaceSharing.share(id), { schema: ShareRead });
+      return { isShared: r.is_shared, slug: r.share_slug };
+    },
+    async unshare(id) {
+      const r = await http.request('DELETE', endpoints.workspaceSharing.share(id), { schema: ShareRead });
+      return { isShared: r.is_shared, slug: r.share_slug };
+    },
+    async shared(slug, o) {
+      const r = await http.request('GET', endpoints.workspaceSharing.shared(slug), {
+        schema: z.object({
+          name: z.string(),
+          owner: z.object({ display_name: z.string(), role: z.string() }),
+          state: z.record(z.string(), z.unknown()),
+          unavailable_instrument_ids: z.array(z.string()),
+          updated_at: z.string(),
+        }),
+        ...opt(o?.signal),
+      });
+      return { name: r.name, owner: { name: r.owner.display_name, role: r.owner.role }, state: r.state, unavailableInstrumentIds: r.unavailable_instrument_ids, updatedAt: Date.parse(r.updated_at) || 0 };
+    },
+    importShared: async (slug, name) =>
+      toWorkspace(await http.request('POST', endpoints.workspaceSharing.importShared(slug), { body: name?.trim() ? { name: name.trim() } : {}, schema: WorkspaceRead })),
     subscribe(onEvent): Unsubscribe {
       return socket.onUserEvent('workspace_updated', (msg) =>
         onEvent({

@@ -1,7 +1,7 @@
 import { CornerDownLeft, Search } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { usePreferences } from '@/app/contexts';
+import { useAuth, usePreferences } from '@/app/contexts';
 import { INSTRUMENTS, matchesInstrument } from '@/domain/instruments';
 import { cn } from '@/lib/cn';
 import { useServices } from '@/app/contexts';
@@ -23,6 +23,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navigate = useNavigate();
   const { updateWorkspace } = usePreferences();
   const { source } = useServices();
+  const { session } = useAuth();
   const listId = useId();
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         navigate('/workspace');
       },
     }));
-    const pages: Item[] = allNavFor(source)
+    const pages: Item[] = allNavFor(source, session?.user.role)
       .filter((p) => !q || p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q))
       .map((p) => ({ id: `p-${p.to}`, group: 'Pages', label: p.label, hint: p.description, run: () => navigate(p.to) }));
     return [...instruments, ...pages];

@@ -178,3 +178,17 @@ export interface Earnings {
   months: { month: string; gross: string; platformFee: string; net: string; refunded: string; invoices: number }[];
   recentInvoices: { number: string; amount: string; currency: string; status: string; subscriber: string; plan: string; paidAt: number | null }[];
 }
+
+/** One conversation with its moderation state (GET /conversations/{id}, block/unblock). */
+export interface ConversationDetail extends Conversation {
+  blockedByMe: boolean;
+  myRole: string;
+}
+
+/** A chat message as the backend returns it after an edit. */
+export interface EditedMessage {
+  id: string;
+  body: string | null;
+  editedAt: number | null;
+  deleted: boolean;
+}

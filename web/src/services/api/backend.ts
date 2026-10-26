@@ -192,6 +192,7 @@ export const MessageRead = z.object({
   sender_id: Uuid,
   body: z.string().nullable(),
   deleted: z.boolean(),
+  edited_at: IsoDate.nullable().optional(),
   created_at: IsoDate,
 });
 export type MessageRead = z.infer<typeof MessageRead>;

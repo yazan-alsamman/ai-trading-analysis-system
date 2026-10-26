@@ -89,3 +89,15 @@ export interface AlertTrigger {
   note: string | null;
   createdAt: number;
 }
+
+/** A device registered for push notifications (by the mobile app). */
+export interface PushDevice {
+  id: string;
+  platform: 'android' | 'ios' | 'web';
+  /** The last 8 characters of the token. */
+  tokenSuffix: string;
+  appVersion: string | null;
+  locale: string | null;
+  lastSeenAt: number;
+  createdAt: number;
+}

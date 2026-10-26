@@ -37,6 +37,17 @@ const ExpertDetailPage = lazy(() => import('@/features/community/ExpertDetailPag
 const CheckoutReturnPage = lazy(() => import('@/features/subscriptions/CheckoutReturnPage').then((m) => ({ default: m.CheckoutReturnPage })));
 const AISetupsPage = lazy(() => import('@/features/aiSetups/AISetupsPage').then((m) => ({ default: m.AISetupsPage })));
 const CalendarPage = lazy(() => import('@/features/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
+const AdminLayout = lazy(() => import('@/features/admin/AdminLayout').then((m) => ({ default: m.AdminLayout })));
+const AdminOverviewPage = lazy(() => import('@/features/admin/AdminOverviewPage').then((m) => ({ default: m.AdminOverviewPage })));
+const AdminUsersPage = lazy(() => import('@/features/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
+const AdminModerationPage = lazy(() => import('@/features/admin/AdminModerationPage').then((m) => ({ default: m.AdminModerationPage })));
+const AdminContentPage = lazy(() => import('@/features/admin/AdminContentPage').then((m) => ({ default: m.AdminContentPage })));
+const AdminMarketDataPage = lazy(() => import('@/features/admin/AdminMarketDataPage').then((m) => ({ default: m.AdminMarketDataPage })));
+const AdminAIEnginePage = lazy(() => import('@/features/admin/AdminAIEnginePage').then((m) => ({ default: m.AdminAIEnginePage })));
+const AdminPaymentsPage = lazy(() => import('@/features/admin/AdminPaymentsPage').then((m) => ({ default: m.AdminPaymentsPage })));
+const AdminAccessPage = lazy(() => import('@/features/admin/AdminAccessPage').then((m) => ({ default: m.AdminAccessPage })));
+const SharedWorkspacePage = lazy(() => import('@/features/workspace/SharedWorkspacePage').then((m) => ({ default: m.SharedWorkspacePage })));
+const NewsArticlePage = lazy(() => import('@/features/community/NewsArticlePage').then((m) => ({ default: m.NewsArticlePage })));
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('@/features/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })));
 
@@ -91,6 +102,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to="news" replace /> },
           { path: 'news', element: page(<NewsPage />) },
+          { path: 'news/:articleId', element: page(<NewsArticlePage />) },
           { path: 'posts', element: page(<PostsPage />) },
           { path: 'experts', element: page(<ExpertsPage />) },
           { path: 'experts/:expertId', element: page(<ExpertDetailPage />) },
@@ -100,6 +112,21 @@ export const router = createBrowserRouter([
       },
       { path: '/subscriptions/return', element: page(<CheckoutReturnPage />) },
       { path: '/settings', element: page(<SettingsPage />) },
+      { path: '/workspaces/shared/:slug', element: page(<SharedWorkspacePage />) },
+      {
+        path: '/admin',
+        element: page(<AdminLayout />),
+        children: [
+          { index: true, element: page(<AdminOverviewPage />) },
+          { path: 'users', element: page(<AdminUsersPage />) },
+          { path: 'moderation', element: page(<AdminModerationPage />) },
+          { path: 'content', element: page(<AdminContentPage />) },
+          { path: 'market-data', element: page(<AdminMarketDataPage />) },
+          { path: 'ai', element: page(<AdminAIEnginePage />) },
+          { path: 'payments', element: page(<AdminPaymentsPage />) },
+          { path: 'access', element: page(<AdminAccessPage />) },
+        ],
+      },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

@@ -5,8 +5,8 @@ import { IconButton } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { DemoPlanChip } from '@/features/membership/PlanGate';
 import { MarketSessions } from './MarketSessions';
-import { useServices } from '@/app/contexts';
-import { navGroupsFor, OVERVIEW_NAV, SETTINGS_NAV, type NavItem } from './navigation';
+import { useAuth, useServices } from '@/app/contexts';
+import { ADMIN_NAV, navGroupsFor, OVERVIEW_NAV, SETTINGS_NAV, type NavItem } from './navigation';
 
 function Shortcut({ keys }: { keys: string }) {
   return (
@@ -57,6 +57,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, className }: SidebarProps) {
+  const { session } = useAuth();
+  const isAdmin = useServices().source === 'api' && session?.user.role === 'admin';
   const { source } = useServices();
   return (
     <div className={cn('flex h-full flex-col bg-surface', className)}>
@@ -86,6 +88,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, className }:
           <MarketSessions collapsed={collapsed} />
           <ul className="flex flex-col gap-0.5">
             <NavEntry item={SETTINGS_NAV} collapsed={collapsed} onNavigate={onNavigate} />
+            {isAdmin && <NavEntry item={ADMIN_NAV} collapsed={collapsed} onNavigate={onNavigate} />}
           </ul>
           {onToggleCollapsed && (
             <div className={cn('flex', collapsed ? 'justify-center' : 'justify-end')}>

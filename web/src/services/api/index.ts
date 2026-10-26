@@ -35,7 +35,9 @@ import { createMarketSocket, type MarketSocket } from './marketSocket';
 import { createTokenManager, type SessionStore } from './session';
 import { apiAlertHistory, apiExpertStudio, apiKeyService, apiNotificationSettings, apiWorkspaceSync } from './accountApi';
 import { apiBacktestService, apiInstrumentDirectory, apiStrategyService } from './labApi';
+import { apiAdminService } from './adminApi';
 import { apiAISetupService, apiCalendarService } from './aiApi';
+import { apiMarketContextService } from './extrasApi';
 import { apiSocialService } from './socialApi';
 
 /**
@@ -442,6 +444,8 @@ export function createApiServices(cfg: AppConfig, store: SessionStore, onUnautho
     backtests: apiBacktestService(http, socket),
     aiSetups: apiAISetupService(http, socket),
     calendar: apiCalendarService(http),
+    marketContext: apiMarketContextService(http),
+    admin: apiAdminService(http),
     workspacesSync: apiWorkspaceSync(http, socket),
     notificationSettings: apiNotificationSettings(http),
     social: apiSocialService(http),

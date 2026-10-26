@@ -161,7 +161,7 @@ export function toExpert(e: ExpertCard): Expert {
 
 export function toChatMessage(m: MessageRead, myUserId: string): ChatMessage | null {
   if (m.deleted || m.body === null) return null;
-  return { id: m.id, from: m.sender_id === myUserId ? 'user' : 'expert', body: m.body, sentAt: ms(m.created_at) };
+  return { id: m.id, from: m.sender_id === myUserId ? 'user' : 'expert', body: m.body, sentAt: ms(m.created_at), ...(m.edited_at ? { editedAt: ms(m.edited_at) } : {}) };
 }
 
 export function toNotification(n: NotificationRead): AppNotification {

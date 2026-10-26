@@ -98,4 +98,6 @@ export interface ChatMessage {
   from: 'user' | 'expert';
   body: string;
   sentAt: number;
+  /** Backend only: when the sender last edited it. */
+  editedAt?: number;
 }

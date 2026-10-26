@@ -2,7 +2,7 @@ import { FlaskConical, WifiOff, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { z } from 'zod';
-import { usePreferences, useServices } from '@/app/contexts';
+import { useAuth, usePreferences, useServices } from '@/app/contexts';
 import { IconButton } from '@/components/ui/Button';
 import { AlertMonitor } from '@/features/alerts/AlertMonitor';
 import { ServerInboxSync } from '@/features/notifications/ServerInboxSync';
@@ -91,6 +91,7 @@ function readSessionFlag(key: string): boolean {
 
 export function AppShell() {
   const { source } = useServices();
+  const { session } = useAuth();
   const { resolvedTheme, setTheme } = usePreferences();
   const online = useOnlineStatus();
   const navigate = useNavigate();
@@ -119,7 +120,7 @@ export function AppShell() {
     () => ({
       '?': () => setShortcutsOpen(true),
       t: () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'),
-      ...Object.fromEntries(Object.entries(navShortcutsFor(source)).map(([keys, to]) => [keys, () => navigate(to)])),
+      ...Object.fromEntries(Object.entries(navShortcutsFor(source, session?.user.role)).map(([keys, to]) => [keys, () => navigate(to)])),
     }),
     [navigate, resolvedTheme, setTheme, source],
   );

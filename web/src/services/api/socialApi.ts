@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Subscription } from '@/domain/social';
+import type { ConversationDetail, Subscription } from '@/domain/social';
 import type { SocialService } from '../types';
 import { PostRead, Role } from './backend';
 import { endpoints } from './endpoints';
@@ -136,6 +136,21 @@ const ConversationListRead = z.object({
   last_message: z.object({ excerpt: z.string().nullable(), created_at: z.string() }).nullable(),
 });
 
+const ConversationDetailRead = ConversationListRead.extend({ my_role: z.string(), blocked_by_me: z.boolean() });
+const toConversationDetail = (c: z.infer<typeof ConversationDetailRead>): ConversationDetail => ({
+  id: c.id,
+  expertId: c.expert_id,
+  other: { id: c.other.id, name: c.other.display_name, role: c.other.role },
+  status: c.status,
+  canSend: c.can_send,
+  readOnlyReason: c.read_only_reason,
+  unread: c.unread,
+  lastMessage: c.last_message ? { excerpt: c.last_message.excerpt, createdAt: msReq(c.last_message.created_at) } : null,
+  myRole: c.my_role,
+  blockedByMe: c.blocked_by_me,
+});
+const EditedMessageRead = z.object({ id: z.string(), body: z.string().nullable(), edited_at: z.string().nullable(), deleted: z.boolean() });
+
 const toFollows = (items: z.infer<typeof FollowEntryRead>[]) => items.map((f) => ({ user: { id: f.user.id, name: f.user.display_name, role: f.user.role }, since: msReq(f.since) }));
 
 export function apiSocialService(http: HttpClient): SocialService {
@@ -237,6 +252,16 @@ export function apiSocialService(http: HttpClient): SocialService {
       })),
     markConversationRead: async (id) => {
       await http.request('POST', endpoints.chat.read(id), { schema: Empty });
+    },
+    conversation: async (id, o) => toConversationDetail(await http.request('GET', endpoints.chatExtra.conversation(id), { schema: ConversationDetailRead, ...opt(o?.signal) })),
+    blockConversation: async (id) => toConversationDetail(await http.request('POST', endpoints.chatExtra.block(id), { schema: ConversationDetailRead })),
+    unblockConversation: async (id) => toConversationDetail(await http.request('POST', endpoints.chatExtra.unblock(id), { schema: ConversationDetailRead })),
+    async editMessage(id, body) {
+      const m = await http.request('PATCH', endpoints.chatExtra.message(id), { body: { body }, schema: EditedMessageRead });
+      return { id: m.id, body: m.body, editedAt: m.edited_at ? Date.parse(m.edited_at) : null, deleted: m.deleted };
+    },
+    deleteMessage: async (id) => {
+      await http.request('DELETE', endpoints.chatExtra.message(id), { schema: Empty });
     },
   };
 }
