@@ -37,6 +37,7 @@ from sqlalchemy import (
     null,
     or_,
     select,
+    true,
     union_all,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,23 +72,62 @@ class Filters:
     id: str | None = None
 
 
-def _ai_branch(user: User):
-    events = AISetupEvent
+# --- building blocks (also used by Y17 recommendations) -------------------------------------------
+
+
+def ai_outcome():
+    """The outcome of an ``ai_setups`` row (section 2 of docs/predictions.md)."""
+    return case(
+        (AISetup.state.in_(("ARMED", "ACTIVE")), "open"),
+        (and_(AISetup.state == "CLOSED", func.coalesce(AISetup.realized_r, 0) > 0), "tp_hit"),
+        (AISetup.state == "CLOSED", "sl_hit"),
+        else_="expired",
+    )
+
+
+def ai_generated_at():
+    """When an AI setup was first published: its first ARMED/ACTIVE/CLOSED event, else
+    ``created_at``."""
     published_at = (
-        select(func.min(events.at))
-        .where(events.setup_id == AISetup.setup_id, events.to_state.in_(PUBLISHED))
+        select(func.min(AISetupEvent.at))
+        .where(AISetupEvent.setup_id == AISetup.setup_id, AISetupEvent.to_state.in_(PUBLISHED))
         .scalar_subquery()
     )
+    return func.coalesce(published_at, AISetup.created_at)
+
+
+def ai_published():
+    """An AI setup that reached ARMED (or later): a prediction."""
+    return or_(
+        AISetup.state.in_(PUBLISHED),
+        exists().where(
+            AISetupEvent.setup_id == AISetup.setup_id, AISetupEvent.to_state.in_(PUBLISHED)
+        ),
+    )
+
+
+def signal_outcome():
+    """The outcome of a ``signals`` row outer-joined to its ``signal_outcomes`` row."""
+    return case(
+        (SignalOutcome.signal_id.is_(None), "open"),
+        (SignalOutcome.correct.is_(True), "tp_hit"),
+        (SignalOutcome.correct.is_(False), "sl_hit"),
+        else_="expired",
+    )
+
+
+def _ai_branch(user: User | None):
+    """``user`` None: every setup (aggregates that are not user specific)."""
+    events = AISetupEvent
     final_at = (
         select(func.max(events.at))
         .where(events.setup_id == AISetup.setup_id, events.to_state == AISetup.state)
         .scalar_subquery()
     )
-    outcome = case(
-        (AISetup.state.in_(("ARMED", "ACTIVE")), "open"),
-        (and_(AISetup.state == "CLOSED", func.coalesce(AISetup.realized_r, 0) > 0), "tp_hit"),
-        (AISetup.state == "CLOSED", "sl_hit"),
-        else_="expired",
+    taken = (
+        exists().where(AISetupTake.setup_id == AISetup.setup_id, AISetupTake.user_id == user.id)
+        if user is not None
+        else literal(False, Boolean)
     )
     return (
         select(
@@ -100,18 +140,16 @@ def _ai_branch(user: User):
             AISetup.direction.label("direction"),
             AISetup.probability.label("probability"),
             AISetup.r_multiple.label("risk_reward"),
-            func.coalesce(published_at, AISetup.created_at).label("generated_at"),
+            ai_generated_at().label("generated_at"),
             case(
                 (AISetup.state.in_(FINAL), func.coalesce(final_at, AISetup.updated_at)),
                 else_=null(),
             ).label("resolved_at"),
-            outcome.label("outcome"),
+            ai_outcome().label("outcome"),
             AISetup.realized_r.label("realized_r"),
             cast(null(), Double).label("return_pct"),
             AISetup.model_version.label("model_version"),
-            exists()
-            .where(AISetupTake.setup_id == AISetup.setup_id, AISetupTake.user_id == user.id)
-            .label("taken_by_user"),
+            taken.label("taken_by_user"),
             cast(null(), String).label("note"),
             literal(False, Boolean).label("excluded"),
             AISetup.state.label("state"),
@@ -121,23 +159,15 @@ def _ai_branch(user: User):
         )
         .join(Instrument, Instrument.id == AISetup.instrument_id)
         .where(
-            or_(
-                AISetup.state.in_(PUBLISHED),
-                exists().where(events.setup_id == AISetup.setup_id, events.to_state.in_(PUBLISHED)),
-            ),
-            strategy_resolver.readable_ai_setups(user),
+            ai_published(),
+            strategy_resolver.readable_ai_setups(user) if user is not None else true(),
         )
     )
 
 
-def _signal_branch(user: User):
+def _signal_branch(user: User | None):
+    """``user`` None: every signal (aggregates that are not user specific)."""
     out = SignalOutcome
-    outcome = case(
-        (out.signal_id.is_(None), "open"),
-        (out.correct.is_(True), "tp_hit"),
-        (out.correct.is_(False), "sl_hit"),
-        else_="expired",
-    )
     return (
         select(
             func.concat(SIGNAL_PREFIX, cast(Signal.id, String)).label("id"),
@@ -151,7 +181,7 @@ def _signal_branch(user: User):
             cast(null(), Double).label("risk_reward"),
             Signal.created_at.label("generated_at"),
             out.resolved_at.label("resolved_at"),
-            outcome.label("outcome"),
+            signal_outcome().label("outcome"),
             cast(null(), Double).label("realized_r"),
             out.return_pct.label("return_pct"),
             cast(null(), String).label("model_version"),
@@ -164,7 +194,11 @@ def _signal_branch(user: User):
         .select_from(Signal)
         .join(Instrument, Instrument.id == Signal.instrument_id)
         .outerjoin(out, out.signal_id == Signal.id)
-        .where(strategy_resolver.visible_signal(Signal.strategy_key, user))
+        .where(
+            strategy_resolver.visible_signal(Signal.strategy_key, user)
+            if user is not None
+            else true()
+        )
     )
 
 
@@ -396,3 +430,44 @@ async def stats(session: AsyncSession, user: User, f: Filters) -> dict[str, Any]
             for source, key, total, resolved, tp, sl in by.all()
         ],
     }
+
+
+async def track_records(
+    session: AsyncSession, pairs: list[tuple[uuid.UUID, str]]
+) -> dict[tuple[uuid.UUID, str], dict[str, dict[str, Any]]]:
+    """Per (instrument, timeframe): ``"<source>:<strategy_key or profile>"`` -> counts over
+    **every** prediction (not user specific: callers keep only the keys the user may read).
+    One grouped query for all pairs. Data-gap rows are left out, as in :func:`stats`."""
+    out: dict[tuple[uuid.UUID, str], dict[str, dict[str, Any]]] = {p: {} for p in pairs}
+    if not pairs:
+        return out
+    u = union_all(_ai_branch(None), _signal_branch(None)).subquery("predictions")
+    decided = u.c.outcome.in_(DECIDED)
+
+    def count(*where):
+        return func.count().filter(and_(*where))
+
+    rows = await session.execute(
+        select(
+            u.c.instrument_id,
+            u.c.timeframe,
+            u.c.source,
+            u.c.strategy_key,
+            count(~u.c.excluded, u.c.outcome != "open"),
+            count(u.c.outcome == "tp_hit"),
+            count(u.c.outcome == "sl_hit"),
+            func.avg(u.c.realized_r).filter(decided),
+            func.avg(u.c.return_pct).filter(decided),
+        )
+        .where(or_(*(and_(u.c.instrument_id == i, u.c.timeframe == tf) for i, tf in pairs)))
+        .group_by(u.c.instrument_id, u.c.timeframe, u.c.source, u.c.strategy_key)
+    )
+    for instrument_id, timeframe, source, key, resolved, tp, sl, mean_r, mean_ret in rows.all():
+        out[(instrument_id, timeframe)][f"{source}:{key}"] = {
+            "resolved": resolved,
+            "tp_hit": tp,
+            "sl_hit": sl,
+            "mean_realized_r": mean_r,
+            "mean_return_pct": mean_ret,
+        }
+    return out
