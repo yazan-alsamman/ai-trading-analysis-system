@@ -45,8 +45,8 @@ collection or the committed file against the VPS.
 04 · Market Data            11 · API Keys               18 · Notifications
 05 · Indicators                  Using an API key       19 · Admin
 06 · Strategies & Signals   12 · News                        Users · Market Data · cTrader Feed
-07 · Risk Management        13 · Community                   API Keys & Rate Limits
-                            14 · Price Alerts                AI Engine · News & Moderation
+     Predictions            13 · Community                   API Keys & Rate Limits
+07 · Risk Management        14 · Price Alerts                AI Engine · News & Moderation
                                                              Subscriptions & Chat · Notifications
                                                         20 · Realtime (WebSocket)
 ```
