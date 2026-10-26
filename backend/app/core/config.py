@@ -70,6 +70,15 @@ class Settings(BaseSettings):
     prediction_horizon_bars: int = 10
     prediction_resolve_interval_seconds: int = 300
     prediction_resolve_batch: int = 500
+    # Recommendations (Y17, docs/recommendations.md): a signal older than this many bars of its
+    # timeframe is not actionable any more; below RECOMMENDATION_MIN_SAMPLES decided predictions
+    # a track record is "not enough history" (neutral 0.5 prior); the per-(instrument,
+    # timeframe) track records are cached in Redis (never anything user specific);
+    # RECOMMENDATIONS_NOTIFY adds the track record line to signal notifications (off: unchanged)
+    recommendation_max_age_bars: int = 3
+    recommendation_min_samples: int = 20
+    recommendation_cache_seconds: int = 300
+    recommendations_notify: bool = False
     # Deliveries a lost send task left pending are sent again after this (notifications.sweep)
     notification_sweep_after_seconds: int = 120
     notification_sweep_batch: int = 500

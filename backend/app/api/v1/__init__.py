@@ -25,6 +25,7 @@ from app.api.v1 import (
     posts,
     predictions,
     price_alerts,
+    recommendations,
     risk,
     strategies,
     subscriptions,
@@ -72,6 +73,7 @@ limited_router.include_router(calendar.router)
 limited_router.include_router(calendar.admin_router)
 limited_router.include_router(predictions.router)
 limited_router.include_router(predictions.admin_router)
+limited_router.include_router(recommendations.router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)

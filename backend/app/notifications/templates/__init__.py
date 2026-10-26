@@ -91,6 +91,22 @@ def _plan_lines(plan: dict[str, Any] | None, lang: str, price_digits: int, qty_d
     return lines
 
 
+def _track_record_line(record: dict[str, Any] | None, lang: str) -> list[str]:
+    """Y17 (RECOMMENDATIONS_NOTIFY): the strategy's hit rate on this market, when it has one."""
+    if not record or record.get("hit_rate") is None:
+        return []
+    return [
+        t(
+            lang,
+            "signal.track_record",
+            rate=num(record["hit_rate"] * 100, 0),
+            n=record.get("decided", "?"),
+            symbol=record.get("symbol", "?"),
+            timeframe=record.get("timeframe", ""),
+        )
+    ]
+
+
 def _signal(data: dict[str, Any], lang: str) -> tuple[str, str]:
     signal = data.get("signal") or {}
     instrument = data.get("instrument") or {}
@@ -114,6 +130,7 @@ def _signal(data: dict[str, Any], lang: str) -> tuple[str, str]:
             strength=num(signal.get("strength"), 2),
         ),
         t(lang, "signal.price", price=num(signal.get("price"), price_digits)),
+        *_track_record_line(data.get("track_record"), lang),
         "",
         *_plan_lines(data.get("plan"), lang, price_digits, qty_digits),
     ]

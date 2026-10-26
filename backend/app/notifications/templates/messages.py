@@ -11,6 +11,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "signal.title": "{side} signal: {symbol} {timeframe}",
         "signal.strategy": "Strategy: {strategy} · strength {strength}",
         "signal.price": "Price: {price}",
+        "signal.track_record": "Track record: this strategy hit {rate}% of {n} signals on "
+        "{symbol} {timeframe} (past results, not a guarantee)",
         "plan.header": "Trade plan ({account} {currency} account):",
         "plan.entry": "Entry ≈ {entry}",
         "plan.stop": "Stop: {stop}",
@@ -161,6 +163,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "signal.title": "إشارة {side}: {symbol} {timeframe}",
         "signal.strategy": "الاستراتيجية: {strategy} · القوة {strength}",
         "signal.price": "السعر: {price}",
+        "signal.track_record": "السجل: أصابت هذه الاستراتيجية {rate}% من {n} إشارة على "
+        "{symbol} {timeframe} (نتائج سابقة وليست ضماناً)",
         "plan.header": "خطة الصفقة (حساب {account} {currency}):",
         "plan.entry": "الدخول ≈ {entry}",
         "plan.stop": "وقف الخسارة: {stop}",

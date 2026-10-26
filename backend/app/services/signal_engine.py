@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.config import get_settings
 from app.models.candle import Timeframe
 from app.models.instrument import Instrument
 from app.models.notification import NotificationType
@@ -36,7 +37,13 @@ from app.models.strategy import Signal, SignalSide, UserStrategy
 from app.notifications import service as notifications
 from app.realtime import publisher
 from app.realtime.topics import private_signals_topic, signals_topic, user_topic
-from app.services import indicator_service, market_service, risk_service, strategy_resolver
+from app.services import (
+    indicator_service,
+    market_service,
+    recommendation_service,
+    risk_service,
+    strategy_resolver,
+)
 from app.services.market_service import floor_to_bucket
 from app.services.strategy_resolver import Resolved
 
@@ -451,6 +458,9 @@ async def _notifications(
         return notifications.Prepared()
     instrument = await session.get(Instrument, job.instrument_id)
     names = {s.key: s.name for s in setups}
+    records = (
+        await _track_records(session, redis, job) if get_settings().recommendations_notify else {}
+    )
     items = []
     for row in inserted:
         payload = signal_payload(row)
@@ -478,6 +488,7 @@ async def _notifications(
                         "plans": [
                             {"user_strategy_id": str(a.id), "plan": plan} for a, plan in notified
                         ],
+                        **_track_record_data(records, row, instrument, job),
                     },
                     dedup_key=f"signal:{row['id']}",
                 )
@@ -493,6 +504,25 @@ async def _notifications(
         return notifications.Prepared()
     result.notifications = len(prepared.notifications)
     return prepared
+
+
+async def _track_records(session: AsyncSession, redis: Redis, job: Job) -> dict[str, dict]:
+    """RECOMMENDATIONS_NOTIFY (Y17): track records of this market (cached; never blocks)."""
+    try:
+        return await recommendation_service.signal_track_records(
+            session, redis, job.instrument_id, job.timeframe
+        )
+    except Exception:  # noqa: BLE001 - the notification goes out without the line
+        logger.exception("Track records for %s failed", job)
+        return {}
+
+
+def _track_record_data(records, row, instrument, job: Job) -> dict[str, Any]:
+    record = records.get(row["strategy_key"])
+    if not record or not record["decided"]:
+        return {}
+    symbol = instrument.symbol if instrument else "?"
+    return {"track_record": {**record, "symbol": symbol, "timeframe": job.timeframe.value}}
 
 
 async def _publish(
