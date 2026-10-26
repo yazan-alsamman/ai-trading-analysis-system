@@ -1,5 +1,6 @@
 import { MessageSquare } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { usePreferences, useServices } from '@/app/contexts';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Form';
@@ -10,6 +11,7 @@ import { useResource } from '@/hooks/useResource';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatRelative } from '@/lib/format';
 import { CommentThread } from './CommentThread';
+import { NewsSentimentPanel, NewsSourcesDisclosure } from './NewsInsights';
 
 const IMPACT: Record<NewsImpact, { label: string; tone: BadgeTone }> = {
   high: { label: 'High impact', tone: 'warning' },
@@ -42,8 +44,11 @@ export function NewsPage() {
   const hasImpact = res.data.some((n) => n.impact);
   const items = res.data.filter((n) => (impact === 'all' || n.impact === impact) && (symbol === 'all' || n.symbols.some((s) => s === symbol)));
 
+  const api = services.source === 'api';
   return (
     <div className="flex flex-col gap-3">
+      {api && <NewsSentimentPanel />}
+      {api && <NewsSourcesDisclosure />}
       <div className="flex flex-wrap items-center gap-2">
         {hasImpact && (
           <Select aria-label="Filter by impact" value={impact} onChange={(e) => setImpact(e.target.value as 'all' | NewsImpact)} className="h-8 w-40">
@@ -87,7 +92,13 @@ export function NewsPage() {
               </time>
             </div>
             <h2 id={`news-${n.id}`} className="mt-1.5 text-base font-semibold text-fg">
-              {n.title}
+              {api ? (
+                <Link to={`/community/news/${n.id}`} className="underline-offset-2 hover:underline">
+                  {n.title}
+                </Link>
+              ) : (
+                n.title
+              )}
             </h2>
             {n.summary && <p className="mt-1 text-sm text-fg-2">{n.summary}</p>}
             {n.url && /^https?:\/\//i.test(n.url) && (

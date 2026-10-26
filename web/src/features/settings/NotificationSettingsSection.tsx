@@ -23,6 +23,7 @@ import { TIME_ZONE_OPTIONS } from '@/domain/preferences';
 import { useNow } from '@/hooks/useEnvironment';
 import { useResource } from '@/hooks/useResource';
 import { userMessage } from '@/services/errors';
+import { DevicesPanel } from './DevicesPanel';
 
 type Draft = Omit<NotificationPreferences, 'updatedAt'>;
 type TestChannel = 'in_app' | ExternalChannel;
@@ -444,6 +445,7 @@ export function NotificationSettingsSection() {
               ) : (
                 <PreferencesForm key={prefs.data.updatedAt} initial={prefs.data} channels={channels.data} onSaved={(p) => prefs.setData(() => p)} />
               )}
+              <DevicesPanel />
             </div>
           )}
         </Panel>

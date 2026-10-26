@@ -8,9 +8,9 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 
 | Area | Status |
 | --- | --- |
-| Integration of the backend's capabilities | **Complete**: every user-facing backend feature in the table below has a screen, including **AI setups** and the **economic calendar**, which were added on `main` (`1afe445`) during this round. Not connected: data health (`/health/data`, an operations endpoint) and admin-only features. |
+| Integration of the backend's capabilities | **Complete.** The web client calls **172 of the backend's 181 operations** (all of them except the 9 in §2a, none of which belongs in a website). This includes the **admin console** (users, moderation, content, market data, AI engine, payments, API access, system status). |
 | Verified against the **real** backend | **Two layers:**<br>• The service layer for all features: 9/9 live tests on 26 Oct 2026, plus the 29 API and 12 browser checks from 18 Oct.<br>• The **new pages**: verified in the browser against the backend's *recorded* responses only. A live browser run was not possible (see §4). |
-| Demo mode | Unchanged. All 103 browser tests pass, including the visual-regression screenshots. |
+| Demo mode | Unchanged. All 89 demo browser tests pass on a fresh build, including the 10 visual-regression screenshots. |
 | Ready to deploy | **No, configuration first** (§5): `deploy.yml` still builds demo mode. HTTPS now exists on `main` (trading.yazanalsamman.com, #51). |
 | AI predictions, real prices, password reset, LLM assistant, platform membership | **Backend gaps.** The screens say "Not available yet" and never show stand-in data (§6). |
 
@@ -50,7 +50,25 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 | **AI setups:** follows (min grade), setups the server sent, live state changes, size for your account, verified explanation (ar/en), "I took this trade" record, taken setups with results | AI setups page (`/ai-setups`); `ai_setup` notifications open it | `/me/ai/follows*`, `/ai/setups/{id}/size`, `/explanation`, `/take`, `/me/ai/trades`, `/me/notifications?type=ai_setup`, WebSocket `ai_setups` | Mocked (browser, incl. a live frame) + contract tests on recordings; live checks written, **not yet run** | v1 is rules-only: probability, EV and grade show "Not provided" |
 | **Economic calendar:** week view, currency and impact filters, revision history, next high-impact event | Economic calendar page (`/calendar`) | `/calendar/events`, `/calendar/events/{key}/history` | Mocked (browser) + contract tests; live check written, **not yet run** | — |
 | AI opportunities per instrument, prediction history, model analytics | "Not available yet" | No per-instrument listing; no model in v1 | n/a | Backend/AI R1, R2 |
-| Data health | — | `/health/data` | n/a | Optional operations view |
+| **Data health** | Warning banner above every page when an instrument is degraded or has no data (dismissible) | `/health/data` (a 503 still carries the report) | Mocked (browser, degraded case) + contract | — |
+| **Admin console** (admin role only; hidden and refused for others) | `/admin`: System (readiness, system status, hub, rate limits, delivery stats) · Users (search, role, activate) · Moderation (reports: hide/dismiss with a note; conversations) · Content (news sources, publish article, sentiment, calendar refresh and CSV import, broadcast) · Market data (instruments and specs, 1m candle upload, cTrader feed) · AI engine (setups and detail, alert outbox retry, models) · Payments (statistics, subscriptions, refund, demo fast-forward) · API access (all keys, revoke) | every `/admin/*` operation, `/ingest/news*`, `/health/ready` | Mocked (browser: every tab loads, resolve and broadcast send the contract) + 8 contract tests | No admin invoice list in the backend: refunds take an invoice ID |
+| **Workspace order and sharing** | Settings → Server workspaces (move up/down, share link, stop sharing); `/workspaces/shared/:slug` read-only page with "Copy to my workspaces" | `/me/workspaces/order`, `/me/workspaces/{id}/share`, `/workspaces/shared/{slug}[/import]` | Mocked (browser) + contract | — |
+| **Expert chat moderation** | Expert chat: block/unblock, edit (15 min) and delete your own messages | `/conversations/{id}[/block|/unblock]`, `/messages/{id}` | Contract tests | Deleted messages disappear instead of showing the server tombstone |
+| **News detail, sentiment, sources** | `/community/news/:id`; sentiment panel (1h/24h/7d) and sources list on News | `/news/{id}`, `/news/sentiment`, `/news/sources` | Mocked (browser) + contract | — |
+| **Server indicators** | Strategies → Indicators: the server's library and computed lines on the server's candles | `/indicators`, `/market/instruments/{id}/indicators` | Mocked (browser) + contract | — |
+| **Risk templates** | Capital & risk: the server's conservative / balanced / aggressive templates compared | `/risk/schema` | Contract | — |
+| **Push devices** | Settings → Notifications: devices registered by the mobile app, remove | `GET /me/devices`, `DELETE /me/devices/{id}` | Contract | Registering this browser for push would need Firebase (not added) |
+
+### 2a. Backend operations the website deliberately does not call (9)
+
+| Operation | Why |
+| --- | --- |
+| `GET /pay/demo/{id}`, `POST /pay/demo/{id}/confirm`, `GET /pay/demo/{id}/done` | The backend's own hosted demo payment page; the website sends the browser there and back |
+| `POST /payments/webhook/{provider}` | Server-to-server callback from a payment provider |
+| `GET /admin/feeds/ctrader/callback` | The redirect target of the cTrader login, opened by cTrader, not by the website (the admin page starts the flow and accepts a pasted code) |
+| `GET /health`, `GET /health/live` | Infrastructure probes (the admin console uses `/health/ready` and `/health/data`) |
+| `POST /auth/token` | OAuth2 form login for the API docs; the website uses `/auth/login` |
+| `POST /me/devices` | Registers an FCM push token; the mobile app does it. Web push would need Firebase, a new external dependency that was not added |
 | AI assistant (LLM) | Rule-based, labelled | — none | n/a | Backend R3 |
 | Platform membership | "Pricing to be announced", labelled preview | — none | n/a | Backend R6 |
 
@@ -60,9 +78,9 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 | --- | --- | --- |
 | `pnpm typecheck` (strict TS) | static | clean |
 | `pnpm lint` | static | clean (0 errors, 0 warnings) |
-| `vitest run` | unit, contract (recorded responses), config | **209 passed**, including 9 contract tests for AI setups and the calendar; 11 live tests skipped without a backend |
+| `vitest run` | unit, contract (recorded responses), config | **221 passed**, including 9 contract tests for AI setups and the calendar and 12 for the admin console and user extras; 11 live tests skipped without a backend |
 | `src/services/api/live.services.test.ts` | **live**, real backend, service layer of every new feature | **9/9 passed** (26 Oct 2026, before the local stack was stopped) |
-| `playwright test` (demo + api-mode projects) | browser, mocked backend from recordings | **Before the merge:** 103/103.<br>**After merging `main` and adding AI setups and the calendar, on fresh builds:**<br>• backend-mode project: 16/16, including the new AI-setup and calendar tests<br>• full run: 98 of 105 finished with no failure before the system stopped it for low memory; 6 demo visual screenshots and 1 other test did not run.<br>(An earlier post-merge run had hit stale preview servers; it is not counted.)<br>The tests include the new strategies, backtests, settings (workspace 409), community and alert-history tests |
+| `playwright test` (demo + api-mode projects) | browser, mocked backend from recordings | **109/109 on fresh builds (final state):** backend-mode project 20/20; demo project 79/79 plus 10/10 visual screenshots (run in two parts because of low memory).<br>(An earlier post-merge run had hit stale preview servers; it is not counted.)<br>The tests include the admin console, workspace sharing, news detail, server indicators, data-health banner, AI setups, calendar and the strategies, backtests, settings (workspace 409), community and alert-history tests |
 | `e2e-live/live.spec.ts` | **live** browser | 12/12 on 18 Oct for the originally connected features; **not re-run** for the new pages (see §4) |
 
 **What the live service suite exercised against the real server:**

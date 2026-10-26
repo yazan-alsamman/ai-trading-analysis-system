@@ -11,6 +11,7 @@ import { useOnlineStatus } from '@/hooks/useEnvironment';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { readStored, writeStored } from '@/lib/storage';
 import { CommandPalette } from './CommandPalette';
+import { DataHealthBanner } from './DataHealthBanner';
 import { navShortcutsFor } from './navigation';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { Sidebar } from './Sidebar';
@@ -166,6 +167,7 @@ export function AppShell() {
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar onOpenMenu={() => setDrawerOpen(true)} onOpenSearch={() => setSearchOpen(true)} onShowShortcuts={() => setShortcutsOpen(true)} />
           <main id="main" ref={mainRef} tabIndex={-1} className="relative min-h-0 flex-1 overflow-y-auto outline-none">
+            {source === 'api' && <DataHealthBanner />}
             <Outlet />
           </main>
         </div>

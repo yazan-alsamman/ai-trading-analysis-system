@@ -1,6 +1,6 @@
-import { CloudDownload, CloudUpload, Copy, Pencil, Plus, Star, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CloudDownload, CloudUpload, Copy, Pencil, Plus, Share2, Star, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { usePreferences, useServices, useToast } from '@/app/contexts';
+import { useAuth, usePreferences, useServices, useToast } from '@/app/contexts';
 import { Badge } from '@/components/ui/Badge';
 import { Button, IconButton } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
@@ -12,6 +12,10 @@ import { useResource } from '@/hooks/useResource';
 import { formatRelative } from '@/lib/format';
 import { isApiError, userMessage } from '@/services/errors';
 import { fromServerState, toServerState } from './workspaceState';
+import { WorkspaceShareDialog } from './WorkspaceShareDialog';
+
+/** Roles the server lets share a workspace (docs/workspaces.md; 403 for traders). */
+const SHARING_ROLES = ['analyst', 'expert', 'admin'];
 
 /** A push refused with 409: the server copy changed since it was listed. */
 interface Conflict {
@@ -96,6 +100,8 @@ export function ServerWorkspacesSection() {
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [renaming, setRenaming] = useState<ServerWorkspaceSummary | null>(null);
   const [deleting, setDeleting] = useState<ServerWorkspaceSummary | null>(null);
+  const [sharing, setSharing] = useState<ServerWorkspaceSummary | null>(null);
+  const canShare = SHARING_ROLES.includes(useAuth().session?.user.role ?? '');
   const [error, setError] = useState<string | null>(null);
   const lastOwnChange = useRef(0);
 
@@ -184,6 +190,20 @@ export function ServerWorkspacesSection() {
     });
 
   const mutate = (key: string, action: () => Promise<void>) => void run(key, action);
+
+  /** Tab order: the server needs every id, in the new order. */
+  const move = (index: number, delta: -1 | 1) => {
+    const ids = (list.data ?? []).map((w) => w.id);
+    const to = index + delta;
+    const moved = ids[index];
+    if (moved === undefined || to < 0 || to >= ids.length) return;
+    ids.splice(index, 1);
+    ids.splice(to, 0, moved);
+    mutate(`move:${moved}`, async () => {
+      const ordered = await services.workspacesSync.reorder(ids);
+      list.setData(() => ordered);
+    });
+  };
   const rows = list.data ?? [];
   const disabled = busy !== null;
 
@@ -209,8 +229,14 @@ export function ServerWorkspacesSection() {
           <EmptyState compact title="No server workspaces" description="Save your current layout to continue on another device." />
         ) : (
           <ul className="divide-y divide-line">
-            {rows.map((w) => (
+            {rows.map((w, index) => (
               <li key={w.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+                {rows.length > 1 && (
+                  <div className="flex flex-col">
+                    <IconButton icon={ArrowUp} label={`Move ${w.name} up`} size="sm" disabled={disabled || index === 0} onClick={() => move(index, -1)} tooltipSide="right" />
+                    <IconButton icon={ArrowDown} label={`Move ${w.name} down`} size="sm" disabled={disabled || index === rows.length - 1} onClick={() => move(index, 1)} tooltipSide="right" />
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-fg">
                     {w.name}
@@ -261,6 +287,7 @@ export function ServerWorkspacesSection() {
                     tooltipSide="left"
                   />
                 )}
+                {canShare && <IconButton icon={Share2} label={w.isShared ? `Share link of ${w.name}` : `Share ${w.name}`} size="sm" disabled={disabled} onClick={() => setSharing(w)} tooltipSide="left" />}
                 <IconButton icon={Pencil} label={`Rename ${w.name}`} size="sm" disabled={disabled} onClick={() => setRenaming(w)} tooltipSide="left" />
                 <IconButton
                   icon={Copy}
@@ -290,6 +317,7 @@ export function ServerWorkspacesSection() {
           “Push current” replaces the server copy with the active browser workspace (“{activeWorkspace.name}”). If it was changed on another device since it was listed, you
           choose which version to keep. This website edits one chart per workspace; extra panels, drawings and strategy overlays made in the mobile app are kept on the server
           only when you do not push over them.
+          {canShare ? ' You can share a workspace read-only by link.' : ' Analysts, experts and admins can share workspaces by link.'}
         </p>
       </Panel>
 
@@ -323,6 +351,19 @@ export function ServerWorkspacesSection() {
           <strong className="font-medium text-fg">Overwrite with mine</strong> replaces the server copy with your active browser workspace; the other device’s change is lost.
         </p>
       </Dialog>
+
+      {sharing && (
+        <WorkspaceShareDialog
+          key={sharing.id}
+          target={sharing}
+          onClose={() => setSharing(null)}
+          onChanged={(isShared) => {
+            lastOwnChange.current = Date.now();
+            list.setData((l) => (l ?? []).map((x) => (x.id === sharing.id ? { ...x, isShared } : x)));
+            setSharing((cur) => (cur ? { ...cur, isShared } : cur));
+          }}
+        />
+      )}
 
       <RenameDialog
         target={renaming}

@@ -111,3 +111,6 @@ Every backend capability now has a screen (FINAL_RELEASE_READINESS_REPORT.md). T
 | 55 | Workspace reorder/share and backtest list filters have no UI | The backend supports them; the web service layer does not expose them yet |
 | 56 | AI setups v1 carry no probability, EV or grade | Rules-only engine (no trained model). Shown as "Not provided"; a minimum-grade follow receives nothing in v1, and the follow form says so |
 | 57 | AI setups page lists only setups the server sent you | There is no user-facing list endpoint; setups armed before you followed are not shown |
+| 58 | Admin refunds take an invoice ID | The backend has no admin invoice list |
+| 59 | Web push is not offered | Registering a browser for push needs Firebase (a new external dependency); devices registered by the mobile app are listed and can be removed |
+| 60 | Deleted chat messages vanish from the view | The server keeps a tombstone; the web client hides it |

@@ -9,6 +9,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useResource } from '@/hooks/useResource';
 import { ActivateDialog, type ActivatePreset } from './ActivateDialog';
 import { ActivationsSection } from './ActivationsSection';
+import { IndicatorLabSection } from './IndicatorLabSection';
 import { CatalogSection } from './CatalogSection';
 import { CustomSection } from './CustomSection';
 import { PreviewDialog, type PreviewTarget } from './PreviewDialog';
@@ -22,6 +23,7 @@ const SECTIONS = [
   { value: 'custom', label: 'Custom' },
   { value: 'community', label: 'Community' },
   { value: 'plans', label: 'Signal plans' },
+  { value: 'indicators', label: 'Indicators' },
 ] as const;
 type Section = (typeof SECTIONS)[number]['value'];
 const isSection = (v: string | null): v is Section => SECTIONS.some((s) => s.value === v);
@@ -131,6 +133,7 @@ export function StrategiesPage() {
         />
       )}
       {section === 'plans' && <SignalPlansSection catalog={catalogList} custom={customList} instruments={instruments.data} />}
+      {section === 'indicators' && <IndicatorLabSection instruments={instruments.data} />}
 
       {instruments.data && (
         <ActivateDialog

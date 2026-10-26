@@ -131,12 +131,75 @@ const RECORDED_ROUTES: [string, RegExp, string, number][] = (
     ['PATCH', `/me/api-keys/${ID}`, 'keys_update', 200],
     ['DELETE', `/me/api-keys/${ID}`, '', 204],
     ['GET', '/conversations', 'chat_list', 200],
+    ['GET', `/conversations/${ID}`, 'chat_get', 200],
     ['GET', `/ai/setups/${ID}/size`, 'ai_setup_size', 200],
     ['GET', `/ai/setups/${ID}/explanation`, 'ai_setup_explanation', 200],
     ['POST', `/ai/setups/${ID}/take`, 'ai_setup_take', 201],
     ['DELETE', `/ai/setups/${ID}/take`, '', 204],
     ['GET', '/me/ai/trades', 'ai_trades', 200],
     ['GET', '/calendar/events', 'calendar_events', 200],
+    ['GET', '/health/ready', 'health_ready', 200],
+    ['GET', '/me/expert-profile', 'expert_profile_get', 200],
+    ['PUT', '/me/expert-profile', 'expert_profile_put', 200],
+    ['GET', '/me/plans', 'plans_list', 200],
+    ['POST', '/me/plans', 'plans_create', 201],
+    ['PATCH', `/me/plans/${ID}`, 'plans_update', 200],
+    ['DELETE', `/me/plans/${ID}`, '', 204],
+    ['GET', '/me/earnings', 'experts_earnings', 200],
+    ['PUT', '/me/workspaces/order', 'ws_reorder', 200],
+    ['POST', `/me/workspaces/${ID}/share`, 'ws_share', 200],
+    ['DELETE', `/me/workspaces/${ID}/share`, 'ws_unshare', 200],
+    ['GET', `/workspaces/shared/${ID}`, 'ws_shared_get', 200],
+    ['POST', `/workspaces/shared/${ID}/import`, 'ws_shared_import', 201],
+    ['POST', `/conversations/${ID}/block`, 'chat_block', 200],
+    ['POST', `/conversations/${ID}/unblock`, 'chat_unblock', 200],
+    ['PATCH', `/messages/${ID}`, 'chat_edit', 200],
+    ['DELETE', `/messages/${ID}`, '', 204],
+    ['GET', '/news/sentiment', 'news_sentiment', 200],
+    ['GET', '/news/sources', 'news_sources', 200],
+    ['GET', `/news/${ID}`, 'news_get', 200],
+    ['GET', '/indicators', 'indicators_catalog', 200],
+    ['POST', `/market/instruments/${ID}/indicators`, 'indicators_compute', 200],
+    ['GET', '/risk/schema', 'risk_schema', 200],
+    ['GET', '/me/devices', 'notif_devices', 200],
+    ['DELETE', `/me/devices/${ID}`, '', 204],
+    ['POST', '/ingest/news', 'news_ingest', 200],
+    ['POST', '/ingest/news/sentiment', 'news_ingest_sentiment', 200],
+    ['GET', '/admin/system/status', 'admin_system_status', 200],
+    ['GET', '/admin/realtime/stats', 'admin_realtime', 200],
+    ['GET', '/admin/rate-limits/stats', 'admin_rate_limits', 200],
+    ['GET', '/admin/notifications/stats', 'admin_notif_stats', 200],
+    ['POST', '/admin/notifications/broadcast', 'admin_notif_broadcast', 202],
+    ['GET', '/admin/payments/stats', 'admin_payment_stats', 200],
+    ['GET', '/admin/users', 'admin_users', 200],
+    ['PATCH', `/admin/users/${ID}/role`, 'admin_user_role', 200],
+    ['PATCH', `/admin/users/${ID}/status`, 'admin_user_status', 200],
+    ['GET', '/admin/reports', 'admin_reports', 200],
+    ['POST', `/admin/reports/${ID}/resolve`, 'admin_report_resolve', 200],
+    ['GET', '/admin/conversations', 'admin_conversations', 200],
+    ['GET', '/admin/subscriptions', 'admin_subscriptions', 200],
+    ['POST', `/admin/invoices/${ID}/refund`, 'admin_refund', 200],
+    ['POST', `/admin/subscriptions/${ID}/fast-forward`, 'admin_fast_forward', 200],
+    ['GET', '/admin/api-keys', 'admin_keys', 200],
+    ['DELETE', `/admin/api-keys/${ID}`, '', 204],
+    ['PATCH', `/admin/news/sources/${ID}`, 'admin_news_source', 200],
+    ['POST', '/admin/calendar/refresh', 'admin_calendar_refresh', 200],
+    ['POST', '/admin/calendar/import', 'admin_calendar_import', 200],
+    ['POST', '/admin/instruments', 'admin_instrument_create', 201],
+    ['PATCH', `/admin/instruments/${ID}`, 'admin_instrument_update', 200],
+    ['POST', `/admin/instruments/${ID}/candles`, 'admin_candles_upsert', 200],
+    ['GET', '/admin/feeds/ctrader', 'admin_feed_status', 200],
+    ['PATCH', '/admin/feeds/ctrader', 'admin_feed_account', 200],
+    ['GET', '/admin/feeds/ctrader/connect', 'admin_feed_connect', 200],
+    ['POST', '/admin/feeds/ctrader/code', 'admin_feed_code', 200],
+    ['POST', '/admin/feeds/ctrader/backfill', 'admin_feed_backfill', 202],
+    ['GET', '/admin/ai/setups', 'admin_ai_setups', 200],
+    ['GET', `/admin/ai/setups/${ID}`, 'admin_ai_setup', 200],
+    ['GET', '/admin/ai/outbox', 'admin_ai_outbox', 200],
+    ['POST', `/admin/ai/outbox/${ID}/retry`, 'admin_ai_outbox_retry', 200],
+    ['GET', '/admin/ai/models', 'admin_ai_models', 200],
+    ['POST', '/admin/ai/models', 'admin_ai_model_register', 200],
+    ['POST', `/admin/ai/models/${ID}/activate`, 'admin_ai_model_activate', 200],
     ['GET', `/calendar/events/${ID}/history`, 'calendar_event_history', 200],
   ] as const
 ).map(([m, p, name, status]) => [m, new RegExp(`^${p}$`), name, status]);
@@ -186,7 +249,8 @@ export interface MockBackend {
 export const USER = { id: '2b0ff791-1d77-4e0e-9ace-eb2cdce57724', email: 'trader@example.com', full_name: 'Sara Trader', role: 'trader', is_active: true, created_at: iso(0), updated_at: iso(0) };
 export const PASSWORD = 'correct-pass1';
 
-export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Promise<MockBackend> {
+export async function mockBackend(page: Page, opts: { nowMs?: number; role?: string } = {}): Promise<MockBackend> {
+  const role = opts.role ?? USER.role;
   const nowMs = opts.nowMs ?? Date.now();
   let seq = 1;
   const validAccess = new Set<string>();
@@ -251,6 +315,8 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
       return reply(route, 200, issue());
     }
 
+    if (method === 'GET' && path === '/health/data') return reply(route, 200, { status: 'ok', instruments: [] });
+
     // --- everything else needs a currently valid access token
     const token = authHeader?.replace(/^Bearer /, '') ?? '';
     if (!validAccess.has(token)) return reply(route, 401, { detail: 'Could not validate credentials' });
@@ -259,7 +325,7 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
       validRefresh.delete(String(b.refresh_token ?? ''));
       return reply(route, 204);
     }
-    if (method === 'GET' && path === '/users/me') return reply(route, 200, { ...USER, full_name: fullName });
+    if (method === 'GET' && path === '/users/me') return reply(route, 200, { ...USER, role, full_name: fullName });
     if (method === 'PATCH' && path === '/users/me') {
       fullName = String(b.full_name ?? fullName);
       return reply(route, 200, { ...USER, full_name: fullName });
@@ -378,9 +444,9 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
 }
 
 /** A session as the app stores it after sign-in (token issued by the mock as `acc-0`/`ref-0`). */
-export async function seedSession(page: Page, over: { expiresInMs?: number } = {}): Promise<void> {
+export async function seedSession(page: Page, over: { expiresInMs?: number; role?: string } = {}): Promise<void> {
   const session = {
-    user: { id: USER.id, name: USER.full_name, email: USER.email, role: USER.role },
+    user: { id: USER.id, name: USER.full_name, email: USER.email, role: over.role ?? USER.role },
     token: 'acc-0',
     refreshToken: 'ref-0',
     expiresAt: Date.now() + (over.expiresInMs ?? 30 * 60_000),

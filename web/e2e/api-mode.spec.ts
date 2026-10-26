@@ -313,6 +313,107 @@ test('AI setups: follow, setups from notifications and live frames, server size 
   expect(api.unexpected).toEqual([]);
 });
 
+test('admin console: hidden from non-admins; every section loads from the backend; moderation and broadcast send the contract', async ({ page }) => {
+  // A trader sees no Admin entry and an explicit refusal on the URL.
+  let api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/admin');
+  await expect(page.getByText('Admins only')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Admin' })).toHaveCount(0);
+  await page.context().clearCookies();
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+
+  api = await mockBackend(page, { role: 'admin' });
+  await seedSession(page, { role: 'admin' });
+  await page.goto('/admin');
+  await expect(page.getByRole('heading', { name: 'Admin', level: 1 })).toBeVisible();
+  await expect(page.getByText('development').first()).toBeVisible();
+  for (const [tab, path] of [
+    ['Users', '/admin/users'],
+    ['Moderation', '/admin/reports'],
+    ['Content', '/news/sources'],
+    ['Market data', '/admin/feeds/ctrader'],
+    ['AI engine', '/admin/ai/setups'],
+    ['Payments', '/admin/payments/stats'],
+    ['API access', '/admin/api-keys'],
+  ] as const) {
+    await page.getByRole('navigation', { name: 'Admin sections' }).getByRole('link', { name: tab }).click();
+    await expect.poll(() => api.calls.some((c) => c.method === 'GET' && c.path === path), { message: `${tab} loads ${path}` }).toBe(true);
+  }
+
+  await page.getByRole('navigation', { name: 'Admin sections' }).getByRole('link', { name: 'Moderation' }).click();
+  await expect(page.getByText('ETH/BTC: momentum is turning').first()).toBeVisible();
+  await page.getByRole('button', { name: /^Resolve/ }).first().click();
+  await page.getByLabel('Note to the author').fill('Guaranteed-profit claims are not allowed.');
+  await page.getByRole('button', { name: 'Hide content' }).click();
+  await expect.poll(() => api.calls.find((c) => /^\/admin\/reports\/[^/]+\/resolve$/.test(c.path))?.body).toEqual({ action: 'hide', note: 'Guaranteed-profit claims are not allowed.' });
+
+  await page.getByRole('navigation', { name: 'Admin sections' }).getByRole('link', { name: 'Content' }).click();
+  const broadcast = page.getByRole('region', { name: 'Broadcast a notification' });
+  await broadcast.getByLabel('Title').fill('Maintenance tonight');
+  await broadcast.getByLabel('Message').fill('The platform restarts at 22:00 UTC.');
+  await broadcast.getByRole('button', { name: 'Send broadcast' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
+  await expect(broadcast.getByText(/Accepted: 1 recipients/)).toBeVisible();
+  expect(api.calls.find((c) => c.path === '/admin/notifications/broadcast')?.body).toMatchObject({ title: 'Maintenance tonight', roles: null });
+  expect(api.unexpected).toEqual([]);
+});
+
+test('workspace sharing: a shared link shows a read-only copy that can be imported', async ({ page }) => {
+  const api = await mockBackend(page, { role: 'expert' });
+  await seedSession(page, { role: 'expert' });
+  await page.goto('/workspaces/shared/lw70_hvGpjdW0Pnu');
+  await expect(page.getByText('Yazan Alsamman').first()).toBeVisible();
+  await page.getByRole('button', { name: /Copy to my workspaces/ }).click();
+  await expect.poll(() => api.calls.some((c) => c.method === 'POST' && c.path === '/workspaces/shared/lw70_hvGpjdW0Pnu/import')).toBe(true);
+  await page.goto('/settings');
+  const ws = page.locator('#server-workspaces');
+  await ws.getByRole('button', { name: /^Share / }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Create share link' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Share link', { exact: true })).toHaveValue(/\/workspaces\/shared\/lw70_hvGpjdW0Pnu$/);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('news article detail, sentiment summary and server-computed indicators', async ({ page }) => {
+  const api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/community/news');
+  await expect.poll(() => api.calls.some((c) => c.path === '/news/sentiment')).toBe(true);
+  await page.goto('/community/news/1fb429c3-351e-4dca-8fac-5860cd5f9519');
+  await expect(page.getByRole('link', { name: /Read at/ }).first()).toHaveAttribute('rel', /noopener/);
+
+  await page.goto('/strategies?tab=indicators');
+  await expect(page.getByRole('combobox', { name: 'Indicator' })).toContainText('Simple Moving Average');
+  await page.getByRole('button', { name: 'Add indicator' }).click();
+  await page.getByRole('button', { name: 'Compute' }).click();
+  await expect.poll(() => api.calls.some((c) => c.method === 'POST' && /\/indicators$/.test(c.path))).toBe(true);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('data health: a degraded instrument shows a dismissible delayed-data banner', async ({ page }) => {
+  await mockBackend(page);
+  await seedSession(page);
+  await page.route('**/api/v1/health/data', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'degraded',
+        instruments: [{ instrument: 'fxpro:XAU/USD', timeframe: '15m', status: 'degraded', last_closed_bar: null, lag_seconds: 900, next_open: null, evaluated_at: new Date().toISOString(), failed_checks: [{ name: 'lag', ok: false, detail: 'last bar 15 min old' }] }],
+      }),
+    }),
+  );
+  await page.goto('/overview');
+  const banner = page.getByRole('status').filter({ hasText: 'prices may be delayed' });
+  await expect(banner.getByRole('listitem').filter({ hasText: 'XAU/USD' })).toContainText('degraded');
+  await banner.getByRole('button', { name: /Hide the data check notice/ }).click();
+  await expect(banner).toHaveCount(0);
+});
+
 test('economic calendar: week of events with impact filter and revision history', async ({ page }) => {
   const api = await mockBackend(page);
   await seedSession(page);

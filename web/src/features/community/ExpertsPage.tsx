@@ -13,6 +13,8 @@ import { useResource } from '@/hooks/useResource';
 import { cn } from '@/lib/cn';
 import { formatRelative } from '@/lib/format';
 import { userMessage } from '@/services/errors';
+import { useNow } from '@/hooks/useEnvironment';
+import { ChatModerationBar, OwnMessageActions } from './chatModeration';
 
 const AVAILABILITY: Record<ExpertAvailability, { label: string; tone: BadgeTone }> = {
   available: { label: 'Available', tone: 'accent' },
@@ -26,10 +28,19 @@ function Conversation({ expert, chatAvailable }: { expert: Expert; chatAvailable
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const api = services.source === 'api';
+  const now = useNow(30_000);
+  // Backend: the conversation itself (status, blocking). It exists once the messages loaded (opened by the server).
+  const conv = useResource(api && res.status === 'success' ? `conversation-detail:${expert.id}` : `conversation-detail:${expert.id}:pending`, async (signal) => {
+    if (!api || res.status !== 'success') return null;
+    const found = (await services.social.conversations({ signal })).find((c) => c.expertId === expert.id);
+    return found ? services.social.conversation(found.id, { signal }) : null;
+  });
+  const canSend = chatAvailable && conv.data?.canSend !== false;
 
   const send = async () => {
     const body = draft.trim();
-    if (!chatAvailable || !body) return;
+    if (!canSend || !body) return;
     setSending(true);
     setSendError(null);
     try {
@@ -89,6 +100,8 @@ function Conversation({ expert, chatAvailable }: { expert: Expert; chatAvailable
         </div>
       )}
 
+      {conv.data && <ChatModerationBar conversation={conv.data} onChange={(c) => conv.setData(() => c)} />}
+
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {res.status === 'loading' ? (
           <Loading label="Loading conversation">
@@ -103,8 +116,17 @@ function Conversation({ expert, chatAvailable }: { expert: Expert; chatAvailable
             {res.data.map((m) => (
               <li key={m.id} className={cn('flex flex-col', m.from === 'user' ? 'items-end' : 'items-start')}>
                 <p className={cn('max-w-[85%] rounded-lg px-3 py-2 text-sm', m.from === 'user' ? 'bg-selected text-fg' : 'bg-hover text-fg')}>{m.body}</p>
-                <span className="mt-1 text-xs text-fg-3">
+                <span className="mt-1 flex items-center gap-1 text-xs text-fg-3">
                   {m.from === 'user' ? 'You' : expert.name} · {formatRelative(m.sentAt)}
+                  {m.editedAt !== undefined && ' · edited'}
+                  {api && m.from === 'user' && (
+                    <OwnMessageActions
+                      message={m}
+                      now={now}
+                      onEdited={(edited) => res.setData((list) => (list ?? []).map((x) => (x.id === edited.id ? edited : x)))}
+                      onDeleted={(id) => res.setData((list) => (list ?? []).filter((x) => x.id !== id))}
+                    />
+                  )}
                 </span>
               </li>
             ))}
@@ -131,12 +153,12 @@ function Conversation({ expert, chatAvailable }: { expert: Expert; chatAvailable
           id="chat-message"
           rows={1}
           className="min-h-9"
-          placeholder={chatAvailable ? `Message ${expert.name}` : 'Messaging unavailable until the chat service is connected'}
+          placeholder={canSend ? `Message ${expert.name}` : chatAvailable ? 'This conversation is read-only' : 'Messaging unavailable until the chat service is connected'}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          disabled={!chatAvailable}
+          disabled={!canSend}
         />
-        <Button type="submit" variant="primary" icon={Send} loading={sending} disabled={!chatAvailable || draft.trim().length === 0} aria-label="Send message" />
+        <Button type="submit" variant="primary" icon={Send} loading={sending} disabled={!canSend || draft.trim().length === 0} aria-label="Send message" />
       </form>
     </section>
   );

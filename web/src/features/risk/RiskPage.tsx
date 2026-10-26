@@ -17,6 +17,7 @@ import { STATUS_META } from './limitStatus';
 import { parseDecimal } from './parse';
 import { ProfileForm } from './ProfileForm';
 import { ServerCrossCheck, ServerProfileBanner } from './ServerRisk';
+import { ServerRiskTemplates } from './ServerRiskTemplates';
 import { TradePlanner, type PlannerState } from './TradePlanner';
 
 const BINDING_LABEL: Record<LimitId, string> = {
@@ -226,6 +227,8 @@ export function RiskPage() {
           <ProfileForm />
         </section>
       </div>
+
+      {services.source === 'api' && <ServerRiskTemplates />}
 
       <p className="flex items-start gap-2 text-xs text-fg-3">
         <ShieldAlert aria-hidden className="mt-0.5 size-4 shrink-0" />

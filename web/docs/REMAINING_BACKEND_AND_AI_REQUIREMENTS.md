@@ -6,7 +6,7 @@ This lists what the web client needs that the backend in this repository (`backe
 
 Every capability the backend provided when this integration round started (`main` `5b91175`) is now connected in the web client (see `FINAL_RELEASE_READINESS_REPORT.md`).
 
-**New on `main` while this round ran.** `main` gained 77 commits on 26 October, now merged into the branch. **AI setups and the economic calendar are now connected** (the AI setups and Economic calendar pages). The rest of this table has no web screen:
+**New on `main` while this round ran.** `main` gained 77 commits on 26 October, now merged into the branch. **All of the capabilities in this table are now connected**: AI setups and Economic calendar pages, the data-health banner, and the cTrader feed in the admin console (Market data):
 
 | Capability | Endpoints | Notes |
 | --- | --- | --- |
@@ -194,6 +194,8 @@ These need short-lived single-use tokens, per-IP and per-email rate limits, and 
 **Needed:** seed or add the instruments, plus a collector (R4).
 
 ## Smaller backend observations (not blockers)
+
+- **Refunds:** the backend has no admin list of invoices, so the admin console refunds by invoice ID. An admin invoice list (`GET /admin/invoices?status=&user_id=`) would remove the copy-paste step.
 
 - **Expert signal feed** (`GET /experts/{id}/signals`): the response items are not described in the OpenAPI schema. The web renders them generically as key/value rows. A typed schema would allow a proper layout.
 - **Signal plans** (`GET /me/signal-plans`): `plan` is an untyped object in the schema, so the web shows it generically.
