@@ -1,0 +1,25 @@
+name: Site smoke check (temporary)
+on:
+  push:
+    branches: [claude/project-thread-22q8f1]
+    paths: ['.github/smoke/**', '.github/workflows/site-smoke.yml']
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: mkdir -p /tmp/s && cd /tmp/s && npm init -y >/dev/null && npm i playwright@1.48.2 && npx playwright install --with-deps chromium
+      - run: cp .github/smoke/site-smoke.mjs /tmp/s/ && cd /tmp/s && node site-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke
+          path: |
+            /tmp/s/smoke.json
+            /tmp/s/shots*.png
