@@ -121,6 +121,52 @@ asyncio.run(main())
 """
 
 
+# Three ma_crossover signals on BTC/USDT 1h (the demo candles): two whose 10-bar horizon has
+# closed, resolved in-process like the beat task (Predictions examples and the admin resolver
+# status), and one still open. Fixed params_hash: a re-run inserts nothing twice.
+SEED_PREDICTIONS = """
+import asyncio
+from datetime import UTC, datetime, timedelta
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from app.core.redis import get_redis
+from app.db.session import SessionLocal
+from app.models.instrument import Instrument
+from app.models.strategy import Signal, SignalSide
+from app.models.candle import Timeframe
+from app.services import market_service, prediction_resolver
+
+
+async def main():
+    async with SessionLocal() as session:
+        btc = await session.scalar(select(Instrument).where(Instrument.symbol == "BTC/USDT"))
+        now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+        bars = await market_service.candle_range(
+            session, btc.id, Timeframe.h1, now - timedelta(hours=72), now
+        )
+        picks = [(bars[0], "buy", 0.62), (bars[24], "sell", 0.48), (bars[-3], "buy", 0.71)]
+        for i, (bar, side, strength) in enumerate(picks):
+            await session.execute(
+                insert(Signal)
+                .values(
+                    instrument_id=btc.id, timeframe=Timeframe.h1, strategy_key="ma_crossover",
+                    params={"fast": 9, "slow": 21}, params_hash=f"postman-capture-{i}",
+                    bar_time=bar[0], side=SignalSide(side), strength=strength, price=float(bar[4]),
+                    reason="ema_cross_up" if side == "buy" else "ema_cross_down",
+                    details={"fast": 9, "slow": 21},
+                    created_at=bar[0] + timedelta(hours=1, seconds=4),
+                )
+                .on_conflict_do_nothing(constraint="uq_signals_bar")
+            )
+        await session.commit()
+    result = await prediction_resolver.run(SessionLocal, get_redis())
+    print(result.resolved, result.gaps)
+
+
+asyncio.run(main())
+"""
+
+
 def get_path(data: Any, path: str) -> Any:
     for part in path.split("."):
         if isinstance(data, list):
@@ -433,6 +479,13 @@ class Runner:
         # the user's AI requests (Risk Management) run before Admin → AI Engine stores the id
         self.vars["ai_setup_id"] = AI_SETUP_ID
 
+    def seed_predictions(self) -> None:
+        """Strategy signals for the Predictions examples, two of them resolved."""
+        out = subprocess.run(
+            [sys.executable, "-c", SEED_PREDICTIONS], cwd=BACKEND, capture_output=True, text=True
+        )
+        print(f"   predictions: {(out.stdout or out.stderr).strip()[-200:]}")
+
     def wait_backtest(self, var: str) -> None:
         for _ in range(60):
             res = self.http.get(
@@ -473,6 +526,7 @@ class Runner:
             headers=admin,
         ).raise_for_status()
         self.seed_ai_setup()
+        self.seed_predictions()
         users = self.http.get(
             "/api/v1/admin/users", params={"q": CAPTURE_EMAIL}, headers=admin
         ).json()

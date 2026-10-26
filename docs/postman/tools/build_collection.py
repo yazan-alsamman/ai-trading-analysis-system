@@ -618,6 +618,7 @@ RUNTIME_VARS = [
             "instrument_id",
             "admin_instrument_id",
             "user_strategy_id",
+            "prediction_id",
             "custom_strategy_id",
             "custom_strategy_key",
             "custom_strategy_version",

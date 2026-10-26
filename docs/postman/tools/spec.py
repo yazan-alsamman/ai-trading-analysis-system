@@ -357,6 +357,9 @@ if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
 SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
 if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
 
+SKIP_NO_PREDICTION = """// No prediction id yet (send List predictions first, or set prediction_id): skip.
+if (!pm.variables.get("prediction_id")) pm.execution.skipRequest();"""
+
 SKIP_NO_OUTBOX_ROW = """// No AI alert in the outbox yet (send Admin → AI Engine → List AI alert outbox first): skip.
 if (!pm.variables.get("ai_outbox_id")) pm.execution.skipRequest();"""
 
@@ -804,7 +807,8 @@ FOLDERS: list[Folder] = [
         "Strategies & Signals",
         "Global strategies (`libs/strategies`), per-user activations that the live signal "
         "engine runs on every closed bar, and the signals it produced.\n\n"
-        "* Catalog and preview: JWT or API key `strategies:read`; signals: `signals:read`.\n"
+        "* Catalog and preview: JWT or API key `strategies:read`; signals and predictions: "
+        "`signals:read`.\n"
         "* `/me/strategies`: JWT only.\n"
         "* A custom strategy works everywhere with the key `custom:<uuid>`.",
         [
@@ -928,6 +932,109 @@ FOLDERS: list[Folder] = [
                 "Stops the live strategy. Signals already produced are kept.",
                 path_vars={"user_strategy_id": ("{{user_strategy_id}}", "Activation UUID")},
                 expect=[204],
+            ),
+            Folder(
+                "Predictions",
+                "How accurate our predictions are (`docs/predictions.md`): every published prediction "
+                "with its outcome, and accuracy stats over them.\n\n"
+                "* Two sources in one shape: **AI setups** that reached ARMED (`source=ai`, id "
+                "`ai:<setup_id>`) and buy/sell **strategy signals** (`source=strategy`, id "
+                "`sig:<uuid>`).\n"
+                "* `outcome`: `open`, `tp_hit`, `sl_hit` or `expired`. A signal is resolved over the "
+                "next `PREDICTION_HORIZON_BARS` (10) bars of its timeframe: `tp_hit` when the move beats "
+                "the instrument's `cost_per_unit`, `sl_hit` otherwise, `expired` with a `note` over a "
+                "data gap (left out of the stats).\n"
+                "* JWT or API key `signals:read`. Rows you may not read (another user's private strategy) "
+                "are left out of lists, totals and stats.\n"
+                "* v1 has no model: `probability` is null, so `brier_score` is null and `calibration` "
+                "`[]`. The recorded stats include one setup of the ai-service contract's example, which "
+                "carries a probability.",
+                [
+                    Req(
+                        "predictions_list",
+                        "List predictions",
+                        "GET",
+                        "/predictions",
+                        "`{items, total}`, newest first (`generated_at`). Each item: `id`, `source`, "
+                        "`symbol`, `timeframe`, `strategy_key` (AI setups: their profile), `direction`, "
+                        "`probability`, `risk_reward` (AI: r multiple), `generated_at`, `resolved_at`, "
+                        "`outcome`, `realized_r` (AI), `return_pct` (signals: the move over the horizon, "
+                        "signed in the signal's direction, %), `model_version`, `taken_by_user` and "
+                        "`note`.",
+                        query=[("limit", "20", "1–200"), ("offset", "0", "")],
+                        optional_query=[
+                            ("source", "strategy", "ai | strategy"),
+                            ("instrument_id", "{{instrument_id}}", ""),
+                            ("timeframe", "1h", "AI setups: 15m"),
+                            ("strategy_key", "ma_crossover", "A strategy key, or an AI profile"),
+                            ("profile", "intraday", "AI setups only"),
+                            ("outcome", "tp_hit", "open | tp_hit | sl_hit | expired"),
+                            ("from", "2026-10-01T00:00:00Z", "generated_at >= from"),
+                            ("to", "2026-12-31T23:59:59Z", "generated_at <= to"),
+                        ],
+                        captures={"prediction_id": "items.1.id"},
+                        variants=[
+                            Variant("200 AI setups only", 200, query={"source": "ai"}),
+                            Variant("422 Unknown outcome", 422, query={"outcome": "won"}),
+                            Variant("422 limit above 200", 422, query={"limit": "500"}),
+                        ],
+                    ),
+                    Req(
+                        "predictions_stats",
+                        "Prediction accuracy stats",
+                        "GET",
+                        "/predictions/stats",
+                        "Accuracy over the same rows as the list, with the same filters, computed in "
+                        "SQL: `total`, `open`, `resolved`, `hit_rate` = tp_hit / (tp_hit + sl_hit) "
+                        "(expired rows are not in it), the counts per outcome, `excluded_count` (data "
+                        "gaps), `mean_realized_r` (AI), `mean_return_pct` (signals), `brier_score` and "
+                        "`calibration` (0.1 bins) over rows that have a probability, and `by_strategy`.",
+                        optional_query=[
+                            ("source", "strategy", "ai | strategy"),
+                            ("instrument_id", "{{instrument_id}}", ""),
+                            ("timeframe", "1h", "AI setups: 15m"),
+                            ("strategy_key", "ma_crossover", "A strategy key, or an AI profile"),
+                            ("profile", "intraday", "AI setups only"),
+                            ("outcome", "tp_hit", "open | tp_hit | sl_hit | expired"),
+                            ("from", "2026-10-01T00:00:00Z", "generated_at >= from"),
+                            ("to", "2026-12-31T23:59:59Z", "generated_at <= to"),
+                        ],
+                        variants=[
+                            Variant("200 Strategy signals only", 200, query={"source": "strategy"}),
+                        ],
+                    ),
+                    Req(
+                        "predictions_get",
+                        "Get prediction",
+                        "GET",
+                        "/predictions/:prediction_id",
+                        "One prediction with its details. A strategy signal adds `signal`: `bar_time`, "
+                        "`price` (the entry the outcome is measured from), `strength` (0..1, not a "
+                        "probability), `reason` and its `outcome` row (`horizon_bars`, `exit_ts`, "
+                        "`exit_price`, `return_pct`, `mfe_pct`, `mae_pct`, `correct`, `cost_per_unit`, "
+                        "`note`; null while open). An AI setup adds `ai`: `state`, `entry`, `sl`, `tp`, "
+                        "`grade`, `ev_r`, `valid_until` and its state `events`.\n\n"
+                        "404 when the id is unknown or not yours to read.",
+                        path_vars={
+                            "prediction_id": ("{{prediction_id}}", "ai:<setup_id> or sig:<uuid>")
+                        },
+                        pre=SKIP_NO_PREDICTION,
+                        variants=[
+                            Variant(
+                                "200 AI setup",
+                                200,
+                                path_vars={"prediction_id": "ai:{{ai_setup_id}}"},
+                            ),
+                            Variant(
+                                "404 Prediction not found",
+                                404,
+                                path_vars={
+                                    "prediction_id": "sig:00000000-0000-0000-0000-000000000000"
+                                },
+                            ),
+                        ],
+                    ),
+                ],
             ),
         ],
     ),
@@ -3645,7 +3752,8 @@ FOLDERS: list[Folder] = [
                 "AI Engine",
                 "What the backend stored from ai-service (`docs/ai-contract.md`): trade setups "
                 "with their state events, and the model registry. Read-only for setups; the "
-                "backend writes them from each evaluate response. User-facing reads come later.",
+                "backend writes them from each evaluate response. User-facing reads come later. "
+                "Also the resolver that scores strategy signals for Predictions.",
                 [
                     Req(
                         "admin_ai_setups",
@@ -3800,6 +3908,19 @@ FOLDERS: list[Folder] = [
                                 path_vars={"model_id": "unknown-model"},
                             )
                         ],
+                    ),
+                    Req(
+                        "admin_predictions_resolver",
+                        "Prediction resolver status",
+                        "GET",
+                        "/admin/predictions/resolver",
+                        "The `predictions.resolve_signals` beat task (maintenance queue, every "
+                        "`PREDICTION_RESOLVE_INTERVAL_SECONDS`): the settings in use "
+                        "(`horizon_bars`, `batch`, `interval_seconds`), its last run (`last_run_at`, "
+                        "`last_status`, `last_resolved`, `last_gaps`, `last_waiting` for the market "
+                        "to reopen, `last_duration_ms`, `last_error` and `last_error_at`), "
+                        "`backlog` (signals without an outcome) and `resolved_total`.",
+                        auth="admin",
                     ),
                 ],
             ),
