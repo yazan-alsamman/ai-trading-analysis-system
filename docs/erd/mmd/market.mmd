@@ -52,6 +52,19 @@ erDiagram
         jsonb details
         timestamptz created_at
     }
+    signal_outcomes {
+        uuid signal_id PK, FK
+        int horizon_bars
+        timestamptz exit_ts
+        double exit_price
+        double return_pct
+        double mfe_pct
+        double mae_pct
+        bool correct
+        double cost_per_unit
+        varchar note
+        timestamptz resolved_at
+    }
     price_alerts {
         uuid id PK
         uuid user_id FK
@@ -105,4 +118,5 @@ erDiagram
     candles_1m }o--|| instruments : "instrument_id"
     price_alerts }o--|| instruments : "instrument_id"
     price_alerts }o--|| users : "user_id"
+    signal_outcomes |o--|| signals : "signal_id"
     signals }o--|| instruments : "instrument_id"

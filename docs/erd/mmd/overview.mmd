@@ -11,6 +11,7 @@ flowchart LR
         instruments[instruments]
         candles_1m[candles_1m]
         signals[signals]
+        signal_outcomes[signal_outcomes]
         price_alerts[price_alerts]
         economic_events[economic_events]
         feed_credentials[feed_credentials]
@@ -115,6 +116,7 @@ flowchart LR
     price_alerts -.-> users
     refresh_tokens -.-> users
     risk_profiles -.-> users
+    signal_outcomes --> signals
     signal_plans --> signals
     signal_plans --> user_strategies
     signal_plans -.-> users

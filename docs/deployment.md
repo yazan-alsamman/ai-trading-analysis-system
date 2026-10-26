@@ -349,3 +349,9 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
 ## فلتر الدرجة في تنبيهات AI (B11b)
 - إعداد جديد `AI_GRADES_ENABLED=false` (في `.env.example`، يصل في النشر التالي). في v1 لا يُرجع ai-service درجات (`grade` دائماً null)، فلا يُطبَّق `min_grade` ويصل تنبيه ARMED لكل متابع. `min_grade` يبقى محفوظاً كما هو.
 - يُفعَّل (`true`) فقط حين يُرجع ai-service درجات، ثم إعادة تشغيل `worker` و`backend`. بلا migration وبلا خدمة جديدة.
+
+## تتبع دقة التوقعات (Y16)
+- Migration **0022** إضافية فقط: جدول جديد `signal_outcomes` مع فهرس على `resolved_at`، ولا تغيّر أي جدول موجود.
+- إعدادات جديدة في `.env.example`: `PREDICTION_HORIZON_BARS=10`، `PREDICTION_RESOLVE_INTERVAL_SECONDS=300`، `PREDICTION_RESOLVE_BATCH=500`.
+- مهمة beat جديدة `predictions.resolve_signals` على طابور `maintenance` (أي `worker-backtest`، وليس `worker` الحي). بلا خدمة جديدة. كل تشغيل يحسم 500 إشارة كحد أقصى ويقرأ شموع أفقها فقط، فتُحسم الإشارات القديمة تدريجياً.
+- فحص بعد النشر: `GET /api/v1/admin/predictions/resolver` (آخر تشغيل والمتبقي `backlog`) و`GET /api/v1/predictions/stats`. التفاصيل في docs/predictions.md.

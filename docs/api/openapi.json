@@ -16722,6 +16722,626 @@
           }
         ]
       }
+    },
+    "/api/v1/predictions": {
+      "get": {
+        "tags": [
+          "predictions"
+        ],
+        "summary": "List Predictions",
+        "description": "Every published prediction you may read with its outcome, newest first: AI setups that\nreached ARMED (``source=ai``) and buy/sell strategy signals (``source=strategy``).\n``outcome``: ``open``, ``tp_hit``, ``sl_hit`` or ``expired`` (rules in\ndocs/predictions.md).",
+        "operationId": "predictions_list_predictions",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ai",
+                    "strategy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "name": "instrument_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 8
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Timeframe"
+            }
+          },
+          {
+            "name": "strategy_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "a strategy key, or an AI profile",
+              "title": "Strategy Key"
+            },
+            "description": "a strategy key, or an AI profile"
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI setups only",
+              "title": "Profile"
+            },
+            "description": "AI setups only"
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "tp_hit",
+                    "sl_hit",
+                    "expired",
+                    "open"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "generated_at >= from",
+              "title": "From"
+            },
+            "description": "generated_at >= from"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "generated_at <= to",
+              "title": "To"
+            },
+            "description": "generated_at <= to"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          },
+          {
+            "ApiKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/predictions/stats": {
+      "get": {
+        "tags": [
+          "predictions"
+        ],
+        "summary": "Prediction Stats",
+        "description": "Accuracy over the same rows as the list (same filters): counts, ``hit_rate`` =\ntp_hit / (tp_hit + sl_hit) (expired and data-gap rows are not in it), mean realized R (AI)\nand mean return % (signals), and, over rows that have a probability, the Brier score and a\n0.1-bin calibration. v1 has no probabilities: ``brier_score`` null, ``calibration`` [].",
+        "operationId": "predictions_prediction_stats",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ai",
+                    "strategy"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "name": "instrument_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Instrument Id"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 8
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Timeframe"
+            }
+          },
+          {
+            "name": "strategy_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "a strategy key, or an AI profile",
+              "title": "Strategy Key"
+            },
+            "description": "a strategy key, or an AI profile"
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI setups only",
+              "title": "Profile"
+            },
+            "description": "AI setups only"
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "tp_hit",
+                    "sl_hit",
+                    "expired",
+                    "open"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "generated_at >= from",
+              "title": "From"
+            },
+            "description": "generated_at >= from"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "generated_at <= to",
+              "title": "To"
+            },
+            "description": "generated_at <= to"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionStats"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          },
+          {
+            "ApiKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/predictions/{prediction_id}": {
+      "get": {
+        "tags": [
+          "predictions"
+        ],
+        "summary": "Get Prediction",
+        "description": "One prediction (``ai:<setup_id>`` or ``sig:<uuid>``) with its details: the AI setup's\nprices and state events, or the signal with its outcome row (MFE/MAE). 404 when unknown or\nnot yours to read.",
+        "operationId": "predictions_get_prediction",
+        "parameters": [
+          {
+            "name": "prediction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 140,
+              "title": "Prediction Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          },
+          {
+            "ApiKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/predictions/resolver": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Resolver Status",
+        "description": "The ``predictions.resolve_signals`` task: its last run (resolved, gaps, signals waiting\nfor the market to reopen, duration, error) and the backlog of signals without an outcome.",
+        "operationId": "admin_resolver_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolverStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -16921,6 +17541,106 @@
           "notes"
         ],
         "title": "AIModelRead"
+      },
+      "AIPredictionDetail": {
+        "properties": {
+          "setup_id": {
+            "type": "string",
+            "title": "Setup Id"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "entry": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry"
+          },
+          "sl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sl"
+          },
+          "tp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tp"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "ev_r": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ev R"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/PredictionEvent"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "state events, oldest first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setup_id",
+          "state",
+          "entry",
+          "sl",
+          "tp",
+          "grade",
+          "ev_r",
+          "valid_until",
+          "events"
+        ],
+        "title": "AIPredictionDetail"
       },
       "AIRiskRead": {
         "properties": {
@@ -19382,6 +20102,42 @@
           "body"
         ],
         "title": "BroadcastRequest"
+      },
+      "CalibrationBin": {
+        "properties": {
+          "from": {
+            "type": "number",
+            "title": "From",
+            "description": "inclusive"
+          },
+          "to": {
+            "type": "number",
+            "title": "To",
+            "description": "exclusive (1.0 inclusive in the last bin)"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "mean_predicted": {
+            "type": "number",
+            "title": "Mean Predicted"
+          },
+          "observed_rate": {
+            "type": "number",
+            "title": "Observed Rate",
+            "description": "share of tp_hit in the bin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "count",
+          "mean_predicted",
+          "observed_rate"
+        ],
+        "title": "CalibrationBin"
       },
       "CandleBatch": {
         "properties": {
@@ -25369,6 +26125,573 @@
         ],
         "title": "PostVisibility"
       },
+      "PredictionDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "``ai:<setup_id>`` or ``sig:<signal uuid>``"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "strategy"
+            ],
+            "title": "Source"
+          },
+          "instrument_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Instrument Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "timeframe": {
+            "type": "string",
+            "title": "Timeframe",
+            "description": "the signal's timeframe; AI setups: 15m (the decision bar)"
+          },
+          "strategy_key": {
+            "type": "string",
+            "title": "Strategy Key",
+            "description": "the strategy key; AI setups: their profile"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Direction"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability",
+            "description": "0..1, AI setups only (null in v1: no model). Strategy signals: null, their strength is not a probability"
+          },
+          "risk_reward": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Reward",
+            "description": "AI setups: r_multiple; signals: null"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "AI: when it was first published (ARMED); signals: when it was stored"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "tp_hit",
+              "sl_hit",
+              "expired",
+              "open"
+            ],
+            "title": "Outcome"
+          },
+          "realized_r": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized R",
+            "description": "AI setups only"
+          },
+          "return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct",
+            "description": "signals only: the move over the horizon in %, signed in the signal's direction"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "taken_by_user": {
+            "type": "boolean",
+            "title": "Taken By User",
+            "description": "you marked this AI setup taken"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "signals resolved over a data gap: why there is no result (outcome expired, left out of the stats)"
+          },
+          "ai": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AIPredictionDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignalPredictionDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "instrument_id",
+          "symbol",
+          "timeframe",
+          "strategy_key",
+          "direction",
+          "probability",
+          "risk_reward",
+          "generated_at",
+          "resolved_at",
+          "outcome",
+          "realized_r",
+          "return_pct",
+          "model_version",
+          "taken_by_user",
+          "note"
+        ],
+        "title": "PredictionDetail"
+      },
+      "PredictionEvent": {
+        "properties": {
+          "from_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From State"
+          },
+          "to_state": {
+            "type": "string",
+            "title": "To State"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "realized_r": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized R"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_state",
+          "to_state",
+          "at",
+          "reason",
+          "realized_r"
+        ],
+        "title": "PredictionEvent"
+      },
+      "PredictionPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PredictionRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PredictionPage"
+      },
+      "PredictionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "``ai:<setup_id>`` or ``sig:<signal uuid>``"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "strategy"
+            ],
+            "title": "Source"
+          },
+          "instrument_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Instrument Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "timeframe": {
+            "type": "string",
+            "title": "Timeframe",
+            "description": "the signal's timeframe; AI setups: 15m (the decision bar)"
+          },
+          "strategy_key": {
+            "type": "string",
+            "title": "Strategy Key",
+            "description": "the strategy key; AI setups: their profile"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Direction"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability",
+            "description": "0..1, AI setups only (null in v1: no model). Strategy signals: null, their strength is not a probability"
+          },
+          "risk_reward": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Reward",
+            "description": "AI setups: r_multiple; signals: null"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "AI: when it was first published (ARMED); signals: when it was stored"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "tp_hit",
+              "sl_hit",
+              "expired",
+              "open"
+            ],
+            "title": "Outcome"
+          },
+          "realized_r": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized R",
+            "description": "AI setups only"
+          },
+          "return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct",
+            "description": "signals only: the move over the horizon in %, signed in the signal's direction"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "taken_by_user": {
+            "type": "boolean",
+            "title": "Taken By User",
+            "description": "you marked this AI setup taken"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "signals resolved over a data gap: why there is no result (outcome expired, left out of the stats)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "instrument_id",
+          "symbol",
+          "timeframe",
+          "strategy_key",
+          "direction",
+          "probability",
+          "risk_reward",
+          "generated_at",
+          "resolved_at",
+          "outcome",
+          "realized_r",
+          "return_pct",
+          "model_version",
+          "taken_by_user",
+          "note"
+        ],
+        "title": "PredictionRead"
+      },
+      "PredictionStats": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "open + resolved (rows with a data gap are left out)"
+          },
+          "resolved": {
+            "type": "integer",
+            "title": "Resolved",
+            "description": "tp_hit + sl_hit + expired"
+          },
+          "open": {
+            "type": "integer",
+            "title": "Open"
+          },
+          "hit_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Rate",
+            "description": "tp_hit / (tp_hit + sl_hit); null when none"
+          },
+          "tp_hit_count": {
+            "type": "integer",
+            "title": "Tp Hit Count"
+          },
+          "sl_hit_count": {
+            "type": "integer",
+            "title": "Sl Hit Count"
+          },
+          "expired_count": {
+            "type": "integer",
+            "title": "Expired Count"
+          },
+          "excluded_count": {
+            "type": "integer",
+            "title": "Excluded Count",
+            "description": "signals resolved over a data gap (not counted)"
+          },
+          "mean_realized_r": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Realized R",
+            "description": "AI setups, tp_hit and sl_hit"
+          },
+          "mean_return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Return Pct",
+            "description": "strategy signals, tp_hit and sl_hit"
+          },
+          "with_probability": {
+            "type": "integer",
+            "title": "With Probability",
+            "description": "decided rows that have a probability"
+          },
+          "mean_predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Predicted"
+          },
+          "brier_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brier Score",
+            "description": "null without probabilities (v1)"
+          },
+          "calibration": {
+            "items": {
+              "$ref": "#/components/schemas/CalibrationBin"
+            },
+            "type": "array",
+            "title": "Calibration",
+            "description": "non-empty 0.1 bins; [] in v1"
+          },
+          "by_strategy": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyStats"
+            },
+            "type": "array",
+            "title": "By Strategy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "resolved",
+          "open",
+          "hit_rate",
+          "tp_hit_count",
+          "sl_hit_count",
+          "expired_count",
+          "excluded_count",
+          "mean_realized_r",
+          "mean_return_pct",
+          "with_probability",
+          "mean_predicted",
+          "brier_score",
+          "calibration",
+          "by_strategy"
+        ],
+        "title": "PredictionStats"
+      },
       "PreferencesIn": {
         "properties": {
           "matrix": {
@@ -26569,6 +27892,144 @@
         ],
         "title": "ReportTarget"
       },
+      "ResolverStatus": {
+        "properties": {
+          "horizon_bars": {
+            "type": "integer",
+            "title": "Horizon Bars",
+            "description": "PREDICTION_HORIZON_BARS now"
+          },
+          "batch": {
+            "type": "integer",
+            "title": "Batch",
+            "description": "PREDICTION_RESOLVE_BATCH now"
+          },
+          "interval_seconds": {
+            "type": "integer",
+            "title": "Interval Seconds"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "error"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status"
+          },
+          "last_resolved": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Resolved"
+          },
+          "last_gaps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Gaps"
+          },
+          "last_waiting": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Waiting"
+          },
+          "last_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Duration Ms"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_error_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error At"
+          },
+          "backlog": {
+            "type": "integer",
+            "title": "Backlog",
+            "description": "signals without an outcome yet (due or not)"
+          },
+          "resolved_total": {
+            "type": "integer",
+            "title": "Resolved Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "horizon_bars",
+          "batch",
+          "interval_seconds",
+          "last_run_at",
+          "last_status",
+          "last_resolved",
+          "last_gaps",
+          "last_waiting",
+          "last_duration_ms",
+          "last_error",
+          "last_error_at",
+          "backlog",
+          "resolved_total"
+        ],
+        "title": "ResolverStatus"
+      },
       "RiskProfileRead": {
         "properties": {
           "account_size": {
@@ -27214,6 +28675,119 @@
         "title": "SharedWorkspaceRead",
         "description": "A shared workspace as other users see it: no workspace or user ids."
       },
+      "SignalOutcomeRead": {
+        "properties": {
+          "horizon_bars": {
+            "type": "integer",
+            "title": "Horizon Bars"
+          },
+          "exit_ts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Ts"
+          },
+          "exit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Price"
+          },
+          "return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct"
+          },
+          "mfe_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mfe Pct",
+            "description": "best move in the signal's direction, in %"
+          },
+          "mae_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mae Pct",
+            "description": "worst move (negative: against the signal), in %"
+          },
+          "correct": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct",
+            "description": "null: a data gap in the horizon"
+          },
+          "cost_per_unit": {
+            "type": "number",
+            "title": "Cost Per Unit",
+            "description": "the instrument's fixed cost used (0: none)"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Resolved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "horizon_bars",
+          "exit_ts",
+          "exit_price",
+          "return_pct",
+          "mfe_pct",
+          "mae_pct",
+          "correct",
+          "cost_per_unit",
+          "note",
+          "resolved_at"
+        ],
+        "title": "SignalOutcomeRead"
+      },
       "SignalPlanRead": {
         "properties": {
           "id": {
@@ -27256,6 +28830,55 @@
           "signal"
         ],
         "title": "SignalPlanRead"
+      },
+      "SignalPredictionDetail": {
+        "properties": {
+          "signal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Signal Id"
+          },
+          "bar_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Bar Time"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price",
+            "description": "the entry the outcome is measured from"
+          },
+          "strength": {
+            "type": "number",
+            "title": "Strength",
+            "description": "0..1 signal strength (not a probability)"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignalOutcomeRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null while open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "signal_id",
+          "bar_time",
+          "price",
+          "strength",
+          "reason",
+          "outcome"
+        ],
+        "title": "SignalPredictionDetail"
       },
       "SignalRead": {
         "properties": {
@@ -27640,6 +29263,50 @@
           "updated_at"
         ],
         "title": "StrategyRef"
+      },
+      "StrategyStats": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "strategy"
+            ],
+            "title": "Source"
+          },
+          "strategy_key": {
+            "type": "string",
+            "title": "Strategy Key"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "resolved": {
+            "type": "integer",
+            "title": "Resolved"
+          },
+          "hit_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "strategy_key",
+          "total",
+          "resolved",
+          "hit_rate"
+        ],
+        "title": "StrategyStats"
       },
       "SubscriptionRead": {
         "properties": {

@@ -206,6 +206,35 @@ A signal produced by the live engine for one strategy setup on one closed bar.
 
 - `ix_signals_market_time` (signals.instrument_id, signals.timeframe, bar_time DESC)
 
+### `signal_outcomes`
+
+A buy/sell signal resolved ``horizon_bars`` closed bars after its bar by the ``predictions.resolve_signals`` task (one row per signal, never rewritten).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `signal_id` | uuid | no |  | PK, FK |
+| `horizon_bars` | integer | no |  |  |
+| `exit_ts` | timestamp with time zone | yes |  |  |
+| `exit_price` | double precision | yes |  |  |
+| `return_pct` | double precision | yes |  |  |
+| `mfe_pct` | double precision | yes |  |  |
+| `mae_pct` | double precision | yes |  |  |
+| `correct` | boolean | yes |  |  |
+| `cost_per_unit` | double precision | no |  |  |
+| `note` | varchar(200) | yes |  |  |
+| `resolved_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (signal_id)
+- FK (signal_id) → signals (id) ON DELETE CASCADE
+- CHECK `ck_signal_outcomes_cost`: `cost_per_unit >= 0`
+- CHECK `ck_signal_outcomes_horizon`: `horizon_bars > 0`
+
+**Indexes**
+
+- `ix_signal_outcomes_resolved_at` (signal_outcomes.resolved_at)
+
 ### `price_alerts`
 
 A user's alert on an instrument's price, checked on every closed 1m bar.
