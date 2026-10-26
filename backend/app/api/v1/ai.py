@@ -115,7 +115,8 @@ async def untake_setup(setup_id: SetupId, user: CurrentUser, session: SessionDep
 
 @router.get("/me/ai/follows", response_model=list[FollowRead])
 async def my_ai_follows(user: CurrentUser, session: SessionDep):
-    """The instruments and profiles whose ARMED setups you are alerted about."""
+    """The instruments and profiles whose ARMED setups you are alerted about
+    (``min_grade_active``: whether ``min_grade`` is applied now; false in v1)."""
     return await follows.list_follows(session, user)
 
 
@@ -129,7 +130,12 @@ async def follow_ai_setups(
 ):
     """Alert me when a setup of this instrument and profile becomes ARMED (optionally only
     from ``min_grade``). Idempotent: calling it again only changes ``min_grade``. 404 unknown
-    instrument, 422 unknown profile. After ARMED you hear about a setup only if you took it."""
+    instrument, 422 unknown profile. After ARMED you hear about a setup only if you took it.
+
+    ``min_grade`` is always accepted and stored, but applied only while grades are enabled:
+    the response's ``min_grade_active`` says which. In v1 (rules only, no model) every grade is
+    null, so ``min_grade_active`` is false and every follower gets every ARMED alert; show
+    "grade filter available when grades are enabled"."""
     data = data or FollowIn()
     return await follows.follow(session, user, instrument_id, profile, data.min_grade)
 

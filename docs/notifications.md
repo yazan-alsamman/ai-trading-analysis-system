@@ -314,7 +314,7 @@ ACTIVE, CLOSED, EXPIRED and INVALIDATED. B11 tells users about the state changes
 
 | State | Recipients |
 |---|---|
-| `ARMED` (also a setup born ARMED) | active users who **follow** the setup's instrument and profile, whose `min_grade` the setup meets (A best; a follow without `min_grade` takes every grade), and who may read it (`may_read_ai_setup`) |
+| `ARMED` (also a setup born ARMED) | active users who **follow** the setup's instrument and profile, whose `min_grade` the setup meets (A best; a follow without `min_grade` takes every grade), and who may read it (`may_read_ai_setup`). **While `AI_GRADES_ENABLED=false`** (the default: v1 returns no grades) `min_grade` is not applied: every follower, as with no minimum |
 | `ACTIVE`, `CLOSED`, `EXPIRED`, `INVALIDATED` | only the users who **took** the setup (`POST /ai/setups/{id}/take`) |
 | `DEVELOPING` | nobody, never |
 
@@ -376,6 +376,10 @@ A follower who did not take a setup hears nothing after ARMED.
 |---|---|---|
 | GET | `/me/ai/follows` | your follows |
 | PUT | `/me/ai/follows/{instrument_id}/{profile}` | body `{min_grade?}` (`A`–`D`); idempotent upsert, 200; 404 unknown instrument, 422 unknown profile (today: `intraday`) |
+
+Each follow in a response has `min_grade_active` (= `AI_GRADES_ENABLED`): whether `min_grade`
+filters the alerts now. In v1 it is `false`: `min_grade` is still accepted and stored, and
+applies once grades are enabled.
 | DELETE | `/me/ai/follows/{instrument_id}/{profile}` | 204; 404 when not followed |
 
 There is **no automatic follow**: a user gets ARMED alerts only after following.
@@ -386,7 +390,8 @@ There is **no automatic follow**: a user gets ARMED alerts only after following.
   switch.
   - It calls `PUT /me/ai/follows/{instrument_id}/intraday`, and DELETE to turn it off.
   - Offer an optional "only grade A / A–B" choice as `min_grade`, and read the state with
-    `GET /me/ai/follows`.
+    `GET /me/ai/follows`. While `min_grade_active` is false (v1), show it as "grade filter
+    available when grades are enabled" (Arabic: "فلتر الدرجة متاح عند تفعيل الدرجات").
 - **After ARMED:** remind users that they hear about a setup only if they mark it taken
   (`POST /ai/setups/{id}/take`).
 - **Live screen:** subscribe to `ai_setups` with the instrument.

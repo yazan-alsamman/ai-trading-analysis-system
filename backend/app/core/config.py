@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     ai_alerts_max_attempts: int = 8  # then the row is failed (admin retry)
     ai_alerts_max_age_seconds: int = 900  # an older ARMED alert is skipped (stale)
     ai_explain_langs: str = "ar,en"  # explanations asked of ai-service on ARMED
+    # a follow's min_grade is applied to ARMED alerts only when this is on. v1 (contract 0.2.1)
+    # has no model and every grade is null, so it is off: every follower gets the alert. Turn
+    # it on only when ai-service returns grades
+    ai_grades_enabled: bool = False
     # Deliveries a lost send task left pending are sent again after this (notifications.sweep)
     notification_sweep_after_seconds: int = 120
     notification_sweep_batch: int = 500

@@ -190,6 +190,9 @@ carries about 3,000 bars.
   row's `detail.versions.model` and each setup's `model_version` are null, and no model row is
   added. Readers show a null score as "not available", never as 0: the API returns `null`,
   and the ARMED alert says "Probability n/a" (Arabic: "الاحتمال غير متاح").
+  A follow's `min_grade` is not applied while `AI_GRADES_ENABLED=false` (the default; B11b):
+  every follower gets every ARMED alert, the stored `min_grade` is kept, and follow responses
+  say `min_grade_active: false`. Turn the setting on only when ai-service returns grades.
   3. **New `setup_id`s** in `new_setups`: a row in `ai_setups` and a first event `null →
      state`, where the state is the **start of its history** in `transitions` (or its current
      state without history), at its **`created_at`** when ai-service sends it, else at
@@ -385,7 +388,7 @@ fails the run):
 
 1. `alerts.kick()`: the outbox rows are sent now rather than within 30 s;
 2. sizes (B10) of the **followers** of each setup that became ARMED (who follow its
-   instrument and profile, meet `min_grade`, may read it) and of the **takers** of each setup
+   instrument and profile, meet `min_grade` while `AI_GRADES_ENABLED`, may read it) and of the **takers** of each setup
    that became ACTIVE; stored, the alerts reuse them;
 3. one `ai.explain` per newly ARMED setup and `AI_EXPLAIN_LANGS` language.
 

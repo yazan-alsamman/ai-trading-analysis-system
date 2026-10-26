@@ -2354,7 +2354,9 @@ paths:
       tags:
       - ai
       summary: My Ai Follows
-      description: The instruments and profiles whose ARMED setups you are alerted about.
+      description: 'The instruments and profiles whose ARMED setups you are alerted about
+
+        (``min_grade_active``: whether ``min_grade`` is applied now; false in v1).'
       operationId: ai_my_ai_follows
       responses:
         '200':
@@ -2395,7 +2397,16 @@ paths:
 
         from ``min_grade``). Idempotent: calling it again only changes ``min_grade``. 404 unknown
 
-        instrument, 422 unknown profile. After ARMED you hear about a setup only if you took it.'
+        instrument, 422 unknown profile. After ARMED you hear about a setup only if you took it.
+
+
+        ``min_grade`` is always accepted and stored, but applied only while grades are enabled:
+
+        the response''s ``min_grade_active`` says which. In v1 (rules only, no model) every grade is
+
+        null, so ``min_grade_active`` is false and every follower gets every ARMED alert; show
+
+        "grade filter available when grades are enabled".'
       operationId: ai_follow_ai_setups
       parameters:
       - name: instrument_id
@@ -13565,7 +13576,8 @@ components:
             - D
           - type: 'null'
           title: Min Grade
-          description: 'only setups of this grade or better (A best); null: all'
+          description: 'only setups of this grade or better (A best); null: all. Stored always, applied
+            only while grades are enabled (see min_grade_active)'
       additionalProperties: false
       type: object
       title: FollowIn
@@ -18603,12 +18615,20 @@ components:
           type: string
           format: date-time
           title: Created At
+        min_grade_active:
+          type: boolean
+          title: Min Grade Active
+          description: 'whether min_grade filters the alerts now (AI_GRADES_ENABLED). False in v1: ai-service
+            returns no grades, every follower gets every ARMED alert and min_grade is kept for when grades
+            are enabled'
+          readOnly: true
       type: object
       required:
       - instrument_id
       - profile
       - min_grade
       - created_at
+      - min_grade_active
       title: FollowRead
     app__schemas__backtests__InstrumentRef:
       properties:

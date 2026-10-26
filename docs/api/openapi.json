@@ -3734,7 +3734,7 @@
           "ai"
         ],
         "summary": "My Ai Follows",
-        "description": "The instruments and profiles whose ARMED setups you are alerted about.",
+        "description": "The instruments and profiles whose ARMED setups you are alerted about\n(``min_grade_active``: whether ``min_grade`` is applied now; false in v1).",
         "operationId": "ai_my_ai_follows",
         "responses": {
           "200": {
@@ -3795,7 +3795,7 @@
           "ai"
         ],
         "summary": "Follow Ai Setups",
-        "description": "Alert me when a setup of this instrument and profile becomes ARMED (optionally only\nfrom ``min_grade``). Idempotent: calling it again only changes ``min_grade``. 404 unknown\ninstrument, 422 unknown profile. After ARMED you hear about a setup only if you took it.",
+        "description": "Alert me when a setup of this instrument and profile becomes ARMED (optionally only\nfrom ``min_grade``). Idempotent: calling it again only changes ``min_grade``. 404 unknown\ninstrument, 422 unknown profile. After ARMED you hear about a setup only if you took it.\n\n``min_grade`` is always accepted and stored, but applied only while grades are enabled:\nthe response's ``min_grade_active`` says which. In v1 (rules only, no model) every grade is\nnull, so ``min_grade_active`` is false and every follower gets every ARMED alert; show\n\"grade filter available when grades are enabled\".",
         "operationId": "ai_follow_ai_setups",
         "parameters": [
           {
@@ -21695,7 +21695,7 @@
               }
             ],
             "title": "Min Grade",
-            "description": "only setups of this grade or better (A best); null: all"
+            "description": "only setups of this grade or better (A best); null: all. Stored always, applied only while grades are enabled (see min_grade_active)"
           }
         },
         "additionalProperties": false,
@@ -29222,6 +29222,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "min_grade_active": {
+            "type": "boolean",
+            "title": "Min Grade Active",
+            "description": "whether min_grade filters the alerts now (AI_GRADES_ENABLED). False in v1: ai-service returns no grades, every follower gets every ARMED alert and min_grade is kept for when grades are enabled",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -29229,7 +29235,8 @@
           "instrument_id",
           "profile",
           "min_grade",
-          "created_at"
+          "created_at",
+          "min_grade_active"
         ],
         "title": "FollowRead"
       },

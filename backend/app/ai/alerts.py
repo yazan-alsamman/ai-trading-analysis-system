@@ -75,11 +75,20 @@ def meets_grade(grade: str | None, min_grade: str | None) -> bool:
     return GRADES.index(grade) <= GRADES.index(min_grade)
 
 
+def min_grade_active() -> bool:
+    """Whether follows' ``min_grade`` is applied (``AI_GRADES_ENABLED``). Off in v1: the rules
+    run without a model and every grade is null, so a minimum would silence every alert; the
+    follower's choice stays stored and applies once grades are turned on."""
+    return get_settings().ai_grades_enabled
+
+
 async def recipients(session: AsyncSession, setup: AISetup, to_state: str) -> list[User]:
     """Who is told about a state change:
 
     - ``ARMED`` (also a setup born ARMED): the active users who follow the setup's instrument
-      and profile, whose ``min_grade`` the setup meets, and who may read it;
+      and profile, whose ``min_grade`` the setup meets, and who may read it. While
+      ``AI_GRADES_ENABLED`` is off (v1: no grades) ``min_grade`` is not applied: every
+      follower, as with no minimum;
     - ``ACTIVE``, ``CLOSED``, ``EXPIRED``, ``INVALIDATED``: only the users who took it.
 
     Followers who did not take a setup hear nothing after ARMED."""
@@ -94,10 +103,11 @@ async def recipients(session: AsyncSession, setup: AISetup, to_state: str) -> li
             )
             .order_by(User.id)
         )
+        graded = min_grade_active()
         return [
             user
             for user, min_grade in rows.all()
-            if meets_grade(setup.grade, min_grade)
+            if (not graded or meets_grade(setup.grade, min_grade))
             and strategy_resolver.may_read_ai_setup(user, setup)
         ]
     users = await session.scalars(

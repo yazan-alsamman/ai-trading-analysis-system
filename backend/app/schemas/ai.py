@@ -2,9 +2,10 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.ai.contract import SetupState
+from app.core.config import get_settings
 
 
 class AISetupRead(BaseModel):
@@ -94,7 +95,9 @@ class FollowIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     min_grade: Literal["A", "B", "C", "D"] | None = Field(
-        default=None, description="only setups of this grade or better (A best); null: all"
+        default=None,
+        description="only setups of this grade or better (A best); null: all. Stored always, "
+        "applied only while grades are enabled (see min_grade_active)",
     )
 
 
@@ -105,6 +108,15 @@ class FollowRead(BaseModel):
     profile: str
     min_grade: str | None
     created_at: datetime
+
+    @computed_field(
+        description="whether min_grade filters the alerts now (AI_GRADES_ENABLED). False in v1: "
+        "ai-service returns no grades, every follower gets every ARMED alert and min_grade is "
+        "kept for when grades are enabled"
+    )
+    @property
+    def min_grade_active(self) -> bool:
+        return get_settings().ai_grades_enabled
 
 
 class TakeIn(BaseModel):

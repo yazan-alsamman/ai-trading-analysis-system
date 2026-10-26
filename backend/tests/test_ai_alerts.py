@@ -232,8 +232,9 @@ async def test_outbox_rolls_back_with_the_evaluation(
 
 async def test_armed_goes_to_matching_followers(
     session: AsyncSession, session_factory, redis_client, gold, make_user, fake, channels,
-    notification_queue,
+    notification_queue, monkeypatch: pytest.MonkeyPatch,
 ) -> None:  # fmt: skip
+    monkeypatch.setattr(get_settings(), "ai_grades_enabled", True)  # min_grade applied
     picky = await user_with_targets(make_user, session, "picky@example.com", chat=11)
     keen = await user_with_targets(make_user, session, "keen@example.com", chat=12)
     await user_with_targets(make_user, session, "outsider@example.com", chat=13)
@@ -268,6 +269,44 @@ async def test_armed_goes_to_matching_followers(
     [(sent, _)] = notification_queue
     assert len(sent) == 2  # both enqueued after the commit
     assert fake.count("/v1/size") == 1 and fake.count("/v1/explain") == 1
+
+
+def test_meets_grade_table() -> None:
+    """Unchanged by AI_GRADES_ENABLED: A best, no minimum takes every grade (none too), a null
+    grade meets no minimum."""
+    assert alerts.meets_grade("A", "B") and alerts.meets_grade("B", "B")
+    assert not alerts.meets_grade("C", "B") and not alerts.meets_grade("D", "A")
+    assert alerts.meets_grade(None, None) and alerts.meets_grade("D", None)
+    assert not alerts.meets_grade(None, "B") and not alerts.meets_grade(None, "D")
+
+
+@pytest.mark.parametrize("grades", [False, True])
+async def test_min_grade_while_grades_are_off(
+    session: AsyncSession, session_factory, redis_client, gold, make_user, fake, channels,
+    monkeypatch: pytest.MonkeyPatch, grades: bool,
+) -> None:  # fmt: skip
+    """v1 (B11b): every grade is null. Off (the default): min_grade is not applied, both
+    followers get the alert; on: as before, a null grade does not meet "A"."""
+    assert get_settings().ai_grades_enabled is False  # the default
+    monkeypatch.setattr(get_settings(), "ai_grades_enabled", grades)
+    picky = await user_with_targets(make_user, session, "picky@example.com", chat=31)
+    plain = await user_with_targets(make_user, session, "plain@example.com", chat=32)
+    await follow(session, picky, gold, min_grade="A")
+    await follow(session, plain, gold)
+    await new_setups(session, gold, armed("xau-1", grade=None))
+    setup_row = await session.get(AISetup, "xau-1")
+    assert setup_row.grade is None
+
+    assert await dispatch(session_factory, redis_client, fake) == {"done": 1}
+    told = sorted(n.user_id for n in await inbox(session))
+    assert told == (sorted([picky.id, plain.id]) if not grades else [plain.id])
+    assert all(n.data["grade"] is None for n in await inbox(session))
+    follows = await session.scalars(
+        select(AIAlertFollow.min_grade)
+        .where(AIAlertFollow.user_id == picky.id)
+        .execution_options(populate_existing=True)
+    )
+    assert list(follows) == ["A"]  # the user's choice is kept
 
 
 async def test_after_armed_only_takers(
@@ -651,8 +690,10 @@ async def test_follows_api(client: AsyncClient, session: AsyncSession, gold, mak
     url = f"/api/v1/me/ai/follows/{gold.id}/intraday"
     first = await client.put(url, headers=a)
     assert first.status_code == 200 and first.json()["min_grade"] is None
+    assert first.json()["min_grade_active"] is False  # v1: grades off
     again = await client.put(url, json={"min_grade": "B"}, headers=a)
     assert again.status_code == 200 and again.json()["min_grade"] == "B"
+    assert again.json()["min_grade_active"] is False  # accepted and stored, not applied
     assert again.json()["created_at"] == first.json()["created_at"]
     listed = (await client.get("/api/v1/me/ai/follows", headers=a)).json()
     assert [(f["instrument_id"], f["profile"], f["min_grade"]) for f in listed] == [
@@ -668,6 +709,26 @@ async def test_follows_api(client: AsyncClient, session: AsyncSession, gold, mak
     assert (await client.delete(url, headers=a)).status_code == 204
     assert (await client.delete(url, headers=a)).status_code == 404
     assert (await client.get("/api/v1/me/ai/follows")).status_code == 401
+
+
+async def test_follow_response_min_grade_active(
+    client: AsyncClient, session: AsyncSession, gold, make_user, login,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
+    await make_user("fg@example.com")
+    a = bearer((await login("fg@example.com"))["access_token"])
+    url = f"/api/v1/me/ai/follows/{gold.id}/intraday"
+    for grades in (False, True):
+        monkeypatch.setattr(get_settings(), "ai_grades_enabled", grades)
+        put = await client.put(url, json={"min_grade": "A"}, headers=a)
+        assert put.status_code == 200
+        assert (put.json()["min_grade"], put.json()["min_grade_active"]) == ("A", grades)
+        [listed] = (await client.get("/api/v1/me/ai/follows", headers=a)).json()
+        assert (listed["min_grade"], listed["min_grade_active"]) == ("A", grades)
+        stored = await session.scalar(
+            select(AIAlertFollow.min_grade).execution_options(populate_existing=True)
+        )
+        assert stored == "A"  # the same row either way
 
 
 # --- admin and status ----------------------------------------------------------------------------
