@@ -137,12 +137,13 @@ describe('admin console (recorded backend responses)', () => {
 describe('user-facing extras (recorded backend responses)', () => {
   it('workspace share, shared copy, import and reorder', async () => {
     const ws = apiWorkspaceSync(http(), {} as MarketSocket);
+    const slug = (rec('ws_share') as { share_slug: string }).share_slug;
     use(200, rec('ws_share'));
-    expect(await ws.share('w')).toEqual({ isShared: true, slug: 'lw70_hvGpjdW0Pnu' });
+    expect(await ws.share('w')).toEqual({ isShared: true, slug });
     use(200, rec('ws_shared_get'));
-    expect((await ws.shared('lw70_hvGpjdW0Pnu')).owner).toEqual({ name: 'Yazan Alsamman', role: 'expert' });
+    expect((await ws.shared(slug)).owner).toEqual({ name: 'Yazan Alsamman', role: 'expert' });
     use(201, rec('ws_shared_import'));
-    expect((await ws.importShared('lw70_hvGpjdW0Pnu')).id).toBeTruthy();
+    expect((await ws.importShared(slug)).id).toBeTruthy();
     const f = use(200, rec('ws_reorder'));
     await ws.reorder(['a', 'b']);
     expect(lastCall(f).body).toEqual({ ids: ['a', 'b'] });
