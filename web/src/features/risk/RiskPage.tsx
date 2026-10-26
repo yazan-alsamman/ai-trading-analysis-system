@@ -16,6 +16,8 @@ import { LimitMeter } from './LimitMeter';
 import { STATUS_META } from './limitStatus';
 import { parseDecimal } from './parse';
 import { ProfileForm } from './ProfileForm';
+import { ServerCrossCheck, ServerProfileBanner } from './ServerRisk';
+import { ServerRiskTemplates } from './ServerRiskTemplates';
 import { TradePlanner, type PlannerState } from './TradePlanner';
 
 const BINDING_LABEL: Record<LimitId, string> = {
@@ -165,6 +167,8 @@ export function RiskPage() {
         </Cell>
       </dl>
 
+      {services.source === 'api' && <ServerProfileBanner />}
+
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="flex min-w-0 flex-col gap-5">
           <section aria-labelledby="planner-title" className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -181,6 +185,19 @@ export function RiskPage() {
               profile={profile}
               result={result}
             />
+            {services.source === 'api' && result.kind === 'ok' && parseDecimal(state.entry) !== null && parseDecimal(state.stop) !== null && (
+              <div className="mt-4">
+                <ServerCrossCheck
+                  instrument={instrument}
+                  timeframe={state.timeframe}
+                  risk={result.risk}
+                  entry={parseDecimal(state.entry) ?? 0}
+                  stop={parseDecimal(state.stop) ?? 0}
+                  profile={profile}
+                  riskPct={parseDecimal(state.risk) ?? profile.maxRiskPerTradePct}
+                />
+              </div>
+            )}
           </section>
 
           <section aria-labelledby="limits-title" className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -210,6 +227,8 @@ export function RiskPage() {
           <ProfileForm />
         </section>
       </div>
+
+      {services.source === 'api' && <ServerRiskTemplates />}
 
       <p className="flex items-start gap-2 text-xs text-fg-3">
         <ShieldAlert aria-hidden className="mt-0.5 size-4 shrink-0" />

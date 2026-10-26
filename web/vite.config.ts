@@ -25,13 +25,29 @@ function sitemap(siteUrl: string | undefined): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), sitemap(loadEnv(mode, process.cwd(), '').VITE_SITE_URL)],
+/**
+ * Local development with the backend: the browser talks to this server on the
+ * same origin (/api/v1, /ws/market) and Vite forwards to the backend, so no
+ * CORS configuration is needed. BACKEND_URL is read on the dev machine only
+ * (no VITE_ prefix): it is never compiled into the bundle.
+ */
+function backendProxy(target: string) {
+  return {
+    '/api': { target, changeOrigin: true },
+    '/ws': { target: target.replace(/^http/, 'ws'), ws: true, changeOrigin: true },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const backend = env.BACKEND_URL || 'http://localhost:8000';
+  return {
+  plugins: [react(), tailwindcss(), sitemap(env.VITE_SITE_URL)],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-  server: { port: 5173, strictPort: true },
-  preview: { port: 4173, strictPort: true },
+  server: { port: 5173, strictPort: true, proxy: backendProxy(backend) },
+  preview: { port: 4173, strictPort: true, proxy: backendProxy(backend) },
   build: {
     target: 'es2022',
     rollupOptions: {
@@ -51,4 +67,5 @@ export default defineConfig(({ mode }) => ({
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
   },
-}));
+};
+});

@@ -85,8 +85,8 @@ export const PredictionRecordSchema = z.object({
 export const PriceAlertSchema = z.object({
   id: z.string(),
   symbol: SymbolSchema,
-  condition: z.enum(['crosses_above', 'crosses_below']),
-  price: z.number().positive(),
+  condition: z.enum(['crosses_above', 'crosses_below', 'above', 'below', 'change_pct']),
+  price: z.number(),
   channels: z.array(ChannelSchema),
   note: z.string().optional(),
   status: z.enum(['active', 'paused', 'triggered']),

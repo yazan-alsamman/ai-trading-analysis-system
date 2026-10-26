@@ -1,6 +1,7 @@
 import { ChevronRight, RotateCcw, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { usePreferences, useToast } from '@/app/contexts';
+import { usePreferences, useServices, useToast } from '@/app/contexts';
+import { userMessage } from '@/services/errors';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Form';
@@ -92,6 +93,7 @@ function Group({ title, tag, description, children }: { title: string; tag?: Rea
 
 export function ProfileForm() {
   const { prefs, setRiskProfile } = usePreferences();
+  const services = useServices();
   const { notify } = useToast();
   const saved = prefs.riskProfile;
   const [draft, setDraft] = useState<Draft>(() => toDraft(saved));
@@ -129,7 +131,17 @@ export function ProfileForm() {
       return;
     }
     setRiskProfile(profile);
-    notify('Risk profile saved in this browser.', 'success');
+    if (services.source !== 'api' || profile.capital === null) {
+      notify('Risk profile saved in this browser.', 'success');
+      return;
+    }
+    // Backend mode: the overlapping fields are also saved to the server profile (the rest of its config is preserved).
+    services.riskProfile
+      .save({ capital: profile.capital, currency: profile.currency, riskPerTradePct: profile.maxRiskPerTradePct, dailyLossLimitPct: profile.dailyLossLimitPct })
+      .then(
+        () => notify('Risk profile saved here and to your server profile.', 'success'),
+        (err: unknown) => notify(`Saved in this browser only — the server profile was not updated: ${userMessage(err)}`, 'warning'),
+      );
   };
 
   return (

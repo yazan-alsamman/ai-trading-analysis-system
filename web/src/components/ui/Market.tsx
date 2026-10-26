@@ -52,7 +52,7 @@ export function DirectionBadge({ direction, className }: { direction: Direction;
 }
 
 const FEED: Record<FeedStatus, { label: string; dot: string; text: string; description: string }> = {
-  live: { label: 'Live', dot: 'bg-accent', text: 'text-fg-2', description: 'Receiving real-time updates from the backend.' },
+  live: { label: 'Streaming', dot: 'bg-accent', text: 'text-fg-2', description: 'Receiving updates from the backend feed as they happen.' },
   demo: { label: 'Simulated feed', dot: 'bg-demo', text: 'text-demo', description: 'Prices are generated locally for demonstration. Not real market data.' },
   connecting: { label: 'Connecting', dot: 'bg-fg-3', text: 'text-fg-2', description: 'Establishing the price feed.' },
   delayed: { label: 'Delayed', dot: 'bg-warning', text: 'text-warning', description: 'Updates are arriving late.' },

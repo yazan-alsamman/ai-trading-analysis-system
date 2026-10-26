@@ -4,22 +4,38 @@ import { ApiError } from '../errors';
 export interface HttpClientOptions {
   baseUrl: string;
   timeoutMs: number;
-  /** Returns the current bearer token, if any. */
-  getToken: () => string | undefined;
-  /** Called once per 401 so the app can clear the session. */
+  /** The access token to send (may refresh it first when it is about to expire). */
+  getToken: () => Promise<string | undefined> | string | undefined;
+  /**
+   * After a 401 on an authenticated request: obtain a new access token
+   * (single-flight, see ./session.ts). Resolves undefined when the session is over.
+   */
+  refreshToken?: () => Promise<string | undefined>;
+  /** Called when a request fails with 401 and the session could not be refreshed. */
   onUnauthorized?: () => void;
 }
 
 export interface RequestOptions<T> {
-  query?: Record<string, string | number | boolean | undefined>;
+  query?: Record<string, string | number | boolean | undefined | null>;
   body?: unknown;
+  /** A multipart upload (e.g. a CSV file); the browser sets the boundary header. Not combined with `body`. */
+  formData?: FormData;
   signal?: AbortSignal;
   /** Every response is validated; contract drift becomes a clear error, not a broken UI. */
   schema: z.ZodType<T>;
   /** Override the session token for this call (`null` = send none), e.g. during sign-in. */
   token?: string | null;
-  /** The caller interprets 401 itself (sign-in forms) — do not end the session. */
+  /** The caller interprets 401 itself (sign-in forms) — no refresh, do not end the session. */
   authFailureHandled?: boolean;
+  /** Extra request headers (e.g. `If-Match` for optimistic concurrency). */
+  headers?: Record<string, string>;
+  /**
+   * Error statuses whose body is a documented answer, validated by `schema` like a success
+   * (e.g. `/health/data` answers 503 with its quality report).
+   */
+  acceptStatus?: readonly number[];
+  /** `text`: the body is returned as a string (CSV exports) and validated by `schema`. */
+  responseType?: 'json' | 'text';
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -32,14 +48,15 @@ function buildUrl(baseUrl: string, path: string, query?: RequestOptions<unknown>
   // a relative base (/api/v1) resolves against the page, so it keeps the page's scheme
   const url = new URL(`${baseUrl}${path}`, globalThis.location?.origin);
   for (const [k, v] of Object.entries(query ?? {})) {
-    if (v !== undefined) url.searchParams.set(k, String(v));
+    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   }
   return url.toString();
 }
 
-async function readBody(response: Response): Promise<unknown> {
+async function readBody(response: Response, responseType: 'json' | 'text' = 'json'): Promise<unknown> {
   if (response.status === 204) return null;
   const text = await response.text();
+  if (responseType === 'text' && response.ok) return text;
   if (!text) return null;
   try {
     return JSON.parse(text);
@@ -53,6 +70,7 @@ async function readBody(response: Response): Promise<unknown> {
  *  - FastAPI (this monorepo's backend): `{ detail: "text" }`, or for 422
  *    `{ detail: [{ loc: ["body", "field"], msg: "..." }] }`
  *  - Laravel-style: `{ message, errors: { field: [msg] } }`
+ * Anything else (HTML error pages from a proxy, plain text) yields no message.
  */
 export function parseErrorBody(body: unknown): { message: string; fieldErrors: Record<string, string[]> | undefined } {
   if (typeof body !== 'object' || body === null) return { message: '', fieldErrors: undefined };
@@ -73,50 +91,66 @@ export function parseErrorBody(body: unknown): { message: string; fieldErrors: R
   return { message, fieldErrors };
 }
 
-function errorFromResponse(status: number, body: unknown): ApiError {
+function errorFromResponse(status: number, body: unknown, requestId: string | null): ApiError {
   const { message, fieldErrors } = parseErrorBody(body);
-
-  if (status === 401) return new ApiError('unauthorized', message, { status });
-  if (status === 403) return new ApiError('forbidden', message, { status });
-  if (status === 404) return new ApiError('not_found', message, { status });
-  if (status === 409) return new ApiError('conflict', message, { status });
-  if (status === 400 || status === 422) return new ApiError('validation', message, { status, ...(fieldErrors ? { fieldErrors } : {}) });
-  if (status === 429) return new ApiError('rate_limited', message, { status });
-  return new ApiError('server', message || `HTTP ${status}`, { status });
+  // 4xx bodies are the API's own explanations (e.g. a 409's `current_version`); 5xx bodies are never kept.
+  const data = status < 500 && typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : undefined;
+  const extra = { status, ...(requestId ? { requestId } : {}), ...(data ? { data } : {}) };
+  if (status === 401) return new ApiError('unauthorized', message, extra);
+  if (status === 403) return new ApiError('forbidden', message, extra);
+  if (status === 404) return new ApiError('not_found', message, extra);
+  if (status === 409) return new ApiError('conflict', message, extra);
+  if (status === 400 || status === 422) return new ApiError('validation', message, { ...extra, ...(fieldErrors ? { fieldErrors } : {}) });
+  if (status === 429) return new ApiError('rate_limited', message, extra);
+  // 5xx details are internal: never shown verbatim.
+  return new ApiError('server', `HTTP ${status}`, { status, ...(requestId ? { requestId } : {}) });
 }
 
 export function createHttpClient(options: HttpClientOptions): HttpClient {
+  async function send<T>(method: HttpMethod, path: string, opts: RequestOptions<T>, token: string | undefined): Promise<{ response: Response; payload: unknown }> {
+    const timeout = AbortSignal.timeout(options.timeoutMs);
+    const combined = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+    let response: Response;
+    try {
+      response = await fetch(buildUrl(options.baseUrl, path, opts.query), {
+        method,
+        signal: combined,
+        // Bearer tokens only: no cookies are needed or sent cross-origin.
+        credentials: 'omit',
+        headers: {
+          Accept: opts.responseType === 'text' ? 'text/csv, text/plain, */*' : 'application/json',
+          ...(opts.body !== undefined && !opts.formData ? { 'Content-Type': 'application/json' } : {}),
+          ...opts.headers,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        ...(opts.formData ? { body: opts.formData } : opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+      });
+    } catch (cause) {
+      if (opts.signal?.aborted) throw new ApiError('aborted', 'Request cancelled', { cause });
+      if (timeout.aborted) throw new ApiError('timeout', 'Request timed out', { cause });
+      throw new ApiError('network', 'Network error', { cause });
+    }
+    return { response, payload: await readBody(response, opts.responseType) };
+  }
+
   return {
-    async request<T>(method: HttpMethod, path: string, { query, body, signal, schema, token: tokenOverride, authFailureHandled }: RequestOptions<T>): Promise<T> {
-      const timeout = AbortSignal.timeout(options.timeoutMs);
-      const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
-      const token = tokenOverride === undefined ? options.getToken() : (tokenOverride ?? undefined);
+    async request<T>(method: HttpMethod, path: string, opts: RequestOptions<T>): Promise<T> {
+      const token = opts.token === undefined ? await options.getToken() : (opts.token ?? undefined);
+      let { response, payload } = await send(method, path, opts, token);
 
-      let response: Response;
-      try {
-        response = await fetch(buildUrl(options.baseUrl, path, query), {
-          method,
-          signal: combined,
-          headers: {
-            Accept: 'application/json',
-            ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-        });
-      } catch (cause) {
-        if (signal?.aborted) throw new ApiError('aborted', 'Request cancelled', { cause });
-        if (timeout.aborted) throw new ApiError('timeout', 'Request timed out', { cause });
-        throw new ApiError('network', 'Network error', { cause });
+      // One transparent retry after refreshing an expired access token. A 401 means the
+      // request was rejected before any work was done, so this is safe even for POST.
+      if (response.status === 401 && token && opts.token === undefined && !opts.authFailureHandled && options.refreshToken) {
+        const fresh = await options.refreshToken();
+        if (fresh) ({ response, payload } = await send(method, path, opts, fresh));
       }
 
-      const payload = await readBody(response);
-      if (!response.ok) {
-        if (response.status === 401 && !authFailureHandled) options.onUnauthorized?.();
-        throw errorFromResponse(response.status, payload);
+      if (!response.ok && !opts.acceptStatus?.includes(response.status)) {
+        if (response.status === 401 && !opts.authFailureHandled) options.onUnauthorized?.();
+        throw errorFromResponse(response.status, payload, response.headers.get('x-request-id'));
       }
 
-      const parsed = schema.safeParse(payload);
+      const parsed = opts.schema.safeParse(payload);
       if (!parsed.success) {
         console.error(`Contract mismatch for ${method} ${path}`, parsed.error.issues);
         throw new ApiError('contract', 'Unexpected response format', { cause: parsed.error });

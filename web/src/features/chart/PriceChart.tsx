@@ -421,7 +421,7 @@ function PriceChartImpl(props: PriceChartProps) {
     const last = candles[candles.length - 1];
     const typeLabel = CHART_TYPES.find((c) => c.id === chartType)?.label ?? chartType;
     const parts = [
-      `${provenance === 'demo' ? 'Simulated ' : ''}${instrument.display} ${timeframe} ${typeLabel.toLowerCase()} chart with ${candles.length} candles.`,
+      `${provenance === 'demo' ? 'Simulated ' : 'Backend-feed '}${instrument.display} ${timeframe} ${typeLabel.toLowerCase()} chart with ${candles.length} candles.`,
     ];
     if (last) parts.push(`Last price ${formatPrice(last.close, precision)} at ${formatDate(last.time * 1000, timeZone)} ${formatClock(last.time * 1000, timeZone, false)} ${timeZoneLabel(timeZone)}.`);
     if (opportunity?.status === 'detected') {

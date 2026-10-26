@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
+import { PageFallback } from '@/layouts/RouteFallbacks';
 import { useAuth, useServices } from './contexts';
 
 /**
@@ -11,9 +12,11 @@ import { useAuth, useServices } from './contexts';
  * define permissions per role are not available to the web client yet.
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
+  const { session, status } = useAuth();
   const { source } = useServices();
   const location = useLocation();
+  // Never redirect before a stored session has been checked.
+  if (status === 'restoring') return <PageFallback />;
   if (source === 'api' && !session) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }

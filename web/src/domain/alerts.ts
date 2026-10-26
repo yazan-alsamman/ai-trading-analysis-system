@@ -10,12 +10,20 @@ export const CHANNEL_LABELS: Record<NotificationChannel, string> = {
   telegram: 'Telegram',
 };
 
-/** SF16 — notify when a pair reaches a user-specified level. */
-export type AlertCondition = 'crosses_above' | 'crosses_below';
+/**
+ * SF16 — notify when a pair reaches a user-specified level. The web client
+ * creates crossing alerts; the backend also supports level and % change
+ * alerts (created e.g. from the mobile app), which are displayed as they are.
+ */
+export type AlertCondition = 'crosses_above' | 'crosses_below' | 'above' | 'below' | 'change_pct';
+export type CreatableAlertCondition = 'crosses_above' | 'crosses_below';
 
 export const CONDITION_LABELS: Record<AlertCondition, string> = {
   crosses_above: 'Crosses above',
   crosses_below: 'Crosses below',
+  above: 'Is above',
+  below: 'Is below',
+  change_pct: 'Moves by %',
 };
 
 export type AlertStatus = 'active' | 'paused' | 'triggered';
@@ -32,7 +40,7 @@ export interface PriceAlert {
   triggeredAt?: number;
 }
 
-export type PriceAlertDraft = Pick<PriceAlert, 'symbol' | 'condition' | 'price' | 'channels' | 'note'>;
+export type PriceAlertDraft = Pick<PriceAlert, 'symbol' | 'price' | 'channels' | 'note'> & { condition: CreatableAlertCondition };
 
 /**
  * SF2 — notifications for high-probability opportunities.

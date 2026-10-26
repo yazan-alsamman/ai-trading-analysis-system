@@ -1,5 +1,7 @@
 # Frontend ↔ backend dependencies
 
+> **Superseded on 18 October 2026** by the integration itself: see `BACKEND_INTEGRATION_REPORT.md` (what is connected, with the verified endpoint inventory), `BACKEND_INTEGRATION_GAP_ANALYSIS.md` (what is not, and why) and `BACKEND_INTEGRATION_SETUP.md`. The table below is the pre-integration snapshot.
+
 _Round 6 · 17 October 2026. Verified against `origin/main` (merged into `e/web-client` on 17 Oct; backend PRs up to #25: Y18 news, posts and price alerts; Y19 expert chat and subscriptions; Y20 hardening)._
 
 **This round changed no backend code.** The tables below record which frontend features already have a real backend endpoint, which have one the client does not use yet, and which have none.

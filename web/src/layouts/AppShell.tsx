@@ -2,15 +2,17 @@ import { FlaskConical, WifiOff, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { z } from 'zod';
-import { usePreferences, useServices } from '@/app/contexts';
+import { useAuth, usePreferences, useServices } from '@/app/contexts';
 import { IconButton } from '@/components/ui/Button';
 import { AlertMonitor } from '@/features/alerts/AlertMonitor';
+import { ServerInboxSync } from '@/features/notifications/ServerInboxSync';
 import { useNoIndex } from '@/hooks/useDocumentMeta';
 import { useOnlineStatus } from '@/hooks/useEnvironment';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { readStored, writeStored } from '@/lib/storage';
 import { CommandPalette } from './CommandPalette';
-import { NAV_SHORTCUTS } from './navigation';
+import { DataHealthBanner } from './DataHealthBanner';
+import { navShortcutsFor } from './navigation';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -90,6 +92,7 @@ function readSessionFlag(key: string): boolean {
 
 export function AppShell() {
   const { source } = useServices();
+  const role = useAuth().session?.user.role;
   const { resolvedTheme, setTheme } = usePreferences();
   const online = useOnlineStatus();
   const navigate = useNavigate();
@@ -118,9 +121,9 @@ export function AppShell() {
     () => ({
       '?': () => setShortcutsOpen(true),
       t: () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'),
-      ...Object.fromEntries(Object.entries(NAV_SHORTCUTS).map(([keys, to]) => [keys, () => navigate(to)])),
+      ...Object.fromEntries(Object.entries(navShortcutsFor(source, role)).map(([keys, to]) => [keys, () => navigate(to)])),
     }),
-    [navigate, resolvedTheme, setTheme],
+    [navigate, resolvedTheme, setTheme, source, role],
   );
   useHotkeys(hotkeys);
 
@@ -164,6 +167,7 @@ export function AppShell() {
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar onOpenMenu={() => setDrawerOpen(true)} onOpenSearch={() => setSearchOpen(true)} onShowShortcuts={() => setShortcutsOpen(true)} />
           <main id="main" ref={mainRef} tabIndex={-1} className="relative min-h-0 flex-1 overflow-y-auto outline-none">
+            {source === 'api' && <DataHealthBanner />}
             <Outlet />
           </main>
         </div>
@@ -172,6 +176,7 @@ export function AppShell() {
       <CommandPalette open={searchOpen} onClose={closeSearch} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <AlertMonitor />
+      <ServerInboxSync />
     </div>
   );
 }

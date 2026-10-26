@@ -5,7 +5,8 @@ import { IconButton } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { DemoPlanChip } from '@/features/membership/PlanGate';
 import { MarketSessions } from './MarketSessions';
-import { NAV_GROUPS, OVERVIEW_NAV, SETTINGS_NAV, type NavItem } from './navigation';
+import { useAuth, useServices } from '@/app/contexts';
+import { ADMIN_NAV, navGroupsFor, OVERVIEW_NAV, SETTINGS_NAV, type NavItem } from './navigation';
 
 function Shortcut({ keys }: { keys: string }) {
   return (
@@ -56,6 +57,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, className }: SidebarProps) {
+  const { session } = useAuth();
+  const isAdmin = useServices().source === 'api' && session?.user.role === 'admin';
+  const { source } = useServices();
   return (
     <div className={cn('flex h-full flex-col bg-surface', className)}>
       <div className={cn('flex h-[var(--topbar-h)] shrink-0 items-center border-b border-line', collapsed ? 'justify-center' : 'px-3.5')}>
@@ -65,7 +69,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, className }:
         <ul className="mb-4 flex flex-col">
           <NavEntry item={OVERVIEW_NAV} collapsed={collapsed} onNavigate={onNavigate} />
         </ul>
-        {NAV_GROUPS.map((group) => (
+        {navGroupsFor(source).map((group) => (
           <div key={group.label} className="mb-4">
             {collapsed ? (
               <span aria-hidden className="mx-auto mb-1.5 block h-px w-5 bg-line" />
@@ -84,6 +88,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, className }:
           <MarketSessions collapsed={collapsed} />
           <ul className="flex flex-col gap-0.5">
             <NavEntry item={SETTINGS_NAV} collapsed={collapsed} onNavigate={onNavigate} />
+            {isAdmin && <NavEntry item={ADMIN_NAV} collapsed={collapsed} onNavigate={onNavigate} />}
           </ul>
           {onToggleCollapsed && (
             <div className={cn('flex', collapsed ? 'justify-center' : 'justify-end')}>
