@@ -73,9 +73,12 @@ jobs:
         with:
           context: web
           push: true
-          # demo data until the backend serves every endpoint the client reads (web/.env.example)
+          # Backend mode: the web client reads this stack's API on the page's own origin (same
+          # nginx), so it follows http/https. An invalid value shows a blocking configuration
+          # screen instead of silently falling back to demo data (web/src/services/config.ts).
           build-args: |
-            VITE_DATA_SOURCE=demo
+            VITE_DATA_SOURCE=api
+            VITE_API_BASE_URL=/api/v1
             VITE_SITE_URL=http://187.127.76.76:8080
           tags: ${{ env.WEB_IMAGE }}:${{ steps.meta.outputs.tag }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}

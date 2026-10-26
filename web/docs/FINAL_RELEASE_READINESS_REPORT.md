@@ -106,10 +106,17 @@ The existing FastAPI backend (`backend/`) was kept exactly as it is. None of its
 
 ## 5. Before deploying
 
-1. **Switch the build to backend mode.** `deploy.yml` builds with `VITE_DATA_SOURCE=demo`. Set `VITE_DATA_SOURCE=api` and `VITE_API_BASE_URL=/api/v1`; the Dockerfile default is now `/api/v1`. An invalid value now shows a blocking configuration screen instead of silently falling back to demo mode.
-2. **HTTPS.** `main` now serves the platform at `https://trading.yazanalsamman.com` (`docs/https.md`). Use that origin for real accounts: tokens are sent on every request, and the WebSocket token is in its URL.
-3. **Celery worker queues.** Run the worker with `-Q celery,notifications,backtests`. Without the `backtests` queue, backtests stay queued.
-4. Optional: Telegram, SMTP and FCM credentials in the server environment (never in the repository).
+1. **Backend-mode build: done in `.github/workflows/deploy.yml`** (`VITE_DATA_SOURCE=api`, `VITE_API_BASE_URL=/api/v1`). An invalid value shows a blocking configuration screen instead of silently falling back to demo mode.
+2. **HTTPS: required before real people sign in.**
+   - On 26 Oct 2026, `trading.yazanalsamman.com` did not resolve in DNS, so the only public address was `http://187.127.76.76:8080`.
+   - Over plain HTTP, passwords and tokens travel unencrypted, and the WebSocket token sits in its URL.
+   - To enable it: point the domain's DNS at the server, install the host nginx site (`docs/https.md`), then use `https://trading.yazanalsamman.com` for real accounts.
+3. **Server `.env` (on the VPS, not in the repository):**
+   - The web origin(s) must be allowed for the demo checkout's return address: `PUBLIC_BASE_URL=http://187.127.76.76:8080` (or the HTTPS origin once live), or list the origin in `CORS_ORIGINS`.
+   - Otherwise the backend refuses the return URL with 422 "origin not allowed".
+4. **Workers:** nothing to change. The production compose file already runs `worker` (`celery,notifications`) and `worker-backtest` (`backtests,maintenance`).
+5. **Optional:** Telegram, SMTP and FCM credentials, and the cTrader app credentials, in the server environment (never in the repository).
+6. **First admin:** `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` in the server `.env`, or `python -m app.cli create-admin --email … --password …` on the server (it also promotes an existing user), create the account that can open `/admin`.
 
 ## 6. Data integrity and safety
 
