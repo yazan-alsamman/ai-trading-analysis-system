@@ -34,6 +34,7 @@ celery_app = Celery(
         "app.tasks.ai_alerts",
         "app.tasks.ai",
         "app.tasks.feeds",
+        "app.tasks.predictions",
     ],
 )
 celery_app.conf.update(
@@ -62,6 +63,7 @@ celery_app.conf.update(
         "subscriptions.*": {"queue": "maintenance"},
         "ops.*": {"queue": "maintenance"},
         "feeds.*": {"queue": "maintenance"},  # long backfills (worker-backtest)
+        "predictions.*": {"queue": "maintenance"},  # off the live worker (Y16)
     },
     task_ignore_result=True,
     beat_schedule={
@@ -119,6 +121,12 @@ celery_app.conf.update(
         # renewals, trial ends, grace periods and expired checkouts (Y19), every 10 minutes
         # one log line a day: signals, notifications, users, subscriptions (maintenance queue)
         "ops-daily-summary": {"task": "ops.daily_summary", "schedule": crontab(hour=0, minute=5)},
+        # strategy signals resolved into signal_outcomes (Y16), a light batch per run
+        "predictions-resolve-signals": {
+            "task": "predictions.resolve_signals",
+            "schedule": timedelta(seconds=settings.prediction_resolve_interval_seconds),
+            "options": {"expires": max(30, settings.prediction_resolve_interval_seconds - 10)},
+        },
         "subscriptions-renew": {
             "task": "subscriptions.renew",
             "schedule": crontab(minute="*/10"),

@@ -48,7 +48,7 @@ async def test_system_status(
     res = await client.get("/api/v1/admin/system/status", headers=admin_headers)
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["database"]["migration"] == "0021" and body["database"]["size_mb"] > 0
+    assert body["database"]["migration"] == "0022" and body["database"]["size_mb"] > 0
     assert set(body["celery"]["queues"]) == {"celery", "notifications", "backtests", "maintenance"}
     assert body["celery"]["tasks"]["signals.tick"]["seconds_ago"] is not None
     assert body["errors_last_hour"] >= 1

@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     # has no model and every grade is null, so it is off: every follower gets the alert. Turn
     # it on only when ai-service returns grades
     ai_grades_enabled: bool = False
+    # Prediction tracking (Y16, docs/predictions.md): each buy/sell signal is resolved after
+    # PREDICTION_HORIZON_BARS closed bars of its timeframe (the value is stored on each row); the
+    # predictions.resolve_signals task runs every PREDICTION_RESOLVE_INTERVAL_SECONDS and
+    # resolves at most PREDICTION_RESOLVE_BATCH signals per run (old ones too, gradually)
+    prediction_horizon_bars: int = 10
+    prediction_resolve_interval_seconds: int = 300
+    prediction_resolve_batch: int = 500
     # Deliveries a lost send task left pending are sent again after this (notifications.sweep)
     notification_sweep_after_seconds: int = 120
     notification_sweep_batch: int = 500

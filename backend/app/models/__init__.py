@@ -51,6 +51,7 @@ from app.models.notification import (
     TelegramLink,
     UserDevice,
 )
+from app.models.prediction import SignalOutcome
 from app.models.price_alert import AlertCondition, AlertRepeat, PriceAlert
 from app.models.refresh_token import RefreshToken
 from app.models.risk import RiskProfile, SignalPlan
@@ -138,6 +139,7 @@ __all__ = [
     "RefreshToken",
     "RiskProfile",
     "Scope",
+    "SignalOutcome",
     "Signal",
     "SignalPlan",
     "SignalSide",
