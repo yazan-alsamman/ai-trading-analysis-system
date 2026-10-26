@@ -19,6 +19,85 @@ import type { Page, Route, WebSocketRoute } from '@playwright/test';
 type Recorded = Record<string, { body: string }[]>;
 const examples = JSON.parse(readFileSync(resolve(process.cwd(), '../docs/postman/tools/examples.json'), 'utf8')) as Recorded;
 const rec = (name: string): Record<string, unknown> => JSON.parse(examples[name]?.[0]?.body ?? '{}') as Record<string, unknown>;
+/** A recorded body as-is (lists stay arrays). */
+const recRaw = (name: string): unknown => JSON.parse(examples[name]?.[0]?.body ?? 'null') as unknown;
+/** The recorded response with a given status code (e.g. the 409 of a stale workspace version). */
+const recVariant = (name: string, code: number): Record<string, unknown> =>
+  JSON.parse(examples[name]?.find((e) => (e as { code?: number }).code === code)?.body ?? '{}') as Record<string, unknown>;
+
+const BACKTEST_ID = String(rec('backtests_get').id);
+const ID = '[^/]+';
+/**
+ * Endpoints answered with the backend's recorded success response (method, path, recording, status).
+ * 204 rows send no body, like the server.
+ */
+const RECORDED_ROUTES: [string, RegExp, string, number][] = (
+  [
+    ['GET', '/me/price-alerts/history', 'alerts_history', 200],
+    ['DELETE', `/me/notifications/${ID}`, '', 204],
+    ['GET', '/me/notification-preferences', 'notif_prefs_get', 200],
+    ['PUT', '/me/notification-preferences', 'notif_prefs_put', 200],
+    ['GET', '/me/notifications/channels', 'notif_channels', 200],
+    ['POST', '/me/notifications/test', 'notif_test', 200],
+    ['POST', '/me/notifications/telegram/link', 'notif_telegram_link', 200],
+    ['DELETE', '/me/notifications/telegram', '', 204],
+    ['GET', '/strategies', 'strategies_catalog', 200],
+    ['POST', `/strategies/${ID}/preview`, 'strategies_preview', 200],
+    ['GET', '/me/strategies', 'me_strategies_list', 200],
+    ['POST', '/me/strategies', 'me_strategies_create', 201],
+    ['PATCH', `/me/strategies/${ID}`, 'me_strategies_update', 200],
+    ['DELETE', `/me/strategies/${ID}`, '', 204],
+    ['GET', '/me/signal-plans', 'risk_signal_plans', 200],
+    ['GET', '/me/custom-strategies', 'custom_list', 200],
+    ['POST', '/me/custom-strategies', 'custom_create', 201],
+    ['POST', `/me/custom-strategies/${ID}/clone`, 'custom_clone', 201],
+    ['GET', `/me/custom-strategies/${ID}`, 'custom_get', 200],
+    ['PUT', `/me/custom-strategies/${ID}`, 'custom_replace', 200],
+    ['PATCH', `/me/custom-strategies/${ID}`, 'custom_update', 200],
+    ['DELETE', `/me/custom-strategies/${ID}`, '', 204],
+    ['GET', '/custom-strategies/schema', 'custom_schema', 200],
+    ['POST', '/custom-strategies/validate', 'custom_validate', 200],
+    ['GET', '/custom-strategies/public', 'custom_public', 200],
+    ['POST', `/custom-strategies/public/${ID}/clone`, 'custom_public_clone', 201],
+    ['GET', '/backtests', 'backtests_list', 200],
+    ['POST', '/backtests', 'backtests_create', 202],
+    ['POST', '/backtests/compare', 'backtests_compare', 200],
+    ['GET', `/backtests/${ID}/trades`, 'backtests_trades', 200],
+    ['GET', `/backtests/${ID}`, 'backtests_get', 200],
+    ['DELETE', `/backtests/${ID}`, '', 204],
+    ['GET', '/me/workspaces', 'ws_list', 200],
+    ['POST', '/me/workspaces', 'ws_create', 201],
+    ['POST', `/me/workspaces/${ID}/duplicate`, 'ws_duplicate', 201],
+    ['PATCH', `/me/workspaces/${ID}`, 'ws_update', 200],
+    ['DELETE', `/me/workspaces/${ID}`, '', 204],
+    ['POST', `/posts/${ID}/like`, 'posts_like', 200],
+    ['DELETE', `/posts/${ID}/like`, 'posts_unlike', 200],
+    ['PATCH', `/posts/${ID}`, 'posts_update', 200],
+    ['DELETE', `/posts/${ID}`, '', 204],
+    ['POST', `/posts/${ID}/comments`, 'comments_create', 201],
+    ['PATCH', `/comments/${ID}`, 'comments_update', 200],
+    ['DELETE', `/comments/${ID}`, '', 204],
+    ['POST', '/reports', 'reports_create', 201],
+    ['GET', `/users/${ID}/profile`, 'users_profile', 200],
+    ['POST', `/users/${ID}/follow`, 'users_follow', 200],
+    ['DELETE', `/users/${ID}/follow`, 'users_unfollow', 200],
+    ['GET', '/me/following', 'me_following', 200],
+    ['GET', '/me/followers', 'me_followers', 200],
+    ['GET', `/experts/${ID}/signals`, 'experts_signals', 200],
+    ['GET', `/experts/${ID}`, 'experts_get', 200],
+    ['POST', '/subscriptions/checkout', 'subs_checkout', 201],
+    ['GET', '/me/subscriptions', 'subs_mine', 200],
+    ['POST', `/me/subscriptions/${ID}/cancel`, 'subs_cancel', 200],
+    ['POST', `/me/subscriptions/${ID}/resume`, 'subs_resume', 200],
+    ['GET', '/me/api-keys/scopes', 'keys_scopes', 200],
+    ['GET', '/me/api-keys', 'keys_list', 200],
+    ['POST', '/me/api-keys', 'keys_create', 201],
+    ['GET', `/me/api-keys/${ID}/usage`, 'keys_usage', 200],
+    ['PATCH', `/me/api-keys/${ID}`, 'keys_update', 200],
+    ['DELETE', `/me/api-keys/${ID}`, '', 204],
+    ['GET', '/conversations', 'chat_list', 200],
+  ] as const
+).map(([m, p, name, status]) => [m, new RegExp(`^${p}$`), name, status]);
 
 export const INSTRUMENTS = [
   { symbol: 'XAU/USD', id: 'i-xau', market: 'commodity', base: 'XAU', quote: 'USD', pp: 2, price: 2400 },
@@ -58,6 +137,8 @@ export interface MockBackend {
   /** WebSocket messages the client sent. */
   wsSent: Record<string, unknown>[];
   ws: WebSocketRoute | null;
+  /** Simulate a save of the test workspace from another device (the next PUT with the old version gets 409). */
+  bumpWorkspaceVersion(): void;
 }
 
 export const USER = { id: '2b0ff791-1d77-4e0e-9ace-eb2cdce57724', email: 'trader@example.com', full_name: 'Sara Trader', role: 'trader', is_active: true, created_at: iso(0), updated_at: iso(0) };
@@ -85,6 +166,7 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
     refreshCount: 0,
     wsSent: [],
     ws: null,
+    bumpWorkspaceVersion: () => undefined,
     expireAccessToken: () => validAccess.clear(),
     revokeRefreshTokens: () => {
       validRefresh.clear();
@@ -95,6 +177,11 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
   const reply = (route: Route, status: number, body?: unknown) =>
     route.fulfill({ status, contentType: 'application/json', headers: { 'x-request-id': `req-${state.calls.length}` }, body: body === undefined ? '' : JSON.stringify(body) });
   const page_ = (items: unknown[]) => ({ items, total: items.length, limit: 50, offset: 0 });
+  /** The server version of the workspace edited in tests (bumped by `bumpWorkspaceVersion`, i.e. "another device"). */
+  let workspaceVersion = Number(rec('ws_get').version ?? 1);
+  state.bumpWorkspaceVersion = () => {
+    workspaceVersion += 1;
+  };
 
   await page.route('**/api/v1/**', async (route) => {
     const req = route.request();
@@ -180,6 +267,22 @@ export async function mockBackend(page: Page, opts: { nowMs?: number } = {}): Pr
     if (method === 'GET' && path === '/me/risk-profile') return reply(route, 200, rec('risk_profile_get'));
     if (method === 'PUT' && path === '/me/risk-profile') return reply(route, 200, { ...rec('risk_profile_get'), ...b });
     if (method === 'POST' && path === '/risk/position-size') return reply(route, 200, rec('risk_position_size'));
+
+    // Workspaces: optimistic concurrency like the server (a stale version gets the recorded 409).
+    if (method === 'PUT' && /^\/me\/workspaces\/[^/]+$/.test(path) && path !== '/me/workspaces/order') {
+      if (b.version !== workspaceVersion) return reply(route, 409, { ...recVariant('ws_replace', 409), current_version: workspaceVersion });
+      workspaceVersion += 1;
+      return reply(route, 200, { ...rec('ws_replace'), version: workspaceVersion, state: b.state });
+    }
+    if (method === 'GET' && /^\/me\/workspaces\/[^/]+$/.test(path)) return reply(route, 200, { ...rec('ws_get'), version: workspaceVersion });
+    if (method === 'GET' && path === '/backtests/' + BACKTEST_ID + '/trades.csv')
+      return route.fulfill({ status: 200, contentType: 'text/csv', body: examples.backtests_trades_csv?.[0]?.body ?? '' });
+
+    const recorded = RECORDED_ROUTES.find(([m, re]) => m === method && re.test(path));
+    if (recorded) {
+      const [, , name, status] = recorded;
+      return status === 204 ? reply(route, 204) : reply(route, status, recRaw(name));
+    }
 
     state.unexpected.push(`${method} ${path}`);
     return reply(route, 404, { detail: 'Not Found' });

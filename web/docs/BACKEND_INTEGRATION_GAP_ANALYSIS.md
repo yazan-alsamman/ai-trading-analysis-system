@@ -1,5 +1,7 @@
 # Backend integration — gap analysis
 
+> **Update 26 October 2026:** every row marked "In backend, not connected" below is now **Connected** (strategies, custom strategies, backtests, notification preferences, Telegram linking, workspace sync with 409 handling, likes and follows, expert subscription checkout with demo payments). See `FINAL_RELEASE_READINESS_REPORT.md` and, for the backend gaps that remain, `REMAINING_BACKEND_AND_AI_REQUIREMENTS.md`.
+
 _18 October 2026 · branch `e/backend-integration` · backend at `main` `07b3d11`. The backend in this repository
 (`backend/`, FastAPI) is the source of truth; nothing was added to or replaced in it._
 

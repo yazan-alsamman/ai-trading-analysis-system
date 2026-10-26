@@ -150,3 +150,114 @@ test('the public website still works in backend mode and makes no API calls', as
   await expect(page.getByRole('heading', { level: 1 })).toContainText('A clearer way');
   expect(api.calls).toEqual([]);
 });
+
+/* ---- Full integration: every remaining backend capability has a screen (recorded backend responses) ---- */
+
+test('strategies: catalog, activation sends the backend contract, rule-based preview chart', async ({ page }) => {
+  const api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/strategies');
+  await expect(page.getByRole('heading', { name: 'Strategies', level: 1 })).toBeVisible();
+  await page.getByRole('radio', { name: 'Catalog' }).click();
+  const card = page.getByRole('region', { name: 'Moving Average Crossover' });
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Activate' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Instrument').selectOption('i-xau');
+  await dialog.getByLabel('Timeframe').selectOption('1h');
+  await dialog.getByRole('button', { name: 'Activate' }).click();
+  await expect(dialog).toBeHidden();
+  const create = api.calls.find((c) => c.method === 'POST' && c.path === '/me/strategies');
+  expect(create?.body).toMatchObject({ strategy_key: 'ma_crossover', instrument_id: 'i-xau', timeframe: '1h', is_active: true });
+
+  await page.getByRole('radio', { name: 'Catalog' }).click();
+  await card.getByRole('button', { name: 'Preview' }).click();
+  const preview = page.getByRole('dialog');
+  await expect(preview.getByText(/not AI output/).first()).toBeVisible();
+  await preview.getByLabel('Instrument').selectOption('i-xau');
+  await preview.getByRole('button', { name: 'Run preview' }).click();
+  await expect(preview.locator('canvas').first()).toBeVisible();
+  expect(api.calls.some((c) => c.method === 'POST' && c.path === '/strategies/ma_crossover/preview')).toBe(true);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('backtests: list, result page with metrics, equity chart, trades and CSV export', async ({ page }) => {
+  const api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/backtests');
+  await expect(page.getByRole('heading', { name: 'Backtests', level: 1 })).toBeVisible();
+  await expect(page.getByText(/not a forecast/i).first()).toBeVisible();
+  await page.goto('/backtests/cae6ba92-75cc-4eed-a397-e3bacfbeb853');
+  await expect(page.getByText('Total return').first()).toBeVisible();
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Backtest trades' })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  expect((await download).suggestedFilename()).toMatch(/^backtest-.*-trades\.csv$/);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('settings: server notification preferences saved; API key shown once; a workspace version conflict is never overwritten silently', async ({ page }) => {
+  const api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/settings');
+  const prefs = page.locator('#notifications');
+  await expect(prefs.getByText('Telegram').first()).toBeVisible();
+  await prefs.getByLabel('Language of notification texts').selectOption('en');
+  await prefs.getByRole('button', { name: 'Save preferences' }).click();
+  await expect.poll(() => api.calls.find((c) => c.method === 'PUT' && c.path === '/me/notification-preferences')?.body).toMatchObject({ language: 'en' });
+
+  const keys = page.locator('#api-keys');
+  await keys.getByRole('button', { name: 'New key' }).click();
+  const keyDialog = page.getByRole('dialog', { name: 'New API key' });
+  await keyDialog.getByLabel('Name').fill('Bot');
+  await keyDialog.getByRole('checkbox').first().check();
+  await keyDialog.getByRole('button', { name: 'Create key' }).click();
+  const secret = page.getByRole('dialog', { name: 'Your new API key' });
+  await expect(secret).toBeVisible();
+  await secret.getByRole('button').last().click();
+  await expect(secret).toBeHidden();
+
+  // Another device saves first: pushing with the listed version gets the server's 409.
+  api.bumpWorkspaceVersion();
+  const ws = page.locator('#server-workspaces');
+  await ws.getByRole('button', { name: 'Push current' }).first().click();
+  const conflict = page.getByRole('dialog', { name: 'Changed on another device' });
+  await expect(conflict).toBeVisible();
+  await conflict.getByRole('button', { name: 'Overwrite with mine' }).click();
+  await expect(conflict).toBeHidden();
+  const puts = api.calls.filter((c) => c.method === 'PUT' && /^\/me\/workspaces\//.test(c.path));
+  expect(puts.length).toBe(2);
+  expect((puts[1]?.body as { version: number }).version).toBe((puts[0]?.body as { version: number }).version + 1);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('community: like, profile with follow, expert plans labelled as demo payments, subscriptions after checkout', async ({ page }) => {
+  const api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/community/posts');
+  await page.getByRole('button', { name: /^Like/ }).first().click();
+  await expect.poll(() => api.calls.some((c) => c.method === 'POST' && /^\/posts\/[^/]+\/like$/.test(c.path))).toBe(true);
+
+  await page.goto('/community/people/35da2fba-7e7e-486f-b7ff-8c06bbd4ff68');
+  await expect(page.getByRole('heading', { name: 'Lina Analyst' })).toBeVisible();
+  await page.getByRole('button', { name: /^(Follow|Unfollow)$/ }).click();
+  await expect.poll(() => api.calls.some((c) => /^\/users\/[^/]+\/follow$/.test(c.path))).toBe(true);
+
+  await page.goto('/community/experts/d8896f08-c212-47b0-8c26-86b4e3d743c7');
+  await expect(page.getByText(/no real money/i).first()).toBeVisible();
+  await expect(page.getByText(/4242 4242 4242 4242/).first()).toBeVisible();
+
+  await page.goto('/subscriptions/return?status=succeeded&checkout_id=x');
+  await expect(page.getByText('Payment accepted')).toBeVisible();
+  await expect(page.getByText('Sami Expert').first()).toBeVisible();
+  expect(api.unexpected).toEqual([]);
+});
+
+test('alerts: the server trigger history is shown', async ({ page }) => {
+  const api = await mockBackend(page);
+  await seedSession(page);
+  await page.goto('/alerts');
+  await expect(page.getByRole('region', { name: 'Alert trigger history' })).toBeVisible();
+  expect(api.unexpected).toEqual([]);
+});

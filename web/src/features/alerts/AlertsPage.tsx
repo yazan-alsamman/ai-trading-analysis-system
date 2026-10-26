@@ -16,6 +16,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useResource } from '@/hooks/useResource';
 import { formatDate, formatPips, formatPrice } from '@/lib/format';
 import { userMessage } from '@/services/errors';
+import { AlertHistoryPanel } from './AlertHistoryPanel';
 import { OpportunityNotifications } from './OpportunityNotifications';
 import { PriceAlertDialog } from './PriceAlertDialog';
 
@@ -198,6 +199,8 @@ export function AlertsPage() {
           </TableRegion>
         )}
       </Panel>
+
+      {!isDemo && <AlertHistoryPanel />}
 
       <OpportunityNotifications />
 

@@ -8,7 +8,7 @@ const POLL_MS = 120_000;
 /**
  * Backend mode: mirrors the server notification inbox (/me/notifications) into
  * the notification centre, reloads on WebSocket pushes (with a slow polling
- * fallback), and sends read state back to the server. On sign-out the mirrored
+ * fallback), and sends read state and deletions back to the server. On sign-out the mirrored
  * items are removed so one account's notifications never show to the next.
  */
 export function ServerInboxSync() {
@@ -29,7 +29,11 @@ export function ServerInboxSync() {
       const c = (ctrl = new AbortController());
       services.inbox
         .list({ signal: c.signal })
-        .then((items) => notificationStore.replaceRemote(items))
+        .then((items) => {
+          notificationStore.replaceRemote(items);
+          // The list holds the latest items only; the badge uses the server's own count.
+          return services.inbox.unreadCount({ signal: c.signal }).then((count) => notificationStore.setRemoteUnread(count));
+        })
         .catch((e: unknown) => {
           if (!isAbort(e)) console.warn('Notification inbox unavailable', e);
         });
@@ -37,6 +41,7 @@ export function ServerInboxSync() {
     setRemoteNotificationHandlers({
       markRead: (id) => void services.inbox.markRead(id).catch(() => undefined),
       markAllRead: () => void services.inbox.markAllRead().catch(() => undefined),
+      remove: (id) => void services.inbox.remove(id).catch(() => load()),
     });
     load();
     const off = services.inbox.subscribe((n) => {

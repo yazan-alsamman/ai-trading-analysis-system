@@ -1,8 +1,10 @@
-import { Lock, Send, Unplug } from 'lucide-react';
+import { ArrowRight, Lock, Send, Unplug } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useServices } from '@/app/contexts';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { buttonClasses } from '@/components/ui/buttonClasses';
 import { FormError, Textarea } from '@/components/ui/Form';
 import { EmptyState, ErrorState, Loading, Skeleton, SkeletonRows } from '@/components/ui/StateViews';
 import type { Expert, ExpertAvailability } from '@/domain/community';
@@ -57,15 +59,22 @@ function Conversation({ expert, chatAvailable }: { expert: Expert; chatAvailable
                 From <span className="num text-fg-2">{expert.cheapestPlan.price} {expert.cheapestPlan.currency}</span> / {expert.cheapestPlan.interval}
               </span>
             )}
-            <Button
-              size="sm"
-              variant="primary"
-              icon={Lock}
-              disabled
-              title="Subscribing is not available in the web client yet (the backend's checkout uses demo payments only)."
-            >
-              Subscribe to chat
-            </Button>
+            {services.source === 'api' ? (
+              <Link to={`/community/experts/${expert.id}`} className={buttonClasses({ variant: 'primary', size: 'sm' })}>
+                View plans
+                <ArrowRight aria-hidden className="size-4" />
+              </Link>
+            ) : (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={Lock}
+                disabled
+                title="Subscribing is not available in the web client yet (the backend's checkout uses demo payments only)."
+              >
+                Subscribe to chat
+              </Button>
+            )}
           </span>
         )}
       </header>
@@ -196,8 +205,18 @@ export function ExpertsPage() {
                   {e.markets.map((s) => (
                     <Badge key={s}>{getInstrument(s).display}</Badge>
                   ))}
+                  {e.isSubscribed && <Badge tone="accent">Subscribed</Badge>}
                 </span>
               </button>
+              {services.source === 'api' && (
+                <Link
+                  to={`/community/experts/${e.id}`}
+                  className="mt-1 inline-flex items-center gap-1 px-1 text-xs font-medium text-accent underline-offset-2 hover:underline"
+                >
+                  {e.cheapestPlan ? `View plans · from ${e.cheapestPlan.price} ${e.cheapestPlan.currency} / ${e.cheapestPlan.interval}` : 'View profile & plans'}
+                  <span className="sr-only"> for {e.name}</span>
+                </Link>
+              )}
             </li>
           );
         })}

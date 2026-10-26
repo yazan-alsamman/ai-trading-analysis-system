@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ExternalLink, Monitor, Moon, Save, Sun } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { usePreferences, useServices, useToast } from '@/app/contexts';
+import { useAuth, usePreferences, useServices, useToast } from '@/app/contexts';
 import { Badge, DemoBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select, Switch } from '@/components/ui/Form';
@@ -19,6 +19,11 @@ import { channelSettingsSchema, type ChannelSettingsForm } from './schemas';
 import { MembershipSettings } from '@/features/membership/MembershipSettings';
 import { WorkspacesSection } from './WorkspacesSection';
 import { AccountSection } from './AccountSection';
+import { ApiKeysSection } from './ApiKeysSection';
+import { ExpertStudioSection } from './ExpertStudioSection';
+import { NotificationSettingsSection } from './NotificationSettingsSection';
+import { ServerWorkspacesSection } from './ServerWorkspacesSection';
+import { SubscriptionsSection } from './SubscriptionsSection';
 
 function ChannelsSection() {
   const { prefs, setChannels } = usePreferences();
@@ -34,19 +39,9 @@ function ChannelsSection() {
     notify('Channel settings saved in this browser (demo).', 'success');
   });
 
-  // Backend mode: delivery is the server's (notification preferences, Telegram linking, push devices).
-  // This browser-only form would not change it, so it is not offered.
-  if (source === 'api')
-    return (
-      <div id="channels" className="scroll-mt-4">
-        <Panel title="Notification channels" meta={<span>Managed by the server</span>}>
-          <p className="text-sm text-fg-2">
-            Alerts are evaluated on the server and appear in the notification centre here. Email, Telegram and push delivery are configured through your server
-            notification preferences, which this web client cannot edit yet.
-          </p>
-        </Panel>
-      </div>
-    );
+  // Backend mode: delivery is the server's (notification preferences, Telegram linking, push devices),
+  // edited in NotificationSettingsSection instead of this browser-only form.
+  if (source === 'api') return <NotificationSettingsSection />;
 
   return (
     <div id="channels" className="scroll-mt-4">
@@ -127,13 +122,18 @@ function DemoControls() {
 export function SettingsPage() {
   const { prefs, setTheme, setDensity, setTimeZone, timeZone } = usePreferences();
   const { source } = useServices();
+  const { session } = useAuth();
+  const signedIn = source === 'api' && !!session && !session.isDemo;
   const now = useNow(1000);
   useHashScroll();
   usePageTitle('Settings');
 
   return (
     <Page width="reading">
-      <PageHeader title="Settings" description="Display preferences, notification channels and workspaces." />
+      <PageHeader
+        title="Settings"
+        description={source === 'api' ? 'Display preferences, notifications, workspaces, account, subscriptions and API keys.' : 'Display preferences, notification channels and workspaces.'}
+      />
 
       <Panel title="Appearance">
         <div className="flex flex-col gap-5">
@@ -200,11 +200,19 @@ export function SettingsPage() {
         persistenceNote={
           source === 'demo'
             ? 'Demo: workspaces are saved in this browser only. Server sync per account is pending the backend workspace API.'
-            : 'Workspaces are currently saved in this browser. Server sync per account is pending the backend workspace API.'
+            : 'These workspaces are saved in this browser. Use “Server workspaces” below to save them on your account or load one from another device.'
         }
       />
 
+      {signedIn && <ServerWorkspacesSection />}
+
       {source === 'api' && <AccountSection />}
+
+      {signedIn && <SubscriptionsSection />}
+
+      {signedIn && session?.user.role === 'expert' && <ExpertStudioSection />}
+
+      {signedIn && <ApiKeysSection />}
 
       <div id="data-source" className="scroll-mt-4">
         <Panel title="Data source" meta={source === 'demo' ? <Badge tone="demo">Demo mode</Badge> : <Badge tone="info">API mode</Badge>}>

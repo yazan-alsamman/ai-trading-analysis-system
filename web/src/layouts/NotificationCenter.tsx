@@ -1,9 +1,9 @@
-import { Bell, BellRing, CheckCheck, Info, Radar, Sparkles, Trash2 } from 'lucide-react';
+import { Bell, BellRing, CheckCheck, Info, Radar, Sparkles, Trash2, X } from 'lucide-react';
 import { Link } from 'react-router';
 import { useServices } from '@/app/contexts';
 import { notificationStore, useNotifications, type AppNotification } from '@/app/notifications';
 import { DemoBadge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Button, IconButton } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/cn';
 import { formatRelative } from '@/lib/format';
@@ -98,11 +98,21 @@ export function NotificationCenter() {
             </div>
           ) : (
             <ul className="max-h-96 overflow-y-auto p-1.5">
-              {items.map((n) => (
-                <li key={n.id}>
-                  <Item n={n} onOpen={close} />
-                </li>
-              ))}
+              {items.map((n) =>
+                source === 'api' ? (
+                  // Backend mode: deleting removes it from the server inbox too.
+                  <li key={n.id} className="flex items-start gap-1">
+                    <div className="min-w-0 flex-1">
+                      <Item n={n} onOpen={close} />
+                    </div>
+                    <IconButton icon={X} label={`Delete notification: ${n.title}`} size="sm" className="mt-1.5" tooltipSide="left" onClick={() => notificationStore.remove(n.id)} />
+                  </li>
+                ) : (
+                  <li key={n.id}>
+                    <Item n={n} onOpen={close} />
+                  </li>
+                ),
+              )}
             </ul>
           )}
         </div>

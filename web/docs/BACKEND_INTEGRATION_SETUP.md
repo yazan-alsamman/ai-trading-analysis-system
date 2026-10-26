@@ -92,7 +92,7 @@ python -m app.cli seed-instruments
 python -m app.cli seed-demo-candles --symbol EUR/USD --source twelvedata --days 7    # SYNTHETIC prices
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 python -m app.cli simulate-live --symbol EUR/USD --source twelvedata --interval 2    # optional: live WS updates (demo prices)
-celery -A app.tasks worker -P solo -Q celery,notifications ; celery -A app.tasks beat   # signal engine, alerts, notifications
+celery -A app.tasks worker -P solo -Q celery,notifications,backtests ; celery -A app.tasks beat   # signal engine, alerts, notifications
 ```
 
 On Windows Celery needs `-P solo` (the default prefork pool is not supported there).

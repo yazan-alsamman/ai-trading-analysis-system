@@ -93,3 +93,19 @@ These are genuine, current limitations. None of them is hidden in the UI.
 | 49 | ~~Not verified against a running backend~~ | **Resolved 18 Oct 2026:** the existing backend was run locally (PostgreSQL + TimescaleDB, Redis, Celery) and verified live (29 API checks, 12 browser tests, backend suite 655/655). Production itself was only probed read-only. |
 | 50 | Backend prices are synthetic until a collector exists | No market-data collector exists in the repository; candles come from `seed-demo-candles`/`simulate-live` or an external push. The UI says "Backend feed". |
 | 51 | Tokens in `localStorage`; WS token in the URL | Backend's documented design; needs HTTPS in production (gap E3). HttpOnly refresh cookie recommended later. |
+
+## Full integration (26 October 2026)
+
+Every backend capability now has a screen (FINAL_RELEASE_READINESS_REPORT.md). This resolves several earlier items:
+
+| # | Item | Notes |
+| --- | --- | --- |
+| 1 | ~~No backend connected~~ | **Resolved:** backend mode is verified against the real backend (service layer of every feature live; see the readiness report §3) |
+| 6 | ~~Expert chat & subscriptions~~ | **Resolved in backend mode:** subscriptions go through the backend's **demo** checkout (no real money), and chat works with a subscription. Demo mode is unchanged. |
+| 7 | ~~Notification delivery~~ | **Resolved in backend mode:** server preferences, channel status, Telegram linking and test delivery. Delivery itself needs server credentials. |
+| 8 | ~~Workspace sync~~ | **Resolved in backend mode:** Settings → Server workspaces, with version-conflict (409) handling. Browser workspaces remain the chart's working copy. |
+| 24 | ~~Real-backend auth verified by contract tests only~~ | **Resolved 18 Oct 2026** (live browser suite) |
+| 52 | New pages not yet run in a live browser session | Verified live at the service layer and in the browser against recorded backend responses. The local stack could not be restarted in this session (readiness report §4). |
+| 53 | Custom strategies are edited as JSON | Validated by the server, with error paths and a reference of the builder catalog. A visual drag-and-drop builder is optional follow-up work. |
+| 54 | Server workspaces map one chart panel | The web chart has one panel. Extra server panels, drawings and strategy overlays are listed as not carried over when loading. |
+| 55 | Workspace reorder/share and backtest list filters have no UI | The backend supports them; the web service layer does not expose them yet |
