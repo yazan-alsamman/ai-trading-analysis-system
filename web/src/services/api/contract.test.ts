@@ -80,8 +80,11 @@ describe('mapping recorded responses to the UI domain', () => {
     const instruments = page(InstrumentRead).parse(body('market_instruments')).items;
     const s = page(SignalRead).parse(body('signals_list')).items[0];
     if (!s) throw new Error('no signal');
-    const mapped = toStrategySignal(s, new Map(instruments.map((i) => [i.id, i])));
-    expect(mapped).toMatchObject({ strategyKey: 'rsi_reversal', side: 'sell', instrumentLabel: 'BTC/USDT', symbol: null, reason: 'rsi_cross_down_overbought' });
+    const byId = new Map(instruments.map((i) => [i.id, i]));
+    const mapped = toStrategySignal(s, byId);
+    // Compared with the recording itself, so a re-recorded example (different strategy) stays valid.
+    expect(mapped).toMatchObject({ strategyKey: s.strategy_key, side: s.side, reason: s.reason, instrumentLabel: byId.get(s.instrument_id)?.symbol });
+    expect(mapped.symbol).toBe(toSymbol(byId.get(s.instrument_id)?.symbol ?? ''));
     expect(mapped).not.toHaveProperty('probability');
   });
 

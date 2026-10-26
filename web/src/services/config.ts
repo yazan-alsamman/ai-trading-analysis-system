@@ -15,16 +15,19 @@ const BaseUrl = z
   .trim()
   .refine((v) => /^https?:\/\//i.test(v) || v.startsWith('/'), 'Use an absolute http(s) URL or a path starting with "/"');
 
-const EnvSchema = z.object({
-  VITE_DATA_SOURCE: z.enum(['demo', 'api']).default('demo'),
-  // Same-origin by default (production behind one Nginx); local development points it at the backend explicitly.
-  VITE_API_BASE_URL: BaseUrl.default('/api/v1'),
-  /** WebSocket endpoint for live market data. Default: derived from the API URL (`/ws/market` on the same host). */
-  VITE_WS_URL: BaseUrl.or(z.string().regex(/^wss?:\/\//i)).optional(),
-  VITE_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
-});
+const DataSourceSchema = z.enum(['demo', 'api']);
+const WsUrl = BaseUrl.or(z.string().regex(/^wss?:\/\//i));
+const Timeout = z.coerce.number().int().positive();
 
 export type DataSource = 'demo' | 'api';
+
+/** A configuration value the app refuses to guess about. The app shows these instead of starting. */
+export interface ConfigIssue {
+  variable: string;
+  /** The public value received (VITE_ variables are compiled into the bundle; never secrets). */
+  value: string;
+  message: string;
+}
 
 export interface AppConfig {
   dataSource: DataSource;
@@ -37,6 +40,12 @@ export interface AppConfig {
   pricePollMs: number;
   /** A feed with no update for this long is shown as stale. */
   staleAfterMs: number;
+  /**
+   * Blocking problems. Demo mode is only ever used when VITE_DATA_SOURCE is
+   * unset or `demo`: a malformed value never silently swaps real data for
+   * simulated data.
+   */
+  issues: ConfigIssue[];
 }
 
 function origin(): string {
@@ -59,21 +68,59 @@ export function deriveWsUrl(apiBaseUrl: string, explicit?: string): string {
   return `${u.protocol === 'https:' ? 'wss:' : 'ws:'}//${u.host}/ws/market`;
 }
 
+const present = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
+
 export function loadConfig(env: Record<string, unknown> = import.meta.env): AppConfig {
-  const parsed = EnvSchema.safeParse(env);
-  if (!parsed.success) {
-    console.warn('Invalid environment configuration — falling back to demo mode.', z.prettifyError(parsed.error));
+  const issues: ConfigIssue[] = [];
+  const issue = (variable: string, value: unknown, message: string) => issues.push({ variable, value: String(value), message });
+
+  // Unset = demo (the documented default). Anything else must be exactly `demo` or `api`.
+  const rawSource = env.VITE_DATA_SOURCE;
+  let dataSource: DataSource = 'demo';
+  if (present(rawSource)) {
+    const parsed = DataSourceSchema.safeParse(rawSource.trim());
+    if (parsed.success) dataSource = parsed.data;
+    else issue('VITE_DATA_SOURCE', rawSource, 'Must be "demo" or "api".');
   }
-  const values = parsed.success ? parsed.data : EnvSchema.parse({});
-  const apiBaseUrl = resolveBaseUrl(values.VITE_API_BASE_URL);
+
+  let apiBase = '/api/v1';
+  if (present(env.VITE_API_BASE_URL)) {
+    const parsed = BaseUrl.safeParse(env.VITE_API_BASE_URL);
+    if (parsed.success) apiBase = parsed.data;
+    // In demo mode the API URL is unused; in API mode a wrong URL would talk to the wrong server.
+    else if (dataSource === 'api')
+      issue(
+        'VITE_API_BASE_URL',
+        env.VITE_API_BASE_URL,
+        'Use an absolute http(s) URL or a path starting with "/". (Git Bash on Windows rewrites "/api/v1" into a Windows path: leave it unset or put it in .env.local.)',
+      );
+  }
+
+  let wsExplicit: string | undefined;
+  if (present(env.VITE_WS_URL)) {
+    const parsed = WsUrl.safeParse(env.VITE_WS_URL);
+    if (parsed.success) wsExplicit = parsed.data;
+    else if (dataSource === 'api') issue('VITE_WS_URL', env.VITE_WS_URL, 'Use a ws(s):// or http(s):// URL, a path starting with "/", or leave it empty.');
+  }
+
+  let apiTimeoutMs = 10_000;
+  if (env.VITE_API_TIMEOUT_MS !== undefined && env.VITE_API_TIMEOUT_MS !== '') {
+    const parsed = Timeout.safeParse(env.VITE_API_TIMEOUT_MS);
+    if (parsed.success) apiTimeoutMs = parsed.data;
+    else console.warn(`VITE_API_TIMEOUT_MS=${String(env.VITE_API_TIMEOUT_MS)} is not a positive integer; using 10000.`);
+  }
+
+  if (issues.length) console.error('Invalid configuration:', issues);
+  const apiBaseUrl = resolveBaseUrl(apiBase);
   return {
-    dataSource: values.VITE_DATA_SOURCE,
+    dataSource,
     apiBaseUrl,
-    wsUrl: deriveWsUrl(apiBaseUrl, values.VITE_WS_URL),
-    apiTimeoutMs: values.VITE_API_TIMEOUT_MS,
+    wsUrl: deriveWsUrl(apiBaseUrl, wsExplicit),
+    apiTimeoutMs,
     pricePollMs: 15_000,
     // Demo ticks every second; backend 1-minute candles may legitimately go quiet for longer.
-    staleAfterMs: values.VITE_DATA_SOURCE === 'api' ? 90_000 : 10_000,
+    staleAfterMs: dataSource === 'api' ? 90_000 : 10_000,
+    issues,
   };
 }
 

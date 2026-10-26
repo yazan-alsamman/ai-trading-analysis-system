@@ -25,6 +25,7 @@ import {
   RiskProfileRead,
   SignalRead,
   ThreadRead,
+  UnreadCount,
   UserRead,
 } from './backend';
 import { endpoints } from './endpoints';
@@ -32,6 +33,9 @@ import { createHttpClient, type HttpClient } from './http';
 import { toChatMessage, toComments, toCandleSeries, toExpert, toNewsItem, toNotification, toPost, toPriceAlert, toStrategySignal, toUser, instrumentIndex } from './mappers';
 import { createMarketSocket, type MarketSocket } from './marketSocket';
 import { createTokenManager, type SessionStore } from './session';
+import { apiAlertHistory, apiExpertStudio, apiKeyService, apiNotificationSettings, apiWorkspaceSync } from './accountApi';
+import { apiBacktestService, apiInstrumentDirectory, apiStrategyService } from './labApi';
+import { apiSocialService } from './socialApi';
 
 /**
  * Backend implementation of the service interfaces (VITE_DATA_SOURCE=api),
@@ -276,6 +280,7 @@ export function createApiServices(cfg: AppConfig, store: SessionStore, onUnautho
       remove: async (id) => {
         await http.request('DELETE', endpoints.alerts.item(id), { schema: Empty });
       },
+      history: apiAlertHistory(http),
       getOpportunityPreferences: missing('Alerts on AI opportunities need the model’s output, which the backend does not expose yet.'),
       saveOpportunityPreferences: missing('Alerts on AI opportunities need the model’s output, which the backend does not expose yet.'),
     },
@@ -288,24 +293,39 @@ export function createApiServices(cfg: AppConfig, store: SessionStore, onUnautho
         const p = await http.request('GET', endpoints.posts.comments(postId), { query: { limit: 100 }, schema: page(ThreadRead), ...(o?.signal ? { signal: o.signal } : {}) });
         return toComments(p.items, postId);
       },
-      addComment: async (postId, body) => {
-        const c = await http.request('POST', endpoints.posts.comments(postId), { body: { body: body.trim() }, schema: CommentRead });
+      addComment: async (postId, body, parentId) => {
+        const c = await http.request('POST', endpoints.posts.comments(postId), { body: { body: body.trim(), ...(parentId ? { parent_id: parentId } : {}) }, schema: CommentRead });
         const [mapped] = toComments([c], postId);
         if (!mapped) throw new ApiError('contract', 'The new comment was not returned');
         return mapped;
       },
       listPosts: async (o) => {
-        const p = await http.request('GET', endpoints.posts.list, { query: { limit: 50 }, schema: page(PostRead), ...(o?.signal ? { signal: o.signal } : {}) });
+        const p = await http.request('GET', endpoints.posts.list, {
+          query: { limit: 50, scope: o?.scope === 'following' ? 'following' : undefined, author_id: o?.authorId },
+          schema: page(PostRead),
+          ...(o?.signal ? { signal: o.signal } : {}),
+        });
         return p.items.map(toPost);
       },
-      createPost: async ({ body, symbols }) => {
+      createPost: async ({ body, symbols, title: explicitTitle, direction, timeframe, visibility }) => {
         const text = body.trim();
-        // The backend requires a title (≤ 140): the first line of what the user wrote.
+        // The backend requires a title (≤ 140): the user's own, or the first line of what they wrote.
         const firstLine = text.split('\n')[0]?.trim() ?? '';
-        const title = firstLine.length > 140 ? `${firstLine.slice(0, 139)}…` : firstLine || text.slice(0, 140);
+        const derived = firstLine.length > 140 ? `${firstLine.slice(0, 139)}…` : firstLine || text.slice(0, 140);
+        const title = explicitTitle?.trim() || derived;
         const first = symbols[0];
         const instrumentId = first ? (await registry.require(first)).id : null;
-        const created = await http.request('POST', endpoints.posts.list, { body: { title, body: text, instrument_id: instrumentId }, schema: PostRead });
+        const created = await http.request('POST', endpoints.posts.list, {
+          body: {
+            title,
+            body: text,
+            instrument_id: instrumentId,
+            ...(direction !== undefined ? { direction } : {}),
+            ...(timeframe ? { timeframe } : {}),
+            ...(visibility ? { visibility } : {}),
+          },
+          schema: PostRead,
+        });
         return toPost(created);
       },
       listExperts: async (o) => {
@@ -347,6 +367,10 @@ export function createApiServices(cfg: AppConfig, store: SessionStore, onUnautho
       markAllRead: async () => {
         await http.request('POST', endpoints.notifications.readAll, { schema: Empty });
       },
+      remove: async (id) => {
+        await http.request('DELETE', endpoints.notificationSettings.item(id), { schema: Empty });
+      },
+      unreadCount: async (o) => (await http.request('GET', endpoints.notificationSettings.unreadCount, { schema: UnreadCount, ...(o?.signal ? { signal: o.signal } : {}) })).count,
       subscribe(onPush) {
         // docs/websocket.md: `notification` carries {notification: {title, body, …}}; `price_alert` follows a fired alert.
         const read = (msg: Record<string, unknown>) => {
@@ -412,6 +436,14 @@ export function createApiServices(cfg: AppConfig, store: SessionStore, onUnautho
         return composeReply(question, context, Date.now());
       },
     },
+    instruments: apiInstrumentDirectory(http),
+    strategies: apiStrategyService(http),
+    backtests: apiBacktestService(http, socket),
+    workspacesSync: apiWorkspaceSync(http, socket),
+    notificationSettings: apiNotificationSettings(http),
+    social: apiSocialService(http),
+    expertStudio: apiExpertStudio(http),
+    apiKeys: apiKeyService(http),
   };
 }
 

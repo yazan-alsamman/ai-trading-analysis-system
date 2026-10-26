@@ -1,9 +1,10 @@
 import { Dialog } from '@/components/ui/Dialog';
-import { ALL_NAV } from './navigation';
+import { useServices } from '@/app/contexts';
+import { allNavFor } from './navigation';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
-const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = [
+const groupsFor = (source: 'demo' | 'api'): { title: string; items: { keys: string[]; label: string }[] }[] => [
   {
     title: 'Global',
     items: [
@@ -12,7 +13,7 @@ const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = 
       { keys: ['T'], label: 'Toggle dark / light theme' },
     ],
   },
-  { title: 'Go to', items: ALL_NAV.map((n) => ({ keys: n.shortcut.toUpperCase().split(' '), label: n.label })) },
+  { title: 'Go to', items: allNavFor(source).map((n) => ({ keys: n.shortcut.toUpperCase().split(' '), label: n.label })) },
   {
     title: 'Workspace',
     items: [
@@ -28,10 +29,11 @@ const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = 
 ];
 
 export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { source } = useServices();
   return (
     <Dialog open={open} onClose={onClose} title="Keyboard shortcuts" description="Shortcuts are disabled while typing in a field.">
       <div className="grid gap-5 sm:grid-cols-2">
-        {GROUPS.map((g) => (
+        {groupsFor(source).map((g) => (
           <section key={g.title} className={g.title === 'Go to' ? 'sm:row-span-2' : ''}>
             <h3 className="mb-2 text-xs font-medium text-fg-3">{g.title}</h3>
             <dl className="flex flex-col gap-1.5">

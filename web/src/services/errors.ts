@@ -23,14 +23,21 @@ export class ApiError extends Error {
   readonly fieldErrors: Record<string, string[]>;
   /** The backend's `x-request-id`, for support (shown, never the raw body). */
   readonly requestId: string | undefined;
+  /** The parsed body of a 4xx response (e.g. a 409's `current_version`). Never set for 5xx. */
+  readonly data: Record<string, unknown> | undefined;
 
-  constructor(kind: ApiErrorKind, message: string, options: { status?: number; fieldErrors?: Record<string, string[]>; cause?: unknown; requestId?: string } = {}) {
+  constructor(
+    kind: ApiErrorKind,
+    message: string,
+    options: { status?: number; fieldErrors?: Record<string, string[]>; cause?: unknown; requestId?: string; data?: Record<string, unknown> } = {},
+  ) {
     super(message, { cause: options.cause });
     this.name = 'ApiError';
     this.kind = kind;
     this.status = options.status;
     this.fieldErrors = options.fieldErrors ?? {};
     this.requestId = options.requestId;
+    this.data = options.data;
   }
 }
 

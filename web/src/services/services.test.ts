@@ -68,7 +68,7 @@ describe('feed status', () => {
 describe('API auth against the FastAPI backend contract (round 3)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  const cfg = { dataSource: 'api' as const, apiBaseUrl: 'http://api.test/api/v1', wsUrl: 'ws://api.test/ws/market', apiTimeoutMs: 1000, pricePollMs: 1000, staleAfterMs: 10_000 };
+  const cfg = { dataSource: 'api' as const, apiBaseUrl: 'http://api.test/api/v1', wsUrl: 'ws://api.test/ws/market', apiTimeoutMs: 1000, pricePollMs: 1000, staleAfterMs: 10_000, issues: [] };
   const store = () => ({ get: () => null, set: () => undefined, readPersisted: () => null });
   const json = (status: number, body: unknown) => new Response(body === null ? null : JSON.stringify(body), { status });
   const user = { id: 'u1', email: 'sara@example.com', full_name: 'Sara K', role: 'trader', is_active: true, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' };

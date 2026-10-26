@@ -28,6 +28,13 @@ const OverviewPage = lazy(() => import('@/features/overview/OverviewPage').then(
 const RiskPage = lazy(() => import('@/features/risk/RiskPage').then((m) => ({ default: m.RiskPage })));
 const AssistantPage = lazy(() => import('@/features/assistant/AssistantPage').then((m) => ({ default: m.AssistantPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const StrategiesPage = lazy(() => import('@/features/strategies/StrategiesPage').then((m) => ({ default: m.StrategiesPage })));
+const BacktestsPage = lazy(() => import('@/features/backtests/BacktestsPage').then((m) => ({ default: m.BacktestsPage })));
+const BacktestDetailPage = lazy(() => import('@/features/backtests/BacktestDetailPage').then((m) => ({ default: m.BacktestDetailPage })));
+const PeoplePage = lazy(() => import('@/features/community/PeoplePage').then((m) => ({ default: m.PeoplePage })));
+const ProfilePage = lazy(() => import('@/features/community/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const ExpertDetailPage = lazy(() => import('@/features/community/ExpertDetailPage').then((m) => ({ default: m.ExpertDetailPage })));
+const CheckoutReturnPage = lazy(() => import('@/features/subscriptions/CheckoutReturnPage').then((m) => ({ default: m.CheckoutReturnPage })));
 const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('@/features/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })));
 
@@ -71,6 +78,9 @@ export const router = createBrowserRouter([
       { path: '/signals', element: page(<SignalsPage />) },
       { path: '/alerts', element: page(<AlertsPage />) },
       { path: '/insights', element: page(<InsightsPage />) },
+      { path: '/strategies', element: page(<StrategiesPage />) },
+      { path: '/backtests', element: page(<BacktestsPage />) },
+      { path: '/backtests/:backtestId', element: page(<BacktestDetailPage />) },
       {
         path: '/community',
         element: page(<CommunityLayout />),
@@ -79,8 +89,12 @@ export const router = createBrowserRouter([
           { path: 'news', element: page(<NewsPage />) },
           { path: 'posts', element: page(<PostsPage />) },
           { path: 'experts', element: page(<ExpertsPage />) },
+          { path: 'experts/:expertId', element: page(<ExpertDetailPage />) },
+          { path: 'people', element: page(<PeoplePage />) },
+          { path: 'people/:userId', element: page(<ProfilePage />) },
         ],
       },
+      { path: '/subscriptions/return', element: page(<CheckoutReturnPage />) },
       { path: '/settings', element: page(<SettingsPage />) },
       { path: '*', element: <NotFoundPage /> },
     ],

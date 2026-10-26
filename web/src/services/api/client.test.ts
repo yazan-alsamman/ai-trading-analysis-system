@@ -49,9 +49,19 @@ describe('configuration', () => {
     expect(cfg).toMatchObject({ dataSource: 'api', apiBaseUrl: `${window.location.origin}/api/v1`, staleAfterMs: 90_000 });
   });
 
-  it('falls back to demo mode on an invalid configuration', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    expect(loadConfig({ VITE_DATA_SOURCE: 'api', VITE_API_BASE_URL: 'javascript:alert(1)' }).dataSource).toBe('demo');
+  it('never falls back to demo data silently: an invalid configuration is a blocking issue', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const bad = loadConfig({ VITE_DATA_SOURCE: 'api', VITE_API_BASE_URL: 'javascript:alert(1)' });
+    expect(bad.dataSource).toBe('api');
+    expect(bad.issues.map((i) => i.variable)).toEqual(['VITE_API_BASE_URL']);
+    // The Git Bash path rewrite that once switched a local run to demo data.
+    expect(loadConfig({ VITE_DATA_SOURCE: 'api', VITE_API_BASE_URL: 'C:/Program Files/Git/api/v1' }).issues).toHaveLength(1);
+    expect(loadConfig({ VITE_DATA_SOURCE: 'API ' }).issues[0]).toMatchObject({ variable: 'VITE_DATA_SOURCE' });
+  });
+
+  it('uses demo mode only when it is selected or left unset', () => {
+    expect(loadConfig({})).toMatchObject({ dataSource: 'demo', issues: [] });
+    expect(loadConfig({ VITE_DATA_SOURCE: 'demo', VITE_API_BASE_URL: 'not a url' })).toMatchObject({ dataSource: 'demo', issues: [] });
   });
 });
 
@@ -219,7 +229,7 @@ describe('market WebSocket', () => {
 });
 
 describe('API adapter request shapes (verified contract)', () => {
-  const cfg: AppConfig = { dataSource: 'api', apiBaseUrl: 'http://api.test/api/v1', wsUrl: 'ws://api.test/ws/market', apiTimeoutMs: 1000, pricePollMs: 1000, staleAfterMs: 90_000 };
+  const cfg: AppConfig = { dataSource: 'api', apiBaseUrl: 'http://api.test/api/v1', wsUrl: 'ws://api.test/ws/market', apiTimeoutMs: 1000, pricePollMs: 1000, staleAfterMs: 90_000, issues: [] };
   const instruments = {
     items: [
       { id: 'i-xau', symbol: 'XAU/USD', source: 'twelvedata', market: 'commodity', base_asset: 'XAU', quote_asset: 'USD', price_precision: 2, is_active: true },

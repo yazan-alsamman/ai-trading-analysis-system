@@ -11,7 +11,28 @@ import { localId } from '@/lib/cn';
 import { readStored, writeStored } from '@/lib/storage';
 import { ApiError } from '../errors';
 import { OpportunityPreferencesSchema, PriceAlertSchema } from '../schemas';
-import type { AccountService, AlertService, AssistantService, AuthService, CommunityService, InboxService, MarketDataService, OpportunityService, PredictionService, RiskProfileService, Services, StrategySignalService } from '../types';
+import type {
+  AccountService,
+  AlertService,
+  ApiKeyService,
+  AssistantService,
+  AuthService,
+  BacktestService,
+  CommunityService,
+  ExpertStudioService,
+  InboxService,
+  InstrumentDirectoryService,
+  MarketDataService,
+  NotificationSettingsService,
+  OpportunityService,
+  PredictionService,
+  RiskProfileService,
+  Services,
+  SocialService,
+  StrategyService,
+  StrategySignalService,
+  WorkspaceSyncService,
+} from '../types';
 import { composeReply, DEMO_ASSISTANT } from './assistant';
 import { DemoMarket } from './demoMarket';
 import { demoList, simulateRequest } from './scenario';
@@ -153,6 +174,7 @@ function demoAlertService(): AlertService {
       alerts = alerts.filter((a) => a.id !== id);
       save();
     },
+    history: () => Promise.reject(new ApiError('not_available', 'Alert trigger history is kept by the backend. This app is running on simulated demo data.')),
     async getOpportunityPreferences(options) {
       await simulateRequest(options?.signal, 150);
       return readStored(OPP_PREFS_KEY, OpportunityPreferencesSchema, DEFAULT_OPP_PREFS);
@@ -276,6 +298,8 @@ const demoInboxService = (): InboxService => ({
   list: backendOnly('The server notification inbox'),
   markRead: backendOnly('The server notification inbox'),
   markAllRead: backendOnly('The server notification inbox'),
+  remove: backendOnly('The server notification inbox'),
+  unreadCount: backendOnly('The server notification inbox'),
   subscribe: () => () => undefined,
 });
 const demoStrategySignals = (): StrategySignalService => ({ list: backendOnly('Strategy-engine signals') });
@@ -284,6 +308,80 @@ const demoRiskProfile = (): RiskProfileService => ({
   save: backendOnly('The server risk profile'),
   positionSize: backendOnly('Server position sizing'),
 });
+
+/**
+ * Capabilities that exist only on the backend. In demo mode every method says so
+ * (`not_available`); none is simulated, so nothing can be mistaken for a real result.
+ */
+const demoInstruments = (): InstrumentDirectoryService => ({ list: backendOnly('The instrument directory'), candles: backendOnly('Backend candles') });
+const demoStrategies = (): StrategyService => {
+  const no = backendOnly('The strategy engine');
+  return {
+    catalog: no,
+    listActivations: no,
+    activate: no,
+    updateActivation: no,
+    removeActivation: no,
+    preview: no,
+    signalPlans: no,
+    listCustom: no,
+    getCustom: no,
+    createCustom: no,
+    replaceCustom: no,
+    updateCustom: no,
+    removeCustom: no,
+    cloneCustom: no,
+    builderCatalog: no,
+    validate: no,
+    listPublic: no,
+    clonePublic: no,
+  };
+};
+const demoBacktests = (): BacktestService => {
+  const no = backendOnly('Backtesting');
+  return { create: no, list: no, get: no, remove: no, trades: no, exportTradesCsv: no, compare: no, subscribe: () => () => undefined };
+};
+const demoWorkspaceSync = (): WorkspaceSyncService => {
+  const no = backendOnly('Workspace synchronisation');
+  return { list: no, get: no, create: no, replaceState: no, update: no, remove: no, duplicate: no, subscribe: () => () => undefined };
+};
+const demoNotificationSettings = (): NotificationSettingsService => {
+  const no = backendOnly('Notification delivery settings');
+  return { getPreferences: no, savePreferences: no, channels: no, sendTest: no, linkTelegram: no, unlinkTelegram: no };
+};
+const demoSocial = (): SocialService => {
+  const no = backendOnly('This community feature');
+  return {
+    likePost: no,
+    unlikePost: no,
+    updatePost: no,
+    deletePost: no,
+    updateComment: no,
+    deleteComment: no,
+    report: no,
+    profile: no,
+    follow: no,
+    unfollow: no,
+    following: no,
+    followers: no,
+    expert: no,
+    expertSignals: no,
+    checkout: no,
+    subscriptions: no,
+    cancelSubscription: no,
+    resumeSubscription: no,
+    conversations: no,
+    markConversationRead: no,
+  };
+};
+const demoExpertStudio = (): ExpertStudioService => {
+  const no = backendOnly('The expert studio');
+  return { getProfile: no, saveProfile: no, listPlans: no, createPlan: no, updatePlan: no, deactivatePlan: no, earnings: no };
+};
+const demoApiKeys = (): ApiKeyService => {
+  const no = backendOnly('API keys');
+  return { list: no, scopes: no, create: no, update: no, revoke: no, usage: no };
+};
 
 export function createDemoServices(getSession: () => Session | null): Services {
   const market = new DemoMarket();
@@ -300,5 +398,13 @@ export function createDemoServices(getSession: () => Session | null): Services {
     strategySignals: demoStrategySignals(),
     riskProfile: demoRiskProfile(),
     assistant: demoAssistantService(),
+    instruments: demoInstruments(),
+    strategies: demoStrategies(),
+    backtests: demoBacktests(),
+    workspacesSync: demoWorkspaceSync(),
+    notificationSettings: demoNotificationSettings(),
+    social: demoSocial(),
+    expertStudio: demoExpertStudio(),
+    apiKeys: demoApiKeys(),
   };
 }

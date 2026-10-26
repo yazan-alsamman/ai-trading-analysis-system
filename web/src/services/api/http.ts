@@ -25,6 +25,10 @@ export interface RequestOptions<T> {
   token?: string | null;
   /** The caller interprets 401 itself (sign-in forms) — no refresh, do not end the session. */
   authFailureHandled?: boolean;
+  /** Extra request headers (e.g. `If-Match` for optimistic concurrency). */
+  headers?: Record<string, string>;
+  /** `text`: the body is returned as a string (CSV exports) and validated by `schema`. */
+  responseType?: 'json' | 'text';
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -41,9 +45,10 @@ function buildUrl(baseUrl: string, path: string, query?: RequestOptions<unknown>
   return url.toString();
 }
 
-async function readBody(response: Response): Promise<unknown> {
+async function readBody(response: Response, responseType: 'json' | 'text' = 'json'): Promise<unknown> {
   if (response.status === 204) return null;
   const text = await response.text();
+  if (responseType === 'text' && response.ok) return text;
   if (!text) return null;
   try {
     return JSON.parse(text);
@@ -80,7 +85,9 @@ export function parseErrorBody(body: unknown): { message: string; fieldErrors: R
 
 function errorFromResponse(status: number, body: unknown, requestId: string | null): ApiError {
   const { message, fieldErrors } = parseErrorBody(body);
-  const extra = { status, ...(requestId ? { requestId } : {}) };
+  // 4xx bodies are the API's own explanations (e.g. a 409's `current_version`); 5xx bodies are never kept.
+  const data = status < 500 && typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : undefined;
+  const extra = { status, ...(requestId ? { requestId } : {}), ...(data ? { data } : {}) };
   if (status === 401) return new ApiError('unauthorized', message, extra);
   if (status === 403) return new ApiError('forbidden', message, extra);
   if (status === 404) return new ApiError('not_found', message, extra);
@@ -88,7 +95,7 @@ function errorFromResponse(status: number, body: unknown, requestId: string | nu
   if (status === 400 || status === 422) return new ApiError('validation', message, { ...extra, ...(fieldErrors ? { fieldErrors } : {}) });
   if (status === 429) return new ApiError('rate_limited', message, extra);
   // 5xx details are internal: never shown verbatim.
-  return new ApiError('server', `HTTP ${status}`, extra);
+  return new ApiError('server', `HTTP ${status}`, { status, ...(requestId ? { requestId } : {}) });
 }
 
 export function createHttpClient(options: HttpClientOptions): HttpClient {
@@ -103,8 +110,9 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
         // Bearer tokens only: no cookies are needed or sent cross-origin.
         credentials: 'omit',
         headers: {
-          Accept: 'application/json',
+          Accept: opts.responseType === 'text' ? 'text/csv, text/plain, */*' : 'application/json',
           ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...opts.headers,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
@@ -114,7 +122,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
       if (timeout.aborted) throw new ApiError('timeout', 'Request timed out', { cause });
       throw new ApiError('network', 'Network error', { cause });
     }
-    return { response, payload: await readBody(response) };
+    return { response, payload: await readBody(response, opts.responseType) };
   }
 
   return {

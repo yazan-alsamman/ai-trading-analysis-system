@@ -102,6 +102,16 @@ export function toPost(p: PostRead): Post {
     createdAt: ms(p.created_at),
     commentCount: p.comments_count,
     provenance: 'live',
+    title: p.title,
+    instrumentLabel: p.instrument?.symbol ?? null,
+    ...(p.likes_count !== undefined ? { likes: p.likes_count } : {}),
+    ...(p.liked_by_me !== undefined ? { likedByMe: p.liked_by_me } : {}),
+    ...(p.can_edit !== undefined ? { canEdit: p.can_edit } : {}),
+    ...(p.edited_at !== undefined ? { editedAt: p.edited_at ? ms(p.edited_at) : null } : {}),
+    ...(p.direction !== undefined ? { direction: p.direction } : {}),
+    ...(p.timeframe !== undefined ? { timeframe: p.timeframe } : {}),
+    ...(p.visibility !== undefined ? { visibility: p.visibility } : {}),
+    ...(p.status !== undefined ? { status: p.status } : {}),
   };
 }
 
@@ -116,6 +126,9 @@ export function toComments(threads: readonly (CommentRead & { replies?: readonly
       author: c.author ? { id: c.author.id, name: c.author.display_name, role: c.author.role } : { id: 'deleted', name: 'Deleted account', role: 'trader' },
       body: c.body,
       createdAt: ms(c.created_at),
+      parentId: c.parent_id,
+      ...(c.can_edit !== undefined ? { canEdit: c.can_edit } : {}),
+      ...(c.edited_at !== undefined ? { editedAt: c.edited_at ? ms(c.edited_at) : null } : {}),
     });
   };
   for (const t of threads) {
@@ -140,6 +153,8 @@ export function toExpert(e: ExpertCard): Expert {
       ? { name: e.cheapest_plan.name, price: e.cheapest_plan.price, currency: e.cheapest_plan.currency, interval: e.cheapest_plan.interval, trialDays: e.cheapest_plan.trial_days }
       : null,
     isSubscribed: e.is_subscribed,
+    ...(e.followers_count !== undefined ? { followers: e.followers_count } : {}),
+    ...(e.subscribers_count !== undefined ? { subscribers: e.subscribers_count } : {}),
     provenance: 'live',
   };
 }

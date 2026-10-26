@@ -1,5 +1,6 @@
 import type { InstrumentSymbol } from './instruments';
 import type { Provenance } from './market';
+import type { PostDirection, PostVisibility } from './social';
 import type { UserRole } from './user';
 
 /** SF11 news + comments, SF12 posts, SF13 expert chat. */
@@ -37,6 +38,11 @@ export interface Comment {
   author: Author;
   body: string;
   createdAt: number;
+  /** Backend only: the comment this one replies to. */
+  parentId?: string | null;
+  /** Backend only: the server allows the viewer to edit or delete it. */
+  canEdit?: boolean;
+  editedAt?: number | null;
 }
 
 export interface Post {
@@ -47,6 +53,20 @@ export interface Post {
   createdAt: number;
   commentCount: number;
   provenance: Provenance;
+  /* Backend only (absent in demo mode): */
+  title?: string;
+  likes?: number;
+  likedByMe?: boolean;
+  /** The author within 24 h of publishing, or an admin (decided by the server). */
+  canEdit?: boolean;
+  editedAt?: number | null;
+  direction?: PostDirection | null;
+  timeframe?: string | null;
+  visibility?: PostVisibility;
+  /** `hidden`: moderated, visible to its author only. */
+  status?: 'published' | 'hidden' | 'deleted';
+  /** The backend symbol when the instrument is not one the web client charts. */
+  instrumentLabel?: string | null;
 }
 
 export type ExpertAvailability = 'available' | 'busy' | 'offline';
@@ -68,6 +88,8 @@ export interface Expert {
   /** Backend: the expert's cheapest subscription plan (set by the expert), and whether you subscribe. */
   cheapestPlan?: { name: string; price: string; currency: string; interval: string; trialDays: number } | null;
   isSubscribed?: boolean;
+  followers?: number;
+  subscribers?: number;
   provenance: Provenance;
 }
 

@@ -135,6 +135,15 @@ export const PostRead = z.object({
   instrument: z.object({ id: Uuid, symbol: z.string() }).nullable(),
   comments_count: z.number().int().nonnegative(),
   created_at: IsoDate,
+  // Optional so older recordings still parse; the live backend always sends them.
+  likes_count: z.number().int().nonnegative().optional(),
+  liked_by_me: z.boolean().optional(),
+  can_edit: z.boolean().optional(),
+  edited_at: IsoDate.nullable().optional(),
+  timeframe: z.string().nullable().optional(),
+  direction: z.enum(['bullish', 'bearish', 'neutral']).nullable().optional(),
+  visibility: z.enum(['public', 'followers', 'subscribers']).optional(),
+  status: z.enum(['published', 'hidden', 'deleted']).optional(),
 });
 export type PostRead = z.infer<typeof PostRead>;
 
@@ -146,6 +155,8 @@ export const CommentRead = z.object({
   body: z.string().nullable(),
   status: z.string(),
   created_at: IsoDate,
+  can_edit: z.boolean().optional(),
+  edited_at: IsoDate.nullable().optional(),
 });
 export type CommentRead = z.infer<typeof CommentRead>;
 
@@ -162,6 +173,8 @@ export const ExpertCard = z.object({
   response_time_hint: z.string().nullable(),
   cheapest_plan: z.object({ name: z.string(), price: z.string(), currency: z.string(), interval: z.string(), trial_days: z.number().int() }).nullable(),
   is_subscribed: z.boolean(),
+  followers_count: z.number().int().optional(),
+  subscribers_count: z.number().int().optional(),
 });
 export type ExpertCard = z.infer<typeof ExpertCard>;
 

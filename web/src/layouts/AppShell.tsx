@@ -11,7 +11,7 @@ import { useOnlineStatus } from '@/hooks/useEnvironment';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { readStored, writeStored } from '@/lib/storage';
 import { CommandPalette } from './CommandPalette';
-import { NAV_SHORTCUTS } from './navigation';
+import { navShortcutsFor } from './navigation';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -119,9 +119,9 @@ export function AppShell() {
     () => ({
       '?': () => setShortcutsOpen(true),
       t: () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'),
-      ...Object.fromEntries(Object.entries(NAV_SHORTCUTS).map(([keys, to]) => [keys, () => navigate(to)])),
+      ...Object.fromEntries(Object.entries(navShortcutsFor(source)).map(([keys, to]) => [keys, () => navigate(to)])),
     }),
-    [navigate, resolvedTheme, setTheme],
+    [navigate, resolvedTheme, setTheme, source],
   );
   useHotkeys(hotkeys);
 
