@@ -84,6 +84,13 @@ def may_read_ai_setup(user: User, setup: object | None) -> bool:
     return True
 
 
+def readable_ai_setups(user: User) -> ColumnElement[bool]:
+    """SQL condition on ``ai_setups``: the setups ``user`` may read, the same rule as
+    :func:`may_read_ai_setup` (keep the two in step). Used as a WHERE clause by the prediction
+    history, so totals and stats stay right."""
+    return true()
+
+
 def usable_keys(user_id: uuid.UUID):
     """SQL: the ``custom:<uuid>`` keys ``user_id`` may use (their own and public ones)."""
     return select(func.concat(KEY_PREFIX, cast(CustomStrategy.id, Text))).where(
