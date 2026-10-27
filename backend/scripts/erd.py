@@ -94,6 +94,7 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "ai_evaluation_runs",
         ],
     ),
+    ("vision", "Chart image analysis (Gemini)", ["chart_analyses"]),
     ("workspaces", "Workspaces", ["workspaces"]),
     (
         "notifications",

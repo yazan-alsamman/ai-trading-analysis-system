@@ -33,7 +33,7 @@
 - المنفذ العام الوحيد لمشروعنا هو `8080` (حاوية nginx). قاعدة البيانات مربوطة على `127.0.0.1:5435` فقط، وRedis والـ backend بلا منافذ على المضيف.
 - الشبكة المستخدمة `172.30.57.0/24`: العناوين الديناميكية من `172.30.57.128/25` فقط (`DOCKER_IP_RANGE`)، وعنوان Nginx
   الثابت `172.30.57.10` خارجها. منافذ المشاريع الأخرى المحجوزة هي 80، 443، 3000-3005، 5000، 5432-5434، 6380، 9000، 9001، 27017.
-- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3424MiB (≈3.34GiB، نحو 43% من 7.8GB على السيرفر المشترك بلا swap) بعد إضافة `feed-ctrader` (128m، 0.25 CPU، B1)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
+- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3520MiB (≈3.44GiB، نحو 45% من 7.8GB على السيرفر المشترك بلا swap) بعد إضافة `feed-ctrader` (128m، 0.25 CPU، B1) ورفع الـ backend إلى 640m لتحليل صور الشارت (Y14)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
 - `cpus:` سقف وليس حجزاً (مجموع سقوفنا 6.5 على سيرفر بـ 2 vCPU)، لذلك لكل خدماتنا `cpu_shares: 512` (الافتراضي 1024):
   عند انشغال السيرفر تأخذ المشاريع الأخرى ضعف وزننا من المعالج، وعندما يكون هادئاً نستطيع استخدام سقوفنا.
 
@@ -360,3 +360,12 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
 - بلا migration وبلا خدمة أو مهمة Celery جديدة: نقطتا قراءة فقط في الـ backend، `GET /api/v1/me/recommendations` و`GET /api/v1/recommendations/strategies`.
 - إعدادات جديدة في `.env.example`: `RECOMMENDATION_MAX_AGE_BARS=3`، `RECOMMENDATION_MIN_SAMPLES=20`، `RECOMMENDATION_CACHE_SECONDS=300`، `RECOMMENDATIONS_NOTIFY=false`. القيمة الأخيرة مطفأة، فلا يتغير إشعار الإشارة.
 - سجل كل (أداة، فريم) يُخزَّن في Redis تحت `reco:track:*` لمدة 300 ثانية، ولا يُخزَّن أي شيء خاص بمستخدم. التفاصيل في docs/recommendations.md.
+
+## تحليل صورة الشارت عبر Gemini (Y14)
+- Migration **0023** إضافية فقط: جدول جديد `chart_analyses` (الصورة نفسها لا تُخزَّن، فقط بصمتها SHA-256).
+- إعدادات جديدة في `.env.example` بقيم آمنة: `GEMINI_API_KEY=` (فارغ = الميزة مطفأة، 503، وباقي المنصة يعمل)، `CHART_ANALYSIS_ENABLED=true`، `CHART_VISION_MODEL=gemini-3.6-flash`، `CHART_VISION_TIMEOUT_SECONDS=45`، `CHART_IMAGE_MAX_BYTES=5242880`، الحدود اليومية `CHART_ANALYSIS_DAILY_LIMIT_{TRADER,ANALYST,EXPERT,ADMIN}=5/20/20/100`، و`CHART_ANALYSIS_MAX_CONCURRENT=1`.
+- السر: خطوة جديدة في `deploy.yml` تكتب `GEMINI_API_KEY` من سر GitHub بنفس الاسم إلى `/opt/trading/.env` **فقط إذا كان المفتاح غير موجود أو فارغاً**، عبر `set-env-secrets.sh` على stdin ودون طباعة القيمة. إذا لم يُضبط السر في GitHub تطبع "GEMINI_API_KEY not set in GitHub: skipped" ويستمر النشر. خطوة `up -d` التالية تعيد إنشاء الـ backend (وسم صورة جديد) فيقرأ المفتاح.
+- Nginx: موقع خاص بـ `/api/v1/analysis/chart-image` فقط، مع `client_max_body_size 6m` و`proxy_read_timeout 60s`. باقي المسارات بلا تغيير.
+- الذاكرة: حد الـ backend من 544m إلى **640m (+96m)** بعد القياس (4 تحليلات متوازية بأسوأ صور 4.5MB، القمة 508MiB؛ التفاصيل في docs/chart-analysis.md §7). مجموع حدود الذاكرة من 3424MiB إلى **3520MiB** (≈45% من 7.8GB).
+- بلا خدمة جديدة وبلا منفذ عام. التفعيل: أضف سر GitHub `GEMINI_API_KEY`، ثم ادمج أو أعد تشغيل Deploy، وتحقق أن `/admin/system/status` يعرض `chart_analysis.enabled: true`.
+

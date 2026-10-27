@@ -37,6 +37,10 @@ flowchart LR
         ai_alert_follows[ai_alert_follows]
         ai_evaluation_runs[ai_evaluation_runs]
     end
+    subgraph domain_vision["Chart image analysis (Gemini)"]
+        direction TB
+        chart_analyses[chart_analyses]
+    end
     subgraph domain_workspaces["Workspaces"]
         direction TB
         workspaces[workspaces]
@@ -87,6 +91,7 @@ flowchart LR
     backtests --> instruments
     backtests -.-> users
     candles_1m --> instruments
+    chart_analyses -.-> users
     checkout_sessions --> subscription_plans
     checkout_sessions --> subscriptions
     checkout_sessions -.-> users

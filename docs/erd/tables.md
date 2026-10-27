@@ -777,6 +777,45 @@ One ``ai.evaluate`` run (B9, ``app/ai/evaluate.py``) of an instrument, profile a
 
 - `ix_ai_evaluation_runs_finished` (ai_evaluation_runs.finished_at)
 
+## Chart image analysis (Gemini)
+
+### `chart_analyses`
+
+Base class used for declarative class definitions.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` | PK |
+| `user_id` | uuid | no |  | FK |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `image_sha256` | varchar(64) | no |  |  |
+| `image_bytes` | integer | no |  |  |
+| `width` | integer | no |  |  |
+| `height` | integer | no |  |  |
+| `mime` | varchar(16) | no |  |  |
+| `language` | varchar(2) | no |  |  |
+| `symbol_hint` | varchar(32) | yes |  |  |
+| `timeframe_hint` | varchar(8) | yes |  |  |
+| `model` | varchar(64) | no |  |  |
+| `prompt_version` | varchar(32) | no |  |  |
+| `status` | varchar(16) | no |  |  |
+| `result` | jsonb | yes |  |  |
+| `input_tokens` | integer | yes |  |  |
+| `output_tokens` | integer | yes |  |  |
+| `latency_ms` | integer | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (user_id) → users (id) ON DELETE CASCADE
+- CHECK `ck_chart_analyses_language`: `language IN ('ar', 'en')`
+- CHECK `ck_chart_analyses_status`: `status IN ('ok', 'not_chart', 'refused', 'error')`
+
+**Indexes**
+
+- `ix_chart_analyses_user_created` (chart_analyses.user_id, created_at DESC)
+- `ix_chart_analyses_user_sha` (chart_analyses.user_id, chart_analyses.image_sha256)
+
 ## Workspaces
 
 ### `workspaces`
