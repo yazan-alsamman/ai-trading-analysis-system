@@ -250,3 +250,26 @@ with 2 workers and a fake Gemini that answers after 2 s: 3 rounds of **4 paralle
 in `/opt/trading/.env` by hand and recreate the backend, or empty it and run Deploy with the
 new secret. **To turn the feature off without removing the key:** set
 `CHART_ANALYSIS_ENABLED=false` and recreate the backend.
+
+## 9. The fake Gemini (development and CI only)
+
+`tools/fake_gemini/fake_gemini.py` stands in for Google in the end-to-end suite
+(`backend/tests_e2e/test_11_chart_analysis.py`). **CI never calls Gemini.**
+
+- **How the backend reaches it.** `CHART_VISION_BASE_URL` (empty by default, so Google) is
+  passed to the official SDK as `HttpOptions(base_url=...)`. The SDK, the request it builds (the
+  image, the request text, the response schema, the key in the `x-goog-api-key` header) and the
+  parsing of the answer stay the real ones; only the host changes. No dependency override and no
+  test-only code path in the backend.
+- **What it answers.** `POST /{version}/models/{model}:generateContent`: a one-colour image is
+  `is_chart: false`; anything else is a chart with a fixed buy idea, in the language the request
+  text asks for. `POST /_fake/mode {"mode": "ok" | "429" | "500" | "blocked"}` changes the
+  answer, `GET /_fake/requests` lists what it received (model, language, image size, and whether
+  the key came in the header; never the key or the image), `POST /_fake/reset` starts again.
+- **Why it never reaches production.** It is a compose service with the profile `fake-gemini`
+  in `docker-compose.yml` only (no published port), it is not in
+  `infra/deploy/docker-compose.prod.yml`, and `CHART_VISION_BASE_URL` is empty in
+  `.env.example`. The e2e job sets it, and a dummy `GEMINI_API_KEY`, in its own `.env` only.
+- **Locally:** `docker compose --profile fake-gemini up -d fake-gemini`, then in `.env`
+  `CHART_VISION_BASE_URL=http://fake-gemini:8002` and any non-empty `GEMINI_API_KEY`, and
+  recreate the backend.
