@@ -9,7 +9,7 @@ automatic login/refresh.
 | `AI-Trading-Platform.postman_collection.json` | The collection (Postman v2.1) |
 | `environments/Production.postman_environment.json` | The VPS: `http://187.127.76.76:8080` |
 | `environments/Local.postman_environment.json` | Docker Compose: `http://localhost` (use `http://localhost:8000` for a bare uvicorn) |
-| `tools/` | Generator: `spec.py` (the requests), `capture_examples.py`, `build_collection.py` |
+| `tools/` | Generator: `spec.py` (the requests), `capture_examples.py`, `build_collection.py`, `fake_gemini.py` (a local stand-in for Gemini) |
 
 ## Use it
 
@@ -43,11 +43,11 @@ collection or the committed file against the VPS.
 02 · Auth                   09 · Backtests              16 · Chat
 03 · Users (me)             10 · Workspaces             17 · Expert Studio
 04 · Market Data            11 · API Keys               18 · Notifications
-05 · Indicators                  Using an API key       19 · Admin
-06 · Strategies & Signals   12 · News                        Users · Market Data · cTrader Feed
-     Predictions            13 · Community                   API Keys & Rate Limits
-07 · Risk Management        14 · Price Alerts                AI Engine · News & Moderation
-                                                             Subscriptions & Chat · Notifications
+     Chart Image Analysis        Using an API key       19 · Admin
+05 · Indicators             12 · News                        Users · Market Data · cTrader Feed
+06 · Strategies & Signals   13 · Community                   API Keys & Rate Limits
+     Predictions            14 · Price Alerts                AI Engine · News & Moderation
+07 · Risk Management                                         Subscriptions & Chat · Notifications
                                                         20 · Realtime (WebSocket)
 ```
 
@@ -68,7 +68,10 @@ npx newman run docs/postman/AI-Trading-Platform.postman_collection.json \
 **Admin → Market Data → Import economic calendar CSV** uploads
 [`samples/calendar_history_sample.csv`](samples/calendar_history_sample.csv). Newman resolves it
 through `--working-dir docs/postman`; in the Postman app, pick the file again in the request's
-**Body → form-data** tab (or set Postman's working directory to this folder).
+**Body → form-data** tab (or set Postman's working directory to this folder). **Market Data →
+Chart Image Analysis → Analyse chart image** uploads [`samples/chart_sample.png`](samples/chart_sample.png)
+the same way. Chart analysis answers 503 `not_configured` until `GEMINI_API_KEY` is set on the
+server, and each analysis takes one unit of your daily quota.
 
 Once HTTPS is live on `trading.yazanalsamman.com` (`docs/https.md`), set the Production
 environment's `base_url` to `https://trading.yazanalsamman.com` and `ws_url` to
@@ -89,6 +92,8 @@ The JSON files are generated; edit `tools/spec.py`, never the collection by hand
 3. Start a local stack with demo data (`seed-instruments`, `seed-demo-candles`, a Celery
    worker for backtests) and run
    `python docs/postman/tools/capture_examples.py --admin-email … --admin-password …`
-   to refresh `tools/examples.json`.
+   to refresh `tools/examples.json`. For the chart analysis examples, first start
+   `python docs/postman/tools/fake_gemini.py` and run the backend with
+   `GEMINI_API_KEY=fake CHART_VISION_BASE_URL=http://localhost:8765` (no key, no paid call).
 4. `python docs/postman/tools/build_collection.py` writes the collection and environments;
    run Newman as above before committing.

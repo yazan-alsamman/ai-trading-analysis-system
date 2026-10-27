@@ -267,12 +267,19 @@ def url_object(
     return out
 
 
-def body_object(req: Req, body: Any = None) -> dict[str, Any] | None:
+def body_object(
+    req: Req, body: Any = None, files: dict[str, str] | None = None
+) -> dict[str, Any] | None:
     if req.files is not None:
         return {
             "mode": "formdata",
             "formdata": [
-                {"key": k, "type": "file", "src": src, "description": d} for k, src, d in req.files
+                {"key": k, "type": "file", "src": (files or {}).get(k, src), "description": d}
+                for k, src, d in req.files
+            ]
+            + [
+                {"key": k, "value": v, "description": d, "type": "text"}
+                for k, v, d in req.form or []
             ],
         }
     if req.form is not None:
@@ -379,7 +386,7 @@ def example_objects(req: Req, examples: list[dict[str, Any]]) -> list[dict[str, 
         variant = by_name.get(ex["variant"]) if ex["variant"] else None
         if variant is not None:
             body = (
-                body_object(req, variant.body)
+                body_object(req, variant.body, variant.files)
                 if req.body is not None or req.files is not None or variant.body
                 else None
             )
@@ -620,6 +627,7 @@ RUNTIME_VARS = [
             "user_strategy_id",
             "prediction_id",
             "ai_instrument_id",
+            "chart_analysis_id",
             "custom_strategy_id",
             "custom_strategy_key",
             "custom_strategy_version",
