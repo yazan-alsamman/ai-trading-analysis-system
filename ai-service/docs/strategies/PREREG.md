@@ -1,17 +1,24 @@
 # Pre-registration: signal strategies, trade management and AI layers
 
 **Status: DRAFT, not registered.** First written 2026-10-25; revised 2026-10-25 after Fadi's
-review of the decision tables (C1-C8, D1-D13, N1-N11, R1, the four final refinements). It becomes
-binding when Fadi approves it as written and the approval date and commit are filled in. Until
-then no outcome of any strategy, bundle or model here (R, hit rate, exit mix, MFE / MAE, equity)
-may be computed, printed or plotted, on any period. Counts are allowed under section 12; they
-choose nothing.
+review of the decision tables (C1-C8, D1-D13, N1-N11, R1, the four final refinements); revised
+2026-10-26 after the Stage A audit (family C selection, approval timing); revised 2026-10-27
+after Fadi's decisions on the Stage A review (the session end and its gaps, the 1h boundary, a_S
+without a swap export, complete ranges for S1 and S4, the rollover price, T4 wording;
+`STAGE_A.md`). It becomes binding when Fadi
+approves it as written and the approval date and commit are filled in. The rules are frozen at a
+recorded commit before any count. Before formal approval only the pre-approval candidate counts
+of section 12 may run; they use bars up to the signal bar only and choose nothing. Until approval
+no outcome of any strategy, bundle or model here (R, hit rate, exit reason, exit time, exit mix,
+MFE / MAE, equity) may be computed, printed or plotted, on any period, and no count that uses an
+exit may run.
 
 | Field | Value |
 | --- | --- |
+| Rules frozen at commit | _(commit; before any count)_ |
 | Approved by | _(Fadi)_ |
-| Approval date | _(YYYY-MM-DD, before any count or outcome is computed)_ |
-| Code version frozen at approval | _(commit)_ |
+| Approval date | _(YYYY-MM-DD; after the pre-approval candidate counts, before any outcome or any count that uses an exit)_ |
+| Code version at approval | _(commit; the frozen commit unless a recorded new version)_ |
 | Seeds (E0, bootstrap) | _(fixed at approval)_ |
 
 ## 1. Why, and what is not a goal
@@ -83,19 +90,32 @@ reported (section 6).
 
 | Type | Entry frame | Holding | Forced exit | Strategies |
 | --- | --- | --- | --- | --- |
-| **Scalp** | 5m | up to 2 h | horizon | S4, S5, S6, S8 |
-| **Intraday** | 15m, 1h | same trading day | at the close of the bar ending 16:45 New York | S1, S2, S7 (L1: label only, section 2) |
+| **Scalp** | 5m | up to 2 h | horizon or the session end, whichever comes first | S4, S5, S6, S8 |
+| **Intraday** | 15m, 1h | same trading day | horizon or the session end, whichever comes first | S1, S2, S7 (L1: label only, section 2) |
 | **Swing** | 4h | days | horizon; open over weekends allowed | S3 |
 
+**Session end (scalp and intraday).** The trade exits at the close of the last entry-frame bar
+that can close by 16:45 New York on the signal bar's New York date: the first bar whose close plus
+one bar is after 16:45. On 5m and 15m that is the bar ending 16:45; on 1h it is the bar ending
+16:00 (no 1h bar ends at 16:45). A signal whose next bar would close after 16:45 is rejected as
+`no_time_left`; within the liquid window that is only the 1h bar opening 15:00. A session end is
+defined for 5m, 15m and 1h entry frames only; on 4h or D1 it is a configuration error. The exit is
+at a close and pays no slippage, as the timeout. **Missing bars:** when bars are missing so that
+the next bar in the data closes after 16:45, no price is invented: the trade exits at the open of
+that bar, pays the SL slippage, is marked `session_end_gap` and counted, and its swap runs to that
+actual exit time (the resting TP, and T2, fill at their levels if that open reaches them).
+
 No scalp or intraday trade is held over the Friday close. Scalp and intraday trades never cross a
-rollover, so their swap is zero by construction.
+rollover, except after a `session_end_gap`, so their swap is zero by construction (the swap of a
+gap exit is computed by its actual exit time).
 
 ## 5. Strategies
 
 ### Primary (family A)
 
 **S1 LB, London breakout of the Asian range (intraday, 15m).** Asian range: high and low of the
-15m bars opening 00:00-06:59 Europe/London. Filter: width 0.3-1.2 x ATR(14, D1) of the previous
+15m bars opening 00:00-06:59 Europe/London; all 28 must be present, else the day's first
+breakout is rejected as `incomplete_range`. Filter: width 0.3-1.2 x ATR(14, D1) of the previous
 closed D1 bar. Window: bars opening 07:00-10:59 London. Buy: first close above range high
 + 0.1 x ATR(14, 15m); sell: first close below range low - 0.1 x ATR(14, 15m); one signal per
 instrument a day. SL: range midpoint -/+ the spread. TP 1.5 R. Horizon 32 bars.
@@ -108,7 +128,8 @@ band at the signal bar, R in [0.75, 3] else `r_out_of_range`. Horizon 24 bars.
 before; sell mirrored. SL 2 x ATR(20, 4h). TP 3 R. Horizon 60 bars.
 
 **S4 ORB, New York opening-range breakout (scalp, 5m).** Opening range: high and low of the six 5m
-bars opening 08:30-08:59 New York (US data and the COMEX gold open). Filter: width 0.25-1.5 x
+bars opening 08:30-08:59 New York (US data and the COMEX gold open); all six must be present,
+else the day's first breakout is rejected as `incomplete_range`. Filter: width 0.25-1.5 x
 ATR(14, 1h) at 08:30. Window: bars opening 09:00-10:29. Buy: first close above range high
 + 0.1 x ATR(14, 5m); sell mirrored; one signal per instrument a day. SL: range midpoint -/+ the
 spread. TP 1.5 R. Horizon 24 bars.
@@ -186,7 +207,9 @@ profit currency); `CURRENCY_DEPOSIT` USD to the profit currency (as is for USD-q
 x P for USDJPY and USDCAD); `CURRENCY_PROFIT` as is; `INTEREST_CURRENT` P_t x S / 100 / 360 /
 risk_price; `INTEREST_OPEN` the same at the open price; `REOPEN_CURRENT` and `REOPEN_BID`
 approximated as `POINTS` (labelled). In MT5 a negative value is a charge. USD reports divide by
-P for USDJPY and USDCAD.
+P for USDJPY and USDCAD. **P and P_t** are the price at the rollover: in trade results the close
+of the last entry-frame bar closed by the rollover instant; in a_S (section 8) the entry price,
+because a_S reads no price after the signal bar. W3 is taken at the open price.
 
 ### 6a. MT5 export needed from Fadi
 
@@ -205,7 +228,9 @@ build. Optional, the only historical swap facts we could have: account statement
 Rules act on entry-frame bar closes (live and research alike). A rule that fires gives an
 **alert** (`EXIT_SUGGESTED` or `SL_MOVE_SUGGESTED`, with the reason); the service never touches an
 order. **Execution assumption:** an exit alert fills at the next entry-frame bar's open and pays
-the SL slippage (the user's reaction); a moved SL is in force from the next bar.
+the SL slippage (the user's reaction); a moved SL is in force from the next bar. Exits at a close
+(`timeout`, `session_end`) pay no slippage; a `session_end_gap` exit at an open pays it
+(section 4).
 
 TP side:
 
@@ -214,7 +239,7 @@ TP side:
 | **T1 profit lock** | progress >= 80% of the TP distance at a close, and at least 50% of the horizon elapsed → exit |
 | **T2 scale-out** | half closed at +1 R (a resting limit); the rest runs under the bundle's other rules |
 | **T3 dead trade** | 50% of the horizon elapsed and the best excursion so far < 0.25 R → exit |
-| **T4 momentum fade** | open profit >= 0.5 R, then a bar that engulfs the previous bar against the trade, or a close back across EMA(20) of the entry frame → exit |
+| **T4 momentum fade** | armed at a close with open profit >= 0.5 R; then, at a later close, a bar whose body engulfs the previous bar's body against the trade, or a close beyond EMA(20) of the entry frame against the trade (whatever side the earlier closes were on) → exit |
 
 SL side:
 
@@ -242,7 +267,7 @@ Bundles (fixed now; each is one policy):
 
 Every trade record keeps the exit reason: `tp`, `profit_lock`, `scale_out_tp`, `trail`,
 `breakeven`, `dead_trade`, `fade`, `invalidation`, `time_tighten`, `sl`, `timeout`,
-`session_end`. **Success is net R > 0**; the app may show the reasons and a win rate, but every
+`session_end`, `session_end_gap`. **Success is net R > 0**; the app may show the reasons and a win rate, but every
 decision here is on mean net R.
 
 ## 8. Strategy tests (families A and B)
@@ -302,7 +327,9 @@ p_(j) = max over k <= j of min(1, (m - k + 1) p_(k)); passed if <= 0.05.
 and Bonferroni one-sided lower bounds at level 1 - alpha/m (percentile and t forms).
 
 **Smallest effect of interest (D1, N4).** delta*_S = max(0.05 R, a_S). a_S is the median, over the
-primary-period signals of S, of the assumed part of the cost model in R:
+armed candidates of S in the primary period (the pre-approval counts, section 12; the
+one-active-trade rule is not applied, because it needs exits), of the assumed part of the cost
+model in R:
 max(cost_extra_frac * spread, cost_extra_min) + sl_slippage (counted on every trade) + the swap
 term below. The recorded spread is the only measured part and is excluded. **a_S is a definitional
 allowance based on assumed costs, not a measured bound on the error of the cost model.** The
@@ -317,7 +344,10 @@ negative s_h is a charge. The term entering a_S is max(0, -s_h): estimated charg
 allowance, and estimated income counts as zero, so no allowance is reduced by an assumed credit.
 Nothing that depends on the exit enters it (no exit time, no realised holding period, no outcome).
 It is an assumed allowance on the registered maximum horizon, not an estimate of realised swap.
-Strategies whose horizon cannot cross a rollover have s_h = 0 by construction, checked by a test.
+Strategies whose horizon cannot cross a rollover (scalp and intraday: the horizon ends by the
+session end, before the 17:00 rollover) have s_h = 0 by construction, checked by a test, so their
+a_S needs no swap export. S3's a_S waits for the MT5 export of section 6a. The price in s_h is the
+entry price (section 6).
 
 **Unvalidated classification (D2, N3; a preregistered conservative rule, not an exact bound).**
 For a strategy that did not pass, U_S = max(U1, U2), where U1 = the 95th percentile of x* and
@@ -340,7 +370,7 @@ not adjusted for multiplicity: both outcomes are "not validated" and are served 
 misclassification between them has limited consequence.
 
 **Power, stated before any evaluation.** MDE(n) = (z_(1-a) + z_0.8) x sigma x DE / sqrt(n), with n
-the Stage B labelled count in the primary period, sigma = sqrt(k) for a TP of k R (the break-even
+the number of resolved M0 trades in the primary period from the post-approval counts (section 12), sigma = sqrt(k) for a TP of k R (the break-even
 binary value, an upper bound when timeouts are frequent; for S2, S6 and S8 sigma = sqrt(mean k) of
 their signals), and DE = 1.2, or 1.5 for S4 and S8 (their signals fire on all six instruments at
 the same moment). **DE values are provisional assumptions, not measured facts**: L1's walk-forward
@@ -359,13 +389,22 @@ bundle.
 
 - **Unit:** a trade of a strategy of type t (S1-S8; L1 excluded), with the entry set fixed by M0's
   one-active-trade rule. Every bundle is evaluated on that same entry set, each entry managed on
-  its own. delta_i = R_i(bundle chosen for the window of trade i) - R_i(M0).
-- **Selection:** for each of the 13 test windows w, the chosen bundle is the one with the highest
-  mean net R over the training trades of type t whose exit + 1 day <= the start of w and whose
-  entry < the start of w (from 2012). Ties go to the lower index (M0 first). Fewer than 100
-  training trades: M0. Nothing else is tuned.
-- **Test:** mean delta over all test trades of type t, 4-week blocks, T1 and T2 as in section 8,
-  p = max(p1, p2); Holm over the three types, one-sided alpha 0.05.
+  its own. Each bundle's outcome on an entry comes from that bundle's own management of it: its
+  own exit time, exit reason and net R, never M0's. delta_i = R_i(bundle chosen for the window of
+  trade i) - R_i(M0).
+- **Selection:** for each of the 13 test windows w with start s_w, the training trades are the
+  trades of type t with entry < s_w whose exit under every bundle, plus 1 day, is at or before s_w
+  (from 2012). Every bundle's net R is therefore known by s_w, and all bundles are compared on the
+  same trades. A training trade still open under any bundle at s_w, or unresolved in the data, is
+  left out of that window's training. The chosen bundle has the highest mean net R over the
+  training trades; ties go to the lower index (M0 first); fewer than 100 training trades: M0.
+  Nothing else is tuned.
+- **Test:** the test trades of window w are the trades of type t in the fixed entry set with entry
+  in w. This set depends only on M0's one-active-trade rule, never on the outcome of another
+  bundle. A test trade is excluded, and counted, only when its M0 outcome or the chosen bundle's
+  outcome is unresolved at the 2024-07-01 load limit; the outcomes of bundles not chosen for w
+  never include or exclude a test trade. Mean delta over all test trades of type t, 4-week blocks,
+  T1 and T2 as in section 8, p = max(p1, p2); Holm over the three types, one-sided alpha 0.05.
 
 **Family D (AI).** Four hypotheses, one per model, each its activation claim:
 
@@ -410,7 +449,13 @@ constraints, where another bundle can change which entries are admitted; that po
 described only in the descriptive portfolio reports. After the walk-forward selection, the
 test-window results of individual bundles and models are descriptive: they are not used for any
 further selection, tuning or choice of a served configuration, and they are not counted as
-independent evidence.
+independent evidence. Under a bundle's own one-active-trade rule the entry set would differ:
+earlier exits admit entries that M0 rejects, and later exits block entries that M0 takes. Under
+bundles that exit later than M0, two managed trades of the same strategy and instrument can
+overlap in time, which the served system never allows. Family C therefore measures the per-entry
+effect of management, not a portfolio. The number of overlaps and the entry-set differences per
+bundle are reported as descriptive diagnostics, never as portfolio performance, and decide
+nothing.
 
 ## 10. Periods, holdout, lockbox and statuses
 
@@ -420,7 +465,7 @@ independent evidence.
 | Sensitivity 1 | XAUUSD alone, 2012-01-01 to 2024-07-01 | gold's longer history, including the 2013-2015 bear market; gold timestamps are weaker in 2012-2013, which matters for S1, S4 and S8 |
 | Sensitivity 2 | all instruments, 2012-01-01 to 2024-07-01 | the instrument mix changes (2012-2015 gold only) |
 | Sensitivity 3 | primary without EURUSD 2021-2023 | zero recorded spreads |
-| **C and D** | the 13 test windows (2018-01 to 2024-06), training expanding from 2012 | `known_by`: exit + 1 day <= the window start; dense AI labels purged by label end time (bar + horizon) |
+| **C and D** | the 13 test windows (2018-01 to 2024-06), training expanding from 2012 | `known_by`: exit + 1 day <= the window start, for family C the exit under every bundle (section 9); dense AI labels purged by label end time (bar + horizon) |
 | **Holdout** | 2024-07-01 to 2026-01-10 | read once, after every report of A to D is written and committed (hash recorded); bars loaded to the lockbox start, unresolved trades excluded |
 | **Lockbox** | 2026-01-10 to the export date | sealed until P9 (`HistoryExport`), read once |
 | **Forward paper log** | from the day a profile is served (after the export date) | monitoring only; never used to change a rule |
@@ -465,29 +510,46 @@ first signal wins a conflict; the exposure limit rejects) under the same constra
 
 ## 12. Counts (Stage B, descriptive only)
 
-Reported per strategy, type, instrument and year, 2012-01-01 to 2026-01-09, with the summary window
-2018-01 to 2026-01-09: signals; rejected candidates by reason; mean and median signals per trading
-day; share of trading days with 0, 1, 2 or more signals; share of weeks with 0, fewer than 10, and
-10 or more signals; counts before and after the signal-time filters, the one-active-trade and
-conflict rules, and (once agreed with Yazan) the exposure limits. No count is a gate, and no count
-changes a strategy, a parameter, delta* or a decision rule (section 15).
+**Pre-approval candidate counts** (on the frozen commit, before approval). Reported per strategy,
+type, instrument and year, 2012-01-01 to 2026-01-09, with the summary window 2018-01 to
+2026-01-09: candidates; rejected candidates by signal-time reason (`holiday`,
+`outside_liquid_window`, the strategy's own filter `incomplete_range`, `range_width`, `regime` or
+`move_too_small`,
+`non_positive_risk`, `r_out_of_range`, `cost_filter`, `no_time_left`; the one-signal-a-day rules of
+S1, S4 and S8 make at most one trigger a day and have no rejection reason); mean and median armed
+candidates per trading day; share of trading days with 0, 1, 2 or more; share of weeks with 0, 1
+to 9, and 10 or more. Candidates use bars up to and including the signal bar only. No `resolve`,
+no management engine, no E0, no label, no exit time or exit bar and no outcome field is computed,
+in any period. The holdout period (2024-07-01 to 2026-01-09) is counted the same way, and every
+holdout table carries the label "candidate-generation statistics only: not served signals, not an
+executable portfolio, not performance". The lockbox is never read. From these counts and
+signal-time quantities only, a_S and delta*_S (section 8) are computed, a_S over the armed
+candidates of the primary period; its swap term reads bar times to the end of the registered
+horizon, never a price after the signal bar and never an exit.
 
-Up to 2024-07-01 the one-active-trade rule needs `resolve` inside the count; Stage B writes no R,
-exit reason or exit price to disk, counts only.
+**Post-approval counts** (after approval, before Stage C), on the primary period only, with bars
+loaded only to 2024-07-01: counts after the one-active-trade and conflict rules (and, once agreed
+with Yazan, after the exposure limits); resolved and unresolved trades; n, K, MDE and n_unval
+(section 8). They use exit bars inside the computation; no R, exit reason, exit price or exit time
+is written or printed. Nothing that uses an exit is computed for the holdout or the lockbox.
 
-**Holdout-period counts (2024-07-01 to 2026-01-09) are candidate-generation statistics only.** They
-count candidates that pass the registered entry rules and the signal-time filters (cost filter, R
-range, liquid window, holidays, one-per-day rules of S1, S4 and S8), with their rejection reasons.
-They are counted before the one-active-trade rule, the conflict rule and any exposure constraint,
-because those rules need the exit time of earlier trades. They are not served signals, not an
-executable portfolio, and not performance; every holdout count table carries this label. No
-outcome-dependent logic runs in holdout counting: no `resolve`, no management engine, no E0, no
-label, no exit time; candidates use bars up to and including the signal bar only. Enforced by
-tests: (a) the holdout counting function runs on synthetic bars with `resolve` and the management
-engine replaced by functions that raise; (b) a static check that the holdout counting module
-imports neither `app.setups.labels` nor `app.management`; (c) the count report has no outcome
-columns. (The P3 count code, `app/setups/counts.py`, resolves through 2026-01-09; the new holdout
-counting must not use it.)
+No count is a gate. No count may change a strategy, parameter, filter, bundle, statistic, delta*
+or decision rule (section 15). A rule change after the first count is a new version: its reason is
+recorded, the pre-approval counts are rerun on it, and the counts of both versions are reported.
+
+Enforced by tests (`tests/test_strategies_counts.py`, `tests/test_strategies_cli.py`,
+`tests/test_management_counts.py`): (a) the pre-approval counts, and the command that runs them
+(`python -m app strategies count`), run on synthetic bars with `resolve` and the management engine
+replaced by functions that raise; (b) the whole import graph of the pre-approval counting module
+(`app/strategies/counts.py`) and of the command loads neither `app.setups.labels` nor
+`app.management` nor E0; (c) the
+count tables have no outcome columns and no timestamps; (d) an end past the lockbox start is
+refused before anything is read; (e) the post-approval counts return, write and print no R, exit
+reason, exit price or exit time, refuse bars after 2024-07-01 and refuse to run before approval;
+(f) the command refuses to run while "Rules frozen at commit" is empty, or when any rule file
+differs from that commit (changed since, uncommitted or untracked), and records the frozen commit
+and the commit it ran on in `docs/strategies/counts.md`. (The P3 count code, `app/setups/counts.py`, resolves through 2026-01-09; the new counting must not
+use it.)
 
 ## 13. Monitoring and product readiness (operational)
 
@@ -521,7 +583,8 @@ Readiness never raises a statistical status.
 4. The unvalidated bound is computed after the test failed (post-selection) and is not adjusted
    for multiplicity.
 5. The holdout check is weak (about 20 blocks); P9 is the stronger check.
-6. Families C and D use a fixed entry set, an approximation of the served system.
+6. Families C and D use a fixed entry set, an approximation of the served system (section 9:
+   overlaps and entry-set differences under other bundles are reported, not decided on).
 7. Costs and swap are partly assumed: the extra cost term and slippage are not measured; every
    swap scenario is an estimate; the rollover instant in mismatch weeks, past server-clock
    conventions and the interest day-count basis are open.
@@ -534,14 +597,16 @@ Readiness never raises a statistical status.
 
 ## 15. Frozen at approval (D11)
 
-Everything outcome-sensitive is frozen before any count or outcome: the strategy list and
+Everything outcome-sensitive is frozen at the commit recorded in the table, before any count:
+the strategy list and
 parameters (S1-S8; L1 unchanged), the common rules, types, bundles M0-M8 and rules T1-T4 and L1-L5,
 E0, the statistics and tests of sections 8 and 9, the block length and sensitivities, B, the
 seeds, alpha, the Holm families, the delta* formula and floor, the classification and holdout
 rules, the method condition, the swap scenarios and decision rule, the rollover convention, the
-cost model, the periods and sensitivities, and the AI order and gates. After the counts only
-mechanical constants are filled in by these fixed formulas (n, K, a_S, delta*_S, MDE, n_unval);
-no strategy is dropped, added or changed after the counts.
+cost model, the periods and sensitivities, and the AI order and gates. After the pre-approval
+counts only a_S and delta*_S are filled in, and after approval n, K, MDE and n_unval, all by these
+fixed formulas. No strategy is dropped, added or changed because of a count; a change for any
+other documented reason is a new version (section 12).
 
 Trials (`docs/phase3/TRIALS.md`): S1-S6 are 11-16, S7-S8 17-18, family C 19-21, A1-A4 22-25; N for
 the Deflated Sharpe 25, plus the pre-v0.2 exposure.

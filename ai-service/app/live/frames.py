@@ -1,8 +1,10 @@
 """Request bars -> the research frames (P6 task 2).
 
 The live scanner runs the research code unchanged, so it needs the frames the research store
-holds: ``15m`` (entry), ``1h``, ``4h`` and ``D1`` with the store's columns. All four are built
-from the request's 15m bars with the importer's aggregation (``app.data.aggregate``), as of
+holds: the entry frame (``15m`` for L1, ``5m`` for the scalp strategies of
+docs/strategies/PREREG.md) and every longer store frame up to ``D1``, with the store's columns.
+All are built from the request's entry-frame bars with the importer's aggregation
+(``app.data.aggregate``), as of
 ``bar_close_ts``: only buckets that have closed are kept, and a bucket that starts before the
 first 15m bar is dropped, because its earlier bars are not in the request. Higher-timeframe bars
 in the request are not used; the store builds every frame from M1 the same way, so the OHLC of
@@ -32,7 +34,7 @@ from app.data.aggregate import aggregate, trading_day
 from app.data.mt5 import BAR_COLUMNS
 from app.data.sessions import MARKET_TZ, is_open, market_holidays
 
-FRAMES = ("15m", "1h", "4h", "D1")
+FRAMES = ("5m", "15m", "1h", "4h", "D1")  # store frames, shortest first
 
 
 class DataQualityError(Exception):
@@ -85,7 +87,15 @@ def longest_gap_minutes(ts: pd.Series, inst: Instrument, step: pd.Timedelta) -> 
 
 
 def build_frames(req: EvaluateRequest, inst: Instrument, p: Strategy, prof: Profile) -> LiveFrames:
-    tf = p.entry_timeframe
+    return frames_for(req, inst, p.entry_timeframe, prof, p.break_is_gap)
+
+
+def frames_for(
+    req: EvaluateRequest, inst: Instrument, tf: str, prof: Profile, break_is_gap: bool = False
+) -> LiveFrames:
+    """The frames of an entry timeframe ``tf`` (``5m`` or ``15m``) from ``bars[tf]``."""
+    if tf not in FRAMES:
+        raise ValueError(f"unsupported entry timeframe {tf!r}")
     step = pd.Timedelta(TIMEFRAMES[tf])
     if tf not in req.bars:
         raise DataQualityError("missing_timeframe", {"timeframe": tf})
@@ -112,7 +122,7 @@ def build_frames(req: EvaluateRequest, inst: Instrument, p: Strategy, prof: Prof
 
     first = bars["ts_utc"].iloc[0]
     frames = {}
-    for name in FRAMES:
+    for name in FRAMES[FRAMES.index(tf) :]:
         out = aggregate(bars, name, step, as_of)
         if name != tf:
             out = out[out["ts_utc"] >= first].reset_index(drop=True)
@@ -123,7 +133,7 @@ def build_frames(req: EvaluateRequest, inst: Instrument, p: Strategy, prof: Prof
             "insufficient_history",
             {"complete_trading_days": days, "required": prof.history_trading_days},
         )
-    if p.break_is_gap:
+    if break_is_gap:
         e = frames[tf]
         frames[tf] = e[is_open(e["ts_utc"], inst)].reset_index(drop=True)
     return LiveFrames(frames, as_of)

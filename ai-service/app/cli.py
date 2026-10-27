@@ -14,6 +14,7 @@
     python -m app features build                   # P4 setup features, walk-forward dataset
     python -m app features e0                      # P4 matched random entries, context features
     python -m app live replay                      # P6 live = backtest, walk-forward period
+    python -m app strategies count                 # signal strategies: pre-approval counts
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -34,6 +35,7 @@ COMMANDS = {
     "research": "app.research.cli",
     "features": "app.features.setup_features",
     "live": "app.live.replay",
+    "strategies": "app.strategies.cli",
 }
 
 
