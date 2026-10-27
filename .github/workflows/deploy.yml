@@ -136,6 +136,21 @@ jobs:
           printf 'CTRADER_CLIENT_ID=%s\nCTRADER_CLIENT_SECRET=%s\n' \
             "$CTRADER_CLIENT_ID" "$CTRADER_CLIENT_SECRET" \
             | ssh vps 'bash /opt/trading/set-env-secrets.sh'
+      - name: Gemini API key into .env (only when missing or empty; never printed)
+        # Y14 (docs/chart-analysis.md). Same rule as the cTrader secrets: stdin over SSH, never
+        # argv or the log; an existing value on the server is kept. Not set in GitHub: skipped
+        # (chart analysis stays off, the rest deploys normally). The next step's `up -d` runs
+        # with a new image tag, so the backend container is recreated and reads the key.
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "GEMINI_API_KEY not set in GitHub: skipped"
+            exit 0
+          fi
+          echo "::add-mask::$GEMINI_API_KEY"
+          printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" \
+            | ssh vps 'bash /opt/trading/set-env-secrets.sh'
       - name: Pull images and restart the trading stack
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | ssh vps 'docker login ghcr.io -u ${{ github.actor }} --password-stdin'

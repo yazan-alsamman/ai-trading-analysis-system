@@ -63,7 +63,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    mem_limit: 544m  # two workers: 400 MiB peak in the load test (infra/loadtest)
+    # two workers: 400 MiB peak in the load test (infra/loadtest); Y14 chart analysis adds up to
+    # ~190 MiB (4 parallel 4.5 MB uploads, measured in docs/chart-analysis.md): 544m -> 640m
+    mem_limit: 640m
     cpus: 1.5
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
