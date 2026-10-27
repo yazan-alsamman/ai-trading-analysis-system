@@ -70,15 +70,15 @@ npx newman run docs/postman/AI-Trading-Platform.postman_collection.json \
 through `--working-dir docs/postman`; in the Postman app, pick the file again in the request's
 **Body → form-data** tab (or set Postman's working directory to this folder). **Market Data →
 Chart Image Analysis → Analyse chart image** uploads [`samples/chart_sample.png`](samples/chart_sample.png)
-the same way. Chart analysis answers 503 `not_configured` until `GEMINI_API_KEY` is set on the
-server, and each analysis takes one unit of your daily quota.
+the same way. Chart analysis answers 503 `not_configured` on a server without `GEMINI_API_KEY` (Production
+has one), and each new analysis takes one unit of your daily quota.
 
 Once HTTPS is live on `trading.yazanalsamman.com` (`docs/https.md`), set the Production
 environment's `base_url` to `https://trading.yazanalsamman.com` and `ws_url` to
 `wss://trading.yazanalsamman.com`; until then it points at `http://187.127.76.76:8080`.
 
 On production, Register, Admin and the create requests write real data (the calendar import adds
-the sample's events, Activate AI model switches the active model, Backfill cTrader bars starts a real backfill): prefer Local for full runs.
+the sample's events, Activate AI model switches the active model, Backfill cTrader bars starts a real backfill, Analyse chart image makes a real, billed Gemini call): prefer Local for full runs.
 
 ## Updating after an API change
 
