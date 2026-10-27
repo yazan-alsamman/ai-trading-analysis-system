@@ -7,9 +7,16 @@ Environment:
   ``FIRST_ADMIN_EMAIL`` / ``FIRST_ADMIN_PASSWORD`` in the stack's .env to the same values);
 - ``E2E_PURGE`` (default ``docker compose exec -T backend python -m app.cli purge-demo``): how
   the run's accounts and market are removed at the end; empty disables the clean-up.
+- ``E2E_COMPOSE`` (default ``docker compose``): how the AI steps reach the stack, to queue a
+  task the way beat does (``celery call`` in the ``beat`` container), drive the fakes and
+  recreate the backend with chart analysis off;
+- ``E2E_REQUIRE_FAKES`` (CI: ``1``): the AI steps (09 to 11) fail instead of skipping when the
+  stack runs without the fakes (``AI_EVALUATE_ENABLED``, ``AI_SERVICE_URL=http://fake-ai:8001``,
+  ``GEMINI_API_KEY``, ``CHART_VISION_BASE_URL=http://fake-gemini:8002``; see the ``e2e`` job).
 
-Every account is ``e2e-<run>-<role>@example.com`` and the market ``E2E<run>/USDT``, so a run
-never touches other data and the clean-up removes exactly what it made.
+Every account is ``e2e-<run>-<role>@example.com`` and the markets ``E2E<run>…/USDT``, so a run
+never touches other data and the clean-up removes exactly what it made. A step that waits waits
+on a condition with a timeout (:func:`wait_for`), never a fixed sleep.
 """
 
 from __future__ import annotations
@@ -21,9 +28,12 @@ import shlex
 import subprocess
 import time
 import uuid
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -37,6 +47,9 @@ ADMIN_PASSWORD = os.environ.get("E2E_ADMIN_PASSWORD", "Passw0rd123")
 PASSWORD = "E2e-Passw0rd-123"
 RUN = uuid.uuid4().hex[:6]
 ROOT = Path(__file__).resolve().parents[2]
+COMPOSE = os.environ.get("E2E_COMPOSE", "docker compose")
+REQUIRE_FAKES = os.environ.get("E2E_REQUIRE_FAKES", "").lower() in ("1", "true", "yes")
+MINUTE = timedelta(minutes=1)
 
 
 @dataclass
@@ -157,6 +170,141 @@ def make_account(http: httpx.Client, world: World):
         return account
 
     return _make
+
+
+# --- the stack: Celery tasks, the fakes, conditions ----------------------------------------------
+
+
+def compose(*args: str, env: dict[str, str | None] | None = None, timeout: float = 180) -> str:
+    """``docker compose <args>`` in the repository root; its stdout. An error fails the step.
+    ``env``: variables for compose's interpolation (``None`` unsets one, so .env decides)."""
+    cmd = [*shlex.split(COMPOSE), *args]
+    environ = {**os.environ, **(env or {})}
+    out = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env={k: v for k, v in environ.items() if v is not None},
+    )
+    assert out.returncode == 0, f"{' '.join(cmd)} failed ({out.returncode}): {out.stderr[-2000:]}"
+    return out.stdout
+
+
+def send_task(name: str, *args: Any) -> None:
+    """Queue a Celery task the way beat does (through the broker, with beat's routing), from the
+    ``beat`` container, instead of waiting for its schedule."""
+    compose(
+        "exec", "-T", "beat", "celery", "-A", "app.tasks", "call", name, "--args", json.dumps(args)
+    )
+
+
+# a control call to a fake from inside its own container (the fakes publish no port)
+_FAKE_CALL = (
+    "import sys, urllib.request; "
+    "body = sys.argv[2].encode() if len(sys.argv) > 2 else None; "
+    "r = urllib.request.Request(sys.argv[1], data=body, "
+    "headers={'Content-Type': 'application/json'}); "
+    "print(urllib.request.urlopen(r, timeout=10).read().decode())"
+)
+
+
+def fake(service: str, port: int, path: str, body: dict | None = None) -> Any:
+    """``GET`` (no body) or ``POST`` (a body, ``{}`` for none) to ``service``'s ``/_fake/...``."""
+    url = [f"http://127.0.0.1:{port}{path}"] + ([json.dumps(body)] if body is not None else [])
+    return json.loads(compose("exec", "-T", service, "python", "-c", _FAKE_CALL, *url))
+
+
+def wait_for(check: Callable[[], Any], what: str, timeout: float = 60, every: float = 1) -> Any:
+    """Poll ``check`` until it returns something truthy, and return that; fail after
+    ``timeout`` seconds naming ``what``."""
+    deadline = time.time() + timeout
+    while True:
+        value = check()
+        if value:
+            return value
+        if time.time() > deadline:
+            raise AssertionError(f"timed out after {timeout:g} s waiting for {what}")
+        time.sleep(every)
+
+
+def need(enabled: bool, what: str) -> None:
+    """Skip the step when a feature is off on this stack (fail instead with
+    ``E2E_REQUIRE_FAKES``, as in CI, so a misconfigured job cannot pass by skipping)."""
+    if enabled:
+        return
+    message = f"{what} is off on this stack (the e2e job runs it against the fakes)"
+    if REQUIRE_FAKES:
+        pytest.fail(message)
+    pytest.skip(message)
+
+
+def system_status(http: httpx.Client, world: World) -> dict:
+    res = http.get("/admin/system/status", headers=world.admin.h)
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+# --- markets and candles -------------------------------------------------------------------------
+
+
+def iso_z(ts: datetime) -> str:
+    return ts.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def this_minute() -> datetime:
+    return datetime.now(UTC).replace(second=0, microsecond=0)
+
+
+def new_market(http: httpx.Client, world: World, suffix: str, **specs: Any) -> tuple[str, str]:
+    """``(id, symbol)`` of a new market ``E2E<run><suffix>/USDT`` (removed by the clean-up)."""
+    res = http.post(
+        "/admin/instruments",
+        json={
+            "symbol": f"E2E{RUN}{suffix}/USDT",
+            "source": "e2e",
+            "market": "crypto",
+            "price_precision": 2,
+            "quantity_precision": 4,
+            **specs,
+        },
+        headers=world.admin.h,
+    )
+    assert res.status_code == 201, res.text
+    return res.json()["id"], res.json()["symbol"]
+
+
+def bars(start: datetime, closes: list[float | None], *, spread: float | None = None) -> list[dict]:
+    """1m candles from ``start``, one minute per close; ``None`` leaves that minute out (a gap).
+    Each opens at the previous close."""
+    out, prev = [], next(c for c in closes if c is not None)
+    for i, close in enumerate(closes):
+        if close is None:
+            continue
+        candle = {
+            "ts": (start + i * MINUTE).isoformat(),
+            "open": prev,
+            "high": round(max(prev, close) + 0.05, 4),
+            "low": round(min(prev, close) - 0.05, 4),
+            "close": close,
+            "volume": 1.0,
+        }
+        if spread is not None:
+            candle["spread"] = spread
+        out.append(candle)
+        prev = close
+    return out
+
+
+def write_candles(http: httpx.Client, world: World, iid: str, candles: list[dict]) -> None:
+    """Through the admin candles API (the path ``simulate-live`` uses), in Nginx-sized batches."""
+    for i in range(0, len(candles), 2000):
+        chunk = candles[i : i + 2000]
+        res = http.post(
+            f"/admin/instruments/{iid}/candles", json={"candles": chunk}, headers=world.admin.h
+        )
+        assert res.status_code == 200 and res.json()["written"] == len(chunk), res.text
 
 
 # --- WebSocket helpers ---------------------------------------------------------------------------

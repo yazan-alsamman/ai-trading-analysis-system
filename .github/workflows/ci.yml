@@ -198,22 +198,33 @@ jobs:
 
   e2e:
     # the compose stack (db, redis, backend, workers, beat, nginx) and the end-to-end suite
-    # through Nginx; the suite removes its own accounts and market (purge-demo)
+    # through Nginx; the suite removes its own accounts and markets (purge-demo). The AI steps
+    # (09-11) run against the fake ai-service and the fake Gemini: dev/CI profiles that are
+    # never in infra/deploy; CI never calls Gemini or a real ai-service
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       E2E_BASE_URL: http://localhost
       E2E_ADMIN_EMAIL: ci-admin@example.com
       E2E_ADMIN_PASSWORD: Ci-Admin-Passw0rd-1
+      E2E_REQUIRE_FAKES: "1"  # steps 09-11 fail (not skip) if the fakes are not wired
     steps:
       - uses: actions/checkout@v4
-      - name: Stack configuration (.env.example + a first admin)
+      - name: Stack configuration (.env.example, a first admin, the fakes for this stack only)
         run: |
           cp .env.example .env
-          sed -i "s|^FIRST_ADMIN_EMAIL=.*|FIRST_ADMIN_EMAIL=$E2E_ADMIN_EMAIL|" .env
-          sed -i "s|^FIRST_ADMIN_PASSWORD=.*|FIRST_ADMIN_PASSWORD=$E2E_ADMIN_PASSWORD|" .env
-      - name: Build and start the stack
-        run: docker compose up -d --build --wait db redis backend worker worker-backtest beat nginx
+          set_env() { grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2" >> .env; }
+          set_env FIRST_ADMIN_EMAIL "$E2E_ADMIN_EMAIL"
+          set_env FIRST_ADMIN_PASSWORD "$E2E_ADMIN_PASSWORD"
+          set_env AI_SERVICE_URL http://fake-ai:8001
+          set_env AI_EVALUATE_ENABLED true
+          set_env CHART_VISION_BASE_URL http://fake-gemini:8002
+          set_env GEMINI_API_KEY ci-dummy-not-a-real-key  # only switches the feature on
+          grep -E '^(AI_SERVICE_URL|AI_EVALUATE_ENABLED|CHART_VISION_BASE_URL)=' .env
+      - name: Build and start the stack (with the fake ai-service and the fake Gemini)
+        run: >-
+          docker compose --profile fake-ai --profile fake-gemini up -d --build --wait
+          db redis backend worker worker-backtest beat nginx fake-ai fake-gemini
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -255,7 +266,9 @@ jobs:
           fi
       - name: Stack logs
         if: failure()
-        run: docker compose logs --tail 150 backend worker worker-backtest beat
+        run: >-
+          docker compose --profile fake-ai --profile fake-gemini logs --tail 150
+          backend worker worker-backtest beat fake-ai fake-gemini
 
   compose:
     runs-on: ubuntu-latest

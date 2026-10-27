@@ -88,7 +88,8 @@ def outcome_values(
     missing = [ts for ts in starts if ts not in found]
     if missing:
         first = missing[0].astimezone(UTC).isoformat().replace("+00:00", "Z")
-        return {
+        return {  # every column, as None: one multi-row INSERT needs the same keys in each row
+            **dict.fromkeys(("exit_ts", "exit_price", "return_pct", "mfe_pct", "mae_pct")),
             "correct": None,
             "note": f"gap: {len(missing)} of {len(starts)} bars missing (first {first})"[:200],
         }

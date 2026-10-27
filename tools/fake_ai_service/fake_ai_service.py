@@ -11,7 +11,8 @@ driven with ``POST /_fake/mode`` to return what a test needs:
   ``probability``, ``ev_r``, ``ev_r_lower`` and ``grade`` null; ``/health`` reports no model
   either), ``same_at`` (DEVELOPING, then
   ARMED and ACTIVE with the same ``at``, then CLOSED), ``examples`` (the ok example),
-  ``model_unavailable``, ``backwards`` (the lifecycle, then the setup sent back as
+  ``model_unavailable``, ``abstain`` (``ok`` with an abstention and no setup, as the v1 rules
+  answer when nothing qualifies), ``backwards`` (the lifecycle, then the setup sent back as
   DEVELOPING), ``422``, ``503``, ``404``;
 - ``size``: ``404`` (default: no ``/v1/size`` yet, as before Fadi's P6), ``ok`` (the example),
   ``503``;
@@ -211,6 +212,15 @@ async def evaluate(request: Request) -> Response:
     if key not in STATE.answers:
         if mode == "examples":
             out = {**example("evaluate-response-ok"), "request_id": body["request_id"]}
+        elif mode == "abstain":
+            out = {
+                "request_id": body["request_id"],
+                "status": "ok",
+                "versions": RULES_ONLY_VERSIONS,
+                "new_setups": [],
+                "transitions": [],
+                "abstentions": [{"reason": "no_setup", "detail": {"fake": True}}],
+            }
         elif mode == "model_unavailable":
             out = {
                 **example("evaluate-response-model-unavailable"),

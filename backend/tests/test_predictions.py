@@ -172,6 +172,32 @@ async def test_a_gap_is_resolved_without_a_result(session: AsyncSession) -> None
     assert out.note == "gap: 1 of 3 bars missing (first 2026-03-02T12:02:00Z)"
 
 
+@pytest.mark.parametrize("gap_first", [True, False])
+async def test_a_gap_and_a_result_in_one_batch(session: AsyncSession, gap_first: bool) -> None:
+    """Found by the Y20 e2e suite: the gap row lacked the price columns, so one multi-row INSERT
+    had rows with different keys. A gap first silently dropped the other rows' prices; a result
+    first failed to compile (the whole run failed)."""
+    eth = await make_instrument(session, "ETH/USDT")
+    closes = [10.0, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0, 11.1]
+    candles = await add_closes(session, eth.id, T0, closes)  # 12:00 ... 12:07
+    missing = candles[2] if gap_first else candles[6]
+    await session.execute(
+        delete(market_service._RELATIONS[Timeframe.m1]).where(
+            market_service._RELATIONS[Timeframe.m1].c.ts == missing.ts
+        )
+    )
+    await session.commit()
+    first = await signal(session, eth, T0, "buy", 10.0)  # horizon 12:01-12:03
+    second = await signal(session, eth, T0 + timedelta(minutes=4), "buy", 10.8)  # 12:05-12:07
+    gap, hit = (first, second) if gap_first else (second, first)
+    result = await resolve(session)
+    assert (result.resolved, result.gaps) == (2, 1)
+    rows = await outcomes(session)
+    assert rows[gap.id].correct is None and rows[gap.id].exit_ts is None
+    assert rows[hit.id].correct is True and rows[hit.id].exit_price is not None
+    assert rows[hit.id].return_pct > 0
+
+
 async def test_a_weekend_is_not_a_gap(session: AsyncSession) -> None:
     """FxPro hours: closed Fri 16:55 to Sun 18:00 New York (20:55 to 22:00 UTC in October)."""
     fx = await make_instrument(

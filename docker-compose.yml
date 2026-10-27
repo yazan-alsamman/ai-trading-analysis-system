@@ -40,6 +40,9 @@ services:
       # uvicorn honours X-Forwarded-For only from Nginx (fixed address below), so the rate
       # limiter sees real client IPs and nobody can spoof one by talking to :8000 directly
       FORWARDED_ALLOW_IPS: ${NGINX_IP:-172.30.57.10}
+      # the .env value, unless the shell overrides it: the e2e suite switches chart analysis
+      # off with `CHART_ANALYSIS_ENABLED=false docker compose up -d --no-deps backend`
+      CHART_ANALYSIS_ENABLED: ${CHART_ANALYSIS_ENABLED:-true}
       <<: *dev-smtp
     depends_on:
       db:
@@ -175,6 +178,19 @@ services:
     volumes:
       - ./tools/fake_ai_service:/fake:ro
       - ./docs/api/ai-service-examples:/examples:ro
+
+  # Y14/Y20: a fake Gemini generateContent endpoint for development and CI (tools/fake_gemini,
+  # docs/chart-analysis.md). Never in production (not in infra/deploy), never a published port.
+  # Only with its profile: docker compose --profile fake-gemini up -d fake-gemini, then
+  # CHART_VISION_BASE_URL=http://fake-gemini:8002 and any non-empty GEMINI_API_KEY in .env
+  fake-gemini:
+    profiles: ["fake-gemini"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: uvicorn fake_gemini:app --app-dir /fake --host 0.0.0.0 --port 8002
+    volumes:
+      - ./tools/fake_gemini:/fake:ro
 
   nginx:
     image: nginx:1.27-alpine

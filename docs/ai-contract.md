@@ -443,11 +443,15 @@ in `ai-service/` and **never** in the production compose (`infra/deploy/docker-c
 - `POST /_fake/mode {"evaluate": ..., "size": ..., "explain": ...}` drives it:
   `evaluate` = `lifecycle` (default), `rules_only` (the lifecycle as Fadi's v1 answers it:
   `ok`, `versions.model` null, `probability`, `ev_r`, `ev_r_lower` and `grade` null; `/health`
-  reports the null model too), `same_at`, `examples`, `model_unavailable`, `backwards`, `422`,
+  reports the null model too), `same_at`, `examples`, `model_unavailable`, `abstain` (`ok`
+  with one abstention and no setup), `backwards`, `422`,
   `503`, `404`; `size` = `404` (default), `ok`, `503`; `explain` = `404` (default),
   `verified`, `template`, `unverified`, `503`. `GET /_fake/requests` lists what it received;
   `POST /_fake/reset` starts again. Gzip request bodies are accepted.
 - The backend tests use it in-process (`tests/test_ai_evaluate.py`, `tests/test_ai_explain.py`).
+- The end-to-end suite runs it on the compose network (`backend/tests_e2e/test_09_ai_evaluate.py`,
+  Y20): the e2e job sets `AI_SERVICE_URL=http://fake-ai:8001` and `AI_EVALUATE_ENABLED=true` in its
+  own `.env` only.
 - Locally: `docker compose --profile fake-ai up -d fake-ai`, then in `.env`
   `AI_SERVICE_URL=http://fake-ai:8001` and `AI_EVALUATE_ENABLED=true`, and restart `worker`
   and `beat`.

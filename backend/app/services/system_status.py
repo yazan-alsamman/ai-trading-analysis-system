@@ -158,8 +158,8 @@ async def _calendar(session: AsyncSession, redis: Redis) -> dict[str, Any]:
 
 
 async def _ai_alerts(session: AsyncSession) -> dict[str, Any]:
-    """The AI setup alert outbox (B11): rows by status, and how long the oldest pending one has
-    waited."""
+    """The AI setup alert outbox (B11): rows by status, how long the oldest pending one has
+    waited, and whether follows' ``min_grade`` is applied (``AI_GRADES_ENABLED``, B11b)."""
     rows = await session.execute(
         text("SELECT status, count(*) FROM ai_setup_outbox GROUP BY status")
     )
@@ -174,6 +174,7 @@ async def _ai_alerts(session: AsyncSession) -> dict[str, Any]:
     return {
         "outbox": counts,
         "oldest_pending_seconds": round(float(oldest), 1) if oldest is not None else None,
+        "grades_enabled": get_settings().ai_grades_enabled,
     }
 
 

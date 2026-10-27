@@ -2,7 +2,8 @@
 //
 // Scenario "api": up to 200 virtual users, each with its own analyst token, picking one read at
 // a time with 0.5-2 s of think time: candles (5 timeframes), indicators (5 per call), signals,
-// news, posts feed.
+// news, posts feed, and (3% each, Y20) prediction stats, recommendations, strategy fit and the
+// economic calendar. Never POST /analysis/chart-image (it would call Gemini).
 // Scenario "ws": 200 WebSocket clients, each subscribed to BTC/USDT 1m candles and its own user
 // topic while simulate-live rewrites the 1m candle every second; fan-out delay = receive time -
 // the publisher's sent_at (same Docker host clock).
@@ -33,8 +34,11 @@ const INDICATORS = [
   { name: 'bollinger', params: {} },
   { name: 'atr', params: {} },
 ];
-const ENDPOINTS = ['candles', 'indicators', 'signals', 'news', 'posts'];
-const WEIGHTS = [0.35, 0.2, 0.15, 0.15, 0.15];
+const ENDPOINTS = [
+  'candles', 'indicators', 'signals', 'news', 'posts',
+  'prediction_stats', 'recommendations', 'reco_strategies', 'calendar',
+];
+const WEIGHTS = [0.31, 0.18, 0.13, 0.13, 0.13, 0.03, 0.03, 0.03, 0.03];
 
 const latency = {};
 const errors = {};
@@ -102,8 +106,16 @@ export function api() {
     res = http.get(`${API}/signals?limit=50`, params);
   } else if (ep === 'news') {
     res = http.get(`${API}/news?limit=30`, params);
-  } else {
+  } else if (ep === 'posts') {
     res = http.get(`${API}/posts?limit=20`, params);
+  } else if (ep === 'prediction_stats') {
+    res = http.get(`${API}/predictions/stats`, params);
+  } else if (ep === 'recommendations') {
+    res = http.get(`${API}/me/recommendations?limit=20`, params);
+  } else if (ep === 'reco_strategies') {
+    res = http.get(`${API}/recommendations/strategies?instrument_id=${iid}&timeframe=${tf}`, params);
+  } else {
+    res = http.get(`${API}/calendar/events?min_impact=medium`, params);
   }
   latency[ep].add(res.timings.duration);
   if (res.status === 429) limited[ep].add(1);
