@@ -119,8 +119,11 @@ def test_signals_predictions_recommendations(http, world, make_account):
         assert res.status_code == 200, res.text
         return res.json()
 
+    def here(items):  # this market only: other suites' live signals are recommendations too
+        return [r for r in items if r["source"] == "strategy" and r["instrument_id"] == iid]
+
     recos = strategy_items(trader)
-    signal_recos = [r for r in recos if r["source"] == "strategy"]
+    signal_recos = here(recos)
     assert [r["id"] for r in signal_recos] == [ids[("rsi_reversal", "C")]], recos
     [reco] = signal_recos
     assert reco["plan"] is not None and reco["age_bars"] <= 3, reco
@@ -128,7 +131,7 @@ def test_signals_predictions_recommendations(http, world, make_account):
     if world.data.get("ai_setup_id"):  # step 9: the followed, taken setup (ACTIVE)
         ai = [r for r in recos if r["source"] == "ai"]
         assert [r["id"] for r in ai] == [f"ai:{world.data['ai_setup_id']}"], recos
-    theirs_reco = [r for r in strategy_items(analyst) if r["source"] == "strategy"]
+    theirs_reco = here(strategy_items(analyst))
     assert [r["id"] for r in theirs_reco] == [ids[(custom, "C")]]
 
     def fits(account) -> list[dict]:
