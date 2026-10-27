@@ -744,6 +744,7 @@ async def test_admin_views_and_status(
     status = (await client.get("/api/v1/admin/system/status", headers=admin_headers)).json()
     assert status["ai_alerts"]["outbox"] == {"pending": 1, "done": 2, "skipped": 0, "failed": 0}
     assert status["ai_alerts"]["oldest_pending_seconds"] >= 0
+    assert status["ai_alerts"]["grades_enabled"] is False  # AI_GRADES_ENABLED (B11b), off in v1
     assert "ai_alerts.dispatch" in status["celery"]["tasks"]
     detail = (await client.get("/api/v1/admin/ai/setups/xau-1", headers=admin_headers)).json()
     assert [(o["to_state"], o["status"]) for o in detail["outbox"]] == [
