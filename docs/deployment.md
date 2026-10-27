@@ -390,7 +390,17 @@ workflow يدوي فقط (`.github/workflows/prod-smoke.yml`، لا يعمل ت�
 - **إضافة السرّين (مرة واحدة)**: أنشئ حساباً خاصاً للفحص (يفضَّل مديراً لترى الأعلام؛ بلا مدير تبقى الفحوص العامة)، ثم
   Settings ← Secrets and variables ← Actions ← New repository secret: `SMOKE_EMAIL` و`SMOKE_PASSWORD`. لا تضع كلمة السر
   في الريبو أبداً. بدونهما يعمل الفحص العام فقط ويطبع `warn login: SMOKE_EMAIL / SMOKE_PASSWORD not set`.
-- مثال من تشغيل محلي في [demo-day.md](demo-day.md).
+- مثال حقيقي (2026-10-27، على السيرفر بلا حساب: `VPS_HOST=<VPS_HOST> python infra/smoke/prod_smoke.py`):
+  ```
+  ok   health: 200
+  ok   ready: database, redis and migrations ok
+  ok   data: ok (fxpro:XAU/USD ok)
+  ok   web: index.html with <div id="root">
+  ok   instruments: 401 without a login (auth enforced)
+  ok   calendar: 401 without a login (auth enforced)
+  warn login: SMOKE_EMAIL / SMOKE_PASSWORD not set: public checks only
+  summary: 6 ok, 1 warn, 0 fail
+  ```
 
 ## اختبارات التكامل النهائية (Y20)
 - مهمة `e2e` في CI تشغّل الآن أيضاً `fake-ai` و`fake-gemini` (ملفّا profile للتطوير/CI فقط، غير موجودين في
@@ -401,3 +411,5 @@ workflow يدوي فقط (`.github/workflows/prod-smoke.yml`، لا يعمل ت�
   (Y16، Y17)، `test_11_chart_analysis.py` (Y14، ومنها إطفاء الميزة بإعداد واحد وإعادة إنشاء الـ backend: 503).
 - إعداد جديد في `.env.example`: `CHART_VISION_BASE_URL=` (فارغ في الإنتاج دائماً). و`/admin/system/status` يعرض الآن
   `ai_alerts.grades_enabled`. بلا migration وبلا خدمة إنتاج جديدة ولا منفذ عام.
+- مدة مهمة `e2e` في CI: نحو 4:05 دقائق (كانت 2:19 إلى 3:08 على main)؛ خطوة الاختبارات 139 ث بدل 65 ث، معظم الزيادة من
+  `test_11` (نحو 36 ث: إعادة إنشاء الـ backend مرتين).
