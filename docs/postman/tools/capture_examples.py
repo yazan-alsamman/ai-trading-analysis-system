@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import mimetypes
 import re
 import subprocess
 import sys
@@ -277,10 +278,18 @@ class Runner:
         body = variant.body if variant and variant.body is not None else req.body
         kwargs: dict[str, Any] = {"params": query, "headers": headers}
         if req.files is not None:
+            files = {k: src for k, src, _ in req.files}
+            files.update(variant.files if variant and variant.files else {})
             kwargs["files"] = {
-                k: (Path(src).name, (POSTMAN / src).read_bytes(), "text/csv")
-                for k, src, _ in req.files
+                k: (
+                    Path(src).name,
+                    (POSTMAN / src).read_bytes(),
+                    mimetypes.guess_type(src)[0] or "application/octet-stream",
+                )
+                for k, src in files.items()
             }
+            if req.form is not None:
+                kwargs["data"] = {k: self.resolve(v) for k, v, _ in req.form}
         elif req.form is not None:
             kwargs["data"] = {k: self.resolve(v) for k, v, _ in req.form}
         elif isinstance(body, str):

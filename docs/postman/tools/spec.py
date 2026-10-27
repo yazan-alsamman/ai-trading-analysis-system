@@ -31,6 +31,7 @@ class Variant:
     headers: dict[str, str] | None = None
     auth: str | None = None  # override auth mode
     path: str | None = None  # another path of the API (e.g. to show a missing scope)
+    files: dict[str, str] | None = None  # multipart: replaces these files (key -> file)
 
 
 @dataclass
@@ -46,7 +47,7 @@ class Req:
     path_vars: dict[str, tuple[str, str]] = field(default_factory=dict)  # name -> value, desc
     headers: list[tuple[str, str, str]] = field(default_factory=list)
     body: Any = None
-    form: list[tuple[str, str, str]] | None = None  # x-www-form-urlencoded
+    form: list[tuple[str, str, str]] | None = None  # x-www-form-urlencoded (with files: text parts)
     files: list[tuple[str, str, str]] | None = None  # multipart: key, file under docs/postman, desc
     expect: list[int] = field(default_factory=lambda: [200])
     captures: dict[str, str] = field(default_factory=dict)
@@ -359,6 +360,9 @@ if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
 
 AI_INSTRUMENT_FALLBACK = """// AI setups are on the instrument of Strategies & Signals → Get prediction; without one, the chart instrument.
 if (!pm.variables.get("ai_instrument_id")) pm.environment.set("ai_instrument_id", pm.variables.get("instrument_id"));"""
+
+SKIP_NO_CHART_ANALYSIS = """// No analysis stored in this run (chart analysis off, or Analyse chart image not sent): skip.
+if (!pm.variables.get("chart_analysis_id")) pm.execution.skipRequest();"""
 
 SKIP_NO_OUTBOX_ROW = """// No AI alert in the outbox yet (send Admin → AI Engine → List AI alert outbox first): skip.
 if (!pm.variables.get("ai_outbox_id")) pm.execution.skipRequest();"""
@@ -754,6 +758,141 @@ FOLDERS: list[Folder] = [
                         404,
                         path_vars={"event_key": "unknown-event"},
                     )
+                ],
+            ),
+            Folder(
+                "Chart Image Analysis",
+                "Upload a screenshot of a price chart and get a structured, checked analysis from "
+                "Gemini (`docs/chart-analysis.md`): trend, patterns, support and resistance, "
+                "indicators seen, an idea (buy, sell or wait, with a confidence) and a summary in "
+                "Arabic or English. An educational aid, **not financial advice**: every result "
+                "carries a fixed `disclaimer` added by the backend.\n\n"
+                "* JWT only, with a daily quota per role (UTC day): trader 5, analyst 20, expert "
+                "20, admin 100.\n"
+                "* The image is **never stored**, only its SHA-256, size, dimensions and type.\n"
+                "* Off until `GEMINI_API_KEY` is set: every request then answers 503 "
+                "`not_configured` (the tests accept it).\n"
+                "* Errors are `detail = {code, message, …}` and never a 500.\n"
+                "* Recorded against `docs/postman/tools/fake_gemini.py`, a local stand-in for "
+                "the Gemini API (no key, no paid call).",
+                [
+                    Req(
+                        "chart_analysis_create",
+                        "Analyse chart image",
+                        "POST",
+                        "/analysis/chart-image",
+                        "Multipart upload, answered synchronously (up to "
+                        "`CHART_VISION_TIMEOUT_SECONDS`, 45 s) with the stored analysis.\n\n"
+                        "* `image`: PNG, JPEG or WebP (read from its bytes), at most 5 MB, at "
+                        "least 200 × 200 px.\n"
+                        "* `language`: `ar` or `en` (default: your profile's language, else "
+                        "`ar`); `symbol` and `timeframe` are hints (the image wins).\n"
+                        "* `result` (status `ok`): `is_chart`, `symbol_guess`, "
+                        "`timeframe_guess`, `trend`, `trend_strength`, `patterns`, "
+                        "`support_levels`, `resistance_levels`, `indicators_seen`, `idea` "
+                        "(`risk_reward` is computed by the backend, never the model's), "
+                        "`summary`, `reasoning`, `warnings`, `disclaimer`.\n"
+                        "* The same image, language and hints within 24 h returns the stored "
+                        "result with `cached: true`: no new call and no quota.\n"
+                        "* Each new call takes one unit of the daily quota; 422 `not_a_chart` "
+                        "is counted too. 429 `quota_exceeded` with `Retry-After` (seconds to "
+                        "00:00 UTC); 503 `busy`, `model_busy`, `model_unavailable` or `timeout` "
+                        "with `Retry-After` (no quota taken).",
+                        files=[
+                            (
+                                "image",
+                                "samples/chart_sample.png",
+                                "PNG, JPEG or WebP, at most 5 MB",
+                            )
+                        ],
+                        form=[
+                            ("language", "en", "ar | en"),
+                            ("symbol", "XAU/USD", "Hint"),
+                            ("timeframe", "15m", "Hint"),
+                        ],
+                        captures={"chart_analysis_id": "id"},
+                        expect=[200, 503],
+                        cost=5,
+                        variants=[
+                            Variant("200 Same image again (cached)", 200),
+                            Variant(
+                                "415 Not an image",
+                                415,
+                                files={"image": "samples/calendar_history_sample.csv"},
+                            ),
+                            Variant(
+                                "422 Image too small",
+                                422,
+                                files={"image": "samples/tiny_image.png"},
+                            ),
+                            Variant(
+                                "422 Not a chart (counted)",
+                                422,
+                                files={"image": "samples/not_a_chart.png"},
+                            ),
+                        ],
+                    ),
+                    Req(
+                        "chart_analysis_quota",
+                        "Chart analysis quota",
+                        "GET",
+                        "/analysis/chart-image/quota",
+                        "Analyses used and left today for your role: `limit`, `used`, "
+                        "`remaining` and `resets_at` (the next 00:00 UTC).",
+                        expect=[200, 503],
+                    ),
+                    Req(
+                        "chart_analysis_history",
+                        "Chart analysis history",
+                        "GET",
+                        "/analysis/chart-image",
+                        "Your analyses, newest first, every status (`ok`, `not_chart`, "
+                        "`refused`, `error`; `error` holds `{code, message}` when it is not "
+                        "`ok`). Paginated: `items`, `total`, `limit`, `offset`.",
+                        query=[("limit", "20", "1–100"), ("offset", "0", "")],
+                        expect=[200, 503],
+                    ),
+                    Req(
+                        "chart_analysis_get",
+                        "Get chart analysis",
+                        "GET",
+                        "/analysis/chart-image/:chart_analysis_id",
+                        "One of your analyses (404 for anyone else's).",
+                        path_vars={
+                            "chart_analysis_id": (
+                                "{{chart_analysis_id}}",
+                                "From Analyse chart image",
+                            )
+                        },
+                        expect=[200, 503],
+                        pre=SKIP_NO_CHART_ANALYSIS,
+                        variants=[
+                            Variant(
+                                "404 Analysis not found",
+                                404,
+                                path_vars={
+                                    "chart_analysis_id": "00000000-0000-0000-0000-000000000000"
+                                },
+                            )
+                        ],
+                    ),
+                    Req(
+                        "chart_analysis_delete",
+                        "Delete chart analysis",
+                        "DELETE",
+                        "/analysis/chart-image/:chart_analysis_id",
+                        "Deletes one of your analyses (404 for anyone else's). The quota unit is "
+                        "not given back.",
+                        path_vars={
+                            "chart_analysis_id": (
+                                "{{chart_analysis_id}}",
+                                "From Analyse chart image",
+                            )
+                        },
+                        expect=[204, 503],
+                        pre=SKIP_NO_CHART_ANALYSIS,
+                        variants=[Variant("404 Already deleted", 404)],
+                    ),
                 ],
             ),
         ],
@@ -3795,7 +3934,9 @@ FOLDERS: list[Folder] = [
                         "with status, reason, duration, request size and bars sent, counts of "
                         "the last 24 h, the last contract error), the cTrader live feed (`feeds.ctrader`: "
                         "enabled, linked, connected, last tick and bar, reconnects, token expiry, "
-                        "last error; never the tokens), "
+                        "last error; never the tokens), chart image analysis (`chart_analysis`: "
+                        "enabled or why not, model, prompt version, and per status of the last 24 h "
+                        "the count, tokens and mean latency), "
                         "WebSocket "
                         "clients summed over every API process (each reports every 30 s), "
                         "notification channels, unhandled errors in "
