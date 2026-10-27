@@ -19,7 +19,7 @@ services:
     cpus: 0.5
     cpu_shares: 512
   backend:
-    mem_limit: 544m
+    mem_limit: 640m  # Y14 (chart image analysis)
     cpus: 1.5
     cpu_shares: 512
     environment:
@@ -42,8 +42,12 @@ services:
     mem_limit: 128m
     cpus: 0.25
     cpu_shares: 512
+  feed-ctrader:
+    mem_limit: 128m
+    cpus: 0.25
+    cpu_shares: 512
   ai-service:
-    mem_limit: 256m
+    mem_limit: 512m  # B7
     cpus: 0.5
     cpu_shares: 512
   nginx:
