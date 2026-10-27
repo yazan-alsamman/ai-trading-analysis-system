@@ -10792,6 +10792,282 @@ paths:
       security:
       - BearerJWT: []
       - ApiKey: []
+  /api/v1/analysis/chart-image:
+    post:
+      tags:
+      - chart-analysis
+      summary: Analyse Chart Image
+      description: 'Analyse one chart image, synchronously (up to ``CHART_VISION_TIMEOUT_SECONDS``), and
+
+        return the stored result. The type is read from the image bytes; the image is re-encoded
+
+        without metadata and **never stored** (only its SHA-256). The same image, language and hints
+
+        within 24 h returns the stored result (``cached``), with no new call and no quota. Each new
+
+        call takes one unit of your daily quota (``GET .../quota``); an image that is not a chart
+
+        (422 ``not_a_chart``) is counted too. The result always carries a disclaimer: it is not
+
+        financial advice.'
+      operationId: chart_analysis_analyse_chart_image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_analyse_chart_image_api_v1_analysis_chart_image_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChartAnalysisRead'
+        '413':
+          description: image_too_large (over CHART_IMAGE_MAX_BYTES)
+        '415':
+          description: unsupported_image (only PNG, JPEG, WebP, by their bytes)
+        '422':
+          description: 'image_too_small, image_too_many_pixels, invalid_image, not_a_chart (counted),
+            could_not_analyse (counted: blocked or empty answer)'
+        '429':
+          description: 'quota_exceeded: Retry-After = seconds to 00:00 UTC'
+        '503':
+          description: not_configured, model_busy, model_unavailable, timeout (Retry-After)
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit-cost: 5
+      security:
+      - BearerJWT: []
+    get:
+      tags:
+      - chart-analysis
+      summary: Chart Analysis History
+      description: Your analyses, newest first (every status).
+      operationId: chart_analysis_chart_analysis_history
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChartAnalysisPage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/analysis/chart-image/quota:
+    get:
+      tags:
+      - chart-analysis
+      summary: Chart Analysis Quota
+      description: Used and remaining analyses today (UTC) for your role, and when the count resets.
+      operationId: chart_analysis_chart_analysis_quota
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChartQuota'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/analysis/chart-image/{analysis_id}:
+    get:
+      tags:
+      - chart-analysis
+      summary: Get Chart Analysis
+      description: One of your analyses (404 for anyone else's).
+      operationId: chart_analysis_get_chart_analysis
+      parameters:
+      - name: analysis_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Analysis Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChartAnalysisRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+    delete:
+      tags:
+      - chart-analysis
+      summary: Delete Chart Analysis
+      description: Delete one of your analyses (404 for anyone else's). The quota is not given back.
+      operationId: chart_analysis_delete_chart_analysis
+      parameters:
+      - name: analysis_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Analysis Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
 components:
   schemas:
     AIExplanationRead:
@@ -12494,6 +12770,42 @@ components:
       - created_at
       - finished_at
       title: BacktestSummary
+    Body_analyse_chart_image_api_v1_analysis_chart_image_post:
+      properties:
+        image:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Image
+          description: PNG, JPEG or WebP, at most 5 MB, >= 200x200
+        language:
+          anyOf:
+          - type: string
+            enum:
+            - ar
+            - en
+          - type: 'null'
+          title: Language
+          description: 'default: your profile''s language, else ar'
+        symbol:
+          anyOf:
+          - type: string
+            maxLength: 32
+            pattern: ^[A-Za-z0-9/._:\- ]+$
+          - type: 'null'
+          title: Symbol
+          description: a hint
+        timeframe:
+          anyOf:
+          - type: string
+            maxLength: 8
+            pattern: ^[0-9]{1,3}[A-Za-z]{1,2}$
+          - type: 'null'
+          title: Timeframe
+          description: a hint
+      type: object
+      required:
+      - image
+      title: Body_analyse_chart_image_api_v1_analysis_chart_image_post
     Body_demo_checkout_confirm_api_v1_pay_demo__checkout_id__confirm_post:
       properties:
         card_number:
@@ -12833,6 +13145,259 @@ components:
       - email
       - push
       title: ChannelsRead
+    ChartAnalysis:
+      properties:
+        is_chart:
+          type: boolean
+          title: Is Chart
+        symbol_guess:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Symbol Guess
+        timeframe_guess:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Timeframe Guess
+        trend:
+          anyOf:
+          - type: string
+            enum:
+            - up
+            - down
+            - sideways
+          - type: 'null'
+          title: Trend
+        trend_strength:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Trend Strength
+        patterns:
+          items:
+            $ref: '#/components/schemas/Pattern'
+          type: array
+          title: Patterns
+        support_levels:
+          items:
+            type: number
+          type: array
+          title: Support Levels
+          description: only when the price axis is readable
+        resistance_levels:
+          items:
+            type: number
+          type: array
+          title: Resistance Levels
+        indicators_seen:
+          items:
+            $ref: '#/components/schemas/Indicator'
+          type: array
+          title: Indicators Seen
+        idea:
+          anyOf:
+          - $ref: '#/components/schemas/Idea'
+          - type: 'null'
+        summary:
+          type: string
+          title: Summary
+          description: 2-4 sentences in the requested language
+          default: ''
+        reasoning:
+          items:
+            type: string
+          type: array
+          title: Reasoning
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+        disclaimer:
+          type: string
+          title: Disclaimer
+          description: fixed per language, added by the backend
+      type: object
+      required:
+      - is_chart
+      - disclaimer
+      title: ChartAnalysis
+    ChartAnalysisPage:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ChartAnalysisRead'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: ChartAnalysisPage
+    ChartAnalysisRead:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        status:
+          type: string
+          enum:
+          - ok
+          - not_chart
+          - refused
+          - error
+          title: Status
+        language:
+          type: string
+          enum:
+          - ar
+          - en
+          title: Language
+        symbol_hint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Symbol Hint
+        timeframe_hint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Timeframe Hint
+        model:
+          type: string
+          title: Model
+        prompt_version:
+          type: string
+          title: Prompt Version
+        image:
+          $ref: '#/components/schemas/ChartImageInfo'
+          description: the image itself is never stored
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/ChartAnalysis'
+          - type: 'null'
+          description: the analysis (status ok or not_chart)
+        error:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Error
+          description: '{code, message} (status refused or error)'
+        usage:
+          $ref: '#/components/schemas/ChartUsage'
+        cached:
+          type: boolean
+          title: Cached
+          description: 'the same image, language and hints within 24 h: no new call'
+          default: false
+      type: object
+      required:
+      - id
+      - created_at
+      - status
+      - language
+      - symbol_hint
+      - timeframe_hint
+      - model
+      - prompt_version
+      - image
+      - result
+      - error
+      - usage
+      title: ChartAnalysisRead
+    ChartImageInfo:
+      properties:
+        sha256:
+          type: string
+          title: Sha256
+        bytes:
+          type: integer
+          title: Bytes
+        width:
+          type: integer
+          title: Width
+        height:
+          type: integer
+          title: Height
+        mime:
+          type: string
+          title: Mime
+          description: the uploaded type (from the magic bytes)
+      type: object
+      required:
+      - sha256
+      - bytes
+      - width
+      - height
+      - mime
+      title: ChartImageInfo
+    ChartQuota:
+      properties:
+        limit:
+          type: integer
+          title: Limit
+          description: analyses per UTC day for your role
+        used:
+          type: integer
+          title: Used
+        remaining:
+          type: integer
+          title: Remaining
+        resets_at:
+          type: string
+          format: date-time
+          title: Resets At
+          description: the next 00:00 UTC
+      type: object
+      required:
+      - limit
+      - used
+      - remaining
+      - resets_at
+      title: ChartQuota
+    ChartUsage:
+      properties:
+        input_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Input Tokens
+        output_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Output Tokens
+        latency_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Latency Ms
+      type: object
+      required:
+      - input_tokens
+      - output_tokens
+      - latency_ms
+      title: ChartUsage
     CheckoutRead:
       properties:
         checkout_id:
@@ -14276,6 +14841,46 @@ components:
       description: 'Closed for the whole local ``date``, or from ``start`` to ``end`` (local date-times
 
         without an offset, e.g. ``2026-12-24T16:55``).'
+    Idea:
+      properties:
+        action:
+          type: string
+          enum:
+          - buy
+          - sell
+          - wait
+          title: Action
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+        entry:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Entry
+        stop_loss:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Stop Loss
+        take_profit:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Take Profit
+        risk_reward:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Risk Reward
+          description: computed from entry, stop and target (null without all three)
+      type: object
+      required:
+      - action
+      - confidence
+      title: Idea
     ImportResult:
       properties:
         dry_run:
@@ -14351,6 +14956,19 @@ components:
       - events_per_impact
       - sample
       title: ImportResult
+    Indicator:
+      properties:
+        name:
+          type: string
+          title: Name
+        reading:
+          type: string
+          title: Reading
+      type: object
+      required:
+      - name
+      - reading
+      title: Indicator
     IndicatorOverlay:
       properties:
         id:
@@ -16142,6 +16760,25 @@ components:
       - current_password
       - new_password
       title: PasswordChange
+    Pattern:
+      properties:
+        name:
+          type: string
+          title: Name
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+        description:
+          type: string
+          title: Description
+      type: object
+      required:
+      - name
+      - confidence
+      - description
+      title: Pattern
     Perks:
       properties:
         premium_posts:

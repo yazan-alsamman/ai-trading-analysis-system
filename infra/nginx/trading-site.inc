@@ -46,6 +46,14 @@ location /api/v1/ingest/ {
     proxy_pass $backend;
 }
 
+# chart image analysis (Y14, docs/chart-analysis.md): uploads up to 5 MB (6m with the multipart
+# overhead) and a synchronous model call of up to 45 s; every other route keeps its limits
+location /api/v1/analysis/chart-image {
+    client_max_body_size 6m;
+    proxy_read_timeout 60s;
+    proxy_pass $backend;
+}
+
 # economic-calendar history upload (admin, CSV up to 50 MB, docs/economic-calendar.md):
 # buffered to disk here, then imported in batches by the backend (minutes, not seconds)
 location = /api/v1/admin/calendar/import {

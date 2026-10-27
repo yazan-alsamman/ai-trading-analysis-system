@@ -23,6 +23,7 @@ PATTERNS = {
     "JWT secret": re.compile(r"test-secret-that-is-at-least-32-characters-long"),
     "Authorization header": re.compile(r"(?i)authorization['\"]?\s*[:=]\s*['\"]?bearer\s+\S{20,}"),
     "private key": re.compile(r"-----BEGIN (?:RSA )?PRIVATE KEY-----"),
+    "Google API key": re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
 }
 
 

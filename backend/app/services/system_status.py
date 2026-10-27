@@ -24,6 +24,7 @@ from app.core.config import get_settings
 from app.notifications import breaker
 from app.notifications.channels import enabled_channels
 from app.services import data_health
+from app.vision import service as vision_service
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +249,7 @@ async def collect(session: AsyncSession, redis: Redis, hub) -> dict[str, Any]:
         "ai_alerts": lambda: _ai_alerts(session),
         "ai_evaluate": lambda: _ai_evaluate(session, redis),
         "feeds": lambda: _feeds(session),
+        "chart_analysis": lambda: vision_service.status_view(session),
         "notifications": lambda: _notifications(redis),
         "errors_last_hour": lambda: ops.errors_last_hour(redis),
     }

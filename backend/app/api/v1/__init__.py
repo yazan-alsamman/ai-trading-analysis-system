@@ -14,6 +14,7 @@ from app.api.v1 import (
     auth,
     backtests,
     calendar,
+    chart_analysis,
     chat,
     custom_strategies,
     experts,
@@ -74,6 +75,7 @@ limited_router.include_router(calendar.admin_router)
 limited_router.include_router(predictions.router)
 limited_router.include_router(predictions.admin_router)
 limited_router.include_router(recommendations.router)
+limited_router.include_router(chart_analysis.router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)

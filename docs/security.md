@@ -124,7 +124,16 @@ connections per IP (`app/core/rate_limit.py`).
 - News from feeds and the ingestion API: HTML stripped, URLs must be http(s), sizes capped.
 - SQL: SQLAlchemy expressions and bound parameters everywhere; the few textual queries use
   names from code, never from input (bandit notes in §9).
-- Uploads: none (attachments are references to existing rows, checked for access).
+- Uploads: attachments are references to existing rows, checked for access. The only file
+  upload is the chart image (Y14, docs/chart-analysis.md):
+  - the type comes from the magic bytes (PNG, JPEG, WebP), never from the header;
+  - at most `CHART_IMAGE_MAX_BYTES` (5 MB). Nginx allows `client_max_body_size 6m` on
+    `/api/v1/analysis/chart-image` only; every other route keeps 2m, or 1m for the site;
+  - at least 200 × 200 px, and at most 40 Mpx checked before decoding (decompression bombs),
+    with Pillow's `MAX_IMAGE_PIXELS` set to the same limit;
+  - re-encoded without any metadata (EXIF, ICC, text), and never stored: only its SHA-256;
+  - a daily quota per role, the expensive-endpoint rate limit, and one analysis in flight per
+    API worker.
 
 ## 6. Webhooks and outbound calls
 
@@ -148,6 +157,11 @@ connections per IP (`app/core/rate_limit.py`).
   `CTRADER_CLIENT_ID` / `CTRADER_CLIENT_SECRET`: the Deploy workflow masks them and sends them
   over SSH on stdin to `infra/deploy/set-env-secrets.sh`, which writes a key into the server
   `.env` only when it is missing or empty (never in argv, never printed).
+- `GEMINI_API_KEY` (Y14, docs/chart-analysis.md) follows the same path from the GitHub secret of
+  the same name. Not set in GitHub: the step prints "GEMINI_API_KEY not set in GitHub: skipped"
+  and chart analysis stays off (503, shown as disabled in `/admin/system/status`). The key goes
+  to Google in the `x-goog-api-key` header (never in a URL), is never logged or returned, and the
+  SDK's loggers are kept at WARNING. Only the backend reads it.
 - The cTrader OAuth tokens live in `feed_credentials`, **encrypted** (Fernet, key derived from
   `JWT_SECRET` with HKDF-SHA256 and its own label): never in `.env`, logs or API answers. The
   feed's WebSocket library logger stays at WARNING (frames carry the client secret and token),
@@ -157,7 +171,8 @@ connections per IP (`app/core/rate_limit.py`).
   format and by the app's log filters; the Telegram bot token and webhook secret are redacted;
   HTTP client loggers are kept at WARNING (they would log URLs). CI runs the whole test suite with
   every log record at DEBUG and fails if the log contains a JWT, API key, bot token, password, the
-  JWT secret, an Authorization header or a private key (`scripts/check_log_secrets.py`).
+  JWT secret, an Authorization header, a private key or a Google API key
+  (`scripts/check_log_secrets.py`).
 - Never returned: API keys after creation, FCM device tokens (only a suffix), card numbers (the
   demo keeps brand and last 4 only), password hashes, other users' e-mails.
 
