@@ -357,8 +357,8 @@ if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
 SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
 if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
 
-SKIP_NO_PREDICTION = """// No prediction id yet (send List predictions first, or set prediction_id): skip.
-if (!pm.variables.get("prediction_id")) pm.execution.skipRequest();"""
+AI_INSTRUMENT_FALLBACK = """// AI setups are on the instrument of Strategies & Signals → Get prediction; without one, the chart instrument.
+if (!pm.variables.get("ai_instrument_id")) pm.environment.set("ai_instrument_id", pm.variables.get("instrument_id"));"""
 
 SKIP_NO_OUTBOX_ROW = """// No AI alert in the outbox yet (send Admin → AI Engine → List AI alert outbox first): skip.
 if (!pm.variables.get("ai_outbox_id")) pm.execution.skipRequest();"""
@@ -925,6 +925,34 @@ FOLDERS: list[Folder] = [
                 ],
             ),
             Req(
+                "recommendations_strategies",
+                "Recommended strategies for a market",
+                "GET",
+                "/recommendations/strategies",
+                "Which strategy has worked on this instrument and timeframe "
+                "(`docs/recommendations.md`): the built-in strategies and the custom ones you may "
+                "use (your own and public ones), ranked by `hit_rate_lower`, the Wilson 95% lower "
+                "bound of their prediction hit rate here. Fewer than `RECOMMENDATION_MIN_SAMPLES` "
+                "(20) decided predictions: `insufficient_history` true, ranked last. Each entry "
+                "also says `already_active` (you run it here) and carries your latest completed "
+                "`backtest` here (information only, not ranked).\n\n"
+                "Advisory only: past results, never a guarantee. JWT or API key "
+                "`strategies:read`. 404 for an unknown instrument.",
+                query=[
+                    ("instrument_id", "{{instrument_id}}", "Required"),
+                    ("timeframe", "{{timeframe}}", "Required: 1m | 5m | 15m | 1h | 4h | 1d"),
+                    ("limit", "10", "1–20"),
+                ],
+                variants=[
+                    Variant("422 Unknown timeframe", 422, query={"timeframe": "2h"}),
+                    Variant(
+                        "404 Instrument not found",
+                        404,
+                        query={"instrument_id": "00000000-0000-0000-0000-000000000000"},
+                    ),
+                ],
+            ),
+            Req(
                 "me_strategies_delete",
                 "Delete activation",
                 "DELETE",
@@ -1014,16 +1042,21 @@ FOLDERS: list[Folder] = [
                         "`exit_price`, `return_pct`, `mfe_pct`, `mae_pct`, `correct`, `cost_per_unit`, "
                         "`note`; null while open). An AI setup adds `ai`: `state`, `entry`, `sl`, `tp`, "
                         "`grade`, `ev_r`, `valid_until` and its state `events`.\n\n"
-                        "404 when the id is unknown or not yours to read.",
+                        "404 when the id is unknown or not yours to read. The AI setup's instrument "
+                        "is stored as `ai_instrument_id` for Risk Management → Follow AI setups.",
                         path_vars={
-                            "prediction_id": ("{{prediction_id}}", "ai:<setup_id> or sig:<uuid>")
+                            "prediction_id": (
+                                "ai:{{ai_setup_id}}",
+                                "ai:<setup_id> or sig:<uuid> (e.g. {{prediction_id}})",
+                            )
                         },
-                        pre=SKIP_NO_PREDICTION,
+                        pre=SKIP_NO_AI_SETUP,
+                        captures={"ai_instrument_id": "instrument_id"},
                         variants=[
                             Variant(
-                                "200 AI setup",
+                                "200 Strategy signal (resolved)",
                                 200,
-                                path_vars={"prediction_id": "ai:{{ai_setup_id}}"},
+                                path_vars={"prediction_id": "{{prediction_id}}"},
                             ),
                             Variant(
                                 "404 Prediction not found",
@@ -1257,9 +1290,10 @@ FOLDERS: list[Folder] = [
                 'every follower gets every ARMED alert; show "grade filter available when grades '
                 'are enabled".',
                 path_vars={
-                    "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
+                    "instrument_id": ("{{ai_instrument_id}}", "XAU/USD: the AI setup's instrument"),
                     "profile": ("intraday", "The ai-service profile"),
                 },
+                pre=AI_INSTRUMENT_FALLBACK,
                 body={"min_grade": "B"},
                 variants=[
                     Variant(
@@ -1284,6 +1318,27 @@ FOLDERS: list[Folder] = [
                 "now; false in v1).",
             ),
             Req(
+                "me_recommendations",
+                "My recommendations",
+                "GET",
+                "/me/recommendations",
+                "What to look at now, best `score` first, then newest (`docs/recommendations.md`): "
+                "the open buy/sell signals of your **active** strategy activations, at most "
+                "`RECOMMENDATION_MAX_AGE_BARS` (3) bars old, and the ARMED or ACTIVE AI setups of "
+                "the instruments and profiles you follow.\n\n"
+                "Each item: `id` (`sig:<uuid>` or `ai:<setup_id>`, the same id as "
+                "`GET /predictions/:prediction_id`), `age_bars`, your stored `plan` (or "
+                "`plan_missing_reason`: `no_plan_stored` or `not_sized_yet`; nothing is sized "
+                "here), the `track_record` of its strategy or AI profile on that market, and "
+                "`score` (0..1) with `score_reasons`: the hit rate's Wilson lower bound (or 0.5 "
+                "with too little history) × 0.85 per bar of age, + 0.05 when your risk profile is "
+                "complete.\n\n"
+                "Advisory only: a ranking from past outcomes, not a probability and never a "
+                "guarantee. JWT only.",
+                query=[("limit", "20", "1–50")],
+                variants=[Variant("422 limit above 50", 422, query={"limit": "100"})],
+            ),
+            Req(
                 "ai_unfollow",
                 "Unfollow AI setups",
                 "DELETE",
@@ -1291,9 +1346,10 @@ FOLDERS: list[Folder] = [
                 "Stop the ARMED alerts of this instrument and profile (404 when not followed). "
                 "Alerts of setups you took keep coming.",
                 path_vars={
-                    "instrument_id": ("{{instrument_id}}", "Instrument UUID"),
+                    "instrument_id": ("{{ai_instrument_id}}", "XAU/USD: the AI setup's instrument"),
                     "profile": ("intraday", "The ai-service profile"),
                 },
+                pre=AI_INSTRUMENT_FALLBACK,
                 expect=[204],
                 variants=[Variant("404 Not followed", 404)],
             ),
