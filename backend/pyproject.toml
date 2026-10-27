@@ -22,10 +22,10 @@ dependencies = [
   "pwdlib[argon2]>=0.2",
   "email-validator>=2.2",
   "python-multipart>=0.0.9",
-  # chart image analysis (Y14): the official Gemini SDK (async client), pinned; Pillow for the
+  # chart image analysis (Y14): the official Gemini SDK (async client), pinned; Pillow (13: the 12.x CVEs) for the
   # upload checks and re-encoding
   "google-genai==2.30.1",
-  "pillow==12.3.0",
+  "pillow==13.0.0",  # 12.x: 37 CVEs fixed in 13.0.0 (pip-audit)
   # local packages in libs/: pip cannot express a relative path dependency, so it is
   # installed first everywhere (Dockerfile, CI, README); uv users get it via tool.uv.sources
   "trading-indicators",
