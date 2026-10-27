@@ -369,3 +369,35 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
 - الذاكرة: حد الـ backend من 544m إلى **640m (+96m)** بعد القياس (4 تحليلات متوازية بأسوأ صور 4.5MB، القمة 508MiB؛ التفاصيل في docs/chart-analysis.md §7). مجموع حدود الذاكرة من 3424MiB إلى **3520MiB** (≈45% من 7.8GB).
 - بلا خدمة جديدة وبلا منفذ عام. التفعيل: أضف سر GitHub `GEMINI_API_KEY`، ثم ادمج أو أعد تشغيل Deploy، وتحقق أن `/admin/system/status` يعرض `chart_analysis.enabled: true`.
 
+
+## الفحص بعد النشر: Prod smoke (Y20)
+workflow يدوي فقط (`.github/workflows/prod-smoke.yml`، لا يعمل تلقائياً أبداً): Actions ← Prod smoke ← Run workflow. يشغّله يزن
+**بعد كل نشر، ويوم العرض** (انظر [demo-day.md](demo-day.md)).
+- يعمل من runner الخاص بـ GitHub على `http://<VPS_HOST>:8080` (نفس سر `VPS_HOST` الذي يستخدمه النشر). **لا SSH** ولا يلمس السيرفر.
+- **قراءة فقط**: كل الطلبات GET، والطلب الوحيد غير GET هو تسجيل الدخول. لا DELETE، ولا `POST /analysis/chart-image` أبداً
+  (يستهلك حصة Gemini). السكربت `infra/smoke/prod_smoke.py` يرفض أي طلب آخر.
+- التوكن مُقنَّع (`::add-mask::`) ولا يُطبع، ولا يُطبع أي جسم استجابة: أعداد وحالات وأعلام فقط، وسطر واحد لكل فحص
+  (`ok` / `warn` / `fail`).
+- **بلا حساب**: `/api/v1/health` و`/health/ready` و`/health/data` (حالة `degraded` تُطبع `warn` ولا تُفشل)، وصفحة الويب
+  (`<div id="root">`)، و`/api/v1/market/instruments` و`/calendar/events` لآخر 7 أيام (بلا حساب يجب أن تعيدا 401).
+- **مع حساب** (فقط إذا وُجد السرّان `SMOKE_EMAIL` و`SMOKE_PASSWORD`): تسجيل الدخول ثم GET فقط:
+  `/admin/system/status` (تطبع الأعلام: AI evaluate، الدرجات `ai_alerts.grades_enabled`، تحليل الشارت، حالة بث cTrader وانتهاء
+  التوكن، تحديث التقويم)، `/predictions?source=ai&limit=1` (إعدادات AI المنشورة؛ لا توجد قائمة `/ai/setups` للمستخدمين)،
+  `/predictions/stats`، `/admin/predictions/resolver`، `/analysis/chart-image/quota`، `/me/recommendations?limit=1`، وعدد
+  الأدوات وأحداث التقويم.
+- **يفشل فقط عند عطل حقيقي**: 5xx (غير 503 المقصود مثل `not_configured` أو بيانات `degraded`)، أو فحص الصحة/الجاهزية لا
+  يجيب، أو صفحة الويب غير موجودة، أو رُفض تسجيل الدخول. ميزة مطفأة أو حساب ليس مديراً = `warn`.
+- **إضافة السرّين (مرة واحدة)**: أنشئ حساباً خاصاً للفحص (يفضَّل مديراً لترى الأعلام؛ بلا مدير تبقى الفحوص العامة)، ثم
+  Settings ← Secrets and variables ← Actions ← New repository secret: `SMOKE_EMAIL` و`SMOKE_PASSWORD`. لا تضع كلمة السر
+  في الريبو أبداً. بدونهما يعمل الفحص العام فقط ويطبع `warn login: SMOKE_EMAIL / SMOKE_PASSWORD not set`.
+- مثال من تشغيل محلي في [demo-day.md](demo-day.md).
+
+## اختبارات التكامل النهائية (Y20)
+- مهمة `e2e` في CI تشغّل الآن أيضاً `fake-ai` و`fake-gemini` (ملفّا profile للتطوير/CI فقط، غير موجودين في
+  `infra/deploy/docker-compose.prod.yml`، بلا منفذ منشور)، وتضبط في `.env` الخاص بها فقط: `AI_SERVICE_URL=http://fake-ai:8001`،
+  `AI_EVALUATE_ENABLED=true`، `CHART_VISION_BASE_URL=http://fake-gemini:8002`، ومفتاح `GEMINI_API_KEY` وهمي. CI لا يستدعي
+  Gemini ولا ai-service حقيقياً أبداً.
+- ملفات جديدة في `backend/tests_e2e/`: `test_09_ai_evaluate.py` (B9-B11)، `test_10_predictions_recommendations.py`
+  (Y16، Y17)، `test_11_chart_analysis.py` (Y14، ومنها إطفاء الميزة بإعداد واحد وإعادة إنشاء الـ backend: 503).
+- إعداد جديد في `.env.example`: `CHART_VISION_BASE_URL=` (فارغ في الإنتاج دائماً). و`/admin/system/status` يعرض الآن
+  `ai_alerts.grades_enabled`. بلا migration وبلا خدمة إنتاج جديدة ولا منفذ عام.
