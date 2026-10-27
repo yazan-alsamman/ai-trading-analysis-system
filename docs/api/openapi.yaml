@@ -10652,6 +10652,146 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - BearerJWT: []
+  /api/v1/me/recommendations:
+    get:
+      tags:
+      - recommendations
+      summary: My Recommendations
+      description: 'What is actionable now, best score first (then newest): the open buy/sell signals
+        of your
+
+        **active** activations, at most ``RECOMMENDATION_MAX_AGE_BARS`` bars old, and the ARMED or
+
+        ACTIVE AI setups of the instruments and profiles you follow. Each item carries your stored
+
+        plan (or why there is none), the track record of its strategy (or AI profile) on that
+
+        market, and an advisory ``score`` with its reasons. Never a guarantee.'
+      operationId: recommendations_my_recommendations
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecommendationRead'
+                title: Response My Recommendations Api V1 Me Recommendations Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/recommendations/strategies:
+    get:
+      tags:
+      - recommendations
+      summary: Recommended Strategies
+      description: 'Which strategy has worked on this market: every strategy you may use (built-in, your
+
+        own and public custom ones), ranked by the Wilson 95% lower bound of its Y16 hit rate here.
+
+        Too little history (``RECOMMENDATION_MIN_SAMPLES``): ranked last. ``already_active`` and
+
+        your latest completed backtest here are attached. 404 unknown instrument.'
+      operationId: recommendations_recommended_strategies
+      parameters:
+      - name: instrument_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Instrument Id
+      - name: timeframe
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Timeframe'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 20
+          minimum: 1
+          default: 10
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StrategyRecommendation'
+                title: Response Recommended Strategies Api V1 Recommendations Strategies Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+      - ApiKey: []
 components:
   schemas:
     AIExplanationRead:
@@ -12013,6 +12153,41 @@ components:
       - id
       - status
       title: BacktestAccepted
+    BacktestBrief:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        total_return_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Total Return Pct
+        win_rate_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Win Rate Pct
+        max_drawdown_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Max Drawdown Pct
+        finished_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Finished At
+      type: object
+      required:
+      - id
+      - total_return_pct
+      - win_rate_pct
+      - max_drawdown_pct
+      - finished_at
+      title: BacktestBrief
     BacktestCreate:
       properties:
         instrument_id:
@@ -17500,6 +17675,98 @@ components:
       additionalProperties: false
       type: object
       title: ReadMarker
+    RecommendationRead:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: 'the Y16 prediction id: GET /predictions/{id}'
+        source:
+          type: string
+          enum:
+          - ai
+          - strategy
+          title: Source
+        instrument_id:
+          type: string
+          format: uuid
+          title: Instrument Id
+        symbol:
+          type: string
+          title: Symbol
+        timeframe:
+          type: string
+          title: Timeframe
+        strategy_key:
+          type: string
+          title: Strategy Key
+          description: 'the strategy key; AI setups: the profile'
+        direction:
+          type: string
+          enum:
+          - buy
+          - sell
+          title: Direction
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        age_bars:
+          type: integer
+          title: Age Bars
+          description: closed bars of its timeframe since it was published
+        user_strategy_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: User Strategy Id
+          description: your activation (strategy signals)
+        plan:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Plan
+          description: 'your stored plan: the signal''s trade plan, or the AI setup''s stored size (lots,
+            risk_amount, currency, margin_required, feasible, warnings, source)'
+        plan_missing_reason:
+          anyOf:
+          - type: string
+            enum:
+            - no_plan_stored
+            - not_sized_yet
+          - type: 'null'
+          title: Plan Missing Reason
+        track_record:
+          $ref: '#/components/schemas/TrackRecord'
+        score:
+          type: number
+          title: Score
+          description: '0..1, advisory ranking only (docs/recommendations.md): never a promise'
+        score_reasons:
+          items:
+            type: string
+          type: array
+          title: Score Reasons
+      type: object
+      required:
+      - id
+      - source
+      - instrument_id
+      - symbol
+      - timeframe
+      - strategy_key
+      - direction
+      - generated_at
+      - age_bars
+      - user_strategy_id
+      - plan
+      - plan_missing_reason
+      - track_record
+      - score
+      - score_reasons
+      title: RecommendationRead
     RefreshRequest:
       properties:
         refresh_token:
@@ -18548,6 +18815,73 @@ components:
           fast: 9
           slow: 21
         limit: 300
+    StrategyRecommendation:
+      properties:
+        rank:
+          type: integer
+          title: Rank
+        strategy_key:
+          type: string
+          title: Strategy Key
+        name:
+          type: string
+          title: Name
+        kind:
+          type: string
+          enum:
+          - builtin
+          - custom
+          title: Kind
+        resolved:
+          type: integer
+          title: Resolved
+        decided:
+          type: integer
+          title: Decided
+        hit_rate:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Hit Rate
+        hit_rate_lower:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Hit Rate Lower
+          description: the rank key (Wilson 95% lower bound)
+        mean_return_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Mean Return Pct
+        insufficient_history:
+          type: boolean
+          title: Insufficient History
+          description: 'fewer than RECOMMENDATION_MIN_SAMPLES decided predictions: ranked last'
+        already_active:
+          type: boolean
+          title: Already Active
+          description: you run it on this instrument and timeframe
+        backtest:
+          anyOf:
+          - $ref: '#/components/schemas/BacktestBrief'
+          - type: 'null'
+          description: your latest completed backtest here (information only, not ranked)
+      type: object
+      required:
+      - rank
+      - strategy_key
+      - name
+      - kind
+      - resolved
+      - decided
+      - hit_rate
+      - hit_rate_lower
+      - mean_return_pct
+      - insufficient_history
+      - already_active
+      - backtest
+      title: StrategyRecommendation
     StrategyRef:
       properties:
         id:
@@ -18982,6 +19316,52 @@ components:
       - refresh_token
       - expires_in
       title: TokenPair
+    TrackRecord:
+      properties:
+        resolved:
+          type: integer
+          title: Resolved
+          description: tp_hit + sl_hit + expired (data-gap rows left out)
+        decided:
+          type: integer
+          title: Decided
+          description: 'tp_hit + sl_hit: the hit rate''s n'
+        hit_rate:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Hit Rate
+          description: tp_hit / decided; null when none
+        hit_rate_lower:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Hit Rate Lower
+          description: Wilson 95% lower bound of hit_rate; null when none
+        mean_return_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Mean Return Pct
+          description: strategy signals
+        mean_realized_r:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Mean Realized R
+          description: AI setups
+      type: object
+      required:
+      - resolved
+      - decided
+      - hit_rate
+      - hit_rate_lower
+      - mean_return_pct
+      - mean_realized_r
+      title: TrackRecord
+      description: 'Y16 outcomes of the same strategy key (or AI profile) on the same instrument and
+
+        timeframe, over every user''s predictions.'
     TradeRead:
       properties:
         number:

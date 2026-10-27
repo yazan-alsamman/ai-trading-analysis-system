@@ -355,3 +355,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
 - إعدادات جديدة في `.env.example`: `PREDICTION_HORIZON_BARS=10`، `PREDICTION_RESOLVE_INTERVAL_SECONDS=300`، `PREDICTION_RESOLVE_BATCH=500`.
 - مهمة beat جديدة `predictions.resolve_signals` على طابور `maintenance` (أي `worker-backtest`، وليس `worker` الحي). بلا خدمة جديدة. كل تشغيل يحسم 500 إشارة كحد أقصى ويقرأ شموع أفقها فقط، فتُحسم الإشارات القديمة تدريجياً.
 - فحص بعد النشر: `GET /api/v1/admin/predictions/resolver` (آخر تشغيل والمتبقي `backlog`) و`GET /api/v1/predictions/stats`. التفاصيل في docs/predictions.md.
+
+## التوصيات (Y17)
+- بلا migration وبلا خدمة أو مهمة Celery جديدة: نقطتا قراءة فقط في الـ backend، `GET /api/v1/me/recommendations` و`GET /api/v1/recommendations/strategies`.
+- إعدادات جديدة في `.env.example`: `RECOMMENDATION_MAX_AGE_BARS=3`، `RECOMMENDATION_MIN_SAMPLES=20`، `RECOMMENDATION_CACHE_SECONDS=300`، `RECOMMENDATIONS_NOTIFY=false`. القيمة الأخيرة مطفأة، فلا يتغير إشعار الإشارة.
+- سجل كل (أداة، فريم) يُخزَّن في Redis تحت `reco:track:*` لمدة 300 ثانية، ولا يُخزَّن أي شيء خاص بمستخدم. التفاصيل في docs/recommendations.md.
