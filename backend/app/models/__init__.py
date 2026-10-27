@@ -14,6 +14,7 @@ from app.models.ai import (
 from app.models.api_key import ApiKey, Scope
 from app.models.backtest import Backtest, BacktestStatus, BacktestTrade
 from app.models.candle import Candle, Timeframe
+from app.models.chart_analysis import ChartAnalysisRecord
 from app.models.chat import Conversation, ConversationStatus, Message
 from app.models.custom_strategy import CustomStrategy, CustomStrategyKind, Visibility
 from app.models.economic_event import EconomicEvent, EventImpact, EventSource
@@ -81,6 +82,7 @@ __all__ = [
     "AISetupExplanation",
     "AISetupSize",
     "AISetupTake",
+    "ChartAnalysisRecord",
     "CheckoutSession",
     "CheckoutStatus",
     "Conversation",

@@ -228,6 +228,24 @@ class Settings(BaseSettings):
     ctrader_client_secret: str = ""
     # development and CI only: the mock server (tools/fake_ctrader); empty: the official host
     ctrader_ws_url: str = ""
+    # Chart image analysis (Y14, docs/chart-analysis.md) with Gemini. GEMINI_API_KEY is written
+    # by the deploy from the GitHub secret (never in git); empty: the feature is off (503) and
+    # the rest of the platform is unaffected
+    gemini_api_key: str = ""
+    chart_analysis_enabled: bool = True
+    chart_vision_model: str = "gemini-3.6-flash"
+    chart_vision_timeout_seconds: float = 45
+    chart_image_max_bytes: int = 5_242_880  # 5 MB (Nginx allows 6m on this route)
+    # analyses per user per UTC day, by role (a duplicate within 24 h is free)
+    chart_analysis_daily_limit_trader: int = 5
+    chart_analysis_daily_limit_analyst: int = 20
+    chart_analysis_daily_limit_expert: int = 20
+    chart_analysis_daily_limit_admin: int = 100
+    # analyses in flight per API worker (memory: measured in docs/chart-analysis.md); more wait
+    # up to 10 s for a slot, then 503 busy
+    chart_analysis_max_concurrent: int = 1
+    # development and load tests only: a fake Gemini server; empty: Google's official host
+    chart_vision_base_url: str = ""
 
     @field_validator("api_docs_enabled", "ctrader_account_id", mode="before")
     @classmethod

@@ -41,8 +41,9 @@ def install_token_redaction() -> None:
 
 def quiet_http_clients() -> None:
     """httpx logs every request URL at INFO, and Telegram's URLs contain the bot token: keep
-    those loggers at WARNING everywhere (API, workers, telegram-bot)."""
-    for name in ("httpx", "httpcore"):
+    those loggers at WARNING everywhere (API, workers, telegram-bot). The Gemini SDK too: it
+    logs every call at INFO, and its debug output may carry the request (Y14)."""
+    for name in ("httpx", "httpcore", "google_genai", "google.genai"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
