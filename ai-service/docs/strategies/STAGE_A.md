@@ -23,7 +23,7 @@ prints nothing.
 `libs/indicators` (`trading-indicators`) is now a dependency of ai-service: in the `research` and
 `dev` extras of `pyproject.toml` (with a `tool.uv.sources` path), installed in the local venv
 (`uv pip install -e ../libs/indicators`) and in CI (`.github/workflows/ci.yml`). It is not in the
-base dependencies, so the production image still builds. Full suite: 377 tests pass (2026-10-27,
+base dependencies, so the production image still builds. Full suite: 378 tests pass (2026-10-28,
 after the review decisions, on `ai/stage-a-engine` with `main`'s tests).
 
 ## Audit points (2026-10-26)
@@ -143,4 +143,8 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
   `libs/indicators`; serving the strategies needs a build-context change (Yazan), Stage F.
 - Live serving: contract fields, 5m bars (`AI_BARS_5M`), history long enough for S3 (55 + 20 4h
   bars, about 13 trading days) and S5 (EMA(50, 1h)): Stage F.
-- `SwapSpec` values: waiting for the MT5 export of section 6a.
+- `SwapSpec` values: received 2026-10-28 (`docs/strategies/mt5/`, PREREG section 6a). The
+  export showed FxPro's GOLD in `CURRENCY_SYMBOL` mode with base currency USD; the conversion
+  multiplied every `CURRENCY_SYMBOL` swap by the price, which would have made gold's swap about
+  4,000 times too large. Fixed: as is when the base is the profit currency, x P otherwise
+  (`swap.per_night_r`; tests with the real values).

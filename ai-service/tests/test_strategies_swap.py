@@ -1,12 +1,15 @@
 """Rollover instants, swap conversion to R, the scenarios, and the zero-swap property of scalp and
 intraday horizons (docs/strategies/PREREG.md, section 6)."""
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
 from app.config import instruments, signal_specs
 from app.strategies import swap
 from app.strategies.base import STEP
+from app.strategies.cli import load_swaps
 from app.strategies.rules import candidates
 from app.strategies.swap import SwapSpec
 from tests.strategy_data import market
@@ -65,6 +68,10 @@ def test_conversion_to_r_by_swap_mode() -> None:
     assert swap.per_night_r(spec("CURRENCY_SYMBOL", long=-5, **eur), "buy", 1.1, 1.0, r) == (
         pytest.approx(-5 * 1.1 / (r * 1e5))
     )
+    # FxPro's GOLD: a CFD whose base currency is USD, so the swap is already in USD (no x P)
+    gold = dict(currency_base="USD", currency_profit="USD", currency_margin="USD")
+    g = spec("CURRENCY_SYMBOL", long=-69.25, **gold)
+    assert swap.per_night_r(g, "buy", 4043, 4043, 40) == pytest.approx(-69.25 / (40 * 100))
     assert swap.per_night_r(spec("CURRENCY_MARGIN", long=-5, **eur), "buy", 1.1, 1.0, r) == (
         pytest.approx(-5 * 1.1 / (r * 1e5))
     )
@@ -89,6 +96,23 @@ def test_conversion_to_r_by_swap_mode() -> None:
         swap.per_night_r(spec("CURRENCY_MARGIN", currency_margin="GBP"), "buy", 1, 1, 1)
     with pytest.raises(ValueError):
         spec("SOMETHING")
+
+
+SNAPSHOT = Path(__file__).resolve().parents[1] / "docs" / "strategies" / "mt5"
+
+
+def test_the_fxpro_snapshot_loads_and_gives_plausible_r() -> None:
+    """The section 6a export of 2026-10-28: every instrument loads as a SwapSpec, and one night
+    on a stop of 1% of the price costs or earns well under 0.1 R (a conversion error, such as a
+    swap multiplied by the gold price, would give thousands)."""
+    specs = load_swaps(SNAPSHOT / "swaps_2026-10-28.json")
+    assert set(specs) == set(instruments())
+    price = {"XAUUSD": 4043.0, "EURUSD": 1.16, "GBPUSD": 1.33, "USDJPY": 157.6, "AUDUSD": 0.70,
+             "USDCAD": 1.40}  # fmt: skip
+    for symbol, s in specs.items():
+        for d in ("buy", "sell"):
+            r = swap.per_night_r(s, d, price[symbol], price[symbol], 0.01 * price[symbol])
+            assert 0 < abs(r) < 0.1, (symbol, d, r)
 
 
 def test_scenarios_w1_stress_and_decision() -> None:

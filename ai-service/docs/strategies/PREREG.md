@@ -201,10 +201,11 @@ pairs were exported on shifted clocks before 2022), and the day-count basis of i
 
 **Conversion to R.** For a swap value S per lot and night: R = (S converted to the profit
 currency per lot) / (risk_price x contract_size); lot size and account currency cancel. By
-`SYMBOL_SWAP_MODE`: `DISABLED` 0; `POINTS` R = S x point / risk_price; `CURRENCY_SYMBOL` base to
-profit currency (x P); `CURRENCY_MARGIN` by `SYMBOL_CURRENCY_MARGIN` (x P if the base, as is if the
-profit currency); `CURRENCY_DEPOSIT` USD to the profit currency (as is for USD-quoted symbols,
-x P for USDJPY and USDCAD); `CURRENCY_PROFIT` as is; `INTEREST_CURRENT` P_t x S / 100 / 360 /
+`SYMBOL_SWAP_MODE`: `DISABLED` 0; `POINTS` R = S x point / risk_price; `CURRENCY_SYMBOL` in the
+base currency, converted to the profit currency: as is when the base is the profit currency
+(FxPro's GOLD is a CFD with base USD), x P otherwise; `CURRENCY_MARGIN` by
+`SYMBOL_CURRENCY_MARGIN` (x P if the base, as is if the profit currency); `CURRENCY_DEPOSIT` USD
+to the profit currency (as is for USD-quoted symbols, x P for USDJPY and USDCAD); `CURRENCY_PROFIT` as is; `INTEREST_CURRENT` P_t x S / 100 / 360 /
 risk_price; `INTEREST_OPEN` the same at the open price; `REOPEN_CURRENT` and `REOPEN_BID`
 approximated as `POINTS` (labelled). In MT5 a negative value is a charge. USD reports divide by
 P for USDJPY and USDCAD. **P and P_t** are the price at the rollover: in trade results the close
@@ -222,6 +223,14 @@ For each of the six symbols, by its exact name in the account: `SYMBOL_SWAP_MODE
 (Standard or Raw), swap-free or not, `TimeTradeServer()` and `TimeGMT()` at the export, terminal
 build. Optional, the only historical swap facts we could have: account statements with swap lines
 (they inform only the dates and positions they cover).
+
+**Snapshot received (2026-10-28):** server `FxPro-MT5 Demo`, account type Raw, not swap-free, the
+same account as the history export; server clock UTC+2 at the export (Europe/Athens, winter
+time). Files: `docs/strategies/mt5/swaps_2026-10-28.json` (the `SwapSpec` fields, for
+`python -m app strategies count --swaps`) and `swaps_meta_2026-10-28.json` (the other fields),
+written by `tools/mt5/ExportSwaps.mq5`. The five pairs are in `POINTS` mode; XAUUSD (`GOLD` in the
+account) is in `CURRENCY_SYMBOL` mode with base currency USD. Triple day Wednesday for all six.
+No day multipliers were exported (the script does not read them).
 
 ## 7. Management: TP rules, SL rules, bundles
 

@@ -13,7 +13,8 @@ Holiday nights are not added.
 rollover: in trade results the close of the last entry-frame bar closed by the instant
 (``close_before``); in a_S the entry price, because a_S reads no price after the signal bar; for
 ``INTEREST_OPEN`` always the open price. By ``SYMBOL_SWAP_MODE``: ``DISABLED`` 0;
-``POINTS`` S x point / risk_price; ``CURRENCY_SYMBOL`` base to profit (x P); ``CURRENCY_MARGIN``
+``POINTS`` S x point / risk_price; ``CURRENCY_SYMBOL`` in the base currency: as is if the base is
+the profit currency (FxPro's GOLD is a CFD with base USD), x P otherwise; ``CURRENCY_MARGIN``
 x P if the margin currency is the base, as is if it is the profit currency; ``CURRENCY_DEPOSIT``
 as is if the deposit currency is the profit currency, x P if it is the base; ``CURRENCY_PROFIT`` as
 is; ``INTEREST_CURRENT`` P x S / 100 / 360 / risk_price; ``INTEREST_OPEN`` the same at the open
@@ -110,7 +111,7 @@ def per_night_r(
     if mode in ("POINTS", *APPROXIMATED):
         return s * spec.point / risk_price
     if mode == "CURRENCY_SYMBOL":
-        return s * price / lot
+        return s / lot if spec.currency_base == spec.currency_profit else s * price / lot
     if mode == "CURRENCY_MARGIN":
         if spec.currency_margin == spec.currency_base:
             return s * price / lot
