@@ -1,0 +1,173 @@
+# Signal strategies, trade management and bundles (docs/strategies/PREREG.md, sections 3-7).
+# Parameters are fixed a priori from published or common versions, not tuned on any data; a change
+# after approval is a new version and a new trial. Times are New York wall-clock unless a key names
+# another zone. Time windows are [start, end): "07:00"-"11:00" means bars opening 07:00-10:59.
+# Bar counts are in bars of the strategy's entry frame.
+
+[common]
+cost_filter_r = 0.15                 # no signal when round trip + SL slippage > this many R
+liquid_window = ["02:00", "16:00"]   # the signal bar opens in this window, Monday to Friday
+spread_stat = "mean"                 # the signal bar's mean recorded spread (as L1)
+
+# Signal types (section 4). `session_end`: forced exit at the close of the last entry-frame bar
+# that can close by this New York time on the signal bar's New York date, whichever comes first
+# with the horizon (none: horizon only). Scalps have it too, so that no scalp crosses the 17:00
+# rollover (decided 2026-10-27). Allowed on 5m, 15m and 1h entry frames only.
+[types.scalp]
+session_end = "16:45"
+[types.intraday]
+session_end = "16:45"
+[types.swing]
+
+# --- family A (primary) ----------------------------------------------------------------------
+
+[strategies.S1]                      # London breakout of the Asian range
+family = "A"
+type = "intraday"
+frame = "15m"
+horizon_bars = 32
+liquid_window = true
+zone = "Europe/London"
+range = ["00:00", "07:00"]           # Asian range: bars opening 00:00-06:59 London
+window = ["07:00", "11:00"]          # signal bars opening 07:00-10:59 London
+width_atr = [0.3, 1.2]               # range width in ATR(14, D1) of the previous closed D1 bar
+d1_atr_period = 14
+atr_period = 14                      # ATR(14, 15m)
+trigger_atr = 0.1                    # close beyond the range by this many ATR
+tp_r = 1.5
+
+[strategies.S2]                      # Bollinger mean reversion in a range
+family = "A"
+type = "intraday"
+frame = "1h"
+horizon_bars = 24
+liquid_window = true
+adx_period = 14
+adx_max = 20.0                       # ADX(14, 1h) < 20
+bb_period = 20
+bb_std = 2.0
+atr_period = 14
+sl_atr = 1.5
+r_range = [0.75, 3.0]                # TP at the middle band; R outside: r_out_of_range
+
+[strategies.S3]                      # Donchian trend breakout
+family = "A"
+type = "swing"
+frame = "4h"
+horizon_bars = 60
+liquid_window = false                # US market holidays only
+channel_bars = 55                    # the 55 bars before the signal bar
+atr_period = 20
+sl_atr = 2.0
+tp_r = 3.0
+
+[strategies.S4]                      # New York opening-range breakout
+family = "A"
+type = "scalp"
+frame = "5m"
+horizon_bars = 24
+liquid_window = true
+range = ["08:30", "09:00"]           # the six 5m bars opening 08:30-08:59
+window = ["09:00", "10:30"]          # signal bars opening 09:00-10:29
+width_atr = [0.25, 1.5]              # in ATR(14, 1h) of the last 1h bar closed by 08:30
+h1_atr_period = 14
+atr_period = 14                      # ATR(14, 5m)
+trigger_atr = 0.1
+tp_r = 1.5
+
+[strategies.S5]                      # trend pullback
+family = "A"
+type = "scalp"
+frame = "5m"
+horizon_bars = 24
+liquid_window = true
+trend_ema = 50                       # EMA(50, 1h)
+trend_slope_bars = 5                 # EMA(50, 1h) above its value five 1h bars before
+pullback_ema = 20                    # EMA(20, 5m)
+swing_bars = 6                       # lowest low of the last six 5m bars (signal bar included)
+sl_buffer_atr = 0.1
+min_sl_atr = 1.0                     # SL at least this many ATR(14, 5m) from the entry
+atr_period = 14
+tp_r = 1.5
+
+[strategies.S6]                      # VWAP reversion in a range
+family = "A"
+type = "scalp"
+frame = "5m"
+horizon_bars = 24
+liquid_window = true
+anchor = "03:00"                     # session VWAP anchored at 03:00 New York
+band_std = 2.0                       # VWAP +/- 2 volume-weighted standard deviations
+adx_period = 14
+adx_max = 20.0                       # ADX(14, 1h) < 20
+window = ["04:00", "12:00"]          # signal bars opening 04:00-11:59
+extreme_bars = 3                     # SL beyond the extreme of the last three bars
+sl_atr = 1.0
+atr_period = 14
+r_range = [0.75, 3.0]                # TP at the VWAP
+
+# --- family B (exploratory) ------------------------------------------------------------------
+
+[strategies.S7]                      # volatility squeeze breakout
+family = "B"
+type = "intraday"
+frame = "15m"
+horizon_bars = 32
+liquid_window = true
+bb_period = 20
+bb_std = 2.0
+kc_period = 20
+kc_mult = 1.5
+kc_atr_period = 10
+min_squeeze_bars = 6
+atr_period = 14
+sl_atr = 1.5
+tp_r = 2.0
+
+[strategies.S8]                      # fix reversal
+family = "B"
+type = "scalp"
+frame = "5m"
+horizon_bars = 12
+liquid_window = true
+zone = "Europe/London"
+fix = { XAUUSD = "15:00", default = "16:00" }  # LBMA gold PM; WM/Reuters 4 pm for the pairs
+move_minutes = 30                    # m = close at the fix - close 30 minutes before
+min_move_atr = 0.5                   # |m| >= 0.5 x ATR(14, 1h)
+h1_atr_period = 14
+atr_period = 14
+sl_atr = 1.5
+r_range = [0.75, 3.0]                # TP: half of m back
+
+# --- management (section 7) ------------------------------------------------------------------
+
+[rules]
+T1_progress = 0.8                    # profit lock: progress >= 80% of the TP distance at a close
+T1_elapsed = 0.5                     # ... and at least 50% of the horizon elapsed
+T2_at_r = 1.0                        # scale-out: half closed at +1 R (a resting limit)
+T2_fraction = 0.5
+T3_elapsed = 0.5                     # dead trade: 50% of the horizon elapsed ...
+T3_max_mfe_r = 0.25                  # ... and best excursion so far < 0.25 R
+T4_arm_r = 0.5                       # momentum fade: open profit >= 0.5 R at a close, then ...
+T4_ema = 20                          # ... an engulfing bar against, or a close back across EMA(20)
+L_from_r = 1.0                       # L1, L2, L3 act from +1 R (best excursion so far)
+L2_atr_mult = 2.0                    # ATR trail: highest high since entry - 2 x ATR(14)
+L3_swing_k = 2                       # structure trail: last confirmed swing low (k = 2) ...
+L3_buffer_atr = 0.1                  # ... - 0.1 x ATR(14)
+L4_elapsed = 0.75                    # time tightening: from 75% of the horizon ...
+L4_sl_r = -0.5                       # ... SL to -0.5 R if price is above it
+L5_closes = 2                        # breakouts: two closes in a row back inside
+L5_adx_max = 25.0                    # ranges: ADX(14, 1h) > 25
+atr_period = 14                      # ATR(14) of the entry frame for L2, L3
+
+# Bundles (each one policy). `tp = false`: no TP, horizon cap only.
+[bundles]
+M0 = { rules = [] }
+M1 = { rules = ["T1"] }
+M2 = { rules = ["L1"] }
+M3 = { rules = ["L1", "L2"], tp = false }
+M4 = { rules = ["T2", "L1"] }
+M5 = { rules = ["T3", "T4"] }
+M6 = { rules = ["L5", "L4"] }
+M7 = { rules = ["L5", "T3", "L1", "T1", "T4"] }
+M8 = { rules = ["L1", "L3"], tp = false }

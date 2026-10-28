@@ -136,6 +136,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # the signal strategies use libs/indicators (docs/strategies/PREREG.md, section 3)
+      - run: pip install -e ../libs/indicators
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .

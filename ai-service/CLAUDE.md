@@ -188,8 +188,20 @@ management bundles M0-M8 (family C, chosen inside the walk-forward); AI A1 range
 exits, A4 direction (family D; P5's encoder and HMM fold in here); trials 11-25. Primary period
 2018-01-01 to 2024-07-01; 4-week block bootstrap, two tests (percentile and t with K - 1) under
 Holm; statuses validated / exploratory / inconclusive / unvalidated; swap only as labelled
-estimated scenarios. L1 keeps its frozen rules and management. **No outcome of any of them before
-Fadi approves `PREREG.md`**; counts are allowed. Stage A waits for Fadi's go.
+estimated scenarios. L1 keeps its frozen rules and management. **No outcome of any of them, and
+no count that uses an exit, before Fadi approves `PREREG.md`**; before approval only the
+pre-approval candidate counts may run, on rules frozen at a recorded commit (section 12).
+**Stage A built (2026-10-26, Fadi's go; uncommitted, on branch `ai/stage-a-engine` from `main`):** `app/strategies/`
+(S1-S8, common filters, swap, pre-approval counts; never imports `app.setups.labels` or
+`app.management`), `app/management/` (engine for T1-T4, L1-L5, M0-M8; M0 == `resolve` on every
+armed L1 development setup; one active trade; family C fixed entry set; post-approval counts),
+`app/research/decide.py` (sections 8-10), `strategies.toml`, `python -m app strategies count`
+(built, refuses until the rules are frozen; not run on market data); `libs/indicators` is now a dependency
+(venv and CI; the production image needs a build-context change, stage F). No count or outcome
+computed on market data. Fadi approved the family C and approval-timing wording (2026-10-26, in
+`PREREG.md`) and the Stage A review points (2026-10-27: session end and its gaps, the 1h
+boundary, a_S without a swap export, complete S1 and S4 ranges, rollover price, T4 wording;
+`docs/strategies/STAGE_A.md`). PREREG not approved; no frozen commit recorded.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

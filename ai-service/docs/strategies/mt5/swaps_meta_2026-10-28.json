@@ -1,0 +1,56 @@
+{
+  "_account": {
+    "currency": "USD",
+    "server": "FxPro-MT5 Demo",
+    "company": "FxPro Markets Ltd.",
+    "trade_mode": "ACCOUNT_TRADE_MODE_DEMO",
+    "margin_mode": "ACCOUNT_MARGIN_MODE_RETAIL_HEDGING",
+    "time_trade_server": "2026.10.28 17:13:44",
+    "time_gmt": "2026.10.28 15:13:44",
+    "terminal_build": 6286,
+    "account_type_and_swap_free": "Raw, not swap-free (Fadi, 2026-10-28)",
+    "note": "One dated snapshot (scenario W1, PREREG section 6): it says nothing about past rates. Same FxPro account as the history export (Fadi, 2026-10-28)."
+  },
+  "XAUUSD": {
+    "broker_symbol": "GOLD",
+    "trade_calc_mode": "SYMBOL_CALC_MODE_CFD",
+    "digits": 2,
+    "tick_size": 0.01,
+    "tick_value": 1.0
+  },
+  "EURUSD": {
+    "broker_symbol": "EURUSD",
+    "trade_calc_mode": "SYMBOL_CALC_MODE_FOREX",
+    "digits": 5,
+    "tick_size": 1e-05,
+    "tick_value": 1.0
+  },
+  "GBPUSD": {
+    "broker_symbol": "GBPUSD",
+    "trade_calc_mode": "SYMBOL_CALC_MODE_FOREX",
+    "digits": 5,
+    "tick_size": 1e-05,
+    "tick_value": 1.0
+  },
+  "USDJPY": {
+    "broker_symbol": "USDJPY",
+    "trade_calc_mode": "SYMBOL_CALC_MODE_FOREX",
+    "digits": 3,
+    "tick_size": 0.001,
+    "tick_value": 0.6320872786
+  },
+  "AUDUSD": {
+    "broker_symbol": "AUDUSD",
+    "trade_calc_mode": "SYMBOL_CALC_MODE_FOREX",
+    "digits": 5,
+    "tick_size": 1e-05,
+    "tick_value": 1.0
+  },
+  "USDCAD": {
+    "broker_symbol": "USDCAD",
+    "trade_calc_mode": "SYMBOL_CALC_MODE_FOREX",
+    "digits": 5,
+    "tick_size": 1e-05,
+    "tick_value": 0.7122557853
+  }
+}

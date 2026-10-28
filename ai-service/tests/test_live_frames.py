@@ -10,7 +10,7 @@ from app.config import instruments, profiles, strategy
 from app.contract import EvaluateRequest, iso_z, make_request_id
 from app.data.importer import DEFAULT_OUT as STORE
 from app.data.sessions import is_open
-from app.live.frames import DataQualityError, build_frames, longest_gap_minutes
+from app.live.frames import DataQualityError, build_frames, frames_for, longest_gap_minutes
 
 P = strategy("L1")
 PROF = profiles()["intraday"]
@@ -25,7 +25,9 @@ SPEC = {
 OHLC = ["ts_utc", "close_utc", "open", "high", "low", "close"]
 
 
-def request(bars15: pd.DataFrame, symbol: str = "XAUUSD", spread: str = "spread_mean"):
+def request(
+    bars15: pd.DataFrame, symbol: str = "XAUUSD", spread: str = "spread_mean", tf: str = "15m"
+):
     close = bars15["close_utc"].iloc[-1]
     return EvaluateRequest.model_validate(
         {
@@ -34,7 +36,7 @@ def request(bars15: pd.DataFrame, symbol: str = "XAUUSD", spread: str = "spread_
             "profile": "intraday",
             "bar_close_ts": iso_z(close.to_pydatetime()),
             "bars": {
-                "15m": [
+                tf: [
                     {
                         "ts": iso_z(r.ts_utc.to_pydatetime()),
                         "o": r.open,
@@ -81,6 +83,22 @@ def test_synthetic_frames_are_closed_and_complete() -> None:
         assert (f["ts_utc"] >= first).all(), name
     assert len(live.frames["D1"]) >= PROF.history_trading_days
     assert live.frames["15m"]["spread_mean"].eq(0.3).all()
+
+
+def test_a_5m_entry_frame_builds_every_longer_frame() -> None:
+    """The scalp strategies (docs/strategies/PREREG.md) read 5m bars: the request's 5m bars give
+    the 5m frame and, aggregated, the 15m, 1h, 4h and D1 frames."""
+    b15 = synthetic()
+    b5 = pd.concat(
+        [b15.assign(ts_utc=b15["ts_utc"] + pd.Timedelta(minutes=k)) for k in (0, 5, 10)]
+    ).sort_values("ts_utc", ignore_index=True)
+    b5["close_utc"] = b5["ts_utc"] + pd.Timedelta(minutes=5)
+    live = frames_for(request(b5, tf="5m"), instruments()["XAUUSD"], "5m", PROF)
+    assert list(live.frames) == ["5m", "15m", "1h", "4h", "D1"]
+    assert len(live.frames["5m"]) == len(b5)
+    f15 = live.frames["15m"]
+    assert (f15["high"].to_numpy() == b15["high"].to_numpy()[: len(f15)]).all()
+    assert "5m" not in build_frames(request(b15), instruments()["XAUUSD"], P, PROF).frames
 
 
 def test_misaligned_bar() -> None:

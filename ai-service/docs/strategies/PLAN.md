@@ -5,7 +5,7 @@ detector and giver, with signals split into scalp / intraday / swing, trade mana
 SL, and AI layers for range, regime, exits and direction. **Signal frequency is descriptive only:
 there is no minimum, zero signals on a day is valid, and nothing is loosened or chosen to produce
 more signals.** Rules, bundles, models, tests and limitations: `PREREG.md` (draft until Fadi
-approves it). Stage A starts only when Fadi says so.
+approves it).
 
 ## How the pieces fit
 
@@ -28,13 +28,23 @@ Candidate generation is never reduced to fit an expected number of served signal
 | Stage | Work | Done when |
 | --- | --- | --- |
 | **A. Engine** | 1. `app/strategies/`: one interface for every strategy (signal bar, direction, `Plan`, frame, horizon, type, reject reason); parameters in `app/config/strategies.toml`. 2. `app/management/`: the rules T1-T4, L1-L5 and bundles M0-M8 as one bar-by-bar engine shared by research and live (M0 equals `labels.resolve` exactly). 3. Session VWAP with bands; the 5m frame for live requests. 4. Rollover instants (00:00 server time) and the swap-to-R conversion of every MT5 swap mode. 5. The pure decision functions of `PREREG.md` sections 8-10 (tests, Holm, classification, status). 6. Tests: hand-built bars for each strategy and rule, an append-future-bars test for each strategy and bundle, M0 == `resolve` on the L1 store, swap zero for scalp and intraday horizons, and status tests: a low-frequency strategy with enough evidence can pass, the same trades spread differently over days give the same status, weak evidence gives `inconclusive`. | tests pass |
-| **B. Counts** | `python -m app strategies count`, descriptive only (`PREREG.md` section 12): no gate, no fallback. Holdout-period counts are candidates only, with no `resolve`, enforced by tests. Then the mechanical constants (n, K, a_S, delta*_S, MDE, n_unval) by the frozen formulas, and Fadi approves `PREREG.md`. | `docs/strategies/counts.md`, approval filled |
+| **B. Counts** | Rules frozen at a recorded commit. Pre-approval: `python -m app strategies count` (candidates and signal-time reasons only, 2012 to 2026-01-09; no `resolve`, management, E0 or exit time; holdout tables labelled candidate-only; lockbox untouched), then a_S and delta*_S; Fadi approves `PREREG.md`. Post-approval, before C: counts after the one-active-trade and conflict rules on the primary period; n, K, MDE, n_unval. Descriptive only (`PREREG.md` section 12): no gate, no fallback; a rule change is a new version and the counts are rerun. | `docs/strategies/counts.md`, approval filled |
 | **C. Strategies** | Families A and B under M0 (`python -m app strategies evaluate`), trials 11-18. | `eval_<S>.md`, trials log |
 | **D. Management** | Family C, trials 19-21. | `management.md` |
 | **E. AI** | A1, A2, A3, A4 in that order, one addendum each before its fit (P5's encoder and HMM become A4 and A2). Trials 22-25. | `ai_<model>.md` |
 | **F. Confirm and serve** | Holdout read once. Swap W2 series (if available) and the CUSUM threshold in an addendum. Contract with Yazan: `type`, `profile`, `status`, statistics, `EXIT_SUGGESTED` / `SL_MOVE_SUGGESTED` events, 5m bars. Live = backtest replay per strategy and bundle. Portfolio reports. Forward paper log and monitoring. | contract tests, replay with zero differences |
 
 **Minimum cut if time runs short:** A, B, C, D and A1. A2-A4 are the first to go.
+
+**Progress.** Stage A built 2026-10-26 (now on branch `ai/stage-a-engine`), tests pass, no count or
+outcome computed: `STAGE_A.md` (what was built, the PREREG points from the audit, the choices
+fixed in code where the text is silent). Fadi approved the family C wording and the separation
+of pre-approval and post-approval counts (2026-10-26; now in `PREREG.md` sections 9, 12 and 15),
+and their code and tests are in place (counting functions only, no command and no run on market
+data). On 2026-10-27 Fadi decided the review points (session end and its gaps, the 1h boundary,
+a_S without a swap export, complete ranges for S1 and S4, the rollover price, T4 wording; in
+`PREREG.md` and `STAGE_A.md`). The PREREG is still a draft: not approved, no frozen commit
+recorded.
 
 ## Expected counts (descriptive guess only)
 

@@ -175,6 +175,115 @@ def profiles() -> dict[str, Profile]:
     }
 
 
+@dataclass(frozen=True)
+class SignalSpec:
+    """One signal strategy of ``strategies.toml`` (docs/strategies/PREREG.md, section 5).
+    ``params`` holds the strategy's own keys; bar counts are in ``frame`` bars."""
+
+    name: str
+    family: str  # "A" primary, "B" exploratory
+    type: str  # "scalp", "intraday" or "swing"
+    frame: str
+    horizon_bars: int
+    liquid_window: bool  # False: US market holidays only (S3)
+    session_end: str | None  # forced exit time (New York) of the type, or None
+    params: dict
+
+    def __post_init__(self) -> None:
+        # a session end is the close of an entry-frame bar by 16:45: a 4h or D1 bar has none
+        if self.session_end is not None and self.frame not in SESSION_END_FRAMES:
+            raise ValueError(f"{self.name}: no session end on the {self.frame} frame")
+
+
+@dataclass(frozen=True)
+class Common:
+    cost_filter_r: float
+    liquid_window: tuple[str, str]
+    spread_stat: str
+
+
+@dataclass(frozen=True)
+class Bundle:
+    name: str
+    rules: tuple[str, ...]
+    tp: bool = True  # False: the registered TP is dropped (horizon cap only)
+
+
+@dataclass(frozen=True)
+class Rules:
+    """Parameters of the management rules T1-T4 and L1-L5 (PREREG section 7)."""
+
+    T1_progress: float
+    T1_elapsed: float
+    T2_at_r: float
+    T2_fraction: float
+    T3_elapsed: float
+    T3_max_mfe_r: float
+    T4_arm_r: float
+    T4_ema: int
+    L_from_r: float
+    L2_atr_mult: float
+    L3_swing_k: int
+    L3_buffer_atr: float
+    L4_elapsed: float
+    L4_sl_r: float
+    L5_closes: int
+    L5_adx_max: float
+    atr_period: int
+
+
+SESSION_END_FRAMES = ("5m", "15m", "1h")
+RULE_NAMES = ("T1", "T2", "T3", "T4", "L1", "L2", "L3", "L4", "L5")
+SIGNAL_TYPES = ("scalp", "intraday", "swing")
+
+
+@cache
+def common() -> Common:
+    c = _load("strategies.toml")["common"]
+    return Common(c["cost_filter_r"], tuple(c["liquid_window"]), c["spread_stat"])
+
+
+@cache
+def signal_specs() -> dict[str, SignalSpec]:
+    raw = _load("strategies.toml")
+    types = raw["types"]
+    if set(types) != set(SIGNAL_TYPES):
+        raise ValueError(f"signal types must be {SIGNAL_TYPES}, got {sorted(types)}")
+    out = {}
+    for name, spec in raw["strategies"].items():
+        spec = dict(spec)
+        kind = spec.pop("type")
+        if kind not in types:
+            raise ValueError(f"{name}: unknown type {kind!r}")
+        out[name] = SignalSpec(
+            name=name,
+            family=spec.pop("family"),
+            type=kind,
+            frame=spec.pop("frame"),
+            horizon_bars=spec.pop("horizon_bars"),
+            liquid_window=spec.pop("liquid_window"),
+            session_end=types[kind].get("session_end"),
+            params=spec,
+        )
+    return out
+
+
+@cache
+def rules() -> Rules:
+    return Rules(**_load("strategies.toml")["rules"])
+
+
+@cache
+def bundles() -> dict[str, Bundle]:
+    out = {}
+    for name, spec in _load("strategies.toml")["bundles"].items():
+        unknown = set(spec["rules"]) - set(RULE_NAMES)
+        if unknown:
+            raise ValueError(f"{name}: unknown rules {sorted(unknown)}")
+        out[name] = Bundle(name, tuple(spec["rules"]), spec.get("tp", True))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     summary = {"instruments": {k: asdict(v) for k, v in instruments().items()}}
     summary["splits"] = asdict(splits())

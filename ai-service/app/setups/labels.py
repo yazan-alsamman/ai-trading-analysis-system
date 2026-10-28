@@ -42,6 +42,7 @@ import pandas as pd
 from app.config import Instrument, Strategy, instruments, strategy
 from app.data.importer import DEFAULT_OUT as STORE
 from app.setups.builder import OUT_DIR, Plan, build
+from app.setups.costs import round_trip
 from app.smc.detector import detect, development_frames, suffix
 
 
@@ -74,10 +75,6 @@ class Bars:
         if direction == "buy":
             return cls(1.0, o, h, lo, c)
         return cls(-1.0, -o, -lo, -h, -c)
-
-
-def round_trip(spread: float, inst: Instrument) -> float:
-    return spread + max(inst.cost_extra_frac * spread, inst.cost_extra_min)
 
 
 def resolve(bars: Bars, d: int, pl: Plan, spread: float, p: Strategy, inst: Instrument) -> Label:
