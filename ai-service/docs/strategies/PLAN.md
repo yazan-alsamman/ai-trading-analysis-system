@@ -45,7 +45,9 @@ data). On 2026-10-27 Fadi decided the review points (session end and its gaps, t
 a_S without a swap export, complete ranges for S1 and S4, the rollover price, T4 wording; in
 `PREREG.md` and `STAGE_A.md`). Stage A merged 2026-10-28 (PR #77), with the MT5 swap snapshot
 (`docs/strategies/mt5/`). Rules frozen at `b9ca2a8` (tag `strategies-rules-v1`, 2026-10-29).
-The PREREG is still a draft: not approved. Next: the pre-approval counts of Stage B.
+Pre-approval counts run 2026-10-29 on the frozen rules (`counts.md`, `counts_by_year.csv`;
+candidates only, no outcome, lockbox not read). The PREREG is still a draft: not approved.
+Next: Fadi reads the counts and approves (date, commit, seeds), then the post-approval counts.
 
 ## Expected counts (descriptive guess only)
 

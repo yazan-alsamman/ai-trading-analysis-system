@@ -202,8 +202,8 @@ computed on market data. Fadi approved the family C and approval-timing wording 
 `PREREG.md`) and the Stage A review points (2026-10-27: session end and its gaps, the 1h
 boundary, a_S without a swap export, complete S1 and S4 ranges, rollover price, T4 wording;
 `docs/strategies/STAGE_A.md`). Rules frozen at `b9ca2a8` (`main` after PR #77, tag
-`strategies-rules-v1`, 2026-10-29); PREREG not approved. Next: the pre-approval counts
-(`python -m app strategies count --swaps docs/strategies/mt5/swaps_2026-10-28.json`).
+`strategies-rules-v1`, 2026-10-29); pre-approval counts run 2026-10-29
+(`docs/strategies/counts.md`, candidates only). PREREG not approved; next: Fadi's approval.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
