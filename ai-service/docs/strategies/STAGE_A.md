@@ -136,9 +136,9 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
 
 - E0 for the new strategies (section 8: same instrument, year, New York hour, entry frame; coin
   direction; same risk in ATR, TP rule, cost filter; 200 replications): Stage C.
-- Stage B: freezing the rules (the commit on `main` after the merge, recorded in `PREREG.md`),
-  then running `python -m app strategies count` on the real store, which writes
-  `docs/strategies/counts.md`. The command is built; it has run on synthetic stores only.
+- Stage B: the rules are frozen at `b9ca2a8` (`main` after PR #77, tag `strategies-rules-v1`,
+  recorded in `PREREG.md` on 2026-10-29). Next: `python -m app strategies count` on the real
+  store, which writes `docs/strategies/counts.md`. The command has run on synthetic stores only.
 - Production image: `ai-service/Dockerfile` builds from `ai-service/` and cannot see
   `libs/indicators`; serving the strategies needs a build-context change (Yazan), Stage F.
 - Live serving: contract fields, 5m bars (`AI_BARS_5M`), history long enough for S3 (55 + 20 4h

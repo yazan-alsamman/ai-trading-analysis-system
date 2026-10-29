@@ -43,8 +43,9 @@ of pre-approval and post-approval counts (2026-10-26; now in `PREREG.md` section
 and their code and tests are in place (counting functions only, no command and no run on market
 data). On 2026-10-27 Fadi decided the review points (session end and its gaps, the 1h boundary,
 a_S without a swap export, complete ranges for S1 and S4, the rollover price, T4 wording; in
-`PREREG.md` and `STAGE_A.md`). The PREREG is still a draft: not approved, no frozen commit
-recorded.
+`PREREG.md` and `STAGE_A.md`). Stage A merged 2026-10-28 (PR #77), with the MT5 swap snapshot
+(`docs/strategies/mt5/`). Rules frozen at `b9ca2a8` (tag `strategies-rules-v1`, 2026-10-29).
+The PREREG is still a draft: not approved. Next: the pre-approval counts of Stage B.
 
 ## Expected counts (descriptive guess only)
 

@@ -5,17 +5,19 @@ review of the decision tables (C1-C8, D1-D13, N1-N11, R1, the four final refinem
 2026-10-26 after the Stage A audit (family C selection, approval timing); revised 2026-10-27
 after Fadi's decisions on the Stage A review (the session end and its gaps, the 1h boundary, a_S
 without a swap export, complete ranges for S1 and S4, the rollover price, T4 wording;
-`STAGE_A.md`). It becomes binding when Fadi
-approves it as written and the approval date and commit are filled in. The rules are frozen at a
-recorded commit before any count. Before formal approval only the pre-approval candidate counts
-of section 12 may run; they use bars up to the signal bar only and choose nothing. Until approval
-no outcome of any strategy, bundle or model here (R, hit rate, exit reason, exit time, exit mix,
-MFE / MAE, equity) may be computed, printed or plotted, on any period, and no count that uses an
-exit may run.
+`STAGE_A.md`); swap snapshot and the `CURRENCY_SYMBOL` conversion fix 2026-10-28. **Rules frozen
+2026-10-29** at the `main` commit of PR #77 (tag `strategies-rules-v1`), before any count. It
+becomes binding when Fadi approves it as written and the approval date and commit are filled in.
+The rules are frozen at a recorded commit before any count. Before formal approval only the
+pre-approval candidate counts of section 12 may run; they use bars up to the signal bar only and
+choose nothing. Until approval no outcome of any strategy, bundle or model here (R, hit rate,
+exit reason, exit time, exit mix, MFE / MAE, equity) may be computed, printed or plotted, on any
+period, and no count that uses an exit may run.
 
 | Field | Value |
 | --- | --- |
-| Rules frozen at commit | _(commit; before any count)_ |
+| Rules frozen at commit | b9ca2a8065513c832ff88deac3c697b7dd44edf5 |
+| Freeze record | `main` after PR #77 (merged 2026-10-28), tag `strategies-rules-v1`, recorded 2026-10-29; the rule files (`app/strategies/cli.py`, `RULE_PATHS`) must match it for a count to run |
 | Approved by | _(Fadi)_ |
 | Approval date | _(YYYY-MM-DD; after the pre-approval candidate counts, before any outcome or any count that uses an exit)_ |
 | Code version at approval | _(commit; the frozen commit unless a recorded new version)_ |
