@@ -23,7 +23,7 @@ prints nothing.
 `libs/indicators` (`trading-indicators`) is now a dependency of ai-service: in the `research` and
 `dev` extras of `pyproject.toml` (with a `tool.uv.sources` path), installed in the local venv
 (`uv pip install -e ../libs/indicators`) and in CI (`.github/workflows/ci.yml`). It is not in the
-base dependencies, so the production image still builds. Full suite: 378 tests pass (2026-10-28,
+base dependencies, so the production image still builds. Full suite: 391 tests pass (2026-10-30,
 after the review decisions, on `ai/stage-a-engine` with `main`'s tests).
 
 ## Audit points (2026-10-26)
@@ -134,8 +134,32 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
 
 ## Left for later stages
 
-- E0 for the new strategies (section 8: same instrument, year, New York hour, entry frame; coin
-  direction; same risk in ATR, TP rule, cost filter; 200 replications): Stage C.
+- **Stage C code, built 2026-10-30 before approval, not run** (`app/research/strategy_eval.py`,
+  `python -m app research evaluate`; `app/research/post_counts.py`, `python -m app research
+  post-counts`). Both refuse to run until the approval date and the seeds are in `PREREG.md`, and
+  while any file of `EVAL_PATHS` differs from the frozen commit. `EVAL_PATHS` is `RULE_PATHS` plus
+  `app/management`, `app/setups/labels.py` and `app/smc/primitives.py`: the count command's
+  `RULE_PATHS` (frozen) leave out the management engine and the label code it reads, which are
+  rules too (section 15). delta*_S is read from `counts.md`, which must name the frozen commit.
+  Tests on synthetic markets only (`tests/test_strategy_eval.py`). Choices fixed in this code where
+  section 8 is silent (part of what Fadi approves):
+  - Trades: entries from 2018-01-01 under M0's one-active-trade rule, warm-up bars from 2017, the
+    same set as the post-approval counts (tested); sensitivities 1 and 2 use a second book with
+    entries from 2012.
+  - x and E0 both use the decision swap scenario (W1 by the trade's own exit time, at the price of
+    each rollover). The 2x stress keeps the W1 swap.
+  - E0 matches on the New York year and hour of the signal bar's open. Its risk is the trade's risk
+    over the strategy's entry-frame ATR, times the ATR of the random bar. Its TP is the trade's own
+    R multiple (for S2, S6 and S8, whose TP is a price level, the R the level gave). A drawn bar must
+    be a weekday that is not a US holiday, with time left before the session end (scalp and
+    intraday), and with a bar after it. A draw that fails the cost filter or is unresolved is
+    redrawn, up to 50 times.
+  - Trades without any E0 draw are left out of the test and counted. Unresolved trades are left out
+    and counted.
+  - One bootstrap seed for every strategy and sensitivity. The Bonferroni bounds use the same
+    draws. The first-Friday filter drops trades open at 08:30 New York on a month's first Friday.
+  - A passed strategy is reported as "passed", waiting for the holdout check. The holdout is not
+    read by this command.
 - Stage B: the rules are frozen at `b9ca2a8` (`main` after PR #77, tag `strategies-rules-v1`,
   recorded in `PREREG.md` on 2026-10-29). The pre-approval counts ran on the real store the same
   day (`docs/strategies/counts.md`, `counts_by_year.csv`).

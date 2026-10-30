@@ -1,4 +1,5 @@
-"""``python -m app research <baselines|walkforward|versions|meta> ...``: the research commands."""
+"""``python -m app research <baselines|walkforward|versions|meta|post-counts|evaluate> ...``: the
+research commands (post-counts and evaluate: the signal strategies, docs/strategies/PREREG.md)."""
 
 from __future__ import annotations
 
@@ -18,6 +19,14 @@ def main(argv: list[str]) -> int:
         from app.research.versions import main as versions
 
         return versions(argv[1:])
+    if argv and argv[0] == "post-counts":
+        from app.research.post_counts import main as post_counts
+
+        return post_counts(argv[1:])
+    if argv and argv[0] == "evaluate":
+        from app.research.strategy_eval import main as evaluate
+
+        return evaluate(argv[1:])
     if argv and argv[0] == "baselines":
         from app.research.baselines import main as baselines
 
