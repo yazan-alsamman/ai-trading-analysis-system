@@ -48,11 +48,13 @@ def test_bars_after_the_holdout_start_are_refused() -> None:
         counts.counts({"XAUUSD": market("XAUUSD")})  # 2024-09 to 2024-11
 
 
-def test_run_is_refused_while_the_preregistration_is_a_draft(tmp_path) -> None:
-    assert not counts.approved()  # the real PREREG.md: not approved yet
+def test_run_is_refused_while_the_preregistration_is_a_draft(tmp_path, monkeypatch) -> None:
+    p = tmp_path / "PREREG.md"
+    p.write_text("| Field | Value |\n| Approval date | _(YYYY-MM-DD)_ |\n")
+    real = counts.approved
+    monkeypatch.setattr(counts, "approved", lambda prereg=p: real(prereg))
     with pytest.raises(PermissionError):
         counts.run(["XAUUSD"], store=tmp_path / "no-store")
-    p = tmp_path / "PREREG.md"
     p.write_text("| Field | Value |\n| Approval date | _(YYYY-MM-DD; after ...)_ |\n")
     assert not counts.approved(p)
     p.write_text("| Field | Value |\n| Approval date | 2026-11-02 |\n")

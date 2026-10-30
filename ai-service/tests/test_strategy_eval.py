@@ -44,7 +44,11 @@ def prereg(path: Path, frozen: str, approved: str = "_(YYYY-MM-DD)_", seeds: str
     return path
 
 
-def test_the_real_preregistration_is_not_approved_yet() -> None:
+def test_the_commands_refuse_an_unapproved_preregistration(tmp_path, monkeypatch) -> None:
+    draft = prereg(tmp_path / "PREREG.md", "b9ca2a8065513c832ff88deac3c697b7dd44edf5")
+    real = ev.registered
+    monkeypatch.setattr(ev, "registered", lambda: real(draft))
+    monkeypatch.setattr(post_counts, "registered", lambda: real(draft))
     with pytest.raises(PermissionError):
         ev.registered()
     assert ev.main([]) == 2

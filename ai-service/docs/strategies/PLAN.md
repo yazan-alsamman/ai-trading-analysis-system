@@ -46,8 +46,10 @@ a_S without a swap export, complete ranges for S1 and S4, the rollover price, T4
 `PREREG.md` and `STAGE_A.md`). Stage A merged 2026-10-28 (PR #77), with the MT5 swap snapshot
 (`docs/strategies/mt5/`). Rules frozen at `b9ca2a8` (tag `strategies-rules-v1`, 2026-10-29).
 Pre-approval counts run 2026-10-29 on the frozen rules (`counts.md`, `counts_by_year.csv`;
-candidates only, no outcome, lockbox not read). The PREREG is still a draft: not approved.
-Next: Fadi reads the counts and approves (date, commit, seeds), then the post-approval counts.
+candidates only, no outcome, lockbox not read). Stage C code built
+2026-10-30 (`python -m app research evaluate`, `post-counts`). **PREREG approved by Fadi on
+2026-10-30** (code `dc4ae2f`, seeds 20261030 / 20261031). Next: the post-approval counts, then
+Stage C.
 
 ## Expected counts (descriptive guess only)
 

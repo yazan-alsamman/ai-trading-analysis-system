@@ -1,13 +1,15 @@
 # Pre-registration: signal strategies, trade management and AI layers
 
-**Status: DRAFT, not registered.** First written 2026-10-25; revised 2026-10-25 after Fadi's
-review of the decision tables (C1-C8, D1-D13, N1-N11, R1, the four final refinements); revised
+**Status: REGISTERED, approved by Fadi on 2026-10-30.** First written 2026-10-25; revised
+2026-10-25 after Fadi's review of the decision tables (C1-C8, D1-D13, N1-N11, R1, the four final
+refinements); revised
 2026-10-26 after the Stage A audit (family C selection, approval timing); revised 2026-10-27
 after Fadi's decisions on the Stage A review (the session end and its gaps, the 1h boundary, a_S
 without a swap export, complete ranges for S1 and S4, the rollover price, T4 wording;
 `STAGE_A.md`); swap snapshot and the `CURRENCY_SYMBOL` conversion fix 2026-10-28. **Rules frozen
-2026-10-29** at the `main` commit of PR #77 (tag `strategies-rules-v1`), before any count. It
-becomes binding when Fadi approves it as written and the approval date and commit are filled in.
+2026-10-29** at the `main` commit of PR #77 (tag `strategies-rules-v1`), before any count.
+**Approved as written on 2026-10-30**, after the pre-approval counts (`counts.md`) and before any
+outcome or any count that uses an exit; binding from then.
 The rules are frozen at a recorded commit before any count. Before formal approval only the
 pre-approval candidate counts of section 12 may run; they use bars up to the signal bar only and
 choose nothing. Until approval no outcome of any strategy, bundle or model here (R, hit rate,
@@ -18,10 +20,10 @@ period, and no count that uses an exit may run.
 | --- | --- |
 | Rules frozen at commit | b9ca2a8065513c832ff88deac3c697b7dd44edf5 |
 | Freeze record | `main` after PR #77 (merged 2026-10-28), tag `strategies-rules-v1`, recorded 2026-10-29; the rule files (`app/strategies/cli.py`, `RULE_PATHS`) must match it for a count to run |
-| Approved by | _(Fadi)_ |
-| Approval date | _(YYYY-MM-DD; after the pre-approval candidate counts, before any outcome or any count that uses an exit)_ |
-| Code version at approval | _(commit; the frozen commit unless a recorded new version)_ |
-| Seeds (E0, bootstrap) | _(fixed at approval)_ |
+| Approved by | Fadi |
+| Approval date | 2026-10-30 |
+| Code version at approval | dc4ae2f64411e685a6bf0af2b16f4c09122c7123 (the frozen rules of b9ca2a8 unchanged, plus the Stage C code: `app/research/strategy_eval.py`, `post_counts.py`) |
+| Seeds (E0, bootstrap) | 20261030, 20261031 |
 
 ## 1. Why, and what is not a goal
 

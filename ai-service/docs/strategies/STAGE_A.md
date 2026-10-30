@@ -160,6 +160,12 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
     draws. The first-Friday filter drops trades open at 08:30 New York on a month's first Friday.
   - A passed strategy is reported as "passed", waiting for the holdout check. The holdout is not
     read by this command.
+- **Incident, 2026-10-30.** After the approval fields were filled in (not yet committed), a test
+  meant to check that `post-counts` refuses an unapproved preregistration patched the guard of
+  `evaluate` only, so `post-counts` ran on the real store twice and wrote `counts_post.md` and
+  `counts_post_by_year.csv`. These are the post-approval counts the approval allows (no R, exit
+  reason, exit price or exit time). The two files were deleted unread and the test fixed (it now
+  patches both commands); the counts are rerun with the command after the approval commit.
 - Stage B: the rules are frozen at `b9ca2a8` (`main` after PR #77, tag `strategies-rules-v1`,
   recorded in `PREREG.md` on 2026-10-29). The pre-approval counts ran on the real store the same
   day (`docs/strategies/counts.md`, `counts_by_year.csv`).
