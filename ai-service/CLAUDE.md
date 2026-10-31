@@ -201,7 +201,16 @@ armed L1 development setup; one active trade; family C fixed entry set; post-app
 computed on market data. Fadi approved the family C and approval-timing wording (2026-10-26, in
 `PREREG.md`) and the Stage A review points (2026-10-27: session end and its gaps, the 1h
 boundary, a_S without a swap export, complete S1 and S4 ranges, rollover price, T4 wording;
-`docs/strategies/STAGE_A.md`). PREREG not approved; no frozen commit recorded.
+`docs/strategies/STAGE_A.md`). Rules frozen at `b9ca2a8` (`main` after PR #77, tag
+`strategies-rules-v1`, 2026-10-29); pre-approval counts run 2026-10-29
+(`docs/strategies/counts.md`, candidates only). Stage C code built, not run (`python -m app
+research evaluate`, `post-counts`). **PREREG approved by Fadi 2026-10-30** (code `dc4ae2f`, seeds
+20261030 / 20261031). **Stage C done 2026-10-31** (code `57cc935`, `docs/strategies/evaluation.md`,
+trials 11-18): all eight strategies **unvalidated** (every mean net R below 0; S1 beats E0, d
++0.038, but not its costs). **Stage D done 2026-10-31** (`management.md`, trials 19-21): scalp
+management passed (M8, delta +0.015, Holm p 0.007; net still negative), intraday and swing not
+activated. Addendum 1 (S1 + M8, trial 26) approved 2026-10-31. **Stage E closed by Fadi 2026-10-31**
+(not run; family D p = 1). Next: the single holdout reading (`python -m app research holdout`).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
