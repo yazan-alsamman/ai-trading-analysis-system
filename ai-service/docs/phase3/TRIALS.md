@@ -17,8 +17,9 @@ P3 task 2 (`labels_XAUUSD_v1.md`, `labels_XAUUSD_V5-S.md`): 2 trials.
 
 Each E1 / E0 trial also reports E1s (V5-S) and E1 without same-bar patterns; those are read from
 the same run and are not counted as separate trials. Trials so far: **18** run (7-10 below, P4;
-11-18, the signal strategies); N for the Deflated Sharpe: **25**, as registered for the strategy
-plan (`docs/strategies/PREREG.md`, section 15; trials 19-25 are families C and D).
+11-21 and 26, the signal strategies); N for the Deflated Sharpe: **26**: the 25 registered for
+the strategy plan (`docs/strategies/PREREG.md`, section 15; trials 22-25 are family D, not run)
+plus trial 26 (Addendum 1).
 
 ## P4 meta-model trials (walk-forward test windows, 2018-01 to 2024-06)
 
@@ -57,6 +58,26 @@ B (2). Summary: `docs/strategies/evaluation.md`.
 No strategy passed, so none goes to the holdout check; all eight are served as "unvalidated" ("no
 proven edge"). S1 beats its matched random entries (d +0.038, 95% +0.001 to +0.075) but not its
 costs (x -0.014). Every strategy is below zero at twice the costs.
+
+## Management trials, family C (test windows 2018-01 to 2024-06)
+
+Registered in `docs/strategies/PREREG.md` section 9; run by `python -m app research management`
+on code `7bf8142`. The walk-forward bundle selection (M0-M8) against M0, on M0's fixed entry
+set. Holm over the three types. Report: `docs/strategies/management.md`.
+
+| # | Date | Type | Test trades | Mean delta (95%) | p | Holm p | Result | Bundle served |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 19 | 2026-10-31 | scalp | 50,537 | +0.015 (+0.005 to +0.026) | 0.002 | 0.007 | passed, waits for the holdout check | M8 |
+| 20 | 2026-10-31 | intraday | 10,062 | +0.012 (-0.005 to +0.029) | 0.094 | 0.123 | not activated | M8 |
+| 21 | 2026-10-31 | swing | 1,271 | +0.063 (-0.015 to +0.142) | 0.061 | 0.123 | not activated | M7 |
+
+Scalp management improves net R but leaves it negative (M0 -0.085, M8 -0.069 on the same entries).
+
+## Post-hoc trial (Addendum 1)
+
+| # | Date | Hypothesis | Origin | Primary period (not evidence) | Judged by |
+| --- | --- | --- | --- | --- | --- |
+| 26 | 2026-10-31 | S1 managed by M8: mean net R > 0 and above M0 | best of 72 strategy-bundle combinations in an exploratory analysis after Stages C and D | net R +0.005 (gross +0.054) | the single holdout reading (consistency only) and the forward paper log (section 8 procedure at K = 30); `docs/strategies/ADDENDUM_1_S1_M8.md` |
 
 ## Outcome mix of E1 by horizon
 

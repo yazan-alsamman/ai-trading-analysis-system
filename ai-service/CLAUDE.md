@@ -207,8 +207,10 @@ boundary, a_S without a swap export, complete S1 and S4 ranges, rollover price, 
 research evaluate`, `post-counts`). **PREREG approved by Fadi 2026-10-30** (code `dc4ae2f`, seeds
 20261030 / 20261031). **Stage C done 2026-10-31** (code `57cc935`, `docs/strategies/evaluation.md`,
 trials 11-18): all eight strategies **unvalidated** (every mean net R below 0; S1 beats E0, d
-+0.038, but not its costs). Stage D code built, not run (`python -m app research management`,
-family C, trials 19-21). Next: run Stage D.
++0.038, but not its costs). **Stage D done 2026-10-31** (`management.md`, trials 19-21): scalp
+management passed (M8, delta +0.015, Holm p 0.007; net still negative), intraday and swing not
+activated. Addendum 1 (S1 + M8, trial 26) approved 2026-10-31. The holdout is read once, after
+Stage E or Fadi's decision to close it.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
