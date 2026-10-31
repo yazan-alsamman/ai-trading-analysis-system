@@ -53,7 +53,10 @@ candidates only, no outcome, lockbox not read). Stage C code built
 trials 11-18): all eight strategies unvalidated; none goes to the holdout check. **Stage D done
 2026-10-31** (`management.md`, trials 19-21): scalp passed (M8), intraday and swing not
 activated. Addendum 1 (S1 + M8, trial 26). **Stage E closed by Fadi on 2026-10-31**
-without running (family D not tested, p = 1). Next: the single holdout reading.
+without running (family D not tested, p = 1). **Holdout read once on 2026-10-31**
+(`holdout.md`): family C scalp consistent (M8 +0.010 R against M0), activated; Addendum 1
+(S1 + M8) not consistent. The registered research is complete. Next: the write-up, serving
+(stage F) with Yazan, the forward paper log, and P9.
 
 ## Expected counts (descriptive guess only)
 

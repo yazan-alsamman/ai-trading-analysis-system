@@ -210,7 +210,10 @@ trials 11-18): all eight strategies **unvalidated** (every mean net R below 0; S
 +0.038, but not its costs). **Stage D done 2026-10-31** (`management.md`, trials 19-21): scalp
 management passed (M8, delta +0.015, Holm p 0.007; net still negative), intraday and swing not
 activated. Addendum 1 (S1 + M8, trial 26) approved 2026-10-31. **Stage E closed by Fadi 2026-10-31**
-(not run; family D p = 1). Next: the single holdout reading (`python -m app research holdout`).
+(not run; family D p = 1). **Holdout read once 2026-10-31** (`docs/strategies/holdout.md`): scalp
+management M8 consistent (+0.010 R), **activated**; Addendum 1 (S1 + M8) not consistent (net
+-0.077). Research plan complete; S1-S8 served as unvalidated. Next: write-up; serving (stage F)
+with Yazan; forward paper log; P9.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

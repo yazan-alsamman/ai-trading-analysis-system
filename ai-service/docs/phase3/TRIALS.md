@@ -72,12 +72,16 @@ set. Holm over the three types. Report: `docs/strategies/management.md`.
 | 21 | 2026-10-31 | swing | 1,271 | +0.063 (-0.015 to +0.142) | 0.061 | 0.123 | not activated | M7 |
 
 Scalp management improves net R but leaves it negative (M0 -0.085, M8 -0.069 on the same entries).
+**Holdout (read once, 2026-10-31, `docs/strategies/holdout.md`):** trial 19 consistent, M8 against
+M0 +0.010 R on 8,057 holdout scalp entries: **activated**. Trials 20-21 were not activated, so
+they had no holdout check. Trials 22-25 (family D) were not run: Stage E was closed by Fadi on
+2026-10-31.
 
 ## Post-hoc trial (Addendum 1)
 
 | # | Date | Hypothesis | Origin | Primary period (not evidence) | Judged by |
 | --- | --- | --- | --- | --- | --- |
-| 26 | 2026-10-31 | S1 managed by M8: mean net R > 0 and above M0 | best of 72 strategy-bundle combinations in an exploratory analysis after Stages C and D | net R +0.005 (gross +0.054) | the single holdout reading (consistency only) and the forward paper log (section 8 procedure at K = 30); `docs/strategies/ADDENDUM_1_S1_M8.md` |
+| 26 | 2026-10-31 | S1 managed by M8: mean net R > 0 and above M0 (holdout: **not consistent**, net -0.077, M8 - M0 +0.002, gross -0.012, n 903) | best of 72 strategy-bundle combinations in an exploratory analysis after Stages C and D | net R +0.005 (gross +0.054) | the single holdout reading (consistency only) and the forward paper log (section 8 procedure at K = 30); `docs/strategies/ADDENDUM_1_S1_M8.md` |
 
 ## Outcome mix of E1 by horizon
 
