@@ -366,6 +366,7 @@ def e0(
     """The E0 draws of every resolved trade of ``book``: an array (trades x reps), NaN where a
     draw failed. Replication by replication, trades in the book's order (fixed seed)."""
     ny = pd.DatetimeIndex(book["signal_utc"]).tz_convert(MARKET_TZ)
+    years, hours = ny.year.to_numpy(), ny.hour.to_numpy()  # once: ny.year[i] rebuilds the array
     keys = list(zip(book["symbol"], book["strategy"], strict=True))
     out = np.full((len(book), reps), np.nan)
     risk_atr = (book["risk"] / book["atr"]).to_numpy(float)
@@ -374,7 +375,7 @@ def e0(
     for rep in range(reps):
         for i, (sym, name) in enumerate(keys):
             x = e0_draw(
-                pools[sym, name], int(ny.year[i]), int(ny.hour[i]), risk_atr[i], k[i], rng,
+                pools[sym, name], int(years[i]), int(hours[i]), risk_atr[i], k[i], rng,
                 instruments()[sym], rp, m0, sw[sym], cost_filter_r,
             )  # fmt: skip
             if x is not None:

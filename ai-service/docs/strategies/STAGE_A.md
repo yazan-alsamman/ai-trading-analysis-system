@@ -171,6 +171,9 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
   about 14 million draws). It was stopped before writing anything. `Rollovers` now computes them
   once per entry frame: about 10 times faster, the same floats (tests compare both paths exactly),
   with a progress line per E0 replication. Recorded in `PREREG.md` (code changes after approval).
+  The second run showed 7 minutes per replication (about 24 hours in all): the E0 loop rebuilt the
+  New York year and hour arrays of all 74,174 trades for every trade. They are now computed once;
+  the same values. That run was stopped too, before writing anything.
 - Stage B: the rules are frozen at `b9ca2a8` (`main` after PR #77, tag `strategies-rules-v1`,
   recorded in `PREREG.md` on 2026-10-29). The pre-approval counts ran on the real store the same
   day (`docs/strategies/counts.md`, `counts_by_year.csv`).
