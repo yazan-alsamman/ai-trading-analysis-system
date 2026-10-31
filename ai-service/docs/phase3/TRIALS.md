@@ -16,8 +16,9 @@ P3 task 2 (`labels_XAUUSD_v1.md`, `labels_XAUUSD_V5-S.md`): 2 trials.
 | 6 | 2026-10-23 | **L1-M**: L1 with signal-based position management (opposite signal exits, same-direction signal extends to 48 bars after it, cap 192; one position per instrument). Registered before the run (`MARKET_STRUCTURE_DEFINITIONS.md`, L1-M). Measured on development and walk-forward periods | `docs/phase4/L1-M.md` | -0.053 | -0.060 | +0.007 (-0.104 to +0.114) | 0.46 | -0.043 (both periods) | Fadi |
 
 Each E1 / E0 trial also reports E1s (V5-S) and E1 without same-bar patterns; those are read from
-the same run and are not counted as separate trials. Trials so far: **10** run (7-10 below, P4);
-N for the Deflated Sharpe: **10**.
+the same run and are not counted as separate trials. Trials so far: **18** run (7-10 below, P4;
+11-18, the signal strategies); N for the Deflated Sharpe: **25**, as registered for the strategy
+plan (`docs/strategies/PREREG.md`, section 15; trials 19-25 are families C and D).
 
 ## P4 meta-model trials (walk-forward test windows, 2018-01 to 2024-06)
 
@@ -34,6 +35,28 @@ H2 decided on trial 7 alone. Baseline: E1 on the same windows, 1,058 trades, mea
 
 Controls (not counted in N, not used to choose anything; `PREREG_P4.md` §7): E0 + meta (20
 replications, 29 context features) and E1 + meta with context features only, for each family.
+
+## Signal strategy trials (primary period 2018-01 to 2024-06, families A and B)
+
+Registered in `docs/strategies/PREREG.md` (approved 2026-10-30, rules frozen at `b9ca2a8`); run by
+`python -m app research evaluate` on code `57cc935`, seeds 20261030 / 20261031, M0, net R with the
+decision swap scenario. d = x minus the mean of 200 matched E0 entries. Holm within family A (6) and
+B (2). Summary: `docs/strategies/evaluation.md`.
+
+| # | Date | Strategy | Report | n | Mean x | Mean d | p_S | Holm p | U_S | delta* | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 11 | 2026-10-31 | S1 LB, London breakout (A, intraday, 15m) | `docs/strategies/eval_S1.md` | 3,735 | -0.014 | +0.038 | 0.760 | 1.000 | +0.019 | 0.050 | unvalidated |
+| 12 | 2026-10-31 | S2 MR, Bollinger reversion (A, intraday, 1h) | `docs/strategies/eval_S2.md` | 3,421 | -0.082 | -0.027 | 1.000 | 1.000 | -0.049 | 0.050 | unvalidated |
+| 13 | 2026-10-31 | S3 TF, Donchian breakout (A, swing, 4h) | `docs/strategies/eval_S3.md` | 1,271 | -0.128 | -0.031 | 0.990 | 1.000 | -0.035 | 0.073 | unvalidated |
+| 14 | 2026-10-31 | S4 ORB, New York opening range (A, scalp, 5m) | `docs/strategies/eval_S4.md` | 4,458 | -0.055 | +0.003 | 0.992 | 1.000 | -0.017 | 0.050 | unvalidated |
+| 15 | 2026-10-31 | S5 PB, trend pullback (A, scalp, 5m) | `docs/strategies/eval_S5.md` | 38,970 | -0.087 | -0.017 | 1.000 | 1.000 | -0.075 | 0.050 | unvalidated |
+| 16 | 2026-10-31 | S6 VR, VWAP reversion (A, scalp, 5m) | `docs/strategies/eval_S6.md` | 5,845 | -0.099 | -0.036 | 1.000 | 1.000 | -0.071 | 0.050 | unvalidated |
+| 17 | 2026-10-31 | S7 SQ, squeeze breakout (B, intraday, 15m) | `docs/strategies/eval_S7.md` | 2,906 | -0.067 | -0.004 | 0.994 | 1.000 | -0.023 | 0.050 | unvalidated |
+| 18 | 2026-10-31 | S8 FX, fix reversal (B, scalp, 5m) | `docs/strategies/eval_S8.md` | 1,264 | -0.045 | +0.013 | 0.929 | 1.000 | +0.007 | 0.050 | unvalidated |
+
+No strategy passed, so none goes to the holdout check; all eight are served as "unvalidated" ("no
+proven edge"). S1 beats its matched random entries (d +0.038, 95% +0.001 to +0.075) but not its
+costs (x -0.014). Every strategy is below zero at twice the costs.
 
 ## Outcome mix of E1 by horizon
 

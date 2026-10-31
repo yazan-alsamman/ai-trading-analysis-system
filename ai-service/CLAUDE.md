@@ -205,7 +205,9 @@ boundary, a_S without a swap export, complete S1 and S4 ranges, rollover price, 
 `strategies-rules-v1`, 2026-10-29); pre-approval counts run 2026-10-29
 (`docs/strategies/counts.md`, candidates only). Stage C code built, not run (`python -m app
 research evaluate`, `post-counts`). **PREREG approved by Fadi 2026-10-30** (code `dc4ae2f`, seeds
-20261030 / 20261031); next: post-counts, then Stage C.
+20261030 / 20261031). **Stage C done 2026-10-31** (code `57cc935`, `docs/strategies/evaluation.md`,
+trials 11-18): all eight strategies **unvalidated** (every mean net R below 0; S1 beats E0, d
++0.038, but not its costs). Next: Stage D (family C, management).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

@@ -48,8 +48,9 @@ a_S without a swap export, complete ranges for S1 and S4, the rollover price, T4
 Pre-approval counts run 2026-10-29 on the frozen rules (`counts.md`, `counts_by_year.csv`;
 candidates only, no outcome, lockbox not read). Stage C code built
 2026-10-30 (`python -m app research evaluate`, `post-counts`). **PREREG approved by Fadi on
-2026-10-30** (code `dc4ae2f`, seeds 20261030 / 20261031). Next: the post-approval counts, then
-Stage C.
+2026-10-30** (code `dc4ae2f`, seeds 20261030 / 20261031). Post-approval counts 2026-10-30
+(`counts_post.md`). **Stage C done 2026-10-31** (`evaluation.md`, `eval_S1.md` to `eval_S8.md`,
+trials 11-18): all eight strategies unvalidated; none goes to the holdout check. Next: Stage D.
 
 ## Expected counts (descriptive guess only)
 
