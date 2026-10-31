@@ -23,7 +23,7 @@ prints nothing.
 `libs/indicators` (`trading-indicators`) is now a dependency of ai-service: in the `research` and
 `dev` extras of `pyproject.toml` (with a `tool.uv.sources` path), installed in the local venv
 (`uv pip install -e ../libs/indicators`) and in CI (`.github/workflows/ci.yml`). It is not in the
-base dependencies, so the production image still builds. Full suite: 404 tests pass (2026-10-31,
+base dependencies, so the production image still builds. Full suite: 413 tests pass (2026-10-31,
 after the review decisions, on `ai/stage-a-engine` with `main`'s tests).
 
 ## Audit points (2026-10-26)
@@ -185,6 +185,13 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
   same bootstrap (reported); the bundle the procedure would serve is the selection at 2024-07-01;
   trial numbers 19 scalp, 20 intraday, 21 swing; the diagnostics (overlaps, entries added and
   dropped) cover all years.
+- **Holdout reading code, built 2026-10-31 after Stage E was closed, not run**
+  (`app/research/holdout.py`, `python -m app research holdout`; `tests/test_holdout.py`). It runs
+  once: it is refused when `holdout.md` exists, while `evaluation.md` or `management.md` is not
+  committed unchanged, before the Stage E decision is in `PREREG.md`, and under the Stage C guard.
+  It computes only the registered checks: family C scalp (the bundle selected at 2024-07-01
+  against M0 on the holdout scalp entries) and Addendum 1 (S1 + M8), with Addendum 1's reported
+  details. Bars go to the lockbox start; the lockbox is not read.
 - Stage B: the rules are frozen at `b9ca2a8` (`main` after PR #77, tag `strategies-rules-v1`,
   recorded in `PREREG.md` on 2026-10-29). The pre-approval counts ran on the real store the same
   day (`docs/strategies/counts.md`, `counts_by_year.csv`).

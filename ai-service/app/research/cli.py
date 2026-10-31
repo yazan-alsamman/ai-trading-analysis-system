@@ -1,6 +1,6 @@
-"""``python -m app research <baselines|walkforward|versions|meta|post-counts|evaluate|management>
-...``: the research commands (post-counts, evaluate and management: the signal strategies,
-docs/strategies/PREREG.md)."""
+"""``python -m app research <command> ...``: the research commands. baselines, walkforward,
+versions, meta: L1 (P3, P4). post-counts, evaluate, management, holdout: the signal strategies
+(docs/strategies/PREREG.md)."""
 
 from __future__ import annotations
 
@@ -32,6 +32,10 @@ def main(argv: list[str]) -> int:
         from app.research.management_eval import main as management
 
         return management(argv[1:])
+    if argv and argv[0] == "holdout":
+        from app.research.holdout import main as holdout
+
+        return holdout(argv[1:])
     if argv and argv[0] == "baselines":
         from app.research.baselines import main as baselines
 

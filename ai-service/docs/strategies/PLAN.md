@@ -52,8 +52,8 @@ candidates only, no outcome, lockbox not read). Stage C code built
 (`counts_post.md`). **Stage C done 2026-10-31** (`evaluation.md`, `eval_S1.md` to `eval_S8.md`,
 trials 11-18): all eight strategies unvalidated; none goes to the holdout check. **Stage D done
 2026-10-31** (`management.md`, trials 19-21): scalp passed (M8), intraday and swing not
-activated. Addendum 1 (S1 + M8, trial 26). Next: Stage E or Fadi closes it; then the single
-holdout reading.
+activated. Addendum 1 (S1 + M8, trial 26). **Stage E closed by Fadi on 2026-10-31**
+without running (family D not tested, p = 1). Next: the single holdout reading.
 
 ## Expected counts (descriptive guess only)
 
