@@ -23,7 +23,7 @@ prints nothing.
 `libs/indicators` (`trading-indicators`) is now a dependency of ai-service: in the `research` and
 `dev` extras of `pyproject.toml` (with a `tool.uv.sources` path), installed in the local venv
 (`uv pip install -e ../libs/indicators`) and in CI (`.github/workflows/ci.yml`). It is not in the
-base dependencies, so the production image still builds. Full suite: 395 tests pass (2026-10-31,
+base dependencies, so the production image still builds. Full suite: 404 tests pass (2026-10-31,
 after the review decisions, on `ai/stage-a-engine` with `main`'s tests).
 
 ## Audit points (2026-10-26)
@@ -174,6 +174,17 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
   The second run showed 7 minutes per replication (about 24 hours in all): the E0 loop rebuilt the
   New York year and hour arrays of all 74,174 trades for every trade. They are now computed once;
   the same values. That run was stopped too, before writing anything.
+- **Stage D code, built 2026-10-31 after Stage C, not run** (`app/research/management_eval.py`,
+  `python -m app research management`; tests on synthetic data, `tests/test_management_eval.py`).
+  Same guard as Stage C. It uses the frozen family C functions (`book.fixed_entry_table`,
+  `overlaps`, `entry_set_difference`; `decide.training`, `select_bundle`, `window_trades`,
+  `paired_test`, `holm`). Choices fixed here where section 9 is silent: the entry set is M0's
+  one-active book on bars from 2012 (all candidates after the indicator warm-up); net R of every
+  bundle includes the decision swap (W1 by its own exit time); the 13 windows and the 1-day embargo
+  come from `research.toml`; the 95% interval of the mean delta is the percentile interval of the
+  same bootstrap (reported); the bundle the procedure would serve is the selection at 2024-07-01;
+  trial numbers 19 scalp, 20 intraday, 21 swing; the diagnostics (overlaps, entries added and
+  dropped) cover all years.
 - Stage B: the rules are frozen at `b9ca2a8` (`main` after PR #77, tag `strategies-rules-v1`,
   recorded in `PREREG.md` on 2026-10-29). The pre-approval counts ran on the real store the same
   day (`docs/strategies/counts.md`, `counts_by_year.csv`).
