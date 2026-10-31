@@ -23,7 +23,7 @@ prints nothing.
 `libs/indicators` (`trading-indicators`) is now a dependency of ai-service: in the `research` and
 `dev` extras of `pyproject.toml` (with a `tool.uv.sources` path), installed in the local venv
 (`uv pip install -e ../libs/indicators`) and in CI (`.github/workflows/ci.yml`). It is not in the
-base dependencies, so the production image still builds. Full suite: 391 tests pass (2026-10-30,
+base dependencies, so the production image still builds. Full suite: 395 tests pass (2026-10-31,
 after the review decisions, on `ai/stage-a-engine` with `main`'s tests).
 
 ## Audit points (2026-10-26)
@@ -166,6 +166,11 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
   `counts_post_by_year.csv`. These are the post-approval counts the approval allows (no R, exit
   reason, exit price or exit time). The two files were deleted unread and the test fixed (it now
   patches both commands); the counts are rerun with the command after the approval commit.
+- **Stage C restart, 2026-10-31.** The first run of `evaluate` (started 2026-10-30) printed nothing
+  and spent 84% of its time rebuilding the rollover instants for every E0 draw (about 1 ms each,
+  about 14 million draws). It was stopped before writing anything. `Rollovers` now computes them
+  once per entry frame: about 10 times faster, the same floats (tests compare both paths exactly),
+  with a progress line per E0 replication. Recorded in `PREREG.md` (code changes after approval).
 - Stage B: the rules are frozen at `b9ca2a8` (`main` after PR #77, tag `strategies-rules-v1`,
   recorded in `PREREG.md` on 2026-10-29). The pre-approval counts ran on the real store the same
   day (`docs/strategies/counts.md`, `counts_by_year.csv`).

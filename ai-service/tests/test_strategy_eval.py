@@ -228,3 +228,46 @@ def test_post_counts_report_has_no_outcomes() -> None:
     assert "## Power statements" in md and "n_unval" in md
     for word in ("net_r", "exit_", "pnl"):
         assert word not in md
+
+
+# --- performance only: the precomputed rollovers give the same floats -------------------------
+
+
+@pytest.mark.parametrize("mode", ["POINTS", "CURRENCY_SYMBOL", "INTEREST_CURRENT"])
+def test_precomputed_rollovers_equal_swap_r_exactly(mode) -> None:
+    from dataclasses import replace
+
+    f = primary()
+    sw = replace(SWAPS["XAUUSD"], mode=mode, long=-69.25, short=17.15)
+    rng = np.random.default_rng(5)
+    for tf in ("4h", "5m"):
+        e = f[tf]
+        roll = ev.Rollovers.of(e, sw)
+        close = e["close_utc"]
+        for _ in range(300):
+            i = int(rng.integers(0, len(e) - 2))
+            j = int(rng.integers(i + 1, min(len(e), i + 400)))
+            d = "buy" if rng.random() < 0.5 else "sell"
+            a, b = close.iloc[i], close.iloc[j]
+            want = swap.swap_r(sw, d, a, b, 3.0, 2000.0, swap.close_before(e))
+            assert roll.w1(d, a, b, 3.0, 2000.0) == want  # the same float, not approximately
+        late = close.iloc[-1] + pd.Timedelta(days=40)  # outside the span: swap.swap_r itself
+        assert roll.w1("buy", close.iloc[0], late, 3.0, 2000.0) == swap.swap_r(
+            sw, "buy", close.iloc[0], late, 3.0, 2000.0, swap.close_before(e)
+        )
+
+
+def test_e0_draws_are_identical_with_and_without_the_precomputed_rollovers() -> None:
+    f, rp = primary(), RP
+    book = pd.concat(
+        [ev.trades(f, XAU, SPECS[n], rp, M0, SWAPS["XAUUSD"], START)[0] for n in ("S3", "S5")]
+    )
+    book = book[book["state"] == "resolved"].head(40).reset_index(drop=True)
+    sw = {"XAUUSD": SWAPS["XAUUSD"]}
+    slow = {("XAUUSD", n): ev.pool(f, SPECS[n], rp) for n in ("S3", "S5")}
+    fast = {("XAUUSD", n): ev.pool(f, SPECS[n], rp, sw["XAUUSD"]) for n in ("S3", "S5")}
+    assert all(p.rollovers is None for p in slow.values())
+    assert all(p.rollovers is not None for p in fast.values())
+    a = ev.e0(book, slow, 3, np.random.default_rng(9), rp, M0, sw, 0.15)
+    b = ev.e0(book, fast, 3, np.random.default_rng(9), rp, M0, sw, 0.15)
+    assert np.array_equal(a, b, equal_nan=True) and np.isfinite(a).sum() > 50

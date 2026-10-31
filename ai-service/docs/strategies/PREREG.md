@@ -24,6 +24,7 @@ period, and no count that uses an exit may run.
 | Approval date | 2026-10-30 |
 | Code version at approval | dc4ae2f64411e685a6bf0af2b16f4c09122c7123 (the frozen rules of b9ca2a8 unchanged, plus the Stage C code: `app/research/strategy_eval.py`, `post_counts.py`) |
 | Seeds (E0, bootstrap) | 20261030, 20261031 |
+| Code changes after approval | 2026-10-31, before any Stage C result: performance only in `app/research/strategy_eval.py` (rollover instants computed once per entry frame instead of per E0 draw, the same floats, tested; progress lines). No rule, statistic, seed or output changed. The commit Stage C ran on is recorded in `evaluation.md` |
 
 ## 1. Why, and what is not a goal
 

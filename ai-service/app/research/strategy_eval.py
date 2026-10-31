@@ -40,6 +40,8 @@ import argparse
 import re
 import subprocess
 import sys
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -207,6 +209,58 @@ def trades(
 # --- E0 -------------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class Rollovers:
+    """The rollover instants of one entry frame's span, computed once with ``swap.instants``, and
+    the price at each (``swap.close_before``). ``w1`` adds the same terms in the same order as
+    ``swap.swap_r``, so it returns the same float, without rebuilding the instants for every
+    trade (performance only; ``tests/test_strategy_eval.py`` checks the equality). Outside the
+    span it calls ``swap.swap_r``."""
+
+    spec: swap.SwapSpec
+    lo: int  # ns: instants in (lo, hi]
+    hi: int
+    at: np.ndarray  # ns
+    weight: np.ndarray
+    price: np.ndarray
+    price_at: Callable[[pd.Timestamp], float]
+
+    @classmethod
+    def of(cls, frame: pd.DataFrame, sw: swap.SwapSpec) -> Rollovers:
+        price_at = swap.close_before(frame)
+        lo = frame["close_utc"].iloc[0] - pd.Timedelta(days=1)
+        hi = frame["close_utc"].iloc[-1] + pd.Timedelta(days=30)
+        t = swap.instants(lo, hi, sw)
+        price = []
+        for at in t["at"]:
+            try:
+                price.append(price_at(at))
+            except ValueError:  # before the first bar: no trade is open then
+                price.append(np.nan)
+        at_ns = pd.DatetimeIndex(t["at"]).as_unit("ns").asi8
+        return cls(sw, lo.value, hi.value, at_ns, t["weight"].to_numpy(float),
+                   np.array(price, float), price_at)  # fmt: skip
+
+    def w1(
+        self,
+        direction: str,
+        entry: pd.Timestamp,
+        exit_: pd.Timestamp,
+        risk: float,
+        price_open: float,
+    ) -> float:
+        if entry.value < self.lo or exit_.value > self.hi:
+            return swap.swap_r(self.spec, direction, entry, exit_, risk, price_open, self.price_at)
+        a = int(np.searchsorted(self.at, entry.value, side="right"))
+        b = int(np.searchsorted(self.at, exit_.value, side="right"))
+        total = 0.0
+        for i in range(a, b):
+            total += float(self.weight[i]) * swap.per_night_r(
+                self.spec, direction, float(self.price[i]), price_open, risk
+            )
+        return total
+
+
 @dataclass
 class Pool:
     """Random entry bars of one strategy's entry frame, by New York (year, hour)."""
@@ -220,9 +274,10 @@ class Pool:
     bars: dict[tuple[int, int], np.ndarray]
     markets: dict[str, Market]
     price_at: object
+    rollovers: Rollovers | None = None  # None: swap.swap_r for every draw
 
 
-def pool(frames: Frames, spec: SignalSpec, rp: Rules) -> Pool:
+def pool(frames: Frames, spec: SignalSpec, rp: Rules, sw: swap.SwapSpec | None = None) -> Pool:
     e = frames[spec.frame]
     n = len(e)
     a = ti.atr(e, spec.params["atr_period"]).to_numpy()
@@ -249,6 +304,7 @@ def pool(frames: Frames, spec: SignalSpec, rp: Rules) -> Pool:
         e, spec, a, spread, e["close"].to_numpy(float), deadline,
         {k: g["j"].to_numpy() for k, g in keys.groupby(["y", "h"])},
         {d: Market.of(e, d, spec.frame, rp) for d in ("buy", "sell")}, swap.close_before(e),
+        Rollovers.of(e, sw) if sw is not None and n else None,
     )  # fmt: skip
 
 
@@ -289,7 +345,10 @@ def e0_draw(
         if o.state != "CLOSED":
             continue
         t, x = p.frame["close_utc"].iloc[j], pd.Timestamp(o.exit_ns, tz="UTC")
-        w1 = swap.swap_r(sw, d, t, x, risk, entry, p.price_at)
+        if p.rollovers is not None and p.rollovers.spec == sw:
+            w1 = p.rollovers.w1(d, t, x, risk, entry)
+        else:
+            w1 = swap.swap_r(sw, d, t, x, risk, entry, p.price_at)
         return o.net_r() + swap.decision_r(w1, None)
     return None
 
@@ -311,6 +370,7 @@ def e0(
     out = np.full((len(book), reps), np.nan)
     risk_atr = (book["risk"] / book["atr"]).to_numpy(float)
     k = book["k"].to_numpy(float)
+    start = time.monotonic()
     for rep in range(reps):
         for i, (sym, name) in enumerate(keys):
             x = e0_draw(
@@ -319,6 +379,10 @@ def e0(
             )  # fmt: skip
             if x is not None:
                 out[i, rep] = x
+        done = time.monotonic() - start
+        left = done / (rep + 1) * (reps - rep - 1)
+        print(f"E0 replication {rep + 1}/{reps} ({len(keys)} trades): {done / 60:.1f} min,"
+              f" about {left / 60:.0f} min left", file=sys.stderr, flush=True)  # fmt: skip
     return out
 
 
@@ -541,7 +605,8 @@ def evaluate(
                 b, u = trades(f, inst, sp, rp, m0, swaps[sym], start)
                 undecided[name, label] = undecided.get((name, label), 0) + u
                 books.append(b.assign(book=label))
-            pools[sym, name] = pool(f, sp, rp)
+            pools[sym, name] = pool(f, sp, rp, swaps[sym])
+        print(f"{sym}: trades and E0 pools ready", file=sys.stderr, flush=True)
     book = pd.concat(books, ignore_index=True)
     resolved = book[book["state"] == "resolved"]
     keys = ["symbol", "strategy", "idx", "direction"]
