@@ -15,6 +15,7 @@ dependencies = [
   "alembic>=1.13",
   "redis>=5.0",
   "celery>=5.4",
+  "packaging>=24",  # kombu 5.7's redis transport imports it without declaring it
   "httpx>=0.27",
   "pyjwt[crypto]>=2.9",  # crypto: RS256 for the FCM service-account token (Y15)
   "tzdata>=2024.1",  # quiet hours in the user's time zone (zoneinfo)
