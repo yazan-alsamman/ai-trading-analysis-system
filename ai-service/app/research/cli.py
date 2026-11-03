@@ -1,6 +1,6 @@
 """``python -m app research <command> ...``: the research commands. baselines, walkforward,
 versions, meta: L1 (P3, P4). post-counts, evaluate, management, holdout: the signal strategies
-(docs/strategies/PREREG.md)."""
+(docs/strategies/PREREG.md). mt5-check: the cost model in the MT5 Strategy Tester (descriptive)."""
 
 from __future__ import annotations
 
@@ -36,6 +36,10 @@ def main(argv: list[str]) -> int:
         from app.research.holdout import main as holdout
 
         return holdout(argv[1:])
+    if argv and argv[0] == "mt5-check":
+        from app.research.mt5_check import main as mt5_check
+
+        return mt5_check(argv[1:])
     if argv and argv[0] == "baselines":
         from app.research.baselines import main as baselines
 

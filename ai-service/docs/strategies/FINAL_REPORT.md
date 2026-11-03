@@ -255,6 +255,16 @@ consistency check, not a test.
 1. **Costs are partly assumed.** About 60% of the modelled cost on gold is an assumption.
    EURUSD's recorded spread is zero on most bars of 2021-2023, which favours the rules. The null
    results hold either way, and every strategy is worse at twice the costs.
+   - **Checked afterwards in the MT5 Strategy Tester** (`mt5_cost_check.md`, 2026-11-03,
+     descriptive). 2,776 Stage C trades of 2024 H1 were replayed on FxPro's real ticks, with
+     commission.
+   - Overall the real cost was 0.082 R a trade against 0.074 R modelled, and the mean net R
+     -0.109 against -0.102.
+   - The model overstates the cost on gold and the four other pairs (0.050 R real against
+     0.084 R modelled).
+   - It understates the cost on EURUSD (0.140 R against 0.055 R). There, 52% of the 2024 trades
+     have a recorded spread of zero, and the commission alone is 0.11 R on stops of about 7 pips.
+   - The tester fills stops at their level, so slippage is not checked. No conclusion changes.
 2. **Swap is a scenario,** not history: one snapshot of rates applied to every year. Only S3 and
    L1 are affected.
 3. **Error control is per family.** Across the four families, the chance of at least one false
