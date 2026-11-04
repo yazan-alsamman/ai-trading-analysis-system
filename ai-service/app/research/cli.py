@@ -1,7 +1,8 @@
 """``python -m app research <command> ...``: the research commands. baselines, walkforward,
 versions, meta: L1 (P3, P4). post-counts, evaluate, management, holdout: the signal strategies
 (docs/strategies/PREREG.md). mt5-check: the cost model in the MT5 Strategy Tester (descriptive).
-levels-confirm: Addendum 2, the level-break reading on the confirmation instruments (once)."""
+levels-confirm: Addendum 2, the level-break reading on the confirmation instruments (once).
+levels-trade: Addendum 2, the level-break trade in the MT5 Strategy Tester (H_L2, once)."""
 
 from __future__ import annotations
 
@@ -41,6 +42,10 @@ def main(argv: list[str]) -> int:
         from app.research.levels_confirm import main as levels_confirm
 
         return levels_confirm(argv[1:])
+    if argv and argv[0] == "levels-trade":
+        from app.research.levels_trade import main as levels_trade
+
+        return levels_trade(argv[1:])
     if argv and argv[0] == "mt5-check":
         from app.research.mt5_check import main as mt5_check
 
