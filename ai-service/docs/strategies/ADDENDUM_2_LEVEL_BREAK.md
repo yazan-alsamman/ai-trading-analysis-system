@@ -121,8 +121,11 @@ New York trading days run from 17:00 to 17:00. The levels are:
   and the lockbox stays sealed.
 - **One reading.** The data are imported and read once, after this addendum is approved and
   committed. Nothing is tuned on them.
-- Instruments are added to `instruments.toml` with specs from the account. The cost fields are
-  not used, because net R comes from the tester.
+- The instruments' specs (point, digits, contract size, currencies, session hours) come from the
+  account. `tools/mt5/ExportHistory.mq5` writes them to `history_meta.json`, and they are held
+  in the confirmation command. They are **not** added to `app/config`, which stays as frozen at
+  `b9ca2a8`. No cost field is used, because net R comes from the tester. (Clarified 2026-11-04,
+  before any bar was exported; no rule, level, distance or decision changed.)
 
 ## 5. Decision rules
 
@@ -180,9 +183,10 @@ Reported and not decided on:
 
 ## 7. Steps after approval
 
-1. Fadi exports M1 bars of the six instruments from FxPro, to 2026-01-10, into `data/raw`.
-2. Their specs go into `instruments.toml`, and the data are imported with the same quality report
-   as the research instruments.
+1. Fadi runs `tools/mt5/ExportHistory.mq5`. It writes M1 bars of the six instruments, to
+   2026-01-09 23:59 server time, and their specs, to `<MT5 Common>/Files/history/`.
+2. The data are imported with the same parser, clock checks and quality report as the research
+   instruments, using the specs of section 4.
 3. A registered command runs H_L1 once and writes `docs/strategies/levels_confirm.md`. It uses
    the same code as `levels_explore.py`, with the instrument list and steps of section 3.
 4. An MT5 EA places the section 3 stop orders, one Strategy Tester run per instrument, and the

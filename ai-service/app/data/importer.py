@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from app.config import instruments, splits
+from app.config import Instrument, instruments, splits
 from app.data import clock
 from app.data.aggregate import TIMEFRAMES, aggregate
 from app.data.exports import name_fields
@@ -71,13 +71,21 @@ def _write(path: Path, write) -> None:
     os.replace(tmp, path)
 
 
-def import_symbol(symbol: str, export_path: Path, out_dir: Path = DEFAULT_OUT) -> dict:
+def import_symbol(
+    symbol: str,
+    export_path: Path,
+    out_dir: Path = DEFAULT_OUT,
+    instrument: Instrument | None = None,
+) -> dict:
+    """``instrument``: specs for a symbol outside ``app/config`` (the Addendum 2 confirmation
+    instruments); by default the configured ones."""
     s = splits()
+    inst = instrument or instruments()[symbol]
     export = HistoryExport(export_path)
-    parsed = parse_export(export.raw_lines(), instruments()[symbol], M1, s.server_tz)
+    parsed = parse_export(export.raw_lines(), inst, M1, s.server_tz)
     if parsed.bars.empty:
         raise ValueError(f"{export_path.name} has no valid bars before the lockbox")
-    segments = clock.detect(parsed.bars, instruments()[symbol], s.server_tz)
+    segments = clock.detect(parsed.bars, inst, s.server_tz)
     m1 = clock.apply(parsed.bars, segments)
     segments = clock.check_mismatch_weeks(m1, segments, s.server_tz)
     m1 = clock.apply_mismatch_weeks(m1, segments, s.server_tz)

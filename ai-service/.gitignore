@@ -1,5 +1,7 @@
 # Research store built by `python -m app import`; rebuilt from the MT5 exports, never committed.
 data/processed/
+# Addendum 2 confirmation store (`python -m app research levels-confirm import`), never committed.
+data/confirm/
 # Dukascopy cross-check sample (`python -m app dukascopy download`), never committed.
 data/dukascopy/
 # Local archives (e.g. a zipped review folder), never committed.
