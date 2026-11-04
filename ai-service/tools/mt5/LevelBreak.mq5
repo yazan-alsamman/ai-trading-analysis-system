@@ -134,20 +134,26 @@ void Place(const int i)
    double pl = 0.0;
    rows[i].risk_money = OrderCalcProfit(market, _Symbol, Lots, rows[i].level, rows[i].sl, pl) ? MathAbs(pl) : 0.0;
    string c = IntegerToString(rows[i].id);
-   bool through = rows[i].dir > 0 ? t.ask >= rows[i].level : t.bid <= rows[i].level;
-   bool ok;
-   if(through)
-     {
-      rows[i].fill = "gap";
-      ok = rows[i].dir > 0 ? trade.Buy(Lots, _Symbol, 0.0, rows[i].sl, rows[i].tp, c)
-                           : trade.Sell(Lots, _Symbol, 0.0, rows[i].sl, rows[i].tp, c);
-     }
-   else
+   // a stop order must be at least the broker's stops (and freeze) level away from the price;
+   // closer than that, or already through, the trade enters at market
+   long lvl = MathMax(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL),
+                      SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL));
+   double gap = (double)lvl * _Point;
+   bool through = rows[i].dir > 0 ? t.ask >= rows[i].level - gap : t.bid <= rows[i].level + gap;
+   bool ok = false;
+   if(!through)
      {
       rows[i].fill = "stop";
       ok = rows[i].dir > 0
            ? trade.BuyStop(Lots, rows[i].level, _Symbol, rows[i].sl, rows[i].tp, ORDER_TIME_SPECIFIED, rows[i].expire_time, c)
            : trade.SellStop(Lots, rows[i].level, _Symbol, rows[i].sl, rows[i].tp, ORDER_TIME_SPECIFIED, rows[i].expire_time, c);
+      through = !ok && trade.ResultRetcode() == TRADE_RETCODE_INVALID_PRICE;  // too close after all
+     }
+   if(through)
+     {
+      rows[i].fill = "gap";
+      ok = rows[i].dir > 0 ? trade.Buy(Lots, _Symbol, 0.0, rows[i].sl, rows[i].tp, c)
+                           : trade.Sell(Lots, _Symbol, 0.0, rows[i].sl, rows[i].tp, c);
      }
    uint rc = trade.ResultRetcode();
    if(!ok || (rc != TRADE_RETCODE_DONE && rc != TRADE_RETCODE_PLACED))
