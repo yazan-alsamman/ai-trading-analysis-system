@@ -19,7 +19,8 @@ Each E1 / E0 trial also reports E1s (V5-S) and E1 without same-bar patterns; tho
 the same run and are not counted as separate trials. Trials so far: **18** run (7-10 below, P4;
 11-21 and 26, the signal strategies); N for the Deflated Sharpe: **26**: the 25 registered for
 the strategy plan (`docs/strategies/PREREG.md`, section 15; trials 22-25 are family D, not run)
-plus trial 26 (Addendum 1).
+plus trial 26 (Addendum 1). Trial 27 (Addendum 2, approved 2026-11-04) uses N = 60, which also counts the
+exploratory looks of 2026-11-03/04 (below).
 
 ## P4 meta-model trials (walk-forward test windows, 2018-01 to 2024-06)
 
@@ -82,6 +83,20 @@ they had no holdout check. Trials 22-25 (family D) were not run: Stage E was clo
 | # | Date | Hypothesis | Origin | Primary period (not evidence) | Judged by |
 | --- | --- | --- | --- | --- | --- |
 | 26 | 2026-10-31 | S1 managed by M8: mean net R > 0 and above M0 (holdout: **not consistent**, net -0.077, M8 - M0 +0.002, gross -0.012, n 903) | best of 72 strategy-bundle combinations in an exploratory analysis after Stages C and D | net R +0.005 (gross +0.054) | the single holdout reading (consistency only) and the forward paper log (section 8 procedure at K = 30); `docs/strategies/ADDENDUM_1_S1_M8.md` |
+| 27 | 2026-11-04 | Level break: at prior-day, five-day and round-number levels, price goes D through more often than D back (H_L1), and a stop entry with the break has mean net R > 0 (H_L2) | exploratory level test on the research instruments, 2018 to 2024-06 (`tools/research/levels_explore.py`) | bounce 46.1% at real levels against 50.0% at placebo levels, -3.9 points (-4.7 to -3.2); every instrument and every gold year below placebo | one reading of six instruments never read here (NZDUSD, USDCHF, EURJPY, GBPJPY, EURGBP, XAGUSD), 2018 to 2026-01-10; `docs/strategies/ADDENDUM_2_LEVEL_BREAK.md` |
+
+## Exploratory looks after the holdout (not trials; decided nothing)
+
+On data already seen (the primary period, 2018 to 2024-06), after the holdout reading. They count
+toward N for the Deflated Sharpe of trial 27 (**N = 60**).
+
+| Date | Look | What it showed |
+| --- | --- | --- |
+| 2026-11-03 | Stage C gold trades re-costed with the MT5 costs, per strategy (8) and under M8 (8) | gold -0.049 R a trade at real cost; best S4 + M8 +0.013 (SE 0.066) |
+| 2026-11-03 | Gold M8 trades by cost tercile (S1, S4, S7) and S3 by direction | no pattern; S3 long followed gold's rise |
+| 2026-11-04 | Scalp diagnostic: signed move after S4, S5, S6, S8 at 5-120 min, excursions, move size against random bars | no positive directional information; a small move against the signal in the first 30 min; S6 reversed |
+| 2026-11-04 | Gold scalp signals with fixed SL/TP ($2/$4, $2/$5, $5/$10, $6/$12, $5/$12) against coin-flip entries | the same as coin flips; net -0.093 to +0.009 R |
+| 2026-11-04 | Level test (origin of trial 27) | see trial 27 |
 
 ## Outcome mix of E1 by horizon
 
