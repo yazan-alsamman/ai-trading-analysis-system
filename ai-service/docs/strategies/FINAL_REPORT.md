@@ -287,6 +287,25 @@ consistency check, not a test.
 9. **Scope.** Six instruments, retail costs, one broker's data. The results say nothing about
    other markets, other cost levels, or discretionary trading.
 
+## 9b. After the registered plan (2026-11-03 and 04)
+
+- **MT5 cost check** (`mt5_cost_check.md`): see limitation 1.
+- **Exploratory looks on data already seen** (`TRIALS.md`; none of them decides anything):
+  - Gold, re-costed with the MT5 costs: -0.049 R a trade over 2018 to 2024-06.
+  - The scalp signals carry no positive directional information at 5 to 120 minutes, and drift
+    slightly against the signal in the first 30 minutes.
+  - Fixed small SL and TP variants did the same as coin-flip entries.
+  - Fadi's support and resistance reading: real levels were broken more often than placebo levels,
+    not bounced from (-3.9 points).
+- **Addendum 2 (trial 27, registered before the data were read)** tested the level effect on six
+  instruments never used before: NZDUSD, USDCHF, EURJPY, GBPJPY, EURGBP and XAGUSD.
+  - **The mechanism was confirmed out of sample:** -1.0 point (-1.8 to -0.2), p 0.010, and all six
+    instruments below placebo. It is the only effect in this research that held on new data. It is
+    about a quarter of its exploratory size.
+  - **The trade test was stopped after two instruments and is not judged.** Both lost clearly:
+    -0.154 and -0.124 R a trade.
+  - So the level effect is real but much smaller than the cost of trading it at this distance.
+
 ## 10. Sources
 
 | Topic | File |

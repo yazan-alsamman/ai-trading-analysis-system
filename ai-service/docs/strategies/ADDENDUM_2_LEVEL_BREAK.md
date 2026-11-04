@@ -2,6 +2,26 @@
 
 **Status: REGISTERED, approved by Fadi on 2026-11-04, before any bar of the confirmation
 instruments was exported or read.**
+
+**Outcome (2026-11-04).**
+
+- **H_L1 passed** (`levels_confirm.md`): the bounce rate was 48.0% at real levels against 49.0% at
+  placebo levels, -1.0 point (95% -1.8 to -0.2), one-sided p 0.010, and all 6 instruments were
+  below their placebo. The effect is about a quarter of the exploratory one.
+- **H_L2 was stopped by Fadi after 2 of the 6 instruments and was not judged.** Section 5 needs
+  all six, so no H_L2 result is claimed.
+  - The two finished tester runs, an interim look that decides nothing:
+
+    | Instrument | Trades | Mean net R (95%, 4-week blocks) |
+    | --- | --- | --- |
+    | NZDUSD | 4,582 | -0.154 (-0.185 to -0.124) |
+    | XAGUSD | 7,286 | -0.124 (-0.163 to -0.089) |
+    | Both | 11,868 | -0.136 (-0.162 to -0.110) |
+
+  - Commission averaged 0.032 R a trade.
+  - 34% of the trades entered at market, because price was already at or through the level.
+  - The mechanism is real, but the trade loses well beyond its size after spread, commission and
+    entry at market.
 It adds one hypothesis (trial 27) to `PREREG.md` and changes nothing there: no rule, strategy,
 bundle, period or earlier decision.
 
