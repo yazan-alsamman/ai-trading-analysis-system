@@ -11,6 +11,9 @@ level -/+ D, TP = level +/- D; closed at market at the close of the 48th bar aft
 Times go to the EA on the server clock (Europe/Athens: the store has no clock correction after
 2017).
 
+An instrument may be run in parts of the period (``Part`` in the EA); the results are merged,
+and the comparison is refused while any trade has no tester result.
+
 **Decision** (section 5): x = net R in the tester ((profit + commission + fee + swap) / the money
 risk of the level and SL), T1 (percentile) and T2 (t with K - 1 df) on 4-week blocks from
 2018-01-01, B = 20,000, seed 20261104, p = max(p1, p2) < 0.05 one-sided, K >= 30. The Deflated
@@ -88,6 +91,18 @@ def write_trades(t: pd.DataFrame, path: Path) -> None:
         out[c] = out[c].dt.strftime("%Y.%m.%d %H:%M:%S")
     path.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(path, index=False, float_format="%.8f", lineterminator="\r\n")
+
+
+RANK = {"closed": 0, "expired": 1, "failed": 2, "open_at_end": 3, "pending_at_end": 4,
+        "not_reached": 5}  # fmt: skip
+
+
+def merged(files: list[Path]) -> pd.DataFrame:
+    """The tester results of every run, one row per trade: a run over part of the period leaves
+    the other trades not reached, so the most advanced status of each trade is kept."""
+    res = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    res = res.assign(rank=res["status"].map(RANK).fillna(9))
+    return res.sort_values(["id", "rank"]).drop_duplicates("id").drop(columns="rank")
 
 
 def joined(t: pd.DataFrame, res: pd.DataFrame) -> pd.DataFrame:
@@ -192,11 +207,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     folder = args.results or common
     files = sorted(folder.glob(RESULT_GLOB)) if folder else []
-    if len(files) < len(lc.INSTRUMENTS):
-        print(f"refused: {len(files)} of {len(lc.INSTRUMENTS)} result files in {folder}",
-              file=sys.stderr)  # fmt: skip
+    res = merged(files) if files else pd.DataFrame(columns=["id", "status"])
+    j = joined(t, res)
+    left = j[~j["status"].isin(["closed", "expired", "failed"])]
+    if len(left):
+        print(f"refused: {len(left):,} trades without a tester result:",
+              left.groupby("symbol").size().to_dict(), file=sys.stderr)  # fmt: skip
         return 2
-    j = joined(t, pd.concat([pd.read_csv(f) for f in files], ignore_index=True))
     r = h_l2(j)
     REPORT.write_text(render(j, r, pd.Timestamp.now(tz="UTC").date().isoformat()),
                       encoding="utf-8", newline="\n")  # fmt: skip

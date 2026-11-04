@@ -65,3 +65,12 @@ def test_render(trades) -> None:
     for text in ("once", "## Decision (section 5)", "Deflated Sharpe (N = 60)", "## Replay",
                  "At twice the commission"):  # fmt: skip
         assert text in md, text
+
+
+def test_parts_of_the_period_are_merged(tmp_path) -> None:
+    a = pd.DataFrame({"id": [1, 2, 3], "status": ["closed", "not_reached", "not_reached"]})
+    b = pd.DataFrame({"id": [1, 2, 3], "status": ["not_reached", "closed", "failed"]})
+    a.to_csv(tmp_path / "levels_replay_X_2018-2021.csv", index=False)
+    b.to_csv(tmp_path / "levels_replay_X_2022-2026.csv", index=False)
+    m = lt.merged(sorted(tmp_path.glob(lt.RESULT_GLOB)))
+    assert list(m.sort_values("id")["status"]) == ["closed", "closed", "failed"]

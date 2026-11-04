@@ -7,7 +7,7 @@
 //| "Every tick based on real ticks", a hedging account.              |
 //| Reads  <Common>/Files/levels_trades.csv                           |
 //|        (python -m app research levels-trade export)               |
-//| Writes <Common>/Files/levels_replay_<ResearchName>.csv            |
+//| Writes <Common>/Files/levels_replay_<ResearchName>[_<Part>].csv   |
 //|        (read by python -m app research levels-trade compare)      |
 //|                                                                   |
 //| At the open of each touch bar it places a stop order at the level |
@@ -21,6 +21,7 @@
 input string ResearchName = "NZDUSD";             // research name of the tested symbol
 input string TradesFile   = "levels_trades.csv";  // in <Common>/Files
 input double Lots         = 1.0;
+input string Part         = "";   // for a run over part of the period, e.g. "2018-2021": its own file
 
 enum RowState { WAITING, PENDING, OPEN, CLOSED, EXPIRED, FAILED };
 
@@ -286,7 +287,7 @@ void OnDeinit(const int reason)
   {
    if(reason == REASON_INITFAILED || ArraySize(rows) == 0)
       return;  // keep the file of an earlier good run
-   string file = "levels_replay_" + ResearchName + ".csv";
+   string file = "levels_replay_" + ResearchName + (Part == "" ? "" : "_" + Part) + ".csv";
    int h = FileOpen(file, FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(h == INVALID_HANDLE)
      {
