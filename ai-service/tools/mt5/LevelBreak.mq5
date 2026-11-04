@@ -33,6 +33,8 @@ struct Row
    RowState          state;
    ulong             ticket;        // the order ticket; the position id of the trade
    string            fill;          // "stop" or "gap"
+   bool              virt;          // SL and TP watched by the EA (closer than the stops level)
+   string            vreason;       // "sl" or "tp" when the EA closed at a watched level
    string            note;
    double            risk_money;
    datetime          open_time, close_time;
@@ -81,6 +83,8 @@ bool Load()
       rows[n].tp          = NormalizeDouble(StringToDouble(f[9]), _Digits);
       rows[n].state       = WAITING;
       rows[n].fill        = "";
+      rows[n].virt        = false;
+      rows[n].vreason     = "";
       rows[n].note        = "";
       n++;
      }
@@ -154,6 +158,14 @@ void Place(const int i)
       rows[i].fill = "gap";
       ok = rows[i].dir > 0 ? trade.Buy(Lots, _Symbol, 0.0, rows[i].sl, rows[i].tp, c)
                            : trade.Sell(Lots, _Symbol, 0.0, rows[i].sl, rows[i].tp, c);
+      if(!ok && trade.ResultRetcode() == TRADE_RETCODE_INVALID_STOPS)
+        {
+         // the SL or TP is inside the stops level: the EA watches them and closes at market
+         rows[i].virt = true;
+         rows[i].note = "watched sl/tp";
+         ok = rows[i].dir > 0 ? trade.Buy(Lots, _Symbol, 0.0, 0.0, 0.0, c)
+                              : trade.Sell(Lots, _Symbol, 0.0, 0.0, 0.0, c);
+        }
      }
    uint rc = trade.ResultRetcode();
    if(!ok || (rc != TRADE_RETCODE_DONE && rc != TRADE_RETCODE_PLACED))
@@ -242,10 +254,24 @@ void OnTick()
             rows[i].state = Collect(i) ? CLOSED : FAILED;
             done = true;
            }
-         else if(now >= rows[i].exit_time && trade.PositionClose(rows[i].ticket))
+         else
            {
-            rows[i].state = Collect(i) ? CLOSED : FAILED;
-            done = true;
+            if(rows[i].virt)
+              {
+               MqlTick t;
+               SymbolInfoTick(_Symbol, t);
+               double px = rows[i].dir > 0 ? t.bid : t.ask;  // the price the position closes at
+               bool hit_sl = rows[i].dir > 0 ? px <= rows[i].sl : px >= rows[i].sl;
+               bool hit_tp = rows[i].dir > 0 ? px >= rows[i].tp : px <= rows[i].tp;
+               rows[i].vreason = hit_sl ? "sl" : hit_tp ? "tp" : "";
+              }
+            if((rows[i].vreason != "" || now >= rows[i].exit_time) && trade.PositionClose(rows[i].ticket))
+              {
+               rows[i].state = Collect(i) ? CLOSED : FAILED;
+               if(rows[i].vreason != "")
+                  rows[i].close_reason = rows[i].vreason;
+               done = true;
+              }
            }
         }
       if(done)
