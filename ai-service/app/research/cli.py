@@ -4,7 +4,7 @@ versions, meta: L1 (P3, P4). post-counts, evaluate, management, holdout: the sig
 levels-confirm: Addendum 2, the level-break reading on the confirmation instruments (once).
 levels-trade: Addendum 2, the level-break trade in the MT5 Strategy Tester (H_L2, once).
 gold-lab, gold-combo: the commercial gold track (exploratory).
-gold-exam: the gold track's lockbox exam (once)."""
+gold-exam: the gold track's lockbox exam (once). gold-live: the v1 live EA against Python."""
 
 from __future__ import annotations
 
@@ -52,6 +52,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_exam import main as gold_exam
 
         return gold_exam(argv[1:])
+    if argv and argv[0] == "gold-live":
+        from app.research.gold_live import main as gold_live
+
+        return gold_live(argv[1:])
     if argv and argv[0] == "gold-lab":
         from app.research.gold_lab import main as gold_lab
 
