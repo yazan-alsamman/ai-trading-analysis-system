@@ -3,7 +3,8 @@ versions, meta: L1 (P3, P4). post-counts, evaluate, management, holdout: the sig
 (docs/strategies/PREREG.md). mt5-check: the cost model in the MT5 Strategy Tester (descriptive).
 levels-confirm: Addendum 2, the level-break reading on the confirmation instruments (once).
 levels-trade: Addendum 2, the level-break trade in the MT5 Strategy Tester (H_L2, once).
-gold-lab, gold-combo: the commercial gold track (exploratory)."""
+gold-lab, gold-combo: the commercial gold track (exploratory).
+gold-exam: the gold track's lockbox exam (once)."""
 
 from __future__ import annotations
 
@@ -47,6 +48,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_combo import main as gold_combo
 
         return gold_combo(argv[1:])
+    if argv and argv[0] == "gold-exam":
+        from app.research.gold_exam import main as gold_exam
+
+        return gold_exam(argv[1:])
     if argv and argv[0] == "gold-lab":
         from app.research.gold_lab import main as gold_lab
 
