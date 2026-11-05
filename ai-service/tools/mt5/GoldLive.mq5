@@ -76,19 +76,26 @@ int LastSunday(const int y, const int m)
    return t.day - t.day_of_week;
   }
 
-int Year(const datetime x) { MqlDateTime t; TimeToStruct(x, t); return t.year; }
+// The summer-time switches of one year, cached: the bars of a refresh fall in one or two years.
+datetime yr_from = 0, yr_to = 0, eu_from, eu_to, us_from, us_to;
 
-bool EuSummer(const datetime utc)  // last Sunday of March 01:00 UTC to last Sunday of October 01:00 UTC
+void Switches(const datetime utc)
   {
-   int y = Year(utc);
-   return utc >= Make(y, 3, LastSunday(y, 3), 1) && utc < Make(y, 10, LastSunday(y, 10), 1);
+   if(utc >= yr_from && utc < yr_to)
+      return;
+   MqlDateTime t;
+   TimeToStruct(utc, t);
+   int y = t.year;
+   yr_from = Make(y, 1, 1, 0);
+   yr_to   = Make(y + 1, 1, 1, 0);
+   eu_from = Make(y, 3, LastSunday(y, 3), 1);    // last Sunday of March 01:00 UTC
+   eu_to   = Make(y, 10, LastSunday(y, 10), 1);  // last Sunday of October 01:00 UTC
+   us_from = Make(y, 3, NthSunday(y, 3, 2), 7);  // second Sunday of March 07:00 UTC
+   us_to   = Make(y, 11, NthSunday(y, 11, 1), 6); // first Sunday of November 06:00 UTC
   }
 
-bool UsSummer(const datetime utc)  // second Sunday of March 07:00 UTC to first Sunday of November 06:00 UTC
-  {
-   int y = Year(utc);
-   return utc >= Make(y, 3, NthSunday(y, 3, 2), 7) && utc < Make(y, 11, NthSunday(y, 11, 1), 6);
-  }
+bool EuSummer(const datetime utc) { Switches(utc); return utc >= eu_from && utc < eu_to; }
+bool UsSummer(const datetime utc) { Switches(utc); return utc >= us_from && utc < us_to; }
 
 datetime ServerToUtc(const datetime s)
   {
@@ -98,16 +105,11 @@ datetime ServerToUtc(const datetime s)
 
 datetime UtcToNy(const datetime u) { return u - (UsSummer(u) ? 4 : 5) * 3600; }
 
-long DayKey(const datetime ny)  // the trading day (17:00-17:00 New York), named after the day it ends
-  {
-   MqlDateTime t;
-   TimeToStruct(ny + 7 * 3600, t);
-   return t.year * 10000 + t.mon * 100 + t.day;
-  }
-
-long CalDay(const datetime ny) { MqlDateTime t; TimeToStruct(ny, t); return t.year * 10000 + t.mon * 100 + t.day; }
-int  NyMin(const datetime ny)  { MqlDateTime t; TimeToStruct(ny, t); return t.hour * 60 + t.min; }
-int  NyDow(const datetime ny)  { MqlDateTime t; TimeToStruct(ny, t); return t.day_of_week; }
+// Day numbers since 1970-01-01 (a Thursday) on the New York clock.
+long DayKey(const datetime ny) { return (long)(ny + 7 * 3600) / 86400; }  // the trading day, 17:00-17:00
+long CalDay(const datetime ny) { return (long)ny / 86400; }
+int  NyMin(const datetime ny)  { return (int)(((long)ny % 86400) / 60); }
+int  NyDow(const datetime ny)  { return (int)(((long)ny / 86400 + 4) % 7); }  // 0 = Sunday
 
 // --- bars and series ---------------------------------------------------------------------------
 
@@ -411,6 +413,9 @@ void Signals(const datetime bar)
      {
       placed_day = key;
       for(int s = 0; s < NS; s++) for(int k = 0; k < NK; k++) filled_today[s][k] = false;
+      Log("DAY", -1, "", 0, bar, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0,
+          StringFormat("PDH %.2f; PDL %.2f; 5DH %.2f; 5DL %.2f; R1 %.2f; S1 %.2f",
+                       lv[0][0], lv[0][1], lv[0][2], lv[0][3], lv[1][0], lv[1][1]));
      }
    Touched(key, lv, done, last_touch);
    // the previous bar: a touch that did not fill, and why
@@ -536,7 +541,7 @@ void Manage()
         {
          Set(id, "watched", sl);  // inside the stops level: the EA watches it (the broker's SL stays)
          Log("SL", s, KNAME[s][(int)Get(id, "kind")], dir, b_srv[j], 0.0, e, sl, risk, 0.0, id, 0.0,
-             "watched, retcode " + IntegerToString(trade.ResultRetcode()));
+             "watched; retcode " + IntegerToString(trade.ResultRetcode()));
         }
      }
   }

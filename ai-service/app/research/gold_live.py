@@ -31,8 +31,23 @@ REPORT = gl.OUT_DIR / "gold_live_check.md"
 CONTRACT = 100.0  # oz a lot
 
 
-def read_log(path: Path) -> pd.DataFrame:
-    return pd.read_csv(path, dtype={"note": str, "kind": str}, keep_default_na=False)
+COLUMNS = ["time_server", "event", "strategy", "kind", "dir", "bar_server", "level", "entry", "sl",
+           "risk", "lots", "ticket", "price", "note"]  # fmt: skip
+NUMERIC = ["dir", "level", "entry", "sl", "risk", "lots", "ticket", "price"]
+
+
+def read_log(path) -> pd.DataFrame:
+    """The rows of the last run (from the last START); the note is the rest of the line, so a
+    comma in it does not shift the columns."""
+    text = path.read() if hasattr(path, "read") else Path(path).read_text(encoding="utf-8")
+    rows = [ln.split(",", len(COLUMNS) - 1) for ln in text.splitlines()[1:] if ln.strip()]
+    df = pd.DataFrame([r + [""] * (len(COLUMNS) - len(r)) for r in rows], columns=COLUMNS)
+    starts = df.index[df["event"] == "START"]
+    if len(starts):
+        df = df.loc[starts[-1] :].reset_index(drop=True)
+    df[NUMERIC] = df[NUMERIC].apply(pd.to_numeric, errors="coerce")
+    df["ticket"] = df["ticket"].fillna(0).astype("int64")
+    return df
 
 
 def python_trades() -> pd.DataFrame:

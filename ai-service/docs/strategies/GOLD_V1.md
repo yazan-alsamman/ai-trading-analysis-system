@@ -52,6 +52,31 @@ bar itself:
   5-minute bar of a 4h (or 1h) bar.
 - **Buy stops.** They fill on the ask; the backtest's touch is on the bid.
 
+### First tester run (2026-11-05): the exam period on real ticks, RiskPct 0.5
+
+`gold_live_check.md` compares the run with Python.
+
+**Results:**
+
+- 287 EA trades against 289 Python trades; 229 match on strategy and signal bar, all in the same
+  direction.
+- **On the 229 matched trades, the EA and the exam replay agree:** +0.029 against +0.031 R, with a
+  per-trade correlation of 0.988. So the orders, M8 and the exits work as the backtest.
+- **The rest differ because the bars differ, not the rules.**
+  - In the tester the bars are built from real ticks. Python used the broker's exported M1 bars.
+  - The two disagree on a day's high or low by a few cents on most days, and by dollars on some.
+  - So a level sits a little elsewhere, and a few touches happen at another bar or not at all.
+  - The 46 exam trades the EA did not take made +0.156 R. The 58 the EA took instead lost
+    −0.094 R.
+- Overall the EA made +0.004 R a trade (the tester's net profit was −$226 on $100,000) against
+  +0.052 for the exam replay.
+- The difference between the two sets of about 50 trades is within noise: the SE of each set is
+  about 0.19 R. Still, it shows how thin the edge is. Moving the levels by cents moved the result
+  from +0.05 to 0 R.
+
+Next: a run in "1 minute OHLC" mode, on the broker's own bars. There the EA should give Python's
+trades exactly; this confirms the signal logic.
+
 ## The demo
 
 | Item | Value |
