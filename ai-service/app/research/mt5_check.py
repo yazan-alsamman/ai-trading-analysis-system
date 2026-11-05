@@ -140,7 +140,8 @@ def render(j: pd.DataFrame, excluded: int, run_date: str) -> str:
         " it decides nothing, changes no rule and is not a trial. Sample: Stage C's M0 trades"
         f" (primary book) with entry from {START.date()} to {END.date()}; {excluded} trades in the"
         " weeks when US and EU daylight saving disagree left out. Replayed by"
-        ' `tools/mt5/ReplayTrades.mq5`, "Every tick based on real ticks"._',
+        ' `tools/mt5/ReplayTrades.mq5`, "Every tick based on real ticks" (where the broker has no'
+        " real ticks, MT5 generates them from M1 bars: the tester log says which)._",
         "",
         "Costs in R a trade. The modelled cost is the registered round trip, plus the SL slippage"
         " on SL exits. The tester cost is the research gross R minus the tester's net R before"

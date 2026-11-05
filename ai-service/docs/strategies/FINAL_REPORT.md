@@ -256,8 +256,11 @@ consistency check, not a test.
    EURUSD's recorded spread is zero on most bars of 2021-2023, which favours the rules. The null
    results hold either way, and every strategy is worse at twice the costs.
    - **Checked afterwards in the MT5 Strategy Tester** (`mt5_cost_check.md`, 2026-11-03,
-     descriptive). 2,776 Stage C trades of 2024 H1 were replayed on FxPro's real ticks, with
+     descriptive). 2,776 Stage C trades of 2024 H1 were replayed with FxPro's contract specs and
      commission.
+   - Correction (2026-11-05): the replay was not on real ticks. The tester log says "no real
+     ticks, every tick generation used", because the FxPro server keeps real ticks only from
+     about 2026-01. So the spread is the M1 bar's spread, not the spread at the fill.
    - Overall the real cost was 0.082 R a trade against 0.074 R modelled, and the mean net R
      -0.109 against -0.102.
    - The model overstates the cost on gold and the four other pairs (0.050 R real against
@@ -303,7 +306,8 @@ consistency check, not a test.
     instruments below placebo. It is the only effect in this research that held on new data. It is
     about a quarter of its exploratory size.
   - **The trade test was stopped after two instruments and is not judged.** Both lost clearly:
-    -0.154 and -0.124 R a trade.
+    -0.154 and -0.124 R a trade. Both runs turned out to use ticks generated from M1 bars,
+    because the FxPro server keeps real ticks only from about 2026-01 (correction, 2026-11-05).
   - So the level effect is real but much smaller than the cost of trading it at this distance.
 
 ## 10. Sources

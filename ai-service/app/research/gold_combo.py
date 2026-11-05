@@ -215,7 +215,9 @@ def compare(folder: Path) -> str:
     lines = [
         "# Gold combination in the MT5 Strategy Tester (commercial track, exploratory)",
         "",
-        f"_`tools/mt5/GoldCombo.mq5` on real ticks; parts merged. Statuses: {status}. Net R = "
+        '_`tools/mt5/GoldCombo.mq5`, "Every tick based on real ticks" (where the broker has no '
+        "real ticks, MT5 generates them from M1 bars: the tester log says which); parts merged. "
+        f"Statuses: {status}. Net R = "
         "(profit + commission + fee + swap) / the money risk of the level and SL. Python = the "
         "simulation of `gold_combo.md` on the same trades._",
         "",

@@ -217,8 +217,9 @@ void Moves(const int i, const datetime now)
       double sl = mv_sl[rows[i].next_move++];
       if(rows[i].watched == 0.0 && trade.PositionModify(rows[i].ticket, sl, 0.0))
          continue;
-      rows[i].watched = sl;                              // refused, or already watched
-      trade.PositionModify(rows[i].ticket, 0.0, 0.0);    // the EA watches the SL from now on
+      if(rows[i].watched == 0.0)                         // refused: the EA watches the SL from now on
+         trade.PositionModify(rows[i].ticket, 0.0, 0.0);
+      rows[i].watched = sl;                              // already watched: only the level moves
      }
   }
 

@@ -18,6 +18,12 @@ instruments was exported or read.**
     | XAGUSD | 7,286 | -0.124 (-0.163 to -0.089) |
     | Both | 11,868 | -0.136 (-0.162 to -0.110) |
 
+  - **Correction (2026-11-05): neither run was on real ticks.** The tester log of 2026-11-04
+    says "NZDUSD : real ticks begin from 2026.01.02" and "SILVER : 2018.01.01 00:00 -
+    2026.01.10 00:00 no real ticks, every tick generation used". The FxPro server keeps real
+    ticks only from about 2026-01, so MT5 generated the ticks from M1 bars. Spread and stop
+    fills come from M1 bars, not from real ticks as section 3 asks. The interim look decided
+    nothing, so no outcome changes.
   - Commission averaged 0.032 R a trade.
   - 34% of the trades entered at market, because price was already at or through the level.
   - The mechanism is real, but the trade loses well beyond its size after spread, commission and
