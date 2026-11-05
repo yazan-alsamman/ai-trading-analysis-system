@@ -45,7 +45,6 @@ LOG = gl.OUT_DIR / "gold_exam_log.json"
 REPORT = gl.OUT_DIR / "gold_exam.md"
 TRADES = gl.STORE / "gold_exam_trades.parquet"
 TRADE_FILE = "gold_exam_trades.csv"
-REPLAY = "gold_combo_replay_exam.csv"
 EXAM_START = pd.Timestamp("2026-01-12", tz="UTC")
 # Frozen by gold_combo.md (tuned on 2012-2021) and the registration, section 1.
 LVL_MULT, LVL_WINDOW, LVL_CAP, LVL_HORIZON = 0.75, "02-16", 0.05, 200
@@ -175,8 +174,9 @@ def decide(mean: float) -> str:
 TICK_LINE = re.compile(r"real ticks|tick generation")
 
 
-def tick_source(tester: Path) -> list[str]:
-    """The tick-source lines of the last tester run with ``Part=exam`` in the agents' logs."""
+def exam_run(tester: Path) -> tuple[str | None, list[str]]:
+    """The ``Part`` input and the tick-source lines of the last tester run of the exam trade file
+    (``TradesFile=gold_exam_trades.csv``) in the agents' logs; (None, []) when there is none."""
     runs: list[tuple[str, list[str]]] = []
     for f in sorted(tester.glob("*/Agent-*/logs/*.log")):
         text = f.read_bytes().decode("utf-16-le", "replace").splitlines()
@@ -187,10 +187,16 @@ def tick_source(tester: Path) -> list[str]:
                 runs.append((f.name, cur))
             elif cur is not None:
                 cur.append(line)
-    exam = [(name, lines) for name, lines in runs if any("Part=exam" in x for x in lines)]
+    exam = [lines for _, lines in runs if any(f"TradesFile={TRADE_FILE}" in x for x in lines)]
     if not exam:
-        return []
-    return [x.split("\t")[-1].strip() for x in exam[-1][1] if TICK_LINE.search(x)]
+        return None, []
+    part = next((x.split("Part=", 1)[1].strip() for x in exam[-1] if "Part=" in x), "")
+    return part, [x.split("\t")[-1].strip() for x in exam[-1] if TICK_LINE.search(x)]
+
+
+def replay_name(part: str | None) -> str:
+    """The replay file GoldCombo.mq5 writes for that ``Part``."""
+    return f"gold_combo_replay{'_' + part if part else ''}.csv"
 
 
 def real_ticks(lines: list[str]) -> bool:
@@ -205,14 +211,16 @@ def real_ticks(lines: list[str]) -> bool:
 
 
 def compare(folder: Path, tester: Path) -> str:
+    part, ticks = exam_run(tester)
+    if part is None:
+        raise ExamError(f"no tester run of {TRADE_FILE} in the logs")
     t = pd.read_parquet(TRADES)
-    res = pd.read_csv(folder / REPLAY).drop(columns="strategy")
+    res = pd.read_csv(folder / replay_name(part)).drop(columns="strategy")
     j = t.merge(res, on="id", how="left")
     done = j["status"] == "closed"
     money = j["risk_money"].where(j["risk_money"] > 0)
     j["mt5"] = ((j["profit"] + j["commission"] + j["fee"] + j["swap"]) / money).where(done)
     c = j[done]
-    ticks = tick_source(tester)
     real = real_ticks(ticks)
     mean = c["mt5"].mean()
     se = c["mt5"].std(ddof=1) / np.sqrt(max(len(c), 2))
@@ -226,7 +234,8 @@ def compare(folder: Path, tester: Path) -> str:
         "",
         "## Tick source",
         "",
-        *([f"- `{x}`" for x in ticks] or ["- no tester run with `Part=exam` found"]),
+        f"- The last tester run of `{TRADE_FILE}` (Part = `{part}`), replay `{replay_name(part)}`:",
+        *([f"- `{x}`" for x in ticks] or ["- no tick-source line in its log"]),
         "- **Real ticks for the whole exam**"
         if real
         else "- **NOT real ticks: the run does not count (section 3, step 4)**",

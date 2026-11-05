@@ -3,6 +3,24 @@
 **Status: REGISTERED, approved by Fadi on 2026-11-05 as written, before any line of the lockbox
 was read. The XAUUSD lockbox file is read once.**
 
+**Outcome (2026-11-05): Pass** (`gold_exam.md`).
+
+- MT5 on real ticks for the whole period: 274 closed trades, mean net R **+0.052** (SE 0.071). The
+  registered bar is above 0, so this is a pass.
+- The SE is larger than the edge, and the 95% range runs from about −0.09 to +0.19. As section 6
+  says, a pass does not prove the edge; the demo is the next check.
+- Python on the same trades: +0.055, and +0.052 with slippage. Cost a trade on real ticks was
+  0.013 R, against 0.010 R in the model.
+- By strategy, reported only: LVL4H +0.044 (146 trades), PIVOT +0.062 (128).
+- **The run was uneven:**
+  - February to April made +21.2 R.
+  - The total peaked at +28.7 R on 2026-09-09 and ended at +14.3 R, after September (−8.2 R)
+    and October (−2.2 R).
+  - The largest drawdown was 15.8 R.
+- Procedure: the tester run left `Part` empty instead of `exam`, so the replay is
+  `gold_combo_replay.csv`. `compare` finds the run in the tester log by its trade file
+  (`TradesFile=gold_exam_trades.csv`). The run is the one read of the lockbox file.
+
 | Field | Value |
 | --- | --- |
 | Approved by | Fadi |

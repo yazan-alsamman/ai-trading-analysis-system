@@ -39,10 +39,11 @@ def test_the_decision_follows_section_4() -> None:
     assert ge.decide(-0.101) == "Fail"
 
 
-def _log(tmp_path, part: str, ticks: str) -> None:
+def _log(tmp_path, trades: str, part: str, ticks: str) -> None:
     d = tmp_path / "ID" / "Agent-127.0.0.1-3000" / "logs"
     d.mkdir(parents=True)
     lines = ["CS\t0\t10:00:00\tTester\tGOLD,M5: testing of Experts\\GoldCombo.ex5 from 2026.01.12",
+             f"CS\t0\t10:00:00\tTester\t  TradesFile={trades}",
              f"CS\t0\t10:00:00\tTester\t  Part={part}",
              f"CS\t0\t10:00:01\tTicks\t{ticks}"]  # fmt: skip
     (d / "20261105.log").write_bytes("\r\n".join(lines).encode("utf-16-le"))
@@ -61,11 +62,18 @@ def _log(tmp_path, part: str, ticks: str) -> None:
     ],
 )
 def test_the_tick_source_of_the_exam_run(tmp_path, ticks, real) -> None:
-    _log(tmp_path, "exam", ticks)
-    lines = ge.tick_source(tmp_path)
-    assert lines == [ticks] and ge.real_ticks(lines) is real
+    _log(tmp_path, ge.TRADE_FILE, "exam", ticks)
+    part, lines = ge.exam_run(tmp_path)
+    assert part == "exam" and lines == [ticks] and ge.real_ticks(lines) is real
+    assert ge.replay_name(part) == "gold_combo_replay_exam.csv"
+
+
+def test_the_run_is_found_by_its_trade_file(tmp_path) -> None:
+    _log(tmp_path, ge.TRADE_FILE, "", "GOLD : real ticks begin from 2026.01.02 00:00:00")
+    part, _ = ge.exam_run(tmp_path)
+    assert part == "" and ge.replay_name(part) == "gold_combo_replay.csv"
 
 
 def test_no_exam_run_counts_as_not_real(tmp_path) -> None:
-    _log(tmp_path, "2024-2022", "GOLD : real ticks begin from 2026.01.02 00:00:00")
-    assert ge.tick_source(tmp_path) == [] and not ge.real_ticks([])
+    _log(tmp_path, "gold_combo_trades.csv", "exam", "GOLD : real ticks begin from 2026.01.02")
+    assert ge.exam_run(tmp_path) == (None, []) and not ge.real_ticks([])

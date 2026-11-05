@@ -309,6 +309,11 @@ consistency check, not a test.
     -0.154 and -0.124 R a trade. Both runs turned out to use ticks generated from M1 bars,
     because the FxPro server keeps real ticks only from about 2026-01 (correction, 2026-11-05).
   - So the level effect is real but much smaller than the cost of trading it at this distance.
+- **The XAUUSD lockbox file was opened on 2026-11-05**, once, for the exam of the commercial gold
+  combination (`GOLD_LOCKBOX_EXAM.md`, outside the registered plan).
+  - The other five lockbox files stay sealed.
+  - The XAUUSD lockbox is no longer unseen data for any later gold research.
+  - The result passed: +0.052 R a trade on real ticks (SE 0.071), as recorded in `gold_exam.md`.
 
 ## 10. Sources
 
