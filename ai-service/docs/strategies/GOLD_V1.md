@@ -74,8 +74,32 @@ bar itself:
   about 0.19 R. Still, it shows how thin the edge is. Moving the levels by cents moved the result
   from +0.05 to 0 R.
 
-Next: a run in "1 minute OHLC" mode, on the broker's own bars. There the EA should give Python's
-trades exactly; this confirms the signal logic.
+### Second tester run (2026-11-05): the same period in "1 minute OHLC" mode, FixedLots 1
+
+**Results:**
+
+- 288 EA trades against 289 in Python; 228 match.
+- On the matched trades, gross R is +0.067 for the EA and +0.068 for Python.
+- Overall the EA made +0.041 R a trade (net profit +$59,675 at 1 lot, PF 1.20).
+
+**The levels still differ by cents on almost every day, so the bars were not the cause. The
+feed is:**
+
+- The research data is the `XAUUSD` M1 export, `XAUUSD_M1_201001110105_…`. Its M1 history goes
+  back to 2010.
+- The demo account trades `GOLD`. Its server has M1 bars only from late 2015.
+- So these are two symbols with two price feeds. Their highs and lows differ by a few cents most
+  days.
+- On the `GOLD` feed, v1 made +0.004 R a trade on real ticks and +0.041 R on M1 bars, against
+  +0.052 R for Python's trades replayed.
+
+**Next:**
+
+- The demo should trade the feed the live account will trade.
+- The signal logic is checked against Python run on that same feed: export `GOLD` M1, build the
+  Python trades from it, and compare them with the EA run.
+
+## The demo
 
 ## The demo
 

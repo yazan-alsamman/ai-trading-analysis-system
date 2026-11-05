@@ -5,16 +5,16 @@ _`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against th
 | Item | Value |
 | --- | --- |
 | Python trades | 289 |
-| EA trades | 287 |
-| Matched | 229 |
-| Same direction | 229 |
+| EA trades | 288 |
+| Matched | 228 |
+| Same direction | 228 |
 | Largest level difference | 27.67 |
 | D, EA / Python (median) | 1.0031 |
-| D off by more than 1% | 31 |
-| Gross R, matched: Python / EA | +0.063 / +0.047 |
-| Net R, all: Python / EA | +0.017 / +0.004 |
+| D off by more than 1% | 30 |
+| Gross R, matched: Python / EA | +0.068 / +0.067 |
+| Net R, all: Python / EA | +0.017 / +0.041 |
 
-## Python only (60)
+## Python only (61)
 
 | Strategy | Signal bar (server) | EA's reason |
 | --- | --- | --- |
@@ -46,6 +46,7 @@ _`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against th
 | PIVOT | 2026.02.06 16:35:00 | - |
 | PIVOT | 2026.02.11 11:45:00 | - |
 | PIVOT | 2026.02.20 09:05:00 | - |
+| PIVOT | 2026.02.23 09:00:00 | - |
 | PIVOT | 2026.02.24 14:50:00 | - |
 | PIVOT | 2026.03.06 17:25:00 | - |
 | PIVOT | 2026.03.09 08:05:00 | - |
@@ -79,7 +80,7 @@ _`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against th
 | PIVOT | 2026.10.16 17:25:00 | - |
 | PIVOT | 2026.10.19 18:50:00 | - |
 
-## EA only (58)
+## EA only (60)
 
 | Strategy | Signal bar (server) | Kind | Fill |
 | --- | --- | --- | --- |
@@ -91,6 +92,7 @@ _`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against th
 | LVL4H | 2026.03.12 08:20:00 | PDL | stop |
 | LVL4H | 2026.03.13 16:55:00 | PDL | stop |
 | LVL4H | 2026.03.16 08:45:00 | PDL | stop |
+| LVL4H | 2026.03.18 12:35:00 | 5DL | stop |
 | LVL4H | 2026.03.18 12:35:00 | PDL | stop |
 | LVL4H | 2026.03.20 20:50:00 | PDL | stop |
 | LVL4H | 2026.03.23 14:50:00 | PDL | stop |
@@ -111,6 +113,7 @@ _`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against th
 | PIVOT | 2026.02.06 16:55:00 | R1 | stop |
 | PIVOT | 2026.02.11 12:15:00 | R1 | stop |
 | PIVOT | 2026.02.20 09:10:00 | R1 | stop |
+| PIVOT | 2026.02.23 09:05:00 | R1 | stop |
 | PIVOT | 2026.02.24 15:35:00 | S1 | stop |
 | PIVOT | 2026.03.06 17:20:00 | R1 | stop |
 | PIVOT | 2026.03.09 08:50:00 | S1 | stop |
