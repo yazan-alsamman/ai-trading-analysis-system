@@ -1,6 +1,10 @@
 """Gold v1 live: check ``tools/mt5/GoldLive.mq5`` against Python (``docs/strategies/GOLD_V1.md``).
 
-    python -m app research gold-live check [--log gold_live_log.csv]
+    python -m app research gold-live check [--log gold_live_log.csv] [--reference exam|fxpro]
+    python -m app research gold-live fxpro --export <Common>/Files/history/GOLDFX_M1_*.csv
+
+``fxpro`` builds v1 on FxPro's own GOLD bars, the feed the demo trades (the research used another
+feed, XAUUSD): the reference for ``check --reference fxpro`` and v1's result by year there.
 
 The EA computes the signals itself. Run in the Strategy Tester over the exam period (2026-01-12 to
 2026-10-21, real ticks, ``FixedLots = 1``), its log must give the trades Python gives for those
@@ -50,11 +54,63 @@ def read_log(path) -> pd.DataFrame:
     return df
 
 
-def python_trades() -> pd.DataFrame:
-    t = pd.read_parquet(ge.TRADES)
-    f = pd.read_csv(gl.STORE / ge.TRADE_FILE)[["id", "place_server"]]
+def python_trades(reference: str = "exam") -> pd.DataFrame:
+    """Python's trades with their signal bar on the server clock: the exam's (the research XAUUSD
+    feed) or v1 on FxPro's GOLD feed (``fxpro``)."""
+    parquet, csv = (ge.TRADES, ge.TRADE_FILE) if reference == "exam" else (FX_TRADES, FX_FILE)
+    t = pd.read_parquet(parquet)
+    f = pd.read_csv(gl.STORE / csv)[["id", "place_server"]]
     t = t.merge(f, on="id")
     return t.rename(columns={"place_server": "bar_server"})
+
+
+def within_log(py: pd.DataFrame, log: pd.DataFrame) -> pd.DataFrame:
+    """Python's trades inside the period the log covers (its first to last bar)."""
+    bars = log.loc[log["bar_server"] != "", "bar_server"]
+    return py[(py["bar_server"] >= bars.min()) & (py["bar_server"] <= bars.max())]
+
+
+# --- v1 on FxPro's GOLD feed ---------------------------------------------------------------------
+
+FX_TRADES = gl.STORE / "gold_fxpro_trades.parquet"
+FX_FILE = "gold_fxpro_trades.csv"
+FX_REPORT = gl.OUT_DIR / "gold_fxpro.md"
+FX_START = pd.Timestamp("2016-01-04", tz="UTC")  # FxPro's GOLD M1 history starts in late 2015
+
+
+def fxpro(export: Path) -> str:
+    """v1 (the exam's code and settings) on an FxPro GOLD M1 export (``ExportHistory``,
+    ``GOLD_name = GOLD``): the trades for the check and the result by year."""
+    fr = ge.lockbox_frames(export)  # every line of the export: a parse, not a lockbox read
+    t, events, cx = ge.exam_trades(fr, start=FX_START)
+    t.to_parquet(FX_TRADES, index=False)
+    gc.trade_file(t, events, cx, gl.STORE / FX_FILE)
+    placed = pd.to_datetime(cx.m["ts_utc"].to_numpy()[t["i"]], utc=True)
+    exam = t[placed >= ge.EXAM_START]
+
+    def row(name: str, g: pd.DataFrame) -> str:
+        se = g["net"].std(ddof=1) / np.sqrt(max(len(g), 2))
+        return (f"| {name} | {len(g):,} | {g['net'].mean():+.3f} ({se:.3f}) "
+                f"| {g['net_slip'].mean():+.3f} |")  # fmt: skip
+
+    lines = [
+        "# Gold v1 on FxPro's GOLD feed (Python)",
+        "",
+        f"_`python -m app research gold-live fxpro`: `{export.name}`, the exam's code and settings "
+        "(`GOLD_V1.md`), FxPro's recorded spread + $0.07 per oz. The research used another feed "
+        "(XAUUSD); 2016 to 2026-01-09 was seen there, so this is a check of the feed, not a test._",
+        "",
+        "| Set | Trades | Net R (SE) | Net with slip |",
+        "| --- | --- | --- | --- |",
+        row("All", t),
+        *[row(k, g) for k, g in t.groupby("strategy")],
+        row("Exam period (2026-01-12 on)", exam),
+        "",
+        "| Year | Trades | Net R (SE) | Net with slip |",
+        "| --- | --- | --- | --- |",
+        *[row(str(y), g) for y, g in t.groupby("year")],
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def check(log: pd.DataFrame, py: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
@@ -143,11 +199,18 @@ def render(j: pd.DataFrame, n: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app research gold-live")
-    ap.add_argument("step", choices=("check",))
+    ap.add_argument("step", choices=("check", "fxpro"))
     ap.add_argument("--log", default="gold_live_log.csv", help="in <Common>/Files")
+    ap.add_argument("--reference", choices=("exam", "fxpro"), default="exam",
+                    help="check: the exam's trades or v1 on FxPro's GOLD feed")  # fmt: skip
+    ap.add_argument("--export", type=Path, help="fxpro: the GOLDFX_M1_*.csv export")
     args = ap.parse_args(argv)
+    if args.step == "fxpro":
+        FX_REPORT.write_text(fxpro(args.export), encoding="utf-8", newline="\n")
+        print(f"wrote {FX_REPORT}")
+        return 0
     log = read_log(gc.common_files() / args.log)
-    j, n = check(log, python_trades())
+    j, n = check(log, within_log(python_trades(args.reference), log))
     REPORT.write_text(render(j, n), encoding="utf-8", newline="\n")
     print(f"wrote {REPORT}: {n}")
     return 0

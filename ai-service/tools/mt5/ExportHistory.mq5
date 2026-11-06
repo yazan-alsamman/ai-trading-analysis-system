@@ -12,6 +12,10 @@
 //| read by `python -m app import --raw-dir <that folder>`.           |
 //| The range ends before the lockbox start (2026-01-10), so no bar   |
 //| of the lockbox is written.                                        |
+//| GOLD_name (empty by default): FxPro's own gold, the feed the v1   |
+//| demo trades (docs/strategies/GOLD_V1.md), written as GOLDFX_M1_*; |
+//| for it To may run past the lockbox start, which the gold exam has |
+//| opened already. Leave the other names empty to export it alone.   |
 //+------------------------------------------------------------------+
 #property script_show_inputs
 
@@ -23,6 +27,7 @@ input string EURJPY_name = "EURJPY";
 input string GBPJPY_name = "GBPJPY";
 input string EURGBP_name = "EURGBP";
 input string XAGUSD_name = "SILVER";
+input string GOLD_name   = "";                    // "GOLD": FxPro gold for the v1 check
 input datetime From      = D'2010.01.01 00:00';
 input datetime To        = D'2026.01.09 23:59';   // the day before the lockbox start
 input string   Folder    = "history";            // in <Common>/Files
@@ -161,14 +166,14 @@ void OnStart()
    long maxbars = TerminalInfoInteger(TERMINAL_MAXBARS);
    if(maxbars < 10000000)
       PrintFormat("Max. bars in chart is %I64d: set it to Unlimited (Tools > Options > Charts) and restart MT5 if bars are missing", maxbars);
-   string research[] = {"NZDUSD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "XAGUSD"};
-   string broker[6];
+   string research[] = {"NZDUSD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "XAGUSD", "GOLDFX"};
+   string broker[7];
    broker[0] = NZDUSD_name; broker[1] = USDCHF_name; broker[2] = EURJPY_name;
-   broker[3] = GBPJPY_name; broker[4] = EURGBP_name; broker[5] = XAGUSD_name;
+   broker[3] = GBPJPY_name; broker[4] = EURGBP_name; broker[5] = XAGUSD_name; broker[6] = GOLD_name;
    string meta = "{\n  \"_export\": {\"server\": " + Str(AccountInfoString(ACCOUNT_SERVER))
                + ", \"from\": " + Str(TimeToString(From)) + ", \"to\": " + Str(TimeToString(To))
                + ", \"terminal_build\": " + IntegerToString(TerminalInfoInteger(TERMINAL_BUILD)) + "}";
-   for(int i = 0; i < 6 && !IsStopped(); i++)
+   for(int i = 0; i < 7 && !IsStopped(); i++)
      {
       string e = Export(research[i], broker[i]);
       if(e != "")
