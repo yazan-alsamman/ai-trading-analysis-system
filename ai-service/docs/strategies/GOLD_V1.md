@@ -151,6 +151,37 @@ What the results show:
   - This is within what a 15-trade run can do.
   - It is the start of the demo's record, not a decision.
 
+### The five strategies together on FxPro GOLD (2026-11-07)
+
+**Method.**
+
+- Python's trades on the FxPro feed, from 2016-02 to 2026-11-05, with slippage.
+- Each trade is weighted by its demo risk: 0.5% for LVL4H and PIVOT, 0.25% for PIVW, ASIA and
+  PWHL.
+- Returns are added, not compounded.
+
+| Set | Total | Largest drawdown | Peak to trough |
+| --- | --- | --- | --- |
+| All five | +65% | **54%** | 2016-06 to 2022-08, recovered 2024-02 |
+| Without PIVOT | +79% | 26% | 2021-04 to 2022-07 |
+| LVL4H only | +50% | 11% | 2021-02 to 2021-07 |
+| PIVW, ASIA, PWHL | +29% | 22% | 2021-04 to 2022-10 |
+| All five, from 2019 | +95% | 38% | 2021-04 to 2022-08 |
+| Without PIVOT, from 2019 | +77% | 26% | 2021-04 to 2022-07 |
+
+**PIVOT makes most of the drawdown.**
+
+- It lost 6.8%, 12.1%, 13.5% and 9.7% of the account in 2016-2019.
+- It has no cost cap, and its stop (ATR(1h)) is small against the wider spreads of those years.
+- Without it, the total is higher and the drawdown less than half.
+
+**Removing PIVOT is a v1 change.** It is Fadi's decision, recorded before the demo. It would be
+done with `TradePIVOT = false`, with nothing changed in the EA.
+
+**Decision (Fadi, 2026-11-07): keep all five on the demo.** PIVOT made money in 2026: +4.7 R,
++0.035 R a trade, over 133 trades in the tester run of `GOLD_SHADOW.md` §8. The demo's stop rule
+judges each strategy by itself.
+
 ## The demo
 
 | Item | Value |
@@ -159,3 +190,33 @@ What the results show:
 | Period | 3 months or 100 trades, whichever is later |
 | Compared each month | live trades against the Python simulation of the same days; mean net R; cost a trade |
 | Live money | only if the demo's trades agree with the simulation, and its mean net R is not below the exam's range |
+| Strategies | LVL4H, PIVOT (v1, `RiskPct = 0.5`), PIVW, ASIA, PWHL (shadow, `ShadowRiskPct = 0.25`); `MaxOpenRiskPct = 2` |
+
+### Stop rules (written 2026-11-07, before the demo; Fadi: "Yes, write and commit")
+
+A trade's net R is its net money (profit + commission + swap + fee, the EA's `DEAL` rows) over
+its money risk at entry (the distance D × lots × 100).
+
+1. **Each strategy by itself.**
+   - Its mean net R is checked at its 100th demo trade, and then at every 50 more.
+   - If it is below −0.10 R, the strategy is turned off (`Trade<NAME> = false`) and reviewed.
+2. **All strategies together.**
+   - The same check runs on every demo trade together: at the 100th, then every 50.
+   - Below −0.10 R, the EA stops.
+3. **The review after a stop.**
+   - First the execution: are the demo's trades the Python trades of the same days
+     (`gold-live check` on the demo log and a fresh GOLD export)?
+   - If they are not, the EA is fixed. If they are, the strategy stays off.
+   - It comes back only by a new decision recorded here.
+4. **Account guards, not yet in the EA (to build before live money):**
+   - a daily loss of 2% of the day's opening equity closes the EA's trades and stops it to the
+     next day;
+   - a drawdown of 10% from the equity peak stops it until a review.
+5. **Why −0.10 after 100 trades.**
+   - A trade's net R spreads by about 1 R, so a mean of 100 trades spreads by about ±0.1.
+   - A strategy that truly makes +0.05 falls below −0.10 by chance about 7% of the time.
+   - −0.10 is also the exam's fail line.
+
+**A stop rule is a trade-off.** It can stop a strategy at the bottom of a drawdown that would
+have recovered. On Python's FxPro trades from 2026-09-01, the five together had a mean of about
+−0.14 R after 165 trades, so rule 2 would have stopped them by the end of October.
