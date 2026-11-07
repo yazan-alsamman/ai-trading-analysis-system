@@ -40,6 +40,10 @@ The rules are those of the exam (`gold_combo.py`, `gold_exam.py`). All times are
 - It logs every signal, fill, SL move and exit to `<Common>/Files/gold_live_log.csv`.
 - It needs a hedging account: LVL4H and PIVOT may hold opposite trades.
 - `SignalsOnly = true` logs the signals and places nothing (advisory).
+- **The shadow strategies.** Since 2026-11-07 the EA can also trade PIVW, ASIA and PWHL beside v1.
+  - They have their own magic numbers and a smaller risk.
+  - A cap on the open risk of all the EA's trades together applies to every strategy.
+  - Details in `GOLD_SHADOW.md` §8. v1's rules are unchanged.
 - It is checked against Python in the Strategy Tester (`python -m app research gold-live check`)
   before the demo starts.
 

@@ -1,7 +1,10 @@
 //+------------------------------------------------------------------+
 //| GoldLive.mq5: gold v1 live (ai-service/docs/strategies/GOLD_V1.md)|
 //| LVL4H and PIVOT level breaks with M8 management, computed from    |
-//| the terminal's bars, for the demo account.                       |
+//| the terminal's bars, for the demo account. The shadow strategies   |
+//| PIVW, ASIA and PWHL (GOLD_SHADOW.md) run beside v1 with their own  |
+//| magic numbers and ShadowRiskPct; MaxOpenRiskPct caps the risk of   |
+//| every open trade and order of the EA together.                     |
 //|                                                                   |
 //| Expert Advisor on GOLD (any chart timeframe), a hedging account.  |
 //| Writes <Common>/Files/<LogFile>: every signal, fill, SL move and  |
@@ -26,17 +29,23 @@ input double RiskPct     = 0.5;                  // % of equity a trade (fixed f
 input double FixedLots   = 0.0;                  // > 0: this size instead (tests)
 input bool   TradeLVL4H  = true;
 input bool   TradePIVOT  = true;
+input bool   TradePIVW   = true;                 // shadow: R1 / S1 with LVL4H's distance and cap
+input bool   TradeASIA   = true;                 // shadow: the Asian range, 19:00-02:00 New York
+input bool   TradePWHL   = true;                 // shadow: the previous week's high and low
+input double ShadowRiskPct  = 0.25;              // % of equity a shadow trade
+input double MaxOpenRiskPct = 2.0;               // cap on the open risk of the EA (0: none; tests)
 input bool   SignalsOnly = false;                // log the signals, place nothing
-input long   MagicBase   = 20261106;             // LVL4H = base, PIVOT = base + 1
+input long   MagicBase   = 20261106;             // LVL4H base, PIVOT +1, PIVW +2, ASIA +3, PWHL +4
 input string LogFile     = "gold_live_log.csv";  // in <Common>/Files
 input int    Bars5m      = 8000;                 // M5 history for the ATRs (about 28 days)
 
-#define NS 2
+#define NS 5
 #define NK 4
-string   SNAME[NS]   = {"LVL4H", "PIVOT"};
-string   KNAME[NS][NK] = {{"PDH", "PDL", "5DH", "5DL"}, {"R1", "S1", "", ""}};
-int      NKINDS[NS]  = {4, 2};
-int      HORIZON[NS] = {200, 48};
+string   SNAME[NS]   = {"LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL"};
+string   KNAME[NS][NK] = {{"PDH", "PDL", "5DH", "5DL"}, {"R1", "S1", "", ""}, {"R1", "S1", "", ""},
+                          {"ASH", "ASL", "", ""}, {"PWH", "PWL", "", ""}};
+int      NKINDS[NS]  = {4, 2, 2, 2, 2};
+int      HORIZON[NS] = {200, 48, 200, 200, 200};
 const double LVL_MULT   = 0.75;
 const double LVL_CAP    = 0.05;
 const double COMMISSION = 0.07;   // $ per oz, round trip
@@ -107,6 +116,7 @@ datetime UtcToNy(const datetime u) { return u - (UsSummer(u) ? 4 : 5) * 3600; }
 
 // Day numbers since 1970-01-01 (a Thursday) on the New York clock.
 long DayKey(const datetime ny) { return (long)(ny + 7 * 3600) / 86400; }  // the trading day, 17:00-17:00
+long Week(const long key)      { return (key + 3) / 7; }  // weeks Monday to Sunday of a day number
 long CalDay(const datetime ny) { return (long)ny / 86400; }
 int  NyMin(const datetime ny)  { return (int)(((long)ny % 86400) / 60); }
 int  NyDow(const datetime ny)  { return (int)(((long)ny / 86400 + 4) % 7); }  // 0 = Sunday
@@ -242,6 +252,33 @@ bool Levels(const long key, double &lv[][NK])
    double pp = (D1[p].h + D1[p].l + D1[p].c) / 3.0;
    lv[1][0] = 2 * pp - D1[p].l;
    lv[1][1] = 2 * pp - D1[p].h;
+   lv[2][0] = lv[1][0];
+   lv[2][1] = lv[1][1];
+   // ASIA: the range of this trading day's bars from 19:00 to 02:00 New York (0: none yet)
+   lv[3][0] = 0.0; lv[3][1] = 0.0;
+   for(int j = NB - 1; j >= 0 && DayKey(b_ny[j]) >= key; j--)
+     {
+      int m = NyMin(b_ny[j]);
+      if(DayKey(b_ny[j]) != key || (m < 19 * 60 && m >= 120))
+         continue;
+      lv[3][0] = lv[3][0] == 0.0 ? b_h[j] : MathMax(lv[3][0], b_h[j]);
+      lv[3][1] = lv[3][1] == 0.0 ? b_l[j] : MathMin(lv[3][1], b_l[j]);
+     }
+   // PWHL: the last week (Monday to Sunday, by the trading day's date) before this one with days
+   long wk = Week(key), pw = -1;
+   lv[4][0] = 0.0; lv[4][1] = 0.0;
+   for(int q = last; q >= 0; q--)
+     {
+      long w = Week(D1[q].key);
+      if(w >= wk)
+         continue;
+      if(pw < 0)
+         pw = w;
+      if(w != pw)
+         break;
+      lv[4][0] = lv[4][0] == 0.0 ? D1[q].h : MathMax(lv[4][0], D1[q].h);
+      lv[4][1] = lv[4][1] == 0.0 ? D1[q].l : MathMin(lv[4][1], D1[q].l);
+     }
    return true;
   }
 
@@ -251,10 +288,17 @@ bool InWindow(const datetime ny)
    return dow >= 1 && dow <= 5 && m >= WIN_FROM && m < WIN_TO;
   }
 
-double Dist(const int s, const datetime utc)
+double Dist(const int s, const datetime utc)  // PIVOT: ATR(1h); the others: LVL4H's 0.75 x ATR(4h)
   {
-   double a = s == 0 ? AtrAt(H4, utc) : AtrAt(H1, utc);
-   return a > 0 ? (s == 0 ? LVL_MULT * a : a) : -1.0;
+   double a = s == 1 ? AtrAt(H1, utc) : AtrAt(H4, utc);
+   return a > 0 ? (s == 1 ? a : LVL_MULT * a) : -1.0;
+  }
+
+bool Enabled(const int s)
+  {
+   bool on[NS];
+   on[0] = TradeLVL4H; on[1] = TradePIVOT; on[2] = TradePIVW; on[3] = TradeASIA; on[4] = TradePWHL;
+   return on[s];
   }
 
 // --- log ---------------------------------------------------------------------------------------
@@ -315,7 +359,7 @@ void DeleteOrders(const int s)  // -1: every strategy
 int    why_dir[NS][NK];      // this bar: the direction placed (0: none)
 string why_not[NS][NK];      // this bar: why no order ("" when placed)
 double why_lv[NS][NK];
-long   placed_day = 0;
+long   placed_day = 0, asia_day = 0;
 bool   filled_today[NS][NK];
 
 // Each kind's first touch of the day inside the window, over the closed bars of that day.
@@ -339,6 +383,8 @@ void Touched(const long key, double &lv[][NK], bool &done[][NK], int &last_touch
          for(int k = 0; k < NKINDS[s]; k++)
            {
             double v = lv[s][k];
+            if(v <= 0)
+               continue;
             bool t = (b_c[j - 1] < v && b_h[j] >= v) || (b_c[j - 1] > v && b_l[j] <= v);
             if(t && !done[s][k]) { done[s][k] = true; last_touch[s][k] = j; }
            }
@@ -346,15 +392,50 @@ void Touched(const long key, double &lv[][NK], bool &done[][NK], int &last_touch
      }
   }
 
-double Lots(const double risk)
+double Lots(const int s, const double risk)
   {
    if(FixedLots > 0)
       return FixedLots;
-   double money = AccountInfoDouble(ACCOUNT_EQUITY) * RiskPct / 100.0;
+   double money = AccountInfoDouble(ACCOUNT_EQUITY) * (s >= 2 ? ShadowRiskPct : RiskPct) / 100.0;
    double per_lot = risk * SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);
    double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
    double lots = MathFloor(money / per_lot / step) * step;
    return MathMin(lots, SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX));
+  }
+
+// The money the EA's open trades (to their current SL) and pending orders would lose. A strategy
+// fills one of its orders (the others are then deleted), so its largest order counts; ``pend``
+// is that of strategy ``s``.
+double OpenRisk(const int s, double &pend)
+  {
+   double cs = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE), sum = 0.0;
+   double most[NS];
+   ArrayInitialize(most, 0.0);
+   for(int q = PositionsTotal() - 1; q >= 0; q--)
+     {
+      if(PositionGetTicket(q) == 0 || PositionGetString(POSITION_SYMBOL) != _Symbol
+         || Strat(PositionGetInteger(POSITION_MAGIC)) < 0)
+         continue;
+      ulong id = (ulong)PositionGetInteger(POSITION_IDENTIFIER);
+      double sl = Get(id, "sl") > 0 ? Get(id, "sl") : PositionGetDouble(POSITION_SL);
+      int dir = PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY ? 1 : -1;
+      double r = sl > 0 ? dir * (PositionGetDouble(POSITION_PRICE_OPEN) - sl) : Get(id, "risk");
+      if(r > 0)
+         sum += r * PositionGetDouble(POSITION_VOLUME) * cs;
+     }
+   for(int k = OrdersTotal() - 1; k >= 0; k--)
+     {
+      int os = OrderGetTicket(k) == 0 || OrderGetString(ORDER_SYMBOL) != _Symbol
+               ? -1 : Strat(OrderGetInteger(ORDER_MAGIC));
+      if(os < 0)
+         continue;
+      most[os] = MathMax(most[os], MathAbs(OrderGetDouble(ORDER_PRICE_OPEN) - OrderGetDouble(ORDER_SL))
+                                   * OrderGetDouble(ORDER_VOLUME_CURRENT) * cs);
+     }
+   for(int q = 0; q < NS; q++)
+      sum += most[q];
+   pend = most[s];
+   return sum;
   }
 
 void Place(const int s, const int k, const int dir, const double lv, const double risk, const datetime bar)
@@ -372,11 +453,22 @@ void Place(const int s, const int k, const int dir, const double lv, const doubl
    bool through = dir > 0 ? t.ask >= lv - gap : t.bid <= lv + gap;
    double e = through ? (dir > 0 ? MathMax(lv, t.bid) : MathMin(lv, t.bid)) : lv;
    double sl = NormalizeDouble(e - dir * risk, _Digits);
-   double lots = Lots(risk);
+   double lots = Lots(s, risk);
    if(lots < SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN))
      {
       why_not[s][k] = "size";
       Log("SKIP", s, kind, dir, bar, lv, e, sl, risk, lots, 0, 0.0, "size below the minimum");
+      return;
+     }
+   double add = risk * lots * SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+   double cap = AccountInfoDouble(ACCOUNT_EQUITY) * MaxOpenRiskPct / 100.0;
+   double pend = 0.0;
+   double open = OpenRisk(s, pend);
+   if(MaxOpenRiskPct > 0 && open + MathMax(add - pend, 0.0) > cap)
+     {
+      why_not[s][k] = "risk cap";
+      Log("SKIP", s, kind, dir, bar, lv, e, sl, risk, lots, 0, 0.0,
+          StringFormat("open risk %.2f + %.2f over the cap %.2f", open, add, cap));
       return;
      }
    trade.SetExpertMagicNumber(MagicBase + s);
@@ -414,8 +506,14 @@ void Signals(const datetime bar)
       placed_day = key;
       for(int s = 0; s < NS; s++) for(int k = 0; k < NK; k++) filled_today[s][k] = false;
       Log("DAY", -1, "", 0, bar, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0,
-          StringFormat("PDH %.2f; PDL %.2f; 5DH %.2f; 5DL %.2f; R1 %.2f; S1 %.2f",
-                       lv[0][0], lv[0][1], lv[0][2], lv[0][3], lv[1][0], lv[1][1]));
+          StringFormat("PDH %.2f; PDL %.2f; 5DH %.2f; 5DL %.2f; R1 %.2f; S1 %.2f; PWH %.2f; PWL %.2f",
+                       lv[0][0], lv[0][1], lv[0][2], lv[0][3], lv[1][0], lv[1][1], lv[4][0], lv[4][1]));
+     }
+   if(key != asia_day && InWindow(ny))
+     {
+      asia_day = key;
+      Log("ASIA", -1, "", 0, bar, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0,
+          StringFormat("ASH %.2f; ASL %.2f", lv[3][0], lv[3][1]));
      }
    Touched(key, lv, done, last_touch);
    // the previous bar: a touch that did not fill, and why
@@ -432,7 +530,7 @@ void Signals(const datetime bar)
       return;
    for(int s = 0; s < NS; s++)
      {
-      if((s == 0 && !TradeLVL4H) || (s == 1 && !TradePIVOT))
+      if(!Enabled(s))
          continue;
       bool busy = !SignalsOnly && HasPosition(s);
       double risk = Dist(s, utc);
@@ -444,12 +542,14 @@ void Signals(const datetime bar)
          if(done[s][k])
             continue;
          double v = lv[s][k];
+         if(v <= 0)
+            continue;
          int dir = b_c[NB - 1] < v ? 1 : (b_c[NB - 1] > v ? -1 : 0);
          if(dir == 0)
             continue;
          if(busy) { why_not[s][k] = "busy"; continue; }
          if(risk <= 0) { why_not[s][k] = "no ATR"; continue; }
-         if(s == 0 && (spread < 0 || (spread + COMMISSION) / risk > LVL_CAP)) { why_not[s][k] = "cost cap"; continue; }
+         if(s != 1 && (spread < 0 || (spread + COMMISSION) / risk > LVL_CAP)) { why_not[s][k] = "cost cap"; continue; }
          bool dup = false;  // one order per price and direction (5DH is often PDH)
          for(int q = 0; q < ArraySize(prices); q++)
             if(dirs[q] == dir && MathAbs(prices[q] - v) < _Point / 2) dup = true;
@@ -607,7 +707,7 @@ int OnInit()
   {
    if(AccountInfoInteger(ACCOUNT_MARGIN_MODE) != ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)
      {
-      Print("GoldLive needs a hedging account: LVL4H and PIVOT may hold opposite trades");
+      Print("GoldLive needs a hedging account: its strategies may hold opposite trades");
       return INIT_FAILED;
      }
    if(StringFind(_Symbol, "GOLD") != 0 && StringFind(_Symbol, "XAUUSD") != 0)
@@ -620,7 +720,8 @@ int OnInit()
    trade.LogLevel(LOG_LEVEL_ERRORS);
    for(int s = 0; s < NS; s++) for(int k = 0; k < NK; k++) { why_dir[s][k] = 0; why_not[s][k] = ""; filled_today[s][k] = false; }
    Log("START", -1, "", 0, 0, 0.0, 0.0, 0.0, 0.0, FixedLots, 0, RiskPct,
-       StringFormat("v1 risk %.2f%% signals only %s", RiskPct, SignalsOnly ? "yes" : "no"));
+       StringFormat("v1 risk %.2f%%; shadow %.2f%%; open risk cap %.2f%%; signals only %s",
+                    RiskPct, ShadowRiskPct, MaxOpenRiskPct, SignalsOnly ? "yes" : "no"));
    return INIT_SUCCEEDED;
   }
 

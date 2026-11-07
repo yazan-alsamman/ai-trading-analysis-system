@@ -56,6 +56,22 @@ def main(argv: list[str]) -> int:
         from app.research.gold_live import main as gold_live
 
         return gold_live(argv[1:])
+    if argv and argv[0] == "gold-pullback":
+        from app.research.gold_pullback import main as gold_pullback
+
+        return gold_pullback(argv[1:])
+    if argv and argv[0] == "gold-retrace":
+        from app.research.gold_retrace import main as gold_retrace
+
+        return gold_retrace(argv[1:])
+    if argv and argv[0] == "gold-night":
+        from app.research.gold_night import main as gold_night
+
+        return gold_night(argv[1:])
+    if argv and argv[0] == "gold-shadow":
+        from app.research.gold_shadow import main as gold_shadow
+
+        return gold_shadow(argv[1:])
     if argv and argv[0] == "gold-lab":
         from app.research.gold_lab import main as gold_lab
 

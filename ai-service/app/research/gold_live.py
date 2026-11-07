@@ -4,7 +4,8 @@
     python -m app research gold-live fxpro --export <Common>/Files/history/GOLDFX_M1_*.csv
 
 ``fxpro`` builds v1 on FxPro's own GOLD bars, the feed the demo trades (the research used another
-feed, XAUUSD): the reference for ``check --reference fxpro`` and v1's result by year there.
+feed, XAUUSD): v1's result by year there, and the reference for ``check --reference fxpro``,
+which also holds the shadow level breaks PIVW, ASIA and PWHL (``GOLD_SHADOW.md``).
 
 The EA computes the signals itself. Run in the Strategy Tester over the exam period (2026-01-12 to
 2026-10-21, real ticks, ``FixedLots = 1``), its log must give the trades Python gives for those
@@ -99,8 +100,17 @@ def fxpro(export: Path) -> str:
     fr = ge.frames_from_lines(fx_lines(export))  # a parse of GOLD's own feed, not a lockbox read
     zero = int((fr["5m"]["spread_max"] == 0).sum())  # 5-minute bars with no spread recorded
     t, events, cx = ge.exam_trades(fr, start=FX_START)
-    t.to_parquet(FX_TRADES, index=False)
-    gc.trade_file(t, events, cx, gl.STORE / FX_FILE)
+    # the reference for the check: v1 and the shadow level breaks (GOLD_SHADOW.md), as the EA
+    from app.research import gold_shadow as gs
+
+    shadow = [gs.level_run(cx, k, lv, events) for k, lv in gs.shadow_levels(cx).items()]
+    every = pd.concat([t, *shadow], ignore_index=True)
+    placed_at = pd.to_datetime(cx.m["close_utc"].to_numpy()[every["i"]], utc=True)
+    every = every[placed_at >= FX_START].sort_values(["i", "strategy"], kind="stable")
+    every = every.reset_index(drop=True).assign(take=True)
+    every["id"] = np.arange(1, len(every) + 1)
+    every.to_parquet(FX_TRADES, index=False)
+    gc.trade_file(every, events, cx, gl.STORE / FX_FILE)
     placed = pd.to_datetime(cx.m["ts_utc"].to_numpy()[t["i"]], utc=True)
     exam = t[placed >= ge.EXAM_START]
 
@@ -200,6 +210,16 @@ def render(j: pd.DataFrame, n: dict, reference: str = "exam") -> str:
         f"| D off by more than 1% | {n['risk_off_1pct']} |",
         f"| Gross R, matched: Python / EA | {n['gross_py']:+.3f} / {n['gross_ea']:+.3f} |",
         f"| Net R, all: Python / EA | {n['net_py_all']:+.3f} / {n['net_ea_all']:+.3f} |",
+        "",
+        "| Strategy | Python | EA | Matched | Gross R matched, Python / EA |",
+        "| --- | --- | --- | --- | --- |",
+        *[
+            f"| {s} | {(g['_merge'] != 'right_only').sum()} | {(g['_merge'] != 'left_only').sum()} "
+            f"| {(g['_merge'] == 'both').sum()} "
+            f"| {g.loc[g['_merge'] == 'both', 'gross'].mean():+.3f} / "
+            f"{g.loc[g['_merge'] == 'both', 'ea_gross'].mean():+.3f} |"
+            for s, g in j.groupby("strategy")
+        ],
         "",
         f"## Python only ({len(only_py)})",
         "",
