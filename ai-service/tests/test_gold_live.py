@@ -36,3 +36,16 @@ def test_trades_are_matched_on_strategy_and_signal_bar() -> None:
     only_py = j[j["_merge"] == "left_only"]
     assert only_py["ea_reason"].tolist() == ["busy"]
     assert "EA only (1)" in gv.render(j, n)
+
+
+def test_fx_lines_keep_the_header_and_the_m1_days(tmp_path) -> None:
+    f = tmp_path / "GOLD_M1.csv"
+    f.write_bytes(
+        b"<DATE>\t<TIME>\t<OPEN>\n"
+        b"2016.01.08\t15:00:00\t1\n"
+        b"2016.01.18\t23:59:00\t2\n"
+        b"2016.01.19\t00:00:00\t3\n"
+        b"2026.11.05\t23:59:00\t4\n"
+    )
+    lines = list(gv.fx_lines(f))
+    assert [ln[:10] for ln in lines] == [b"<DATE>\t<TI", b"2016.01.19", b"2026.11.05"]

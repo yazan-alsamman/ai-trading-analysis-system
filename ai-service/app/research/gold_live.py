@@ -75,13 +75,29 @@ def within_log(py: pd.DataFrame, log: pd.DataFrame) -> pd.DataFrame:
 FX_TRADES = gl.STORE / "gold_fxpro_trades.parquet"
 FX_FILE = "gold_fxpro_trades.csv"
 FX_REPORT = gl.OUT_DIR / "gold_fxpro.md"
-FX_START = pd.Timestamp("2016-01-04", tz="UTC")  # FxPro's GOLD M1 history starts in late 2015
+# FxPro's GOLD history is daily bars to 2015-09-10, hourly bars to 2016-01-08 15:00, M1 from
+# 2016-01-08 15:16, with the spread recorded as 0 to 2016-01-18 15:48 (server time). v1 reads the
+# lines from the first full day with M1 bars and spreads, and trades from 2016-02-01, when its
+# 5-day levels and ATR(14, 4h) have filled.
+FX_FIRST_DAY = b"2016.01.19"
+FX_START = pd.Timestamp("2016-02-01", tz="UTC")
+
+
+def fx_lines(export: Path):
+    """The export's header and its lines from ``FX_FIRST_DAY`` (server date) on."""
+    with open(export, "rb") as f:
+        yield next(f)
+        for ln in f:
+            if ln[:10] >= FX_FIRST_DAY:
+                yield ln
 
 
 def fxpro(export: Path) -> str:
-    """v1 (the exam's code and settings) on an FxPro GOLD M1 export (``ExportHistory``,
-    ``GOLD_name = GOLD``): the trades for the check and the result by year."""
-    fr = ge.lockbox_frames(export)  # every line of the export: a parse, not a lockbox read
+    """v1 (the exam's code and settings) on an FxPro GOLD M1 export (MT5 "Export Bars" or
+    ``ExportHistory`` with ``GOLD_name = GOLD``): the trades for the check and the result by
+    year."""
+    fr = ge.frames_from_lines(fx_lines(export))  # a parse of GOLD's own feed, not a lockbox read
+    zero = int((fr["5m"]["spread_max"] == 0).sum())  # 5-minute bars with no spread recorded
     t, events, cx = ge.exam_trades(fr, start=FX_START)
     t.to_parquet(FX_TRADES, index=False)
     gc.trade_file(t, events, cx, gl.STORE / FX_FILE)
@@ -99,6 +115,10 @@ def fxpro(export: Path) -> str:
         f"_`python -m app research gold-live fxpro`: `{export.name}`, the exam's code and settings "
         "(`GOLD_V1.md`), FxPro's recorded spread + $0.07 per oz. The research used another feed "
         "(XAUUSD); 2016 to 2026-01-09 was seen there, so this is a check of the feed, not a test._",
+        "",
+        f"_Bars from {FX_FIRST_DAY.decode()} (server date; earlier GOLD history is daily or hourly "
+        f"bars, or has no spread), trades from {FX_START.date()}. "
+        f"{zero:,} of {len(fr['5m']):,} five-minute bars have no spread recorded._",
         "",
         "| Set | Trades | Net R (SE) | Net with slip |",
         "| --- | --- | --- | --- |",
@@ -155,14 +175,19 @@ def check(log: pd.DataFrame, py: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     return j, counts
 
 
-def render(j: pd.DataFrame, n: dict) -> str:
+def render(j: pd.DataFrame, n: dict, reference: str = "exam") -> str:
+    source = (
+        "the Python trades of `gold-exam run` (the research XAUUSD feed)"
+        if reference == "exam"
+        else "v1 in Python on FxPro's GOLD feed (`gold-live fxpro`)"
+    )
     only_py = j[j["_merge"] == "left_only"]
     only_ea = j[j["_merge"] == "right_only"]
     lines = [
         "# Gold v1 live EA against Python",
         "",
-        "_`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against the Python "
-        "trades of `gold-exam run` (`GOLD_V1.md`). Matched on strategy and signal bar._",
+        f"_`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against {source} "
+        "(`GOLD_V1.md`). Matched on strategy and signal bar._",
         "",
         "| Item | Value |",
         "| --- | --- |",
@@ -211,6 +236,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     log = read_log(gc.common_files() / args.log)
     j, n = check(log, within_log(python_trades(args.reference), log))
-    REPORT.write_text(render(j, n), encoding="utf-8", newline="\n")
+    REPORT.write_text(render(j, n, args.reference), encoding="utf-8", newline="\n")
     print(f"wrote {REPORT}: {n}")
     return 0

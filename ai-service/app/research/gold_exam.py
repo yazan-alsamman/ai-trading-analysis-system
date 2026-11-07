@@ -75,10 +75,15 @@ def checked_file(
 
 def lockbox_frames(path: Path) -> dict[str, pd.DataFrame]:
     """The file's bars, parsed and clock-checked as the importer does, as research frames."""
+    with open(path, "rb") as f:
+        return frames_from_lines(f)
+
+
+def frames_from_lines(lines) -> dict[str, pd.DataFrame]:
+    """An M1 export's lines (bytes, header first) as research frames, as ``lockbox_frames``."""
     s = splits()
     inst = instruments()[gl.SYM]
-    with open(path, "rb") as f:
-        parsed = parse_export(f, inst, M1, s.server_tz)
+    parsed = parse_export(lines, inst, M1, s.server_tz)
     segments = clock.detect(parsed.bars, inst, s.server_tz)
     m1 = clock.apply(parsed.bars, segments)
     segments = clock.check_mismatch_weeks(m1, segments, s.server_tz)

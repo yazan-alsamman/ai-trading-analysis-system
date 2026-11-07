@@ -99,7 +99,53 @@ feed is:**
 - The signal logic is checked against Python run on that same feed: export `GOLD` M1, build the
   Python trades from it, and compare them with the EA run.
 
-## The demo
+### v1 on FxPro's GOLD feed (2026-11-07)
+
+Fadi exported `GOLD` M1 with MT5's "Export Bars" (`GOLD_M1_201501020000_202611052359.csv`, to
+2026-11-05).
+
+**The export:**
+
+- `GOLD`'s history is daily bars to 2015-09-10, hourly bars to 2016-01-08, and M1 bars from
+  2016-01-08 15:16.
+- The spread is 0 to 2016-01-18.
+- `gold-live fxpro` reads it from 2016-01-19 and trades from 2016-02-01.
+
+**The EA's logic is checked** (`gold_live_check.md`, `check --reference fxpro`). On the same feed,
+the second tester run (M1 bars) and Python agree:
+
+| Item | Value |
+| --- | --- |
+| Trades matched on strategy and signal bar | 283 of 286 Python and 288 EA, all in the same direction |
+| Gross R per trade, correlation | 0.998 |
+| Net R, Python / EA | +0.046 / +0.041 |
+
+The few differences are the known live differences above:
+
+- Five same-day levels fill one bar apart: buy stops on the ask, and the cost cap and D come from
+  an earlier bar.
+- D is off by more than 1% on 8 trades.
+- On one day (2026-03-18) a 5-day level is $6 off.
+
+**v1 on FxPro `GOLD`** (`gold_fxpro.md`) uses FxPro's recorded spread + $0.07 per oz. It is not a
+test: 2016 to 2026-01-09 was seen on the XAUUSD feed, and the settings were tuned there.
+
+| Set | Trades | Net R (SE) | With slippage |
+| --- | --- | --- | --- |
+| All, 2016-02 to 2026-11-05 | 3,493 | +0.036 (0.020) | +0.021 |
+| LVL4H | 1,379 | +0.081 (0.030) | +0.073 |
+| PIVOT | 2,114 | +0.006 (0.028) | −0.013 |
+| Exam period, 2026-01-12 to 2026-11-05 | 300 | +0.005 (0.062) | +0.001 |
+
+What the results show:
+
+- **By year, the sign changes.** v1 lost in 2016–2019, 2021 and 2024. It made money in 2020, 2022,
+  2023 and 2025.
+- **PIVOT carries nothing on this feed.** On the XAUUSD exam it made +0.062.
+- **The first bars after the exam file are new data.** From 2026-10-21 to 2026-11-05, v1 took 15
+  trades: 2 won, 12 lost a full R, and the mean was −0.62 R (−9.3 R in all).
+  - This is within what a 15-trade run can do.
+  - It is the start of the demo's record, not a decision.
 
 ## The demo
 

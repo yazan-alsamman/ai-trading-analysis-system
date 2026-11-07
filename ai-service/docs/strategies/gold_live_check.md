@@ -1,146 +1,33 @@
 # Gold v1 live EA against Python
 
-_`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against the Python trades of `gold-exam run` (`GOLD_V1.md`). Matched on strategy and signal bar._
+_`tools/mt5/GoldLive.mq5` in the Strategy Tester over the exam period against v1 in Python on FxPro's GOLD feed (`gold-live fxpro`) (`GOLD_V1.md`). Matched on strategy and signal bar._
 
 | Item | Value |
 | --- | --- |
-| Python trades | 289 |
+| Python trades | 286 |
 | EA trades | 288 |
-| Matched | 228 |
-| Same direction | 228 |
-| Largest level difference | 27.67 |
-| D, EA / Python (median) | 1.0031 |
-| D off by more than 1% | 30 |
-| Gross R, matched: Python / EA | +0.068 / +0.067 |
-| Net R, all: Python / EA | +0.017 / +0.041 |
+| Matched | 283 |
+| Same direction | 283 |
+| Largest level difference | 6.06 |
+| D, EA / Python (median) | 1.0000 |
+| D off by more than 1% | 8 |
+| Gross R, matched: Python / EA | +0.058 / +0.053 |
+| Net R, all: Python / EA | +0.046 / +0.041 |
 
-## Python only (61)
+## Python only (3)
 
 | Strategy | Signal bar (server) | EA's reason |
 | --- | --- | --- |
-| LVL4H | 2026.01.30 19:15:00 | - |
-| LVL4H | 2026.02.05 11:55:00 | - |
-| LVL4H | 2026.02.20 09:05:00 | - |
-| LVL4H | 2026.03.09 17:10:00 | - |
-| LVL4H | 2026.03.10 11:40:00 | - |
-| LVL4H | 2026.03.12 08:30:00 | - |
-| LVL4H | 2026.03.13 10:15:00 | - |
-| LVL4H | 2026.03.16 08:00:00 | - |
-| LVL4H | 2026.03.17 08:00:00 | - |
-| LVL4H | 2026.03.18 13:35:00 | - |
-| LVL4H | 2026.03.20 21:50:00 | - |
-| LVL4H | 2026.03.23 15:50:00 | - |
-| LVL4H | 2026.03.26 19:20:00 | - |
-| LVL4H | 2026.03.27 18:20:00 | - |
-| LVL4H | 2026.03.30 09:00:00 | - |
-| LVL4H | 2026.05.11 15:20:00 | - |
-| LVL4H | 2026.06.12 11:20:00 | - |
 | LVL4H | 2026.09.30 09:50:00 | - |
-| LVL4H | 2026.10.02 18:15:00 | - |
-| LVL4H | 2026.10.15 22:45:00 | - |
-| PIVOT | 2026.01.14 10:05:00 | - |
-| PIVOT | 2026.01.22 19:25:00 | - |
-| PIVOT | 2026.01.30 09:35:00 | - |
-| PIVOT | 2026.02.03 09:10:00 | - |
-| PIVOT | 2026.02.05 14:10:00 | - |
-| PIVOT | 2026.02.06 16:35:00 | - |
-| PIVOT | 2026.02.11 11:45:00 | - |
-| PIVOT | 2026.02.20 09:05:00 | - |
-| PIVOT | 2026.02.23 09:00:00 | - |
-| PIVOT | 2026.02.24 14:50:00 | - |
-| PIVOT | 2026.03.06 17:25:00 | - |
-| PIVOT | 2026.03.09 08:05:00 | - |
-| PIVOT | 2026.03.10 16:20:00 | - |
-| PIVOT | 2026.03.12 08:10:00 | - |
-| PIVOT | 2026.03.13 17:55:00 | - |
-| PIVOT | 2026.03.16 08:00:00 | - |
-| PIVOT | 2026.03.17 18:40:00 | - |
-| PIVOT | 2026.03.18 13:35:00 | - |
-| PIVOT | 2026.03.19 09:45:00 | - |
-| PIVOT | 2026.03.23 15:55:00 | - |
-| PIVOT | 2026.03.23 17:25:00 | - |
-| PIVOT | 2026.03.26 09:15:00 | - |
-| PIVOT | 2026.03.27 17:50:00 | - |
-| PIVOT | 2026.03.30 17:20:00 | - |
-| PIVOT | 2026.04.08 17:45:00 | - |
-| PIVOT | 2026.04.14 09:50:00 | - |
-| PIVOT | 2026.05.11 15:20:00 | - |
-| PIVOT | 2026.05.28 10:20:00 | - |
-| PIVOT | 2026.05.29 17:10:00 | - |
-| PIVOT | 2026.06.22 09:50:00 | - |
-| PIVOT | 2026.06.29 17:10:00 | - |
-| PIVOT | 2026.07.10 17:30:00 | - |
-| PIVOT | 2026.07.20 14:30:00 | - |
-| PIVOT | 2026.09.08 21:45:00 | - |
-| PIVOT | 2026.09.17 14:50:00 | - |
-| PIVOT | 2026.09.21 12:30:00 | - |
-| PIVOT | 2026.10.06 14:30:00 | - |
-| PIVOT | 2026.10.07 12:55:00 | - |
-| PIVOT | 2026.10.15 11:25:00 | - |
-| PIVOT | 2026.10.16 17:25:00 | - |
-| PIVOT | 2026.10.19 18:50:00 | - |
+| LVL4H | 2026.10.20 10:00:00 | - |
+| PIVOT | 2026.06.11 22:20:00 | - |
 
-## EA only (60)
+## EA only (5)
 
 | Strategy | Signal bar (server) | Kind | Fill |
 | --- | --- | --- | --- |
-| LVL4H | 2026.01.30 19:10:00 | 5DL | stop |
-| LVL4H | 2026.02.05 11:20:00 | PDL | stop |
-| LVL4H | 2026.02.20 09:00:00 | PDH | stop |
-| LVL4H | 2026.03.09 16:10:00 | PDL | stop |
-| LVL4H | 2026.03.10 10:00:00 | PDH | stop |
-| LVL4H | 2026.03.12 08:20:00 | PDL | stop |
-| LVL4H | 2026.03.13 16:55:00 | PDL | stop |
-| LVL4H | 2026.03.16 08:45:00 | PDL | stop |
-| LVL4H | 2026.03.18 12:35:00 | 5DL | stop |
-| LVL4H | 2026.03.18 12:35:00 | PDL | stop |
-| LVL4H | 2026.03.20 20:50:00 | PDL | stop |
-| LVL4H | 2026.03.23 14:50:00 | PDL | stop |
-| LVL4H | 2026.03.26 08:45:00 | PDL | stop |
-| LVL4H | 2026.03.27 17:20:00 | PDH | stop |
-| LVL4H | 2026.03.30 14:40:00 | PDH | stop |
-| LVL4H | 2026.05.11 09:50:00 | PDL | stop |
-| LVL4H | 2026.06.12 11:15:00 | PDH | stop |
+| LVL4H | 2026.05.26 13:50:00 | PDL | stop |
+| LVL4H | 2026.07.14 15:30:00 | PDH | stop |
 | LVL4H | 2026.09.30 09:15:00 | PDH | stop |
-| LVL4H | 2026.10.02 18:20:00 | PDL | stop |
-| LVL4H | 2026.10.15 22:40:00 | PDH | stop |
 | LVL4H | 2026.10.20 09:55:00 | PDL | stop |
-| PIVOT | 2026.01.14 10:10:00 | R1 | stop |
-| PIVOT | 2026.01.22 19:30:00 | R1 | stop |
-| PIVOT | 2026.01.30 10:30:00 | S1 | stop |
-| PIVOT | 2026.02.03 09:25:00 | R1 | stop |
-| PIVOT | 2026.02.05 11:55:00 | S1 | stop |
-| PIVOT | 2026.02.06 16:55:00 | R1 | stop |
-| PIVOT | 2026.02.11 12:15:00 | R1 | stop |
-| PIVOT | 2026.02.20 09:10:00 | R1 | stop |
-| PIVOT | 2026.02.23 09:05:00 | R1 | stop |
-| PIVOT | 2026.02.24 15:35:00 | S1 | stop |
-| PIVOT | 2026.03.06 17:20:00 | R1 | stop |
-| PIVOT | 2026.03.09 08:50:00 | S1 | stop |
-| PIVOT | 2026.03.10 15:15:00 | R1 | stop |
-| PIVOT | 2026.03.12 16:35:00 | S1 | stop |
-| PIVOT | 2026.03.13 18:00:00 | S1 | stop |
-| PIVOT | 2026.03.16 11:45:00 | S1 | stop |
-| PIVOT | 2026.03.18 12:35:00 | S1 | stop |
-| PIVOT | 2026.03.19 09:40:00 | S1 | stop |
-| PIVOT | 2026.03.20 20:55:00 | S1 | stop |
-| PIVOT | 2026.03.23 13:05:00 | S1 | stop |
-| PIVOT | 2026.03.25 08:10:00 | R1 | stop |
-| PIVOT | 2026.03.26 08:00:00 | S1 | stop |
-| PIVOT | 2026.03.27 16:50:00 | R1 | stop |
-| PIVOT | 2026.03.30 14:50:00 | R1 | stop |
-| PIVOT | 2026.04.08 17:50:00 | R1 | stop |
-| PIVOT | 2026.04.14 09:55:00 | R1 | stop |
-| PIVOT | 2026.05.11 09:50:00 | S1 | stop |
-| PIVOT | 2026.05.28 10:05:00 | S1 | stop |
-| PIVOT | 2026.05.29 17:50:00 | R1 | stop |
-| PIVOT | 2026.06.22 09:40:00 | R1 | stop |
-| PIVOT | 2026.06.29 17:05:00 | S1 | stop |
-| PIVOT | 2026.09.08 19:05:00 | S1 | stop |
-| PIVOT | 2026.09.17 14:55:00 | R1 | stop |
-| PIVOT | 2026.09.21 10:40:00 | S1 | stop |
-| PIVOT | 2026.10.06 14:20:00 | R1 | stop |
-| PIVOT | 2026.10.07 12:40:00 | S1 | stop |
-| PIVOT | 2026.10.15 12:25:00 | R1 | stop |
-| PIVOT | 2026.10.19 18:40:00 | S1 | stop |
-| PIVOT | 2026.10.20 09:00:00 | S1 | stop |
+| PIVOT | 2026.06.11 22:15:00 | R1 | stop |
