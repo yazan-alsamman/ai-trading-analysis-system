@@ -5,6 +5,10 @@
 //| PIVW, ASIA and PWHL (GOLD_SHADOW.md) run beside v1 with their own  |
 //| magic numbers and ShadowRiskPct; MaxOpenRiskPct caps the risk of   |
 //| every open trade and order of the EA together.                     |
+//| Account guards (GOLD_V1.md, stop rules 4): a daily loss of         |
+//| DailyLossPct of the trading day's opening equity closes the EA's   |
+//| trades and stops it to the next day; a drawdown of MaxDrawdownPct  |
+//| from the equity peak closes them and stops it until ResetGuards.   |
 //|                                                                   |
 //| Expert Advisor on GOLD (any chart timeframe), a hedging account.  |
 //| Writes <Common>/Files/<LogFile>: every signal, fill, SL move and  |
@@ -34,6 +38,9 @@ input bool   TradeASIA   = true;                 // shadow: the Asian range, 19:
 input bool   TradePWHL   = true;                 // shadow: the previous week's high and low
 input double ShadowRiskPct  = 0.25;              // % of equity a shadow trade
 input double MaxOpenRiskPct = 2.0;               // cap on the open risk of the EA (0: none; tests)
+input double DailyLossPct   = 2.0;               // stop for the day at this loss (0: none; tests)
+input double MaxDrawdownPct = 10.0;              // stop at this drawdown from the peak (0: none; tests)
+input bool   ResetGuards    = false;             // true once: clear a drawdown stop, peak = equity now
 input bool   SignalsOnly = false;                // log the signals, place nothing
 input long   MagicBase   = 20261106;             // LVL4H base, PIVOT +1, PIVW +2, ASIA +3, PWHL +4
 input string LogFile     = "gold_live_log.csv";  // in <Common>/Files
@@ -562,6 +569,73 @@ void Signals(const datetime bar)
      }
   }
 
+// --- account guards (terminal global variables, so a restart keeps them) -------------------------
+
+#define G_PEAK    "GL.guard.peak"
+#define G_DAYKEY  "GL.guard.daykey"
+#define G_DAYEQ   "GL.guard.dayeq"
+#define G_HALTDAY "GL.guard.haltday"
+#define G_HALT    "GL.guard.halt"
+
+void Close(const ulong ticket, const ulong id, const int s, const string why);
+
+// Closes every open trade and order of the EA, and logs why.
+void StopAll(const string why, const double eq, const double ref)
+  {
+   Log("GUARD", -1, "", 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, eq,
+       StringFormat("%s; equity %.2f; reference %.2f", why, eq, ref));
+   DeleteOrders(-1);
+   for(int q = PositionsTotal() - 1; q >= 0; q--)
+     {
+      ulong ticket = PositionGetTicket(q);
+      if(ticket == 0 || PositionGetString(POSITION_SYMBOL) != _Symbol)
+         continue;
+      int s = Strat(PositionGetInteger(POSITION_MAGIC));
+      if(s < 0)
+         continue;
+      ulong id = (ulong)PositionGetInteger(POSITION_IDENTIFIER);
+      if(GlobalVariableCheck(GV(id, "e")))
+         Close(ticket, id, s, "guard");
+      else
+         trade.PositionClose(ticket);
+     }
+  }
+
+// Every tick: true while the EA may open trades.
+bool Guards()
+  {
+   double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+   MqlTick t;
+   SymbolInfoTick(_Symbol, t);
+   long key = DayKey(UtcToNy(ServerToUtc(t.time)));
+   if(!GlobalVariableCheck(G_PEAK) || eq > GlobalVariableGet(G_PEAK))
+      GlobalVariableSet(G_PEAK, eq);
+   if((long)GlobalVariableGet(G_DAYKEY) != key)
+     {
+      GlobalVariableSet(G_DAYKEY, (double)key);
+      GlobalVariableSet(G_DAYEQ, eq);
+     }
+   if(GlobalVariableGet(G_HALT) > 0)
+      return false;
+   double peak = GlobalVariableGet(G_PEAK);
+   if(MaxDrawdownPct > 0 && eq <= peak * (1.0 - MaxDrawdownPct / 100.0))
+     {
+      GlobalVariableSet(G_HALT, 1.0);
+      StopAll("drawdown stop: until ResetGuards", eq, peak);
+      return false;
+     }
+   if((long)GlobalVariableGet(G_HALTDAY) == key)
+      return false;
+   double day = GlobalVariableGet(G_DAYEQ);
+   if(DailyLossPct > 0 && eq <= day * (1.0 - DailyLossPct / 100.0))
+     {
+      GlobalVariableSet(G_HALTDAY, (double)key);
+      StopAll("daily loss stop: to the next trading day", eq, day);
+      return false;
+     }
+   return true;
+  }
+
 // --- management --------------------------------------------------------------------------------
 
 int BarIndex(const datetime srv)  // the closed bar that opened at ``srv``; -1: none
@@ -719,14 +793,22 @@ int OnInit()
    trade.SetTypeFillingBySymbol(_Symbol);
    trade.LogLevel(LOG_LEVEL_ERRORS);
    for(int s = 0; s < NS; s++) for(int k = 0; k < NK; k++) { why_dir[s][k] = 0; why_not[s][k] = ""; filled_today[s][k] = false; }
+   if(ResetGuards)
+     {
+      GlobalVariableDel(G_HALT);
+      GlobalVariableDel(G_HALTDAY);
+      GlobalVariableSet(G_PEAK, AccountInfoDouble(ACCOUNT_EQUITY));
+     }
    Log("START", -1, "", 0, 0, 0.0, 0.0, 0.0, 0.0, FixedLots, 0, RiskPct,
-       StringFormat("v1 risk %.2f%%; shadow %.2f%%; open risk cap %.2f%%; signals only %s",
-                    RiskPct, ShadowRiskPct, MaxOpenRiskPct, SignalsOnly ? "yes" : "no"));
+       StringFormat("v1 risk %.2f%%; shadow %.2f%%; open risk cap %.2f%%; daily loss %.2f%%; "
+                    "drawdown %.2f%%; signals only %s", RiskPct, ShadowRiskPct, MaxOpenRiskPct,
+                    DailyLossPct, MaxDrawdownPct, SignalsOnly ? "yes" : "no"));
    return INIT_SUCCEEDED;
   }
 
 void OnTick()
   {
+   bool open = Guards();
    datetime bar = iTime(_Symbol, PERIOD_M5, 0);
    if(bar != last_bar && bar > 0)
      {
@@ -735,7 +817,8 @@ void OnTick()
       last_bar = bar;
       DeleteOrders(-1);  // orders were valid for the bar that just closed
       Manage();
-      Signals(bar);
+      if(open)
+         Signals(bar);
      }
    Watch();
   }

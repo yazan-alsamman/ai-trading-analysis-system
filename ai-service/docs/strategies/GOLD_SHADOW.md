@@ -155,7 +155,8 @@ Net R with slippage a trade. The FxPro results run from 2016-02 to 2026-11-05; t
 **The tester check** has the same settings as the second v1 run:
 
 - GOLD, M5, 2026-01-12 to 2026-10-21, "1 minute OHLC".
-- `FixedLots = 1`, `MaxOpenRiskPct = 0`.
+- `FixedLots = 1`, `MaxOpenRiskPct = 0`, and since the guards (`GOLD_V1.md`, stop rules 4)
+  `DailyLossPct = 0`, `MaxDrawdownPct = 0`.
 
 Then run `python -m app research gold-live check --reference fxpro`. The reference
 (`gold-live fxpro`) now holds the shadow trades too, and the report lists matches by strategy.

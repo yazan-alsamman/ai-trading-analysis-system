@@ -208,10 +208,17 @@ its money risk at entry (the distance D × lots × 100).
      (`gold-live check` on the demo log and a fresh GOLD export)?
    - If they are not, the EA is fixed. If they are, the strategy stays off.
    - It comes back only by a new decision recorded here.
-4. **Account guards, not yet in the EA (to build before live money):**
-   - a daily loss of 2% of the day's opening equity closes the EA's trades and stops it to the
-     next day;
-   - a drawdown of 10% from the equity peak stops it until a review.
+4. **Account guards, in the EA since 2026-11-07:**
+   - **`DailyLossPct = 2`.** At a loss of 2% of the trading day's opening equity (17:00 New York),
+     the EA closes its trades and orders and stops until the next trading day.
+   - **`MaxDrawdownPct = 10`.** At a drawdown of 10% from the equity peak, the EA closes them and
+     stops until a review. After the review, restart once with `ResetGuards = true`, which clears
+     the stop and sets the peak to the equity then.
+   - The state is kept in terminal global variables (`GL.guard.*`), so a restart keeps a stop.
+     Each stop is logged (`GUARD`).
+   - The equity is the whole account's, so the demo account trades nothing else.
+   - In the Strategy Tester checks against Python, both are 0, with `MaxOpenRiskPct = 0` and
+     `FixedLots = 1`. A 1-lot loss can be over 2% of the deposit, and Python has no guard.
 5. **Why −0.10 after 100 trades.**
    - A trade's net R spreads by about 1 R, so a mean of 100 trades spreads by about ±0.1.
    - A strategy that truly makes +0.05 falls below −0.10 by chance about 7% of the time.
