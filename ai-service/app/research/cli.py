@@ -56,6 +56,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_live import main as gold_live
 
         return gold_live(argv[1:])
+    if argv and argv[0] == "gold-regime":
+        from app.research.gold_regime import main as gold_regime
+
+        return gold_regime(argv[1:])
     if argv and argv[0] == "gold-orb":
         from app.research.gold_orb import main as gold_orb
 
