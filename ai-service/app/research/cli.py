@@ -56,6 +56,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_live import main as gold_live
 
         return gold_live(argv[1:])
+    if argv and argv[0] == "gold-swing":
+        from app.research.gold_swing import main as gold_swing
+
+        return gold_swing(argv[1:])
     if argv and argv[0] == "gold-regime":
         from app.research.gold_regime import main as gold_regime
 
