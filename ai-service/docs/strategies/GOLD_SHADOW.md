@@ -192,3 +192,28 @@ Python.
     together.
 - **The shadow strategies are ready for the demo.** The demo runs with the defaults:
   `ShadowRiskPct = 0.25`, `MaxOpenRiskPct = 2`.
+
+### Real ticks, 2026-10-21 to 2026-11-07 (2026-11-08)
+
+These days come after every earlier run and every choice. The run used "Every tick based on real
+ticks", with `FixedLots = 1` and the guards at 0. FxPro had no real ticks for 385 of the 17,940
+minutes (on 2026-11-05), and the tester generated those.
+
+- **The EA matches Python.**
+  - 39 of Python's 40 trades matched, all in the same direction, with a gross R correlation of
+    1.00.
+  - The EA took 44 trades. 4 of them came on 2026-11-06, which the export does not hold.
+- **Every strategy lost:**
+
+| Strategy | Trades | Winners | EA net R a trade | Sum |
+| --- | --- | --- | --- | --- |
+| ASIA | 16 | 3 | −0.50 | −8.1 R |
+| LVL4H | 9 | 2 | −0.63 | −5.7 R |
+| PIVOT | 8 | 1 | −0.71 | −5.7 R |
+| PIVW | 8 | 2 | −0.58 | −4.7 R |
+| PWHL | 3 | 1 | −0.37 | −1.1 R |
+| All | 44 | 9 | −0.57 | −25.2 R |
+
+At the demo's risks (0.5% v1, 0.25% shadow), these 44 trades lost 9.1% of the account. This is
+the same run of losses as September and October (`GOLD_V1.md`, stop rules: rule 2 would have
+stopped the EA).
