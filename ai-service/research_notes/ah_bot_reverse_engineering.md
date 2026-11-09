@@ -68,3 +68,34 @@ Registered and run as `docs/strategies/GOLD_AH.md` (code `app/research/gold_ah.p
 `docs/strategies/gold_ah_xauusd.md`). AHB plus V1-V6 and ALL: all dropped. Gross R is about 0,
 net R −0.16 to −0.22 on 2012-2021 and −0.03 to −0.06 on 2022 to 2026-01-09. On the bot's own weeks
 the clone matches 52% of its entries but fires about 7 times as often and is negative after costs.
+
+## SL and TP found (2026-11-09)
+In 132 of the 156 matched signals, the order's SL and TP come from one formula on the impulse leg
+before the pullback, L (its low) to H (its high), R = H − L, for a buy (a sell is the mirror):
+
+- **TP = L + 1.088 × R** (8.8% of the leg beyond its high), most common ratio 1.088 (1,103
+  trade × window hits; next 1.089).
+- **SL = H − 2.025 × R** (one leg plus 2.5% below its low), most common ratio 2.025 (1,426 hits).
+- L is before H in 99% of them: the leg goes up, then the pullback is the entry. Median: L 12 min
+  and H 5 min before the entry, R about $6 (IQR $4.1 to $9.5).
+- L is the last 3-bar M1 pivot low before H in 104 of 132 (k = 2: 82, k = 4: 82). H is the
+  highest high since L (it may be unconfirmed). The exact leg finder (perhaps MT5's ZigZag) is not
+  pinned down.
+- The 24 that do not fit: 20 S0, 4 S1 (S0 and S1 use the same formula).
+
+So the wide stop is not a choice per trade: it is one leg length below the leg's low, while the
+target is just past the leg's high. With entry in the pullback, the TP is usually closer than the
+SL. Under a random walk the win rate is SL / (SL + TP), so this shape alone gives a high win rate
+and no edge; an edge needs price to reach the old high more often than that.
+
+## Leg-exit test (2026-11-09)
+`docs/strategies/GOLD_AHX.md`: the bot's exits rebuilt from the leg match its orders to $0.05 in
+69% of signals. On 14 years the TP is hit exactly as often as a random walk predicts (+0.2 points on
+2012-2021, +1.2 on the check), gross R about 0; both settings dropped. The wide-SL / near-TP shape is
+the bot's geometry, not its edge.
+
+## Filter search (2026-11-09)
+`docs/strategies/GOLD_AHF.md`: 50 features on every X1 signal (110,811 trades on 2012-2017). No
+feature quintile, hour, weekday or session has gross R > 0 there. The greedy filter chosen on
+2012-2017 gave +0.010 gross on 2018-2021 (p 0.128), far below the 0.15-0.17 R cost; stopped before
+meta-labeling. Bigger legs lose less (less cost per R), but stay below zero before costs.

@@ -50,6 +50,13 @@ class Setting:
     tp1: float = 0.4
     tp_moved: float = 0.7
     e2: bool = True
+    leg: bool = False  # GOLD_AHX: the bot's leg exits
+
+
+SETTINGS_X = [Setting("X1", e2=False, leg=True), Setting("X2", leg=True)]
+LEG_K = 3
+LEG_TRIES = 10
+TP_K, SL_K = 1.088, 2.025
 
 
 SETTINGS = [
@@ -111,6 +118,7 @@ class Ctx:
     extra: dict  # (direction, name) -> filter array
     sld: np.ndarray
     atr: np.ndarray
+    prevp: dict | None = None  # direction -> last confirmed-or-not pivot index at or before j
 
 
 def context(m1: pd.DataFrame) -> Ctx:
@@ -149,7 +157,41 @@ def context(m1: pd.DataFrame) -> Ctx:
             (1, "deep"): pos60 <= 0.64,
             (-1, "deep"): pos60 >= 0.36,
         }
-    return Ctx(ts, o, h, lo, c, spread, end, blocked, cond, extra, 1.7 * rng10, atr)
+    w = 2 * LEG_K + 1
+    piv_l = (ls == ls.rolling(w, center=True).min()).to_numpy()
+    piv_h = (hs == hs.rolling(w, center=True).max()).to_numpy()
+    prevp = {d: np.maximum.accumulate(np.where(m, np.arange(len(m)), -1))
+             for d, m in ((1, piv_l), (-1, piv_h))}  # fmt: skip
+    return Ctx(ts, o, h, lo, c, spread, end, blocked, cond, extra, 1.7 * rng10, atr, prevp)
+
+
+def leg_index(cx: Ctx, i: int, d: int) -> tuple[int, int, int] | None:
+    """The impulse leg before the pullback at bar i (GOLD_AHX.md §2) as bar indices: (q, hb, try),
+    q the leg's start pivot, hb its extreme, try the pivot (1-10) the finder stopped at."""
+    # slices only: negating the whole series per call made each sell O(len(data))
+    lo_src, hi_src = (cx.lo, cx.h) if d == 1 else (cx.h, cx.lo)
+    q = cx.prevp[d][i - LEG_K] if i - LEG_K >= 0 else -1
+    for k in range(LEG_TRIES):
+        if q < 0:
+            return None
+        lows = d * lo_src[q : i + 1]
+        if q < i and lows[1:].min() >= lows[0]:
+            seg = d * hi_src[q : i + 1]
+            hb = q + int(np.argmax(seg))
+            if hb > q and cx.prevp[d][min(hb - 1, i - LEG_K)] == q:  # confirmed pivots only
+                return int(q), int(hb), k + 1
+        q = cx.prevp[d][q - 1] if q > 0 else -1
+    return None
+
+
+def leg_levels(cx: Ctx, i: int, d: int) -> tuple[float, float] | None:
+    """The leg as prices, real (L, H) for a buy and (H, L) mirrored for a sell: returns
+    (start, extreme) with the leg in direction d."""
+    r = leg_index(cx, i, d)
+    if r is None:
+        return None
+    lo_src, hi_src = (cx.lo, cx.h) if d == 1 else (cx.h, cx.lo)
+    return lo_src[r[0]], hi_src[r[1]]
 
 
 def raw_signals(cx: Ctx) -> pd.DataFrame:
@@ -172,15 +214,21 @@ def _first(mask: np.ndarray) -> int:
     return int(k) if mask[k] else -1
 
 
-def simulate_one(cx: Ctx, i: int, d: int, st: Setting) -> dict:
-    """One signal. Prices are signed so a buy and a sell share the code."""
+def simulate_one(cx: Ctx, i: int, d: int, st: Setting, levels=None) -> dict:
+    """One signal. Prices are signed so a buy and a sell share the code. ``levels`` (stop, tp)
+    replace AHB's exits (GOLD_AHX: same TP for both legs, so no moved TP and no break-even)."""
     e = cx.c[i]
-    sld = cx.sld[i]
+    if levels is None:
+        sld = cx.sld[i]
+        stop = e - d * sld
+        tp1 = e + d * st.tp1 * sld
+        tpm = e + d * st.tp_moved * sld
+    else:
+        stop, tp1 = levels
+        sld = d * (e - stop)
+        tpm = tp1
     off = 0.18 * sld
-    stop = e - d * sld
     lim = e - d * off
-    tp1 = e + d * st.tp1 * sld
-    tpm = e + d * st.tp_moved * sld
     j1 = min(cx.end[i], i + HORIZON)
     if j1 <= i:
         return {}
@@ -248,7 +296,10 @@ def simulate_one(cx: Ctx, i: int, d: int, st: Setting) -> dict:
     return dict(i=i, d=d, gross=gross / risk, cost=costs / risk, slip=slip / risk,
                 net=(gross - costs) / risk, net_slip=(gross - costs - slip) / risk,
                 net_2x=(gross - 2 * costs - 2 * slip) / risk, exit_i=last_bar,
-                e2_filled=any(u == 2 for u, *_ in legs))  # fmt: skip
+                e2_filled=any(u == 2 for u, *_ in legs),
+                hit_tp=any(u == 1 and x == tp1 and not s_ for u, _, x, s_, _ in legs),
+                hit_sl=any(u == 1 and s_ and x == stop for u, _, x, s_, _ in legs),
+                p0=sld / (sld + d * (tp1 - e)), r_usd=sld)  # fmt: skip
 
 
 def run(cx: Ctx, sig: pd.DataFrame, st: Setting) -> pd.DataFrame:
@@ -263,7 +314,17 @@ def run(cx: Ctx, sig: pd.DataFrame, st: Setting) -> pd.DataFrame:
             continue
         if (max(busy.values()) if st.solo else busy[d]) >= i:
             continue
-        r = simulate_one(cx, int(i), int(d), st)
+        levels = None
+        if st.leg:
+            lv = leg_levels(cx, int(i), int(d))
+            if lv is None:
+                continue
+            start, ext = lv
+            rr, e = d * (ext - start), cx.c[i]
+            if not (d * (e - start) > 0 and d * (ext - e) > 0):
+                continue
+            levels = (ext - d * SL_K * rr, start + d * TP_K * rr)
+        r = simulate_one(cx, int(i), int(d), st, levels)
         if not r:
             continue
         busy[d] = r["exit_i"]
@@ -354,6 +415,74 @@ def build() -> str:
     return "\n".join(lines) + "\n"
 
 
+def edge_line(t: pd.DataFrame, lo: pd.Timestamp, hi: pd.Timestamp) -> str:
+    x = t[(t.ts >= lo) & (t.ts < hi)]
+    if not len(x):
+        return "| 0 | | | | |"
+    diff = x.hit_tp.astype(float) - x.p0
+    se = diff.std() / np.sqrt(len(x))
+    return (
+        f"| {len(x):,} | {x.hit_tp.mean():.1%} | {x.p0.mean():.1%} | {diff.mean():+.1%} "
+        f"(SE {se:.1%}) | ${x.r_usd.median():.2f} |"
+    )
+
+
+def build_x() -> str:
+    m1 = load_store()
+    cx = context(m1)
+    sig = raw_signals(cx)
+    t0 = pd.Timestamp(f"{TUNE[0]}-01-01", tz="UTC")
+    t1 = pd.Timestamp(f"{TUNE[1] + 1}-01-01", tz="UTC")
+    end = pd.Timestamp(splits().lockbox_start, tz="UTC")
+    trades = {st.name: run(cx, sig, st) for st in SETTINGS_X}
+    lines = [
+        "# Gold AH leg exits: XAUUSD (`GOLD_AHX.md`)",
+        "",
+        f"_`python -m app research gold-ah build-x`: XAUUSD store M1, {t0.date()} to "
+        f"{end.date()} (the lockbox is not read). Net R per signal; costs as `GOLD_AHX.md` §1._",
+        "",
+    ]
+    decide = []
+    periods = (("Tune period, 2012-2021", t0, t1), ("Check, 2022 to 2026-01-09", CHECK_START, end))
+    for title, a, b in periods:
+        lines += [f"## {title}", "", HEAD]
+        for k, v in trades.items():
+            lines.append(f"| {k} " + _fmt(summary(v, a, b)))
+        lines.append("")
+    for k, v in trades.items():
+        a, b = summary(v, t0, t1), summary(v, CHECK_START, end)
+        c1 = bool(a.get("n")) and a["net"] > 0 and a["years_pos"] >= 0.6
+        c2 = bool(b.get("n")) and b["net_slip"] > 0
+        yp = f"{a['years_pos']:.0%}" if a.get("n") else ""
+        third = "pending" if c1 and c2 else "not needed"
+        decide.append(f"| {k} | {'met' if c1 else 'not met'} ({yp} of years +) | "
+                      f"{'met' if c2 else 'not met'} | {third} |")  # fmt: skip
+    lines += ["## Decision (§4)", "", "| Setting | 1. 2012-2021 | 2. Check | 3. FxPro |",
+              "| --- | --- | --- | --- |", *decide, ""]  # fmt: skip
+    x1 = trades["X1"]
+    lines += ["## The edge test (X1, before costs; deciding nothing)", "",
+              "| Period | Trades | TP hit | Random-walk rate | Difference | Median R |",
+              "| --- | --- | --- | --- | --- | --- |",
+              "| 2012-2021 " + edge_line(x1, t0, t1),
+              "| Check " + edge_line(x1, CHECK_START, end), "",
+              "Resolved trades only (TP or SL; the time and daily-break exits left out):", "",
+              "| Period | Trades | TP hit | Random-walk rate | Difference | Median R |",
+              "| --- | --- | --- | --- | --- | --- |",
+              "| 2012-2021 " + edge_line(x1[x1.hit_tp | x1.hit_sl], t0, t1),
+              "| Check " + edge_line(x1[x1.hit_tp | x1.hit_sl], CHECK_START, end), ""]  # fmt: skip
+    lines += ["## Net R by year (no slippage)", ""]
+    by = pd.DataFrame({k: v.groupby("year").net.mean() for k, v in trades.items() if len(v)})
+    lines += ["| Year | " + " | ".join(by.columns) + " |", "| --- |" + " --- |" * len(by.columns)]
+    for y, r in by.iterrows():
+        lines.append(f"| {y} | " + " | ".join(f"{v:+.3f}" for v in r.to_numpy()) + " |")
+    lines += ["", "## By side, whole period (net R with slippage)", "",
+              "| Setting | Buys | Sells |", "| --- | --- | --- |"]  # fmt: skip
+    for k, v in trades.items():
+        g = v.groupby("d").net_slip.mean()
+        lines.append(f"| {k} | {g.get(1, np.nan):+.3f} | {g.get(-1, np.nan):+.3f} |")
+    return "\n".join(lines) + "\n"
+
+
 def bot_entries(report: Path) -> pd.DataFrame:
     raw = report.read_bytes()
     txt = raw.decode("utf-16") if raw[:2] == b"\xff\xfe" else raw.decode("utf-8", "ignore")
@@ -416,13 +545,15 @@ def fxpro(export: Path, report: Path | None) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app research gold-ah")
-    ap.add_argument("command", choices=["build", "fxpro"])
+    ap.add_argument("command", choices=["build", "build-x", "fxpro"])
     ap.add_argument("--export", type=Path, help="fxpro: an FxPro GOLD M1 export")
     ap.add_argument("--bot-report", type=Path, help="fxpro: the bot's MT5 trade report")
     ap.add_argument("--out", type=Path, help="report path (default under docs/strategies)")
     args = ap.parse_args(argv)
     if args.command == "build":
         text, out = build(), args.out or REPORT
+    elif args.command == "build-x":
+        text, out = build_x(), args.out or REPORT.with_name("gold_ahx_xauusd.md")
     else:
         if args.export is None:
             ap.error("fxpro needs --export")
