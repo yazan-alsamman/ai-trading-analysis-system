@@ -88,6 +88,14 @@ def main(argv: list[str]) -> int:
         from app.research.gold_shadow import main as gold_shadow
 
         return gold_shadow(argv[1:])
+    if argv and argv[0] == "gold-dr":
+        from app.research.gold_dr import main as gold_dr
+
+        return gold_dr(argv[1:])
+    if argv and argv[0] == "gold-ah":
+        from app.research.gold_ah import main as gold_ah
+
+        return gold_ah(argv[1:])
     if argv and argv[0] == "gold-lab":
         from app.research.gold_lab import main as gold_lab
 
