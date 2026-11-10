@@ -93,22 +93,28 @@ def fx_lines(export: Path):
                 yield ln
 
 
+def five_trades(fr: dict[str, pd.DataFrame], start: pd.Timestamp = FX_START):
+    """v1 (the exam's code and settings) and the shadow level breaks (``GOLD_SHADOW.md``), as the
+    EA trades them, placed on or after ``start``: (v1 trades, all five, M8 events, context)."""
+    from app.research import gold_shadow as gs
+
+    t, events, cx = ge.exam_trades(fr, start=start)
+    shadow = [gs.level_run(cx, k, lv, events) for k, lv in gs.shadow_levels(cx).items()]
+    every = pd.concat([t, *shadow], ignore_index=True)
+    placed_at = pd.to_datetime(cx.m["close_utc"].to_numpy()[every["i"]], utc=True)
+    every = every[placed_at >= start].sort_values(["i", "strategy"], kind="stable")
+    every = every.reset_index(drop=True).assign(take=True)
+    every["id"] = np.arange(1, len(every) + 1)
+    return t, every, events, cx
+
+
 def fxpro(export: Path) -> str:
     """v1 (the exam's code and settings) on an FxPro GOLD M1 export (MT5 "Export Bars" or
     ``ExportHistory`` with ``GOLD_name = GOLD``): the trades for the check and the result by
     year."""
     fr = ge.frames_from_lines(fx_lines(export))  # a parse of GOLD's own feed, not a lockbox read
     zero = int((fr["5m"]["spread_max"] == 0).sum())  # 5-minute bars with no spread recorded
-    t, events, cx = ge.exam_trades(fr, start=FX_START)
-    # the reference for the check: v1 and the shadow level breaks (GOLD_SHADOW.md), as the EA
-    from app.research import gold_shadow as gs
-
-    shadow = [gs.level_run(cx, k, lv, events) for k, lv in gs.shadow_levels(cx).items()]
-    every = pd.concat([t, *shadow], ignore_index=True)
-    placed_at = pd.to_datetime(cx.m["close_utc"].to_numpy()[every["i"]], utc=True)
-    every = every[placed_at >= FX_START].sort_values(["i", "strategy"], kind="stable")
-    every = every.reset_index(drop=True).assign(take=True)
-    every["id"] = np.arange(1, len(every) + 1)
+    t, every, events, cx = five_trades(fr)
     every.to_parquet(FX_TRADES, index=False)
     gc.trade_file(every, events, cx, gl.STORE / FX_FILE)
     placed = pd.to_datetime(cx.m["ts_utc"].to_numpy()[t["i"]], utc=True)

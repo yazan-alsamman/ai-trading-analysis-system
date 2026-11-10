@@ -104,6 +104,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_ahl import main as gold_ahl
 
         return gold_ahl(argv[1:])
+    if argv and argv[0] == "gold-demo":
+        from app.research.gold_demo import main as gold_demo
+
+        return gold_demo(argv[1:])
     if argv and argv[0] == "gold-pbk":
         from app.research.gold_pbk import main as gold_pbk
 

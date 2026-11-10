@@ -199,6 +199,24 @@ judges each strategy by itself.
 ordinary drawdown, before the 100 trades the stop rules need. The guards are a backstop against an
 execution fault; the strategies are judged by rules 1-2 below. The risk a trade is unchanged.
 
+**The check, each week and each month (`python -m app research gold-demo check`).** The EA's log
+stays on the VPS, so the check reads what the account records:
+
+1. In MT5 on the laptop (Algo Trading off): History tab, all history, right click, **Report**,
+   **HTML**. Save it, for example `ReportHistory-592239561.html`.
+2. A fresh GOLD M1 export (the `ExportHistory` script or "Export Bars") that starts at least
+   three weeks before 2026-11-10, so the 5-day levels and the ATRs have filled.
+3. `python -m app research gold-demo check --report <report.html> --export <GOLD_M1 csv>`
+   writes `gold_demo_check.md`:
+   - the demo's trades matched with Python's on strategy and fill bar;
+   - the level, D and gross R on both sides;
+   - the demo's net R from its own money (profit + commission + swap over D × lots × 100);
+   - the entry slippage;
+   - each strategy's count and mean against the stop rules below.
+
+The strategy is the order comment the EA writes ("LVL4H PDL"), so trades of any other program on
+the account are left out. Trades are compared up to the start of the export's last server day.
+
 ### Stop rules (written 2026-11-07, before the demo; Fadi: "Yes, write and commit")
 
 A trade's net R is its net money (profit + commission + swap + fee, the EA's `DEAL` rows) over
