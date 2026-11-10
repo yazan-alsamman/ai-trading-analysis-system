@@ -99,3 +99,8 @@ the bot's geometry, not its edge.
 feature quintile, hour, weekday or session has gross R > 0 there. The greedy filter chosen on
 2012-2017 gave +0.010 gross on 2018-2021 (p 0.128), far below the 0.15-0.17 R cost; stopped before
 meta-labeling. Bigger legs lose less (less cost per R), but stay below zero before costs.
+Amendment 1 (meta-model on every X1 trade, walk-forward 2018-2021): LR and LightGBM accept 3-11% of
+trades, net −0.06 to −0.07 R; their gross is about 0, the gain over the base is only a lower cost
+per R (larger legs, lower spread). Line closed.
+Large legs and low cost (2012-2017 only, `gold_ahl_explore.md`): no drift after the signal at any
+horizon (at most +0.02 leg R, cost 0.09 leg R), so no TP / SL choice can make gross R positive.

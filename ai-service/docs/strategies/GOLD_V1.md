@@ -191,6 +191,13 @@ judges each strategy by itself.
 | Compared each month | live trades against the Python simulation of the same days; mean net R; cost a trade |
 | Live money | only if the demo's trades agree with the simulation, and its mean net R is not below the exam's range |
 | Strategies | LVL4H, PIVOT (v1, `RiskPct = 0.5`), PIVW, ASIA, PWHL (shadow, `ShadowRiskPct = 0.25`); `MaxOpenRiskPct = 2` |
+| Runs on | MetaTrader VPS Amsterdam 10 (MQL5 virtual hosting, 1 month, from 2026-11-10); the log file stays on the VPS, so the monthly check reads the account history (one magic number per strategy) |
+
+**Guards changed before the demo (Fadi, 2026-11-10):** `DailyLossPct = 3` (was 2) and
+`MaxDrawdownPct = 25` (was 10). The reason: the five together had a largest drawdown of 54%
+(38% from 2019) at these risks on FxPro GOLD (above), so a 10% stop would end the demo in an
+ordinary drawdown, before the 100 trades the stop rules need. The guards are a backstop against an
+execution fault; the strategies are judged by rules 1-2 below. The risk a trade is unchanged.
 
 ### Stop rules (written 2026-11-07, before the demo; Fadi: "Yes, write and commit")
 
@@ -208,7 +215,8 @@ its money risk at entry (the distance D × lots × 100).
      (`gold-live check` on the demo log and a fresh GOLD export)?
    - If they are not, the EA is fixed. If they are, the strategy stays off.
    - It comes back only by a new decision recorded here.
-4. **Account guards, in the EA since 2026-11-07:**
+4. **Account guards, in the EA since 2026-11-07** (on the demo: 3% and 25% since 2026-11-10,
+   see above; the text below gives the original values):
    - **`DailyLossPct = 2`.** At a loss of 2% of the trading day's opening equity (17:00 New York),
      the EA closes its trades and orders and stops until the next trading day.
    - **`MaxDrawdownPct = 10`.** At a drawdown of 10% from the equity peak, the EA closes them and

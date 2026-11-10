@@ -154,3 +154,11 @@ def test_screen_and_meta_run_end_to_end_on_synthetic_trades() -> None:
     text, state = ahf.meta_stage(t, dict(state, stage2=True))
     assert "| lr |" in text and "| lgbm |" in text
     assert set(state["stage3"]) == {"lr", "lgbm"}
+
+
+def test_meta_runs_on_every_trade_under_the_amendment() -> None:
+    t = _trades(n=4000, signal=1.0)
+    state = {"stage2": False, "conds": [], "amendment": 1}
+    text, state = ahf.meta_stage(t, state)
+    assert "every X1 trade" in text and "## By window" in text
+    assert state["v_net_slip"] is not None

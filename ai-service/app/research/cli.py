@@ -100,6 +100,14 @@ def main(argv: list[str]) -> int:
         from app.research.gold_ahf import main as gold_ahf
 
         return gold_ahf(argv[1:])
+    if argv and argv[0] == "gold-ahl":
+        from app.research.gold_ahl import main as gold_ahl
+
+        return gold_ahl(argv[1:])
+    if argv and argv[0] == "gold-pbk":
+        from app.research.gold_pbk import main as gold_pbk
+
+        return gold_pbk(argv[1:])
     if argv and argv[0] == "gold-lab":
         from app.research.gold_lab import main as gold_lab
 

@@ -218,3 +218,46 @@ did not run; C was not read.
 The base rules come from the bot's trades (`GOLD_AH.md`, disclosure). X1 has already been read on
 D, V and C (gross about 0 everywhere, `gold_ahx_xauusd.md`); this study reads the same trades split
 by features. The stage-2 control is there because the filter is searched on D.
+
+## 11. Amendment 1 (2026-11-09, after the stage-2 outcome): stage 3 on every X1 trade
+
+**Written after stage 2 was read and did not pass** (§9). Fadi chose to run the meta-model anyway
+("وافقت. خلينا على كل الصفقات والموديل يتعلم"): if no fixed filter makes gross R positive, can a
+model trained on all 50 features find the trades whose net R is positive?
+
+- **Base:** every X1 trade, no filter. The stage-2 filter is not used: its +0.010 gross on V was
+  not distinguishable from 0 and it dropped 90% of the trades; the model can learn its conditions
+  if they are real.
+- **Everything else as written:** §6 (label, features, walk-forward, models, EV rule, random
+  controls) and its gate, unchanged; the carry rule of §6 applies with "the filter alone" read as
+  "every trade" (V net R with slippage −0.172, so it cannot be carried); §7 (the check, once) only if
+  a model passes.
+- **Disclosure:** stage 3 now runs on a base whose gross R is about 0 (−0.004 on V), against the
+  original condition. The study counts as one exploratory look with stage 2; this amendment is
+  disclosed beside it in `docs/phase3/TRIALS.md`.
+
+Command: `python -m app research gold-ahf meta --amendment 1` (refuses unless stage 2 ran and did
+not pass; runs once).
+
+### Outcome of Amendment 1 (2026-11-09): neither model passes; the study stops
+
+`gold_ahf_meta.md`. Walk-forward 2018-2021, 73,875 base trades (gross −0.004, net −0.156, slip
+−0.172).
+
+| Model | Accepted | Net R acc. (slip) | Gain vs base | Random 95th | BSS | Gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| LR | 8,320 (11%) | −0.067 (−0.079) | +0.089 | −0.117 | +0.145 | not met (net < 0) |
+| LightGBM | 2,550 (3%) | −0.056 (−0.064) | +0.099 | −0.153 | +0.156 | not met (net < 0) |
+
+- Both models meet conditions 2-4 (they beat the base and the random controls, Brier skill
+  +0.15) and fail condition 1: the accepted trades still lose after costs. Nothing is carried
+  forward; C and F were not read.
+- **The models learned the cost, not an edge.** The accepted trades' gross R, weighted over the
+  windows, is about +0.003 (LR) and −0.001 (LightGBM): the same as the base. The gain of +0.09 to
+  +0.10 R is the cost per R falling from about 0.15 to about 0.06, by picking trades with large
+  legs and low spread. The high Brier skill has the same source: a trade whose cost is a large
+  share of its SL almost never ends with net R > 0, and `cost_r` is a feature.
+- LightGBM accepts nothing in 2021; LR's best window (2021-07) is +0.002 on 228 trades.
+- With stage 1 (no cell with gross R > 0 on 2012-2017), this closes the AH line: the bot's
+  geometry has no edge before costs on 14 years, no fixed filter and no model on 50 features finds
+  one, and a model can only lower the cost share.

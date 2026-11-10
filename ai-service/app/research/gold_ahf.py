@@ -769,22 +769,34 @@ def meta_stage(t: pd.DataFrame, state: dict) -> tuple[str, dict]:
     conds = conds_from(state)
     ft = t[apply(conds, t)].reset_index(drop=True)
     v = ft[_period(ft, V_PERIOD)]
+    if conds:
+        base = "the trades passing the stage-2 filter (" + "; ".join(c.text() for c in conds) + ")"
+    else:
+        base = "every X1 trade, no filter (Amendment 1, `GOLD_AHF.md` §11)"
+    if state.get("amendment") == 1:
+        state = dict(state, v_net_slip=float(v.net_slip.mean()))
     lines = [
         "# Gold AH filters: stage 3, meta-labeling (`GOLD_AHF.md` §6)",
         "",
-        "_`python -m app research gold-ahf meta`: the trades passing the stage-2 filter "
-        "(" + "; ".join(c.text() for c in conds) + "); walk-forward 2018-2021._",
+        f"_`python -m app research gold-ahf meta`: {base}; walk-forward 2018-2021._",
         "",
-        f"Filtered trades on V: {len(v):,}, net R {v.net.mean():+.3f} "
+        f"Base trades on V: {len(v):,}, gross R {v.gross.mean():+.3f}, net R {v.net.mean():+.3f} "
         f"(slip {v.net_slip.mean():+.3f}).",
         "",
-        "| Model | Accepted | A window | Net R acc. | Net R slip acc. | Gain vs filter | "
+        "| Model | Accepted | A window | Net R acc. | Net R slip acc. | Gain vs base | "
         "Random 95th | BSS | Gate |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     passed = {}
+    per_window = []
     for model in ("lr", "lgbm"):
         wf = walk_forward(ft, model)
+        for w, g in wf.groupby("window") if len(wf) else []:
+            a_ = g[g.accept]
+            per_window.append(
+                f"| {model} | {w} | {len(g):,} | {len(a_):,} | {g.net.mean():+.3f} | "
+                + (f"{a_.net.mean():+.3f} | {a_.gross.mean():+.3f} |" if len(a_) else "| |")
+            )
         if not len(wf):
             lines.append(f"| {model} | 0 | | | | | | | not met |")
             passed[model] = False
@@ -812,6 +824,14 @@ def meta_stage(t: pd.DataFrame, state: dict) -> tuple[str, dict]:
             f"{acc.net_slip.mean():+.3f} | {net_acc - wf.net.mean():+.3f} | {r95:+.3f} | "
             f"{bss:+.4f} | {'met' if ok else 'not met'} |"
         )
+    lines += [
+        "",
+        "## By window (deciding nothing)",
+        "",
+        "| Model | Window | Trades | Accepted | Net R all | Net R acc. | Gross R acc. |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        *per_window,
+    ]
     carry = "lr" if passed["lr"] else "lgbm" if passed["lgbm"] else None
     if carry is None and state.get("v_net_slip") is not None and state["v_net_slip"] > 0:
         carry = "filter"
@@ -892,6 +912,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app research gold-ahf")
     ap.add_argument("command", choices=["screen", "meta", "check"])
     ap.add_argument("--export", type=Path, help="check: an FxPro GOLD M1 export (required)")
+    ap.add_argument(
+        "--amendment", type=int, choices=[1], help="meta: Amendment 1 (GOLD_AHF.md §11)"
+    )
     args = ap.parse_args(argv)
     if args.command == "check" and args.export is None:
         ap.error("check needs --export (condition F, GOLD_AHF.md §7)")
@@ -903,10 +926,15 @@ def main(argv: list[str] | None = None) -> int:
         text, state = screen(t)
         out = SCREEN
     elif args.command == "meta":
-        if not state.get("stage2"):
-            ap.error("stage 3 runs only after stage 2 passed (GOLD_AHF.md §5)")
         if "stage3" in state:
             ap.error("stage 3 already ran; it runs once")
+        if args.amendment == 1:
+            # Amendment 1: stage 2 did not pass; stage 3 on every X1 trade, no filter
+            if "stage2" not in state or state["stage2"]:
+                ap.error("Amendment 1 applies only after stage 2 ran and did not pass")
+            state = dict(state, amendment=1, stage2_conds=state["conds"], conds=[])
+        elif not state.get("stage2"):
+            ap.error("stage 3 runs only after stage 2 passed (GOLD_AHF.md §5, or --amendment 1)")
         t = build_set(ah.load_store())
         text, state = meta_stage(t, state)
         out = META
