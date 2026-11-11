@@ -145,3 +145,13 @@ a time on a bars x live-levels matrix (`events.discrete_signals`), checked ident
 version on every real family over 2019 (`discrete_signals_reference`, and a test); the discovery
 run computes only the days of 2012-2021. One shifted copy went from 310 s to 53 s, so the 200
 copies run on 2 worker processes (memory) in about 1.5 hours.
+
+## Outcome L1 (2026-11-11): negative; the study ends (§7)
+
+`discovery.md`. **0 of 8 primary tests pass; 0 of 48 families.** Every primary pool loses after
+costs (−0.04 to −0.25 R a trade) and is within noise of its own 200 shifted copies (t −1.3 to
++1.9): the location of the levels carries no information that survives here. Real families lose
+most (−0.22 break, −0.25 rejection; their shifted copies −0.22 / −0.25): their stops are close, so
+costs are a large share of R. The best single readings: RND-100 break +0.011 (470 trades, t 2.5),
+ANC-D-0.5 break t 2.2; neither near the gates. Exits: stop 42%, target 27%, end of day 22%, 5-hour
+rule 9%. No confirmation on FX, no demo shadow.
