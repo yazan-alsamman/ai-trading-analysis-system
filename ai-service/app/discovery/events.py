@@ -87,12 +87,20 @@ def window_times(days: pd.Series, hhmm: str, tz: str) -> pd.Series:
     return local.dt.tz_convert("UTC").dropna()
 
 
+def month_ends(days: pd.Series) -> pd.Series:
+    """The last weekday with data of each month, for months the data has passed (the data's
+    last month may be incomplete; its last day is not known to be the month's end)."""
+    month = days.dt.to_period("M")
+    last = days.groupby(month).max()
+    return last[last.index < month.max()]
+
+
 def f2(m1: pd.DataFrame) -> pd.DataFrame:
     ts = m1["ts_utc"]
     c = m1["close"].to_numpy()
     days = pd.Series(pd.to_datetime(ts.dt.tz_convert(LONDON).dt.date.unique()))
     days = days[days.dt.day_of_week < 5]
-    last = days.groupby(days.dt.to_period("M")).max()
+    last = month_ends(days)
     out = []
     for name, (hhmm, tz) in WINDOWS.items():
         dd = pd.Series(last.to_numpy()) if name == "MONTHEND" else days

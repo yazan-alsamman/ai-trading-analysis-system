@@ -19,5 +19,9 @@ def main(argv: list[str]) -> int:
         from app.discovery.drivers import main as drivers
 
         return drivers(argv[1:])
+    if argv and argv[0] in ("map", "confirm"):
+        from app.discovery.map import main as run
+
+        return run(argv[1:], step=argv[0])
     print(__doc__, file=sys.stderr)
     return 2

@@ -151,3 +151,19 @@ The map is one entry in `TRIALS.md` with N = 210; confirmation one more. Reports
 test, frozen before the first run.
 
 **Approval:** Fadi, 2026-11-11 ("Approved"), as written, including the changes in §12.
+
+## Addendum 1 (2026-11-11, before any discovery or confirmation markout was computed)
+
+Found while testing the code of §13 on hand-built bars and a smoke run on 2013-03 to 2013-04 (the
+debugging period; only counts and run time were read):
+
+1. **MONTHEND in an incomplete month** (`events.f2`, and its placebo): the data's last month took its
+   last day with data as the month's end (in confirmation: 2026-01-09). Now only months the data
+   has passed have a month end (`events.month_ends`). Discovery (2018-2021, read with 3 days of
+   data after it) is unchanged.
+2. **Markout past the data's end** returned the last bar; now missing.
+3. **F3 placebo:** releases outside the data borrowed the edge days of the data, and two releases
+   could share a placebo minute. Now a release needs placebo days within 30 calendar days of it
+   and inside the data, and placebo minutes are counted once.
+
+Code frozen at the commit tagged `discovery-map-code`.
