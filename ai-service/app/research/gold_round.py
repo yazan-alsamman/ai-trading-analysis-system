@@ -157,14 +157,64 @@ def fxpro(export: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+COMBO_REPORT = gl.OUT_DIR / "gold_round_combo.md"
+COMBO_STEPS = (25.0, 50.0, 100.0)
+
+
+def combo(export: Path) -> str:
+    """Descriptive (Fadi, 2026-11-11; decides nothing): the five with ROUND at $25, $50 or $100
+    added, on XAUUSD 2012 to 2026-01-09 and on FxPro 2016-02 to the export's end."""
+    lines = ["# Gold: the five with round-number breaks added (descriptive)", "",
+             "_`python -m app research gold-round combo`. Net R with slip; ROUND traded with "
+             "LVL4H's frozen engine, as in `GOLD_ROUND.md`. Decides nothing; logged in "
+             "`TRIALS.md`._", ""]  # fmt: skip
+    feeds = {"XAUUSD 2012 to 2026-01-09": (gl.context(gl.load()), gl.START),
+             "FxPro 2016-02 to 2026-11-05": (gl.context(ge.frames_from_lines(gv.fx_lines(export))),
+                                             gv.FX_START)}  # fmt: skip
+    exam = pd.Timestamp("2026-01-12", tz="UTC")
+    for name, (cx, start) in feeds.items():
+        when = pd.to_datetime(cx.m["close_utc"], utc=True).to_numpy()
+
+        def since(t: pd.DataFrame, a=start, w=when) -> pd.DataFrame:
+            return t[pd.to_datetime(w[t["i"]], utc=True) >= a]
+
+        days = len(np.unique(cx.ny_day[(cx.m["close_utc"] >= start).to_numpy() & (cx.weekday < 5)]))
+        day = {k: since(d) for k, d in gn.day_strategies(cx).items()}
+        rows = [("The five", list(day.values()), None)]
+        for step in COMBO_STEPS:
+            t = since(run(cx, step))
+            rows.append((f"The five + ROUND ${step:g}", [*day.values(), t], t))
+        lines += [f"## {name}", "",
+                  "| Set | Trades | Trades a day | Mean | Sum | Largest drawdown | ROUND alone "
+                  "| ROUND from 2026-01-12 | Correlation with the five |",
+                  "|" + " --- |" * 9]  # fmt: skip
+        for label, parts, t in rows:
+            p = gn.portfolio(parts)
+            extra = "| | |"
+            if t is not None:
+                corr = gn.correlations(t, day)
+                in26 = since(t, exam)
+                late = f"{in26['net_slip'].mean():+.3f} ({len(in26)})" if len(in26) else "-"
+                extra = (f"| {t['net_slip'].mean():+.3f} ({len(t):,}) | {late} "
+                         f"| {min(corr.values()):+.2f} to {max(corr.values()):+.2f}")  # fmt: skip
+            lines.append(f"| {label} | {p['trades']:,} | {p['trades'] / days:.2f} "
+                         f"| {p['mean']:+.3f} | {p['sum']:+.1f} | {p['dd']:.1f} "
+                         f"{extra} |")  # fmt: skip
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app research gold-round")
-    ap.add_argument("step", choices=("build", "fxpro"))
-    ap.add_argument("--export", type=Path, help="fxpro: the GOLD M1 export")
+    ap.add_argument("step", choices=("build", "fxpro", "combo"))
+    ap.add_argument("--export", type=Path, help="fxpro, combo: the GOLD M1 export")
     args = ap.parse_args(argv)
     if args.step == "build":
         REPORT.write_text(build(), encoding="utf-8", newline="\n")
         print(f"wrote {REPORT}")
+    elif args.step == "combo":
+        COMBO_REPORT.write_text(combo(args.export), encoding="utf-8", newline="\n")
+        print(f"wrote {COMBO_REPORT}")
     else:
         FX_REPORT.write_text(fxpro(args.export), encoding="utf-8", newline="\n")
         print(f"wrote {FX_REPORT}")
