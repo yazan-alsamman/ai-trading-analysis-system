@@ -153,3 +153,4 @@ version and a new trial.
 | Date | Measurement | Report | Result |
 | --- | --- | --- | --- |
 | 2026-10-23 | E1 on the 13 walk-forward test windows (2018-01 to 2024-06) | `docs/phase4/walkforward_L1.md` | 1,058 trades, TP 11.1%, mean net R -0.047 (95% weekly block -0.115 to +0.020) |
+| 2026-11-11 | Tool check with planted edges (`docs/discovery/INJECT.md`, registered before the run; planted data, not a trial) | `docs/discovery/inject_result.md` | Simulator exact (planted 0.03-0.20 R recovered within 0.2 SE; cost exact). Map: every planted lift measured exactly, never flags 1x cost, flags 2-3x cost at 15-30 minutes; **fails its registered power at 60 minutes and beyond** (noise about 3.5x the `PREREG_2` §11 statement); COMEX E0 thin; the "false alarms" are cells sharing the planted events |

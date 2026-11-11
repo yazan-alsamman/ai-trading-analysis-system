@@ -47,3 +47,38 @@ Code: `app/discovery/inject.py`, `python -m app discovery inject`. Report: `inje
 ## Count
 
 Not a trial (planted data). Logged in `TRIALS.md` under measurements, with the outcome.
+
+## Outcome (2026-11-11): the computations are right; the map is weaker than registered at long horizons
+
+`inject_result.md`. By the letter of the criteria above, **Part B passes and Part A fails**
+(criteria 2 and 6). What the failures are:
+
+**Part B, the simulator: passes.** Planted 0.03, 0.05, 0.10, 0.20 R came back as +0.029, +0.049,
++0.097, +0.198 (within 0.2 SE); cost R exact for every trade; a planted 0.05 R gives t = 3.7 on
+2,578 trades. The strategy tests measure what is there.
+
+**Part A, the map.**
+- Every planted lift is measured exactly (+1.00, +2.00, +3.00, +5.00 at h >= 15); 1x cost is never
+  flagged (criterion 1 holds); 2x is borderline and 3x and 5x pass at 15 minutes in every large cell
+  (BREAK-25 at 15-120 minutes).
+- **Criterion 2 fails at 60 minutes** (PM-30 at 3x and 5x, HIGH+5 at 3x; PM-30 at 30 minutes at 3x).
+  Planting did not move E0 or the placebo; the cause is noise. The standard error of mean z at
+  60 minutes is about 1.3-1.5 cost units for these cells, about 3.5x what `PREREG_2.md` §11 implied:
+  z divides each markout by its own bar's cost, which is sometimes very small (a tight recorded
+  spread), so z has long tails that the §11 calculation (median cost) missed. **§11 overstated the
+  map's power at h >= 30-60.**
+- **Criterion 6 "fails" by overlap, not by false alarms:** the cells that also passed share the
+  planted events: every BREAK-50, -75 and -100 event is also a BREAK-25 event (same bar and sign),
+  and 77% of PM-60's are PM-30's. Cells with no shared events: 0 false alarms in 16 runs. The
+  registration missed the overlap.
+- **A defect found:** E0 for COMEX (13:30 New York every day) has a draw for only 15-18% of events
+  (every bar of that hour lies within 60 minutes of a daily event); PM and WM 85-90%. Their E0
+  tests rest on few, unusual days. It does not change the map (their |mean z| is below 1.3).
+
+**What this means for the negative map (`map.md`).**
+- At 1-30 minutes the verdict stands: an effect of 2-3 cost units in a large cell would have
+  been found.
+- **At 60-240 minutes it is weaker than written:** an effect of 2-4 cost units there could pass
+  unseen. The largest long-horizon readings of the real map (continuation after a $50 / $100 break,
+  z +3.4 to +4.1 at 120-240 minutes, t 2.3-2.6) are the size a real effect of that order would
+  show; they are equally what chance gives among 210 cells. The map cannot tell which.
