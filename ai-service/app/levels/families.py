@@ -49,7 +49,7 @@ class Discrete:
 
 def day_bounds(cx: gl.Ctx) -> tuple[np.ndarray, np.ndarray]:
     """First and one-past-last 5m bar of each D1 bar (trading day); -1 / -1 when it has none."""
-    n = len(cx.d1)
+    n = max(len(cx.d1), int(cx.day_idx.max()) + 1 if len(cx.day_idx) else 0)
     first, end = np.full(n, -1), np.full(n, -1)
     ok = (cx.day_idx >= 0) & (cx.day_idx < n)
     idx = np.arange(len(cx.c))[ok]

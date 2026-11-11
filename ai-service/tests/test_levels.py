@@ -152,3 +152,20 @@ def test_range_projections() -> None:
         "L-1": 90.0,
         "L-2": 80.0,
     }
+
+
+def test_fast_signals_equal_the_reference() -> None:
+    rng = np.random.default_rng(21)
+    n = 600
+    c = 2000 + np.cumsum(rng.normal(0, 1.5, n))
+    cx = make(c)
+    cx.day_idx = np.repeat(np.arange(n // 100), 100)
+    lv = 2000 + rng.normal(0, 25, 60)
+    st = rng.integers(0, n - 50, 60)
+    end = np.minimum(st + rng.integers(20, 300, 60), n)
+    recs = pd.DataFrame({"level": lv, "start": st, "end": end})
+    fam = fm.Discrete("X", recs.sort_values("start").reset_index(drop=True))
+    a = ev.discrete_signals_reference(cx, fam).reset_index(drop=True)
+    b = ev.discrete_signals(cx, fam).reset_index(drop=True)
+    assert len(a) > 20
+    pd.testing.assert_frame_equal(a, b, check_dtype=False)

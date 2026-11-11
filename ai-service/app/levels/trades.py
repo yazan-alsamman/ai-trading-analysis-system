@@ -55,7 +55,11 @@ def entries(cx: gl.Ctx, sig: pd.DataFrame, dl: np.ndarray | None = None) -> pd.D
     out["cost_raw"] = (cx.spread[kk] + COMMISSION) / out["risk"]
     out["cost_std"] = np.maximum(cx.spread[kk], STD_SPREAD) / out["risk"]
     out["end"] = dl[kk]
-    out["year"] = pd.to_datetime(cx.m["close_utc"].to_numpy()[i[ok]], utc=True).year
+    years = getattr(cx, "_years", None)
+    if years is None:  # cached on the context: the conversion is slow
+        years = pd.to_datetime(cx.m["close_utc"], utc=True).dt.year.to_numpy()
+        cx._years = years
+    out["year"] = years[i[ok]]
     return out.reset_index(drop=True)
 
 

@@ -111,7 +111,8 @@ def _touches(cx: gl.Ctx, recs: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True)
 
 
-def discrete_signals(cx: gl.Ctx, fam: fm.Discrete) -> pd.DataFrame:
+def discrete_signals_reference(cx: gl.Ctx, fam: fm.Discrete) -> pd.DataFrame:
+    """The first, level-by-level version: slow; kept as the reference the tests compare with."""
     recs = fam.recs
     t = _touches(cx, recs)
     if t.empty:
@@ -147,5 +148,74 @@ def discrete_signals(cx: gl.Ctx, fam: fm.Discrete) -> pd.DataFrame:
     )
 
 
-def signals(cx: gl.Ctx, fam: fm.Lattice | fm.Discrete) -> pd.DataFrame:
-    return lattice_signals(cx, fam) if isinstance(fam, fm.Lattice) else discrete_signals(cx, fam)
+def discrete_signals(cx: gl.Ctx, fam: fm.Discrete, days: np.ndarray | None = None) -> pd.DataFrame:
+    """As ``discrete_signals_reference``, a trading day at a time on a bars x live-levels matrix
+    (the same rules, much faster). ``days``: only these D1 bars."""
+    recs = fam.recs
+    if recs.empty:
+        return pd.DataFrame(columns=COLS)
+    st, en, lvl = (recs[k].to_numpy() for k in ("start", "end", "level"))
+    span = int((en - st).max())
+    first, end = fm.day_bounds(cx)
+    c, h, lo = cx.c, cx.h, cx.lo
+    bb, tt = fm.B_ATR * cx.atr5, fm.TAU_ATR * cx.atr5
+    out = []
+    for d in range(len(first)) if days is None else days:
+        a, e = max(int(first[d]), 1), int(end[d])
+        if first[d] < 0 or e <= a:
+            continue
+        lo_r, hi_r = np.searchsorted(st, a - span, "left"), np.searchsorted(st, e, "left")
+        sel = np.arange(lo_r, hi_r)
+        sel = sel[en[sel] > a]
+        if not len(sel):
+            continue
+        L, S, E = lvl[sel][None, :], st[sel][None, :], en[sel][None, :]
+        idx = np.arange(a, e)
+        col = idx[:, None]
+        live = (S <= col) & (E > col)
+        pp, cc = c[idx - 1][:, None], c[idx][:, None]
+        hh, ll, b_, t_ = h[idx][:, None], lo[idx][:, None], bb[idx][:, None], tt[idx][:, None]
+        up = live & (pp <= L) & (cc > L + b_)
+        dn = live & (pp >= L) & (cc < L - b_)
+        near = live & (np.abs(cc - L) <= t_)
+        rs = near & (pp < L) & (hh >= L)  # from below: sell
+        rb = near & (pp > L) & (ll <= L)  # from above: buy
+        rows = []
+        far = np.where(up, L, np.where(dn, -L, -np.inf))  # the farthest broken level
+        r = np.flatnonzero(np.isfinite(far.max(axis=1)))
+        if len(r):
+            k = far[r].argmax(axis=1)
+            rows.append(("break", r, k, np.where(up[r, k], 1.0, -1.0)))
+        dist = np.where(rs | rb, np.abs(cc - L), np.inf)
+        r = np.flatnonzero(np.isfinite(dist.min(axis=1)))
+        if len(r):
+            k = dist[r].argmin(axis=1)
+            rows.append(("rejection", r, k, np.where(rs[r, k], -1.0, 1.0)))
+        for beh, r, k, dr in rows:
+            lv = L[0, k]
+            diff = dr[:, None] * (L - lv[:, None])
+            m = live[r]
+            ahead = np.where(m & (diff > 1e-9), diff, np.inf)
+            behind = np.where(m & (diff < -1e-9), -diff, np.inf)
+            ka, kb = ahead.argmin(axis=1), behind.argmin(axis=1)
+            ok = np.isfinite(ahead[np.arange(len(r)), ka]) & np.isfinite(
+                behind[np.arange(len(r)), kb]
+            )
+            out.append(pd.DataFrame({"i": idx[r][ok], "behaviour": beh, "dir": dr[ok],
+                                     "level": lv[ok], "target": L[0, ka][ok],
+                                     "stop": (lv[ok] + L[0, kb][ok]) / 2,
+                                     "o": 0 if beh == "break" else 1}))  # fmt: skip
+    if not out:
+        return pd.DataFrame(columns=COLS)
+    t = pd.concat(out, ignore_index=True).sort_values(["i", "o"], kind="stable")
+    return _frame(fam, t["behaviour"].to_numpy(), t["i"].to_numpy(), t["dir"].to_numpy(),
+                  t["level"].to_numpy(), t["target"].to_numpy(), t["stop"].to_numpy())  # fmt: skip
+
+
+def signals(
+    cx: gl.Ctx, fam: fm.Lattice | fm.Discrete, days: np.ndarray | None = None
+) -> pd.DataFrame:
+    """A family's signals; ``days`` (D1 bars) limits the real families' work to those days."""
+    if isinstance(fam, fm.Lattice):
+        return lattice_signals(cx, fam)
+    return discrete_signals(cx, fam, days)

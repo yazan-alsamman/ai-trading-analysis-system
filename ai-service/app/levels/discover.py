@@ -35,6 +35,8 @@ REPORT = ROOT / "docs" / "levels" / "discovery.md"
 OUT = ROOT / "data" / "processed" / "levels"
 FROM, TO = pd.Timestamp("2012-01-01", tz="UTC"), pd.Timestamp("2022-01-01", tz="UTC")
 COPIES, SEED = 200, 20261116
+# each worker holds the bars (about 0.8 GB): 2 by default on this 16 GB machine
+WORKERS = int(os.environ.get("LEVELS_WORKERS", "2"))
 PRIMARY = dict(mean=0.03, t=3.0, alpha=0.05)
 SECONDARY = dict(mean=0.05, t=3.0, fdr=0.10, trades=300)
 KINDS = ("real", "round", "percent", "anchored")
@@ -53,9 +55,10 @@ def shift(fam, u: float, spacing: float):
 
 
 def run_families(cx: gl.Ctx, fams: list, dl: np.ndarray, in_period: np.ndarray) -> pd.DataFrame:
+    days = period_days(cx, in_period)
     parts = []
     for fam in fams:
-        s = ev.signals(cx, fam)
+        s = ev.signals(cx, fam, days)
         s = s[in_period[s["i"].to_numpy()]]
         e = tr.entries(cx, s, dl)
         if len(e):
@@ -67,6 +70,11 @@ def blocks(cx: gl.Ctx, k: np.ndarray) -> np.ndarray:
     m = cx.m["ts_utc"].dt.tz_convert("UTC").dt.tz_localize(None).to_numpy("datetime64[m]")
     start = np.datetime64(FROM.tz_convert(None), "m")
     return ((m[k] - start).astype("int64") // mk.BLOCK_MIN).astype(int)
+
+
+def period_days(cx: gl.Ctx, in_period: np.ndarray) -> np.ndarray:
+    d = np.unique(cx.day_idx[in_period])
+    return d[d >= 0]
 
 
 def setup() -> tuple:
@@ -84,7 +92,7 @@ def spacings(cx: gl.Ctx, fams: list, in_period: np.ndarray) -> dict[str, float]:
     for fam in fams:
         if isinstance(fam, fm.Lattice):
             continue
-        s = ev.signals(cx, fam)
+        s = ev.signals(cx, fam, period_days(cx, in_period))
         s = s[in_period[s["i"].to_numpy()]]
         out[fam.name] = float(np.median(np.abs(s["target"] - s["level"]))) if len(s) else 0.0
     return out
@@ -270,7 +278,7 @@ def main() -> int:
         for f in fams:
             us[f.name] = float(rng.uniform(0.0, 1.0))
         jobs.append((q, us, sp))
-    with mp.Pool(max(1, (os.cpu_count() or 2) - 2), initializer=_init) as pool:
+    with mp.Pool(WORKERS, initializer=_init) as pool:
         parts = pool.map(_copy, jobs, chunksize=1)
     plc = pd.concat([p for p in parts if len(p)], ignore_index=True)
     OUT.mkdir(parents=True, exist_ok=True)

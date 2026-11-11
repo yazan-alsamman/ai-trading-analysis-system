@@ -137,3 +137,11 @@ projections"): the range families get their range's projections**: high + 1 and 
 and 2 ranges (`families.projected`). FIB also gets 0% and 100%. SESS-A then gives about 2,700
 signals a year, SESS-L about 1,800. LIQ stays as registered (about one event a year: near empty).
 Also fixed: a slow loop in the level-life code (no change in what it computes).
+
+## Addendum 2 (2026-11-11, before any outcome)
+
+Speed only, no change in what is computed: the real families' signals are found a trading day at
+a time on a bars x live-levels matrix (`events.discrete_signals`), checked identical to the first
+version on every real family over 2019 (`discrete_signals_reference`, and a test); the discovery
+run computes only the days of 2012-2021. One shifted copy went from 310 s to 53 s, so the 200
+copies run on 2 worker processes (memory) in about 1.5 hours.
