@@ -240,7 +240,7 @@ data; gross +0.074 beats a random side, the cost takes it; `FIVE_NAS100.md`), an
 **Discovery round 2 (markout map, `docs/discovery/PLAN.md`)**: plan corrected and accepted (gates
 2 cost units, t ≥ 3, 224 cells; silver a feature only); D1-D2 in progress (MT5 calendar 2010-2026
 imported, `python -m app discovery calendar|drivers|count`; Dukascopy dollar index and US bond stored;
-fake spikes: F1 reads the dollar from 2019, the bond from 2020); no outcome computed; `PREREG_2.md` approved 2026-11-11; **the map (210 cells, 2018-2021) is negative: no cell passes, the round ends** (`docs/discovery/map.md`).
+fake spikes: F1 reads the dollar from 2019, the bond from 2020); no outcome computed; `PREREG_2.md` approved 2026-11-11; **the map (210 cells, 2018-2021) is negative: no cell passes, the round ends** (`docs/discovery/map.md`); a planted-edge check found the simulator exact and the map weak at 60-240 minutes (`INJECT.md`); the one lead (round-number break continuation) failed on six untouched markets (`LEAD_GRID.md`).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

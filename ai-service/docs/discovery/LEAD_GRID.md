@@ -61,3 +61,21 @@ only if the effect is larger there.
 
 One trial of 24 cells in `TRIALS.md`. Code: `app/discovery/lead.py`, `python -m app discovery
 lead --nas <NAS100 M1 export>`. Report: `lead_grid_result.md`.
+
+## Outcome (2026-11-11): the lead does not generalise
+
+`lead_grid_result.md`. **No cell shows continuation after Holm (0 of 24, 0 markets).**
+
+- **The four USD-quote pairs: about zero**, with plenty of power. 4,400-14,400 events a cell; ATR
+  markouts −0.031 to +0.010, excess over E0 −0.022 to +0.018 (t −1.4 to +0.8). A gold-sized effect
+  (+0.10 ATR) would show here at t of about 5 to 10. It is not there.
+- **USDJPY and NAS100: small and positive, not significant.** USDJPY 1.00 at 240 minutes +0.060
+  ATR over E0 (t 3.1) but +0.032 over the placebo (t 2.0; one-sided p 0.023 against Holm's
+  0.0021); NAS100 100 points +0.027 to +0.032 (t 2.0-2.3 over E0, 1.5-1.8 over the placebo). Both
+  are a third to a half of gold's size and below one cost unit (mean z +0.3 to +0.5): not tradable.
+- **Gold's reference (seen), same code:** +0.10 to +0.14 ATR over E0 and the placebo (t 1.6-2.8),
+  mean z +3.2 to +4.1.
+- **Reading:** a round-number break does not carry a general continuation; whatever gold showed in
+  2018-2021 (and `GOLD_ROUND` traded) is gold's own, or chance. Combined with the map
+  (`map.md`) and the tool check (`INJECT.md`), the discovery round ends: no new edge on gold, and
+  the one lead fails on six untouched markets.
