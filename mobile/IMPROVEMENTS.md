@@ -332,7 +332,7 @@ class TradingApp extends StatelessWidget {
         // TODO: إضافة متحكمات أخرى هنا
       ],
       child: MaterialApp(
-        title: 'TradeX',
+        title: 'AI Trading Assistance',
         debugShowCheckedModeBanner: false,
         theme: _buildAppTheme(), // ثيم كامل!
         home: const RegistrationScreen(),

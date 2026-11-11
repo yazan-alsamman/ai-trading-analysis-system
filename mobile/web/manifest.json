@@ -1,6 +1,6 @@
 {
-    "name": "trading_app",
-    "short_name": "trading_app",
+    "name": "AI Trading Assistance",
+    "short_name": "AI Trading",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

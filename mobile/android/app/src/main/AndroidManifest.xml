@@ -1,8 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- E1: الـ API (dio) بنسخة release؛ debug/profile عندهن ياها من قبل -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="trading_app"
+        android:label="AI Trading Assistance"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

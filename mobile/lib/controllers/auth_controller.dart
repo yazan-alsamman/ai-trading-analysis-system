@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import '../core/network/token_store.dart';
+import '../features/auth/data/session_store.dart';
 import '../models/user_model.dart';
-import '../services/secure_storage_service.dart';
 
 // ═══════════════════════════════════════════════════════════
 // Auth Status Enum - حالات المصادقة
@@ -36,17 +37,20 @@ enum AuthStatus {
 /// ⚠️ IMPORTANT: الواجهة (View) لا تتواصل مع الخدمات مباشرة
 /// يجب أن تمر جميع العمليات عبر هذا المتحكم
 final class AuthController extends ChangeNotifier {
-  AuthController({ImagePicker? picker, SecureStorageService? secureStorage})
+  AuthController({ImagePicker? picker, SessionStore? sessionStore})
       : _picker = picker ?? ImagePicker(),
-        _secureStorage = secureStorage ?? SecureStorageService();
+        _sessionStore = sessionStore;
 
   /// أداة اختيار الصور (لصورة البروفايل) - نفس نمط
   /// [AiChartAnalyzerController]، الواجهة ما بتلمسها مباشرة
   final ImagePicker _picker;
 
-  /// خدمة التخزين الآمن - لحفظ/قراءة/حذف auth token بعد
-  /// تسجيل الدخول/التسجيل/الخروج
-  final SecureStorageService _secureStorage;
+  /// الجلسة المحفوظة على الجهاز (G3: الـ token بالتخزين الآمن + أقل بيانات
+  /// للمستخدم) - null = بالذاكرة بس (بدون حفظ)
+  final SessionStore? _sessionStore;
+
+  /// الجلسة الحالية محفوظة؟ (بعد Log in / التحقق من البريد / الاستعادة)
+  bool _sessionSaved = false;
 
   // ═══════════════════════════════════════════════════════════
   // Private State - الحالة الخاصة
@@ -113,12 +117,14 @@ final class AuthController extends ChangeNotifier {
   /// تسجيل مستخدم جديد
   /// 
   /// Parameters:
+  /// - [fullName]: الاسم الكامل (بيصير الاسم المعروض)
   /// - [email]: البريد الإلكتروني
   /// - [password]: كلمة المرور
   /// 
   /// في حالة النجاح: [status] = [AuthStatus.success] و [currentUser] يتم تعيينه
   /// في حالة الفشل: [status] = [AuthStatus.failure] و [errorMessage] يتم تعيينه
   Future<void> register({
+    required String fullName,
     required String email,
     required String password,
   }) async {
@@ -132,13 +138,15 @@ final class AuthController extends ChangeNotifier {
       _currentUser = UserModel(
         id: 'uid_${DateTime.now().millisecondsSinceEpoch}',
         email: email,
+        displayName: fullName,
         createdAt: DateTime.now(),
+        // حساب الـ mock = متداول دايمًا؛ الدور بينحفظ مع الجلسة وبيرجع بعد الإقلاع
+        role: UserRole.trader,
       );
 
-      // TODO: لما نربط الـ API الحقيقي، الـ token رح يجي من استجابة
-      // السيرفر مباشرة (مثلاً response['token']) بدل التوليد الوهمي هون
-      await _secureStorage.saveToken('mock_token_${_currentUser!.id}');
-
+      // الحساب الجديد داخل بالذاكرة بس: الجلسة ما بتنحفظ قبل التحقق من
+      // البريد (OtpViewModel → [persistSession]). سكّر التطبيق بنص التسجيل
+      // = الإقلاع الجاي على Welcome.
       _setStatus(AuthStatus.success);
     } catch (error) {
       _setError(_parseError(error));
@@ -164,11 +172,13 @@ final class AuthController extends ChangeNotifier {
       _currentUser = UserModel(
         id: 'uid_mock',
         email: email,
+        // تسجيل دخول الـ mock = متداول دايمًا (SessionStore بيحفظ الدور، restoreSession بيرجّعه)
+        role: UserRole.trader,
       );
 
       // TODO: لما نربط الـ API الحقيقي، الـ token رح يجي من استجابة
-      // السيرفر مباشرة (مثلاً response['token']) بدل التوليد الوهمي هون
-      await _secureStorage.saveToken('mock_token_${_currentUser!.id}');
+      // السيرفر مباشرة (مثلاً response['token']) بدل التوليد الوهمي
+      await persistSession();
 
       _setStatus(AuthStatus.success);
     } catch (error) {
@@ -184,11 +194,58 @@ final class AuthController extends ChangeNotifier {
       // TODO: استبدال هذا بـ API call حقيقي عبر AuthService
       await Future.delayed(const Duration(seconds: 1));
 
-      await _secureStorage.deleteToken();
-      _currentUser = null;
-      _setStatus(AuthStatus.idle);
+      await endSession();
     } catch (error) {
       _setError(_parseError(error));
+    }
+  }
+
+  /// نهاية الجلسة (الطريق الوحيد من "داخل" لـ "طالع"): بيمسح الجلسة المحفوظة،
+  /// بعدين بيطلّع المستخدم - والـ router بيرجع لـ Welcome ويمسح الشجرة.
+  /// تسجيل الخروج بيستخدمها، والـ AuthInterceptor كمان لما الـ refresh ينرفض (E1).
+  Future<void> endSession() async {
+    try {
+      await _sessionStore?.clear();
+    } catch (error) {
+      debugPrint('AuthController: could not clear the saved session: $error');
+    } finally {
+      _sessionSaved = false;
+      _currentUser = null;
+      _setStatus(AuthStatus.idle);
+    }
+  }
+
+  /// يحفظ الجلسة الحالية على الجهاز (الإقلاع الجاي بيفتح على الرئيسية):
+  /// بعد Log in، وبعد التحقق من البريد لحساب جديد (مش قبل). فشل الحفظ ما
+  /// بيوقف الدخول - الجلسة بتضل بالذاكرة بس. [tokens] = استجابة `/auth/login`
+  /// لما الـ API الحقيقي مفعّل للـ auth (E1: SessionStore.realApi).
+  Future<void> persistSession({TokenPair? tokens}) async {
+    final user = _currentUser;
+    if (user == null || _sessionStore == null) return;
+    try {
+      await _sessionStore.save(user, tokens: tokens);
+      _sessionSaved = true;
+    } catch (error) {
+      debugPrint('AuthController: could not save the session: $error');
+    }
+  }
+
+  /// الـ splash: بيقرأ الجلسة المحفوظة؛ إذا موجودة المستخدم بيرجع داخل
+  /// (true)، غير هيك بيضل طالع (false). أي خطأ بالتخزين = ما في جلسة.
+  Future<bool> restoreSession() async {
+    if (_currentUser != null) return true;
+    final store = _sessionStore;
+    if (store == null) return false;
+    try {
+      final user = await store.read();
+      if (user == null) return false;
+      _currentUser = user;
+      _sessionSaved = true;
+      _setStatus(AuthStatus.success);
+      return true;
+    } catch (error) {
+      debugPrint('AuthController: could not read the saved session: $error');
+      return false;
     }
   }
   
@@ -200,20 +257,6 @@ final class AuthController extends ChangeNotifier {
     if (_status == AuthStatus.failure) {
       _setStatus(AuthStatus.idle);
     }
-  }
-
-  /// هل في auth token محفوظ من جلسة سابقة؟
-  ///
-  /// حالياً بس بتتحقق من وجود الـ token (بدون استرجاع بيانات
-  /// المستخدم، لأنه هاد يحتاج نداء API حقيقي لجلب بروفايله).
-  ///
-  /// TODO: لما نربط الـ API الحقيقي، نستخدمها بشاشة البداية (splash/
-  /// initial route) لعمل auto-login: إذا رجعت true، ننادي endpoint
-  /// يرجع بيانات المستخدم عبر الـ token المحفوظ ونعبي [_currentUser]
-  /// بدل ما نودي المستخدم لشاشة تسجيل الدخول من جديد
-  Future<bool> hasStoredSession() async {
-    final token = await _secureStorage.readToken();
-    return token != null;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -239,6 +282,8 @@ final class AuthController extends ChangeNotifier {
         displayName: displayName,
         email: email,
       );
+      // الجلسة المحفوظة بتاخد الاسم/البريد الجديد (الإقلاع الجاي بيعرضهن)
+      if (_sessionSaved) await persistSession();
 
       _isSavingProfile = false;
       notifyListeners();
@@ -257,7 +302,7 @@ final class AuthController extends ChangeNotifier {
     if (_currentUser == null) return;
 
     try {
-      final picked = await _picker.pickImage(source: source, imageQuality: 85);
+      final picked = await _picker.pickImage(source: source, maxWidth: 512, maxHeight: 512, imageQuality: 85);
       if (picked == null) return; // المستخدم لغى الاختيار
 
       _currentUser = _currentUser!.copyWith(avatarUrl: picked.path);
@@ -278,15 +323,11 @@ final class AuthController extends ChangeNotifier {
       displayName: _currentUser!.displayName,
       avatarUrl: null,
       createdAt: _currentUser!.createdAt,
+      role: _currentUser!.role,
     );
     notifyListeners();
   }
 
-  /// مسح خطأ تعديل البروفايل
-  void clearProfileError() {
-    _profileError = null;
-    notifyListeners();
-  }
 
   // ═══════════════════════════════════════════════════════════
   // Password Management - إدارة كلمة المرور
@@ -324,11 +365,6 @@ final class AuthController extends ChangeNotifier {
     }
   }
 
-  /// مسح خطأ تغيير كلمة المرور
-  void clearPasswordError() {
-    _passwordError = null;
-    notifyListeners();
-  }
   
   // ═══════════════════════════════════════════════════════════
   // Private Helper Methods - دوال مساعدة خاصة

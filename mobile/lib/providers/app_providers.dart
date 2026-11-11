@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controllers/auth_controller.dart';
-import '../controllers/news_repository.dart';
-import '../controllers/notifications_repository.dart';
+import '../features/auth/data/session_store.dart';
 import '../services/secure_storage_service.dart';
 
 // ═══════════════════════════════════════════════════════════
@@ -28,24 +27,6 @@ final secureStorageServiceProvider = Provider<SecureStorageService>(
 /// متحكم المصادقة - تسجيل دخول / تسجيل / خروج / تعديل بروفايل / كلمة مرور
 final authControllerProvider = ChangeNotifierProvider<AuthController>(
   (ref) => AuthController(
-    secureStorage: ref.read(secureStorageServiceProvider),
+    sessionStore: ref.read(sessionStoreProvider),
   ),
 );
-
-/// المصدر الوحيد لأخبار السوق - مشترك بين Home / Market News / AI News
-/// Analyzer / Discussion، حتى عدد التعليقات يبقى نفسه بكل مكان يظهر فيه
-final newsRepositoryProvider = ChangeNotifierProvider<NewsRepository>(
-  (ref) => NewsRepository(),
-);
-
-/// المصدر الوحيد لإشعارات التطبيق - مشترك بين Home وشاشة الإشعارات
-final notificationsRepositoryProvider =
-    ChangeNotifierProvider<NotificationsRepository>(
-  (ref) => NotificationsRepository(),
-);
-
-// TODO: إضافة متحكمات أخرى هنا
-// مثال:
-// final tradingControllerProvider = ChangeNotifierProvider<TradingController>(
-//   (ref) => TradingController(),
-// );

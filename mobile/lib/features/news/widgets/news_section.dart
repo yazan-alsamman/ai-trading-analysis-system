@@ -1,0 +1,134 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../app/router/app_navigator.dart';
+import '../../../core/theme/theme_context.dart';
+import '../../../core/widgets/feedback_states.dart';
+import '../../../core/widgets/motion.dart';
+import '../../../core/widgets/source_tag.dart';
+import '../../../l10n/app_localizations.dart';
+import '../models/news_models.dart';
+import '../view_models/news_view_models.dart';
+import 'news_card.dart';
+
+/// قسم News بتبويب Community: سطر مزاج السوق (24 ساعة) وتحتو الأخبار.
+/// سحب للتحديث، وتحميل / فاضي / خطأ.
+class NewsSection extends ConsumerWidget {
+  const NewsSection({super.key});
+
+  Future<void> _refresh(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(newsViewModelProvider.notifier).refresh();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.newsLoadError)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final gutter = AppSpacing.gutter(context);
+    final feed = ref.watch(newsViewModelProvider);
+
+    Widget scroll(List<Widget> children) => RefreshIndicator(
+          color: context.colors.accent,
+          onRefresh: () => _refresh(context, ref),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(gutter, AppSpacing.xs, gutter, AppSpacing.xxl),
+            children: children,
+          ),
+        );
+
+    return feed.when(
+      skipLoadingOnRefresh: true,
+      loading: () => scroll([
+        const LoadingRegion(child: Skeleton(height: AppSpacing.huge, radius: AppRadii.card)),
+        for (var i = 0; i < 3; i++) ...[
+          const SizedBox(height: AppSpacing.md),
+          const Skeleton(height: AppSpacing.huge * 3, radius: AppRadii.card),
+        ],
+      ]),
+      error: (_, __) => scroll([
+        ErrorState(message: l10n.newsLoadError, onRetry: () => ref.invalidate(newsViewModelProvider)),
+      ]),
+      data: (data) => data.articles.isEmpty
+          ? scroll([EmptyState(icon: Icons.newspaper_rounded, title: l10n.newsEmpty, message: l10n.newsEmptyBody)])
+          : scroll([
+              MoodLine(mood: data.mood),
+              for (final (i, article) in data.articles.indexed) ...[
+                const SizedBox(height: AppSpacing.md),
+                FadeRise(
+                  index: i,
+                  child: NewsCard(
+                    article: article,
+                    onTap: () => context.pushNewsDetail(article.id),
+                  ),
+                ),
+              ],
+            ]),
+    );
+  }
+}
+
+/// مزاج السوق بسطر واحد: "Market mood · 24h  Mixed · 2 positive, 1 neutral,
+/// 1 negative" + شارة "Simulated"
+class MoodLine extends StatelessWidget {
+  const MoodLine({super.key, required this.mood});
+
+  final MarketMood mood;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final text = context.textTheme;
+    final l10n = AppLocalizations.of(context)!;
+    final leaning = switch (mood.leaning) {
+      Sentiment.positive => l10n.moodPositive,
+      Sentiment.negative => l10n.moodNegative,
+      Sentiment.neutral => l10n.moodMixed,
+      null => l10n.moodNone,
+    };
+    final counts = l10n.moodCounts('${mood.positive}', '${mood.neutral}', '${mood.negative}');
+
+    return Semantics(
+      container: true,
+      label: '${l10n.moodTitle}: $leaning. ${mood.scored > 0 ? '$counts. ' : ''}${l10n.sourceDemo}',
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: c.card,
+          borderRadius: AppRadii.card,
+          border: Border.all(color: c.hairline),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(Icons.auto_awesome_rounded, size: AppSizes.iconMd, color: c.forecast),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: '${l10n.moodTitle}  ', style: text.bodySmall),
+                    TextSpan(text: leaning, style: text.titleSmall),
+                    if (mood.scored > 0) TextSpan(text: ' · $counts', style: text.bodyMedium!.copyWith(color: c.fg2)),
+                  ]),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const SourceTag(SourceKind.demo),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -3,22 +3,29 @@
 //
 // ⚠️ ملاحظة: هاد الملف كان أصلًا القالب الافتراضي يلي بينزل مع أي
 // مشروع Flutter جديد (`flutter create`) - بيختبر تطبيق عداد وهمي
-// (`MyApp` مع زر "+") مالوش أي علاقة فعلية بتطبيق TradeX. تم استبداله
-// هون باختبار حقيقي على [TradingApp] (الكلاس الفعلي بملف main.dart).
+// (`MyApp` مع زر "+") مالوش أي علاقة فعلية بتطبيق AI Trading Assistance. تم استبداله
+// هون باختبار حقيقي على [TradingApp] (الكلاس الفعلي بملف app/app.dart).
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:trading_app/main.dart';
+import 'package:trading_app/app/app.dart';
+import 'package:trading_app/core/storage/preferences_provider.dart';
 
 void main() {
-  testWidgets('TradeX app builds and shows the splash/auth flow',
+  testWidgets('AI Trading Assistance app builds and shows the splash/auth flow',
       (WidgetTester tester) async {
     // نفس طريقة تشغيل التطبيق الحقيقية بـ main.dart: TradingApp لازم
     // تكون ملفوفة بـ ProviderScope حتى تقدر تقرأ الـ Providers
     // المشتركة (auth / locale / news / notifications).
-    await tester.pumpWidget(const ProviderScope(child: TradingApp()));
+    // main() بيقرأ SharedPreferences قبل runApp - هون منعطيه نسخة وهمية
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const TradingApp(),
+    ));
 
     // فريم واحد بس لبناء أول شجرة (شاشة Splash).
     await tester.pump();

@@ -40,47 +40,45 @@ abstract final class Validators {
   // Password Validation - التحقق من كلمة المرور
   // ═══════════════════════════════════════════════════════════
   
-  /// التحقق من صحة كلمة المرور
-  /// 
-  /// الشروط:
-  /// - الحد الأدنى 8 أحرف
-  /// - حرف كبير واحد على الأقل (A-Z)
-  /// - حرف صغير واحد على الأقل (a-z)
-  /// - رقم واحد على الأقل (0-9)
-  /// - رمز خاص واحد على الأقل (!@#$%^&*...)
+  /// التحقق من صحة كلمة المرور - نفس قاعدة الـ backend بالضبط
+  /// (backend/app/schemas/user.py) حتى نفس الحساب يشتغل عالويب والموبايل:
+  /// - 8 لـ 128 حرف
+  /// - حرف واحد على الأقل
+  /// - رقم واحد على الأقل
   static String? password(String? value, AppLocalizations l10n) {
     if (value == null || value.isEmpty) {
       return l10n.passwordRequired;
     }
-    
-    if (value.length < 8) {
+    if (value.length < passwordMinLength) {
       return l10n.passwordMinChars;
     }
-    
-    if (!value.contains(RegExp(r'[A-Z]'))) {
-      return l10n.passwordNeedsUppercase;
+    if (value.length > passwordMaxLength) {
+      return l10n.passwordMaxChars;
     }
-
-    if (!value.contains(RegExp(r'[a-z]'))) {
-      return l10n.passwordNeedsLowercase;
+    if (!hasLetter(value)) {
+      return l10n.passwordNeedsLetter;
     }
-    
-    if (!value.contains(RegExp(r'[0-9]'))) {
+    if (!hasDigit(value)) {
       return l10n.passwordNeedsNumber;
     }
-
-    if (!value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]/~`]'))) {
-      return l10n.passwordNeedsSymbol;
-    }
-    
     return null;
   }
 
-  /// نص وصفي موجز بشروط كلمة المرور - للعرض تحت الحقل بشاشات
-  /// التسجيل/تغيير كلمة المرور، حتى تكون الشروط واضحة للمستخدم قبل
-  /// ما يحاول يرسل النموذج
-  static String passwordRequirementsHint(AppLocalizations l10n) =>
-      l10n.passwordRequirementsHint;
+  static const int passwordMinLength = 8;
+  static const int passwordMaxLength = 128;
+
+  static bool hasLetter(String value) => value.contains(RegExp(r'[A-Za-z]'));
+
+  static bool hasDigit(String value) => value.contains(RegExp(r'[0-9]'));
+
+  /// الاسم الكامل بشاشة إنشاء الحساب: 2 لـ 60 حرف (نفس الويب)
+  static String? fullName(String? value, AppLocalizations l10n) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.length < 2) return l10n.fullNameRequired;
+    if (trimmed.length > 60) return l10n.fullNameTooLong;
+    return null;
+  }
+
   
   // ═══════════════════════════════════════════════════════════
   // Confirm Password Validation - التحقق من تطابق كلمات المرور
@@ -117,39 +115,6 @@ abstract final class Validators {
       return fieldName != null
           ? l10n.fieldRequired(fieldName)
           : l10n.thisFieldRequired;
-    }
-    return null;
-  }
-  
-  /// التحقق من الحد الأدنى للطول
-  static String? minLength(
-    String? value,
-    int min,
-    AppLocalizations l10n, {
-    String? fieldName,
-  }) {
-    if (value == null || value.isEmpty) {
-      return fieldName != null
-          ? l10n.fieldRequired(fieldName)
-          : l10n.thisFieldRequired;
-    }
-    
-    if (value.length < min) {
-      return l10n.fieldMinLength(fieldName ?? l10n.thisFieldRequired, min);
-    }
-    
-    return null;
-  }
-  
-  /// التحقق من الحد الأقصى للطول
-  static String? maxLength(
-    String? value,
-    int max,
-    AppLocalizations l10n, {
-    String? fieldName,
-  }) {
-    if (value != null && value.length > max) {
-      return l10n.fieldMaxLength(fieldName ?? l10n.thisFieldRequired, max);
     }
     return null;
   }

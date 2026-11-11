@@ -20,6 +20,9 @@ final class SecureStorageService {
   /// المفتاح الثابت يلي بينحفظ تحته الـ auth token
   static const _authTokenKey = 'auth_token';
 
+  /// مفتاح الـ refresh token (E1: الـ API الحقيقي بس - المحاكاة ما بتستخدمه)
+  static const _refreshTokenKey = 'auth_refresh_token';
+
   /// حفظ الـ auth token - بينادى عليها بعد نجاح تسجيل الدخول/التسجيل
   Future<void> saveToken(String token) => _storage.write(
         key: _authTokenKey,
@@ -31,4 +34,11 @@ final class SecureStorageService {
 
   /// حذف الـ token - بينادى عليها عند تسجيل الخروج
   Future<void> deleteToken() => _storage.delete(key: _authTokenKey);
+
+  /// الـ refresh token (من `/auth/login` و`/auth/refresh`) - بيتبدّل مع كل refresh
+  Future<void> saveRefreshToken(String token) => _storage.write(key: _refreshTokenKey, value: token);
+
+  Future<String?> readRefreshToken() => _storage.read(key: _refreshTokenKey);
+
+  Future<void> deleteRefreshToken() => _storage.delete(key: _refreshTokenKey);
 }

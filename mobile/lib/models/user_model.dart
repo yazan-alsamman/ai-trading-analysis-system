@@ -1,3 +1,8 @@
+/// دور المستخدم بالمنصة. الحساب الجديد دايمًا متداول، والخبير والمدير بيعطيهن
+/// المدير (المدير بيشتغل من لوحة الويب بس). ما في دور "محلل" بالتطبيق: أي دور
+/// مش معروف (متل `analyst` من الخادم) بيعتبر متداول.
+enum UserRole { trader, expert, admin }
+
 /// نموذج بيانات المستخدم المعتمد
 /// 
 /// هذا الكلاس immutable (غير قابل للتعديل)
@@ -13,6 +18,7 @@ final class UserModel {
     this.displayName,
     this.avatarUrl,
     this.createdAt,
+    this.role = UserRole.trader,
   });
   
   // ═══════════════════════════════════════════════════════════
@@ -33,6 +39,9 @@ final class UserModel {
   
   /// تاريخ إنشاء الحساب (اختياري)
   final DateTime? createdAt;
+
+  /// الدور (متداول / خبير / مدير)
+  final UserRole role;
   
   // ═══════════════════════════════════════════════════════════
   // JSON Serialization - التحويل من وإلى JSON
@@ -47,6 +56,10 @@ final class UserModel {
         createdAt: json['createdAt'] != null
             ? DateTime.parse(json['createdAt'] as String)
             : null,
+        role: UserRole.values.firstWhere(
+          (r) => r.name == json['role'],
+          orElse: () => UserRole.trader,
+        ),
       );
   
   /// تحويل UserModel إلى JSON
@@ -56,6 +69,7 @@ final class UserModel {
         if (displayName != null) 'displayName': displayName,
         if (avatarUrl != null) 'avatarUrl': avatarUrl,
         if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+        'role': role.name,
       };
   
   // ═══════════════════════════════════════════════════════════
@@ -69,6 +83,7 @@ final class UserModel {
     String? displayName,
     String? avatarUrl,
     DateTime? createdAt,
+    UserRole? role,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -76,6 +91,7 @@ final class UserModel {
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       createdAt: createdAt ?? this.createdAt,
+      role: role ?? this.role,
     );
   }
   
