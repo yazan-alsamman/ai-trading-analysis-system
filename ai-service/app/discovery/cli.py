@@ -19,6 +19,10 @@ def main(argv: list[str]) -> int:
         from app.discovery.drivers import main as drivers
 
         return drivers(argv[1:])
+    if argv and argv[0] == "lead":
+        from app.discovery.lead import main as lead
+
+        return lead(argv[1:])
     if argv and argv[0] == "inject":
         from app.discovery.inject import main as inject
 
