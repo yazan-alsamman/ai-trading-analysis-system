@@ -69,3 +69,13 @@ One run (5 strategies, one setting), logged in `docs/phase3/TRIALS.md`.
   is the one test of the five on untouched data, and it weighs against reading their gold results
   as a general effect; their gold results may be specific to gold or a product of the search
   (about 60 looks on gold). The gold demo is unchanged.
+
+## 6. Correction (2026-11-11): rerun without the export's summary bars
+
+The NAS100 export holds the same summary bars as FxPro's GOLD (`docs/data_quality/FXPRO_SUMMARY_BARS.md`):
+lines with real volume 0 that carry the day's whole range. Rerun without them
+(`five_nas100_result.md`): the five **−0.040** R with slip (4,831 trades; LVL4H −0.009, PIVOT −0.064,
+PIVW −0.016, ASIA −0.025, PWHL −0.025), gross +0.074 against a cost of 0.105. E0: mean −0.079, 95th
+percentile −0.056. **The verdict stands (they do not pay on the Nasdaq), but the reading in §5 is
+replaced:** the break's side is better than a coin there, by about gold's gross margin; the cost
+takes it. RECLAIM (`FIVE_NAS_RECLAIM.md`) is −0.050 on the clean data and still does not hold.

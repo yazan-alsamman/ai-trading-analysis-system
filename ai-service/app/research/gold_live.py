@@ -84,12 +84,25 @@ FX_FIRST_DAY = b"2016.01.19"
 FX_START = pd.Timestamp("2016-02-01", tz="UTC")
 
 
+FAKE_TICKS = 5000
+
+
+def summary_bar(ln: bytes) -> bool:
+    """An export line that is not a minute: real volume 0 with a tick volume above 5,000 (a normal
+    minute has a few hundred). From 2017 to 2022 the GOLD export holds about 250 a year, most at
+    00:00 server time, each carrying the coming day's whole high and low (found 2026-11-11,
+    ``GOLD_MAGNET.md`` §6)."""
+    f = ln.split(b"\t")
+    return len(f) >= 8 and f[7].strip() == b"0" and int(f[6]) > FAKE_TICKS
+
+
 def fx_lines(export: Path):
-    """The export's header and its lines from ``FX_FIRST_DAY`` (server date) on."""
+    """The export's header and its lines from ``FX_FIRST_DAY`` (server date) on, without the
+    summary bars."""
     with open(export, "rb") as f:
         yield next(f)
         for ln in f:
-            if ln[:10] >= FX_FIRST_DAY:
+            if ln[:10] >= FX_FIRST_DAY and not summary_bar(ln):
                 yield ln
 
 

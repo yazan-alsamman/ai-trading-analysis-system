@@ -31,6 +31,7 @@ DUKAS = ("DOLLARIDXUSD", "USTBONDTRUSD")
 FIRST, LAST = date(2018, 1, 1), date(2026, 1, 9)
 LOCKBOX = date(2026, 1, 10)
 SILVER_FIRST = "2016.01.19"
+FAKE_TICKS = 5000  # as gold_live.summary_bar
 
 
 def weekdays(a: date = FIRST, b: date = LAST) -> list[date]:
@@ -98,6 +99,8 @@ def store_silver(export: Path) -> pd.DataFrame:
     rows = pd.read_csv(export, sep="\t")
     rows.columns = [c.strip("<>").lower() for c in rows.columns]
     rows = rows[rows["date"] >= SILVER_FIRST]
+    # the export's summary bars (gold_live.summary_bar): real volume 0, tick volume above 5,000
+    rows = rows[~((rows["vol"] == 0) & (rows["tickvol"] > FAKE_TICKS))]
     srv = pd.to_datetime(rows["date"] + " " + rows["time"], format="%Y.%m.%d %H:%M:%S")
     ts = srv.dt.tz_localize("Europe/Athens", ambiguous="NaT", nonexistent="NaT").dt.tz_convert(
         "UTC"

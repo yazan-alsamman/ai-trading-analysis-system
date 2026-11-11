@@ -108,6 +108,14 @@ def main(argv: list[str]) -> int:
         from app.research.gold_demo import main as gold_demo
 
         return gold_demo(argv[1:])
+    if argv and argv[0] == "gold-c123":
+        from app.research.gold_c123 import main as gold_c123
+
+        return gold_c123(argv[1:])
+    if argv and argv[0] == "gold-magnet":
+        from app.research.gold_magnet import main as gold_magnet
+
+        return gold_magnet(argv[1:])
     if argv and argv[0] == "five-nas":
         from app.research.five_nas import main as five_nas
 

@@ -200,10 +200,23 @@ de Prado and O'Hara (2012); MetaTrader 5 help, "Basic Principles".
 
 - **D1 (2026-11-11).** Calendar imported and checked (`calendar_check.md`). Silver stored from the
   FxPro export, 2016-01-19 to 2026-01-09 (3,515,949 minutes; `drivers.md`). The dollar index and
-  the bond series are being downloaded from Dukascopy, 2018-01-01 to 2026-01-09
-  (`python -m app discovery drivers download`, then `store`). Cost unit c(t0) = the event bar's
+  the bond series downloaded from Dukascopy and stored (`python -m app discovery drivers download`,
+  then `store`): the dollar index from 2018-01-02, the bond from 2018-01-04 (thin in 2018). Cost unit c(t0) = the event bar's
   recorded spread + $0.07: median $0.49 (2012) falling to $0.12 (2021-2022) and $0.22 (2025).
 - **D2 (2026-11-11), counts only.** Detectors `app/discovery/events.py` with hand-built and
   no-look-ahead tests (`tests/test_discovery_events.py`). `counts.md`: F2 about 1,030 events per
   window cell in 2018-2021 (month-end 48), F3 HIGH about 1,380 and TOP3 126 per delay, F5p 665 to
-  2,582 per grid cell. F1 waits for the drivers. No price after an event has been read.
+  2,582 per grid cell. F1 (from 2018, the drivers' start): CONF cells 2,182 to 9,266 events in
+  2018-2021, UNCONF 299 to 3,070 (UNCONF-k1-w15 is thin; 2018 is thin in every F1 cell, from the
+  bond data). 145,845 events in all. No price after an event has been read. Next: `PREREG_2.md`.
+- **Data faults found, D1 corrected (2026-11-11, before any outcome).** (a) Dukascopy's dollar index
+  has about 1,525 fake one-minute spikes in 2018 (89.41 to 86.99 and back within a minute), 1-10 a
+  year after; the bond about 3,700 a year in 2018-2019 (68 to 232 within a minute), 2-48 in
+  2020-2024, and in 2025-2026 its large bars fall at 08:30 New York releases (real moves). **Decision
+  (Fadi): F1 reads the dollar index from 2019-01-01 and the bond from 2020-01-01** (`events.DXY_FROM`,
+  `BOND_FROM`), so F1's discovery years are 2020-2021 only; recounted (`counts.md`): CONF 1,379
+  to 6,022 events in 2020-2021, UNCONF 221 to 2,153 (UNCONF-k1 thin). (b) FxPro's M1 exports (GOLD, NAS100,
+  XAGUSD) hold summary bars in 2017-2022 (real volume 0, tick volume above 5,000, mostly at 00:00
+  server time) that carry the day's whole high and low (`GOLD_MAGNET.md` §6); silver was re-stored
+  without them. The XAUUSD research store does not have them. (c) The calendar's repeated rows are
+  real (euro-area and German releases at the same minute; the 2013 shutdown's double releases).

@@ -224,20 +224,23 @@ the five other lockbox files stay sealed). Shadows PIVW, ASIA, PWHL (`GOLD_SHADO
 MetaTrader VPS** (account 592239561; RiskPct 0.5, ShadowRiskPct 0.5, MaxOpenRiskPct 3, daily stop
 3%, drawdown stop 25%); stop rules: −0.10 R at the 100th trade, then every 50. Weekly check:
 `python -m app research gold-demo check --report <MT5 report .html/.xlsx> [--export <GOLD M1>]`.
-On FxPro 2016-2026 the five make about +0.026 R a trade with slip (largest drawdown about 134 R).
+On FxPro 2016-2026 the five make about +0.031 R a trade with slip (largest drawdown about 126 R).
+**FxPro's M1 exports (GOLD, NAS100, XAGUSD) hold summary bars in 2017-2022** (real volume 0, tick
+volume > 5,000, the day's whole range): every FxPro reader drops them (`gold_live.summary_bar`); all
+FxPro checks were rerun 2026-11-11, no decision changed (`docs/data_quality/FXPRO_SUMMARY_BARS.md`).
 **Everything else tried on gold was dropped** (about 30 registered looks): ORB, pullback, 50%
 retrace, night reversion, value area, daily swing, regime switch, dealing range, the AH bot clone
 with filters and meta-labeling, PBK pullback-before-break, round numbers (3 of 4 conditions; too
 close to the five), the dollar's lead, time-of-day (intraday momentum, London to New York, the
-night), losing-trade filters, a model fading the five's predicted losers (Brier skill ≤ 0). Exits:
+night), losing-trade filters (one kept as a paper shadow), the magnet to an untouched level, a model fading the five's predicted losers (Brier skill ≤ 0). Exits:
 no fixed target, tighter SL or overnight hold beats M8 with the 16:45 close (`GOLD_EXIT`,
 `GOLD_SL`, `GOLD_HOLD`). `gold_path.md`: after an entry gold is close to a random walk (a +0.04 D
-push in the first 5-15 minutes). **The five on the unseen Nasdaq 100 lose** (−0.078 R, below a
-random side; `FIVE_NAS100.md`), and RECLAIM there does not hold (`FIVE_NAS_RECLAIM.md`).
+push in the first 5-15 minutes). **The five on the unseen Nasdaq 100 lose** (−0.040 R on clean
+data; gross +0.074 beats a random side, the cost takes it; `FIVE_NAS100.md`), and RECLAIM there does not hold (`FIVE_NAS_RECLAIM.md`).
 **Discovery round 2 (markout map, `docs/discovery/PLAN.md`)**: plan corrected and accepted (gates
 2 cost units, t ≥ 3, 224 cells; silver a feature only); D1-D2 in progress (MT5 calendar 2010-2026
-imported, `python -m app discovery calendar|drivers|count`; Dukascopy dollar index and US bond M1
-2018 on downloading); no outcome computed; `PREREG_2.md` next, for Fadi's approval.
+imported, `python -m app discovery calendar|drivers|count`; Dukascopy dollar index and US bond stored;
+fake spikes: F1 reads the dollar from 2019, the bond from 2020); no outcome computed; `PREREG_2.md` next, for Fadi's approval.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
@@ -261,3 +264,13 @@ Layout: `app/main.py` (service), `app/config/` (instruments + D23 splits, TOML),
 - Agent data access: backend read-only endpoints vs data passed in the request (Yazan).
 - Which vision-capable LLM to start with (Fadi). Exact end date of the 2026 export (Fadi).
 - FxPro production route: cTrader Open API or Windows MT5 pusher (Yazan). Free historical calendar (Yazan).
+
+## Parked for later (Fadi, 2026-11-11: after the gold work is finished)
+
+- **Daily trend following across many markets.** The one style with long-run evidence (time-series
+  momentum, e.g. Moskowitz, Ooi and Pedersen 2012); gold's own daily swing test was positive in
+  every setting but had too few trades (`GOLD_SWING.md`). About 5-15 trades a year a market,
+  held for weeks, win rate about 35-40%, long flat spells; about 1-2 new trades a day needs 30-40
+  markets. Needs: FxPro daily (or M1) exports of 20-40 markets (indices, energies, metals, more FX),
+  their swap table (`tools/mt5/ExportSwaps.mq5`), and a registration before any run. A new
+  project, not a gold bot.

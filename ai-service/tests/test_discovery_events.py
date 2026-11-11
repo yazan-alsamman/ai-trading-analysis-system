@@ -82,3 +82,13 @@ def test_f1_unconfirmed_when_the_dollar_and_bond_stay_flat() -> None:
     un = e[e["cell"].str.startswith("UNCONF-k1-")]  # the noise alone can pass k = 0.5
     assert len(un) and (un["i"] >= 1580).all() and (un["sign"] == -1).all()
     assert e[e["cell"].str.startswith("CONF")].empty
+
+
+def test_f1_ignores_the_drivers_before_their_clean_start() -> None:
+    rng = np.random.default_rng(5)
+    n = 1600
+    c = 4000 + np.cumsum(rng.normal(0, 0.05, n))
+    c[1580:] += np.linspace(0, 30, 20)
+    m = bars(c, start="2019-06-03 00:00")  # the dollar is read, the bond is not yet (2020)
+    drv = pd.DataFrame({"ts_utc": m["ts_utc"], "close": np.full(n, 100.0)})
+    assert ev.f1(m, drv, drv).empty

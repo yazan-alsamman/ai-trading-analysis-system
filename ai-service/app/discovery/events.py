@@ -33,6 +33,10 @@ WINDOWS = {"PM": ("15:00", LONDON), "WM": ("16:00", LONDON), "COMEX": ("13:30", 
            "MONTHEND": ("16:00", LONDON)}  # fmt: skip
 LOOKBACKS = (30, 60)
 F1_K, F1_W, REFRACTORY = (0.5, 1.0), (15, 30), 60
+# Dukascopy's dollar index has fake one-minute spikes through 2018 and its bond through 2019
+# (``drivers.md``); F1 reads them only from these dates (Fadi, 2026-11-11, before any outcome).
+DXY_FROM = pd.Timestamp("2019-01-01", tz="UTC")
+BOND_FROM = pd.Timestamp("2020-01-01", tz="UTC")
 GRIDS = (25.0, 50.0, 100.0, 75.0)
 COLS = ["family", "cell", "i", "sign"]
 
@@ -123,8 +127,9 @@ def atr_1h(m1: pd.DataFrame, n: int = 14) -> np.ndarray:
 
 def aligned(m1: pd.DataFrame, drv: pd.DataFrame, stale: int = 5) -> np.ndarray:
     """A driver's last close at or before each gold bar's open, within ``stale`` minutes."""
-    g = pd.DataFrame({"ts_utc": m1["ts_utc"]})
+    g = pd.DataFrame({"ts_utc": m1["ts_utc"].dt.as_unit("ns")})
     d = drv[["ts_utc", "close"]].sort_values("ts_utc")
+    d = d.assign(ts_utc=d["ts_utc"].dt.as_unit("ns"))  # the stores differ in resolution
     j = pd.merge_asof(g, d, on="ts_utc", direction="backward",
                       tolerance=pd.Timedelta(minutes=stale))  # fmt: skip
     return j["close"].to_numpy()
@@ -149,6 +154,8 @@ def refractory(i: np.ndarray, minutes: np.ndarray, gap: int = REFRACTORY) -> np.
 def f1(m1: pd.DataFrame, dxy: pd.DataFrame, bond: pd.DataFrame) -> pd.DataFrame:
     c = m1["close"].to_numpy()
     atr = atr_1h(m1)
+    dxy = dxy[dxy["ts_utc"] >= DXY_FROM]
+    bond = bond[bond["ts_utc"] >= BOND_FROM]
     x, b = aligned(m1, dxy), aligned(m1, bond)
     mins = minutes(m1["ts_utc"])
     out = []

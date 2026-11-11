@@ -30,10 +30,11 @@ NAMES = ("LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL")
 
 
 def lines(export: Path):
+    """From ``FIRST_DAY`` on, without the export's summary bars (``gold_live.summary_bar``)."""
     with open(export, "rb") as f:
         yield next(f)
         for ln in f:
-            if ln[:10] >= FIRST_DAY:
+            if ln[:10] >= FIRST_DAY and not gv.summary_bar(ln):
                 yield ln
 
 
