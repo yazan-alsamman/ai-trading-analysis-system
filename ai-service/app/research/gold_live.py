@@ -106,13 +106,18 @@ def fx_lines(export: Path):
                 yield ln
 
 
-def five_trades(fr: dict[str, pd.DataFrame], start: pd.Timestamp = FX_START):
+def five_trades(fr: dict[str, pd.DataFrame], start: pd.Timestamp = FX_START,
+                with_round: bool = False):  # fmt: skip
     """v1 (the exam's code and settings) and the shadow level breaks (``GOLD_SHADOW.md``), as the
-    EA trades them, placed on or after ``start``: (v1 trades, all five, M8 events, context)."""
+    EA trades them, placed on or after ``start``: (v1 trades, all of them, M8 events, context).
+    ``with_round``: also ROUND, the $50 shadow added 2026-11-11 (``GOLD_ROUND.md`` §6)."""
+    from app.research import gold_round as gr
     from app.research import gold_shadow as gs
 
     t, events, cx = ge.exam_trades(fr, start=start)
     shadow = [gs.level_run(cx, k, lv, events) for k, lv in gs.shadow_levels(cx).items()]
+    if with_round:
+        shadow.append(gs.level_run(cx, "ROUND", gr.round_levels(cx, gr.SHADOW_STEP), events))
     every = pd.concat([t, *shadow], ignore_index=True)
     placed_at = pd.to_datetime(cx.m["close_utc"].to_numpy()[every["i"]], utc=True)
     every = every[placed_at >= start].sort_values(["i", "strategy"], kind="stable")
@@ -127,7 +132,7 @@ def fxpro(export: Path) -> str:
     year."""
     fr = ge.frames_from_lines(fx_lines(export))  # a parse of GOLD's own feed, not a lockbox read
     zero = int((fr["5m"]["spread_max"] == 0).sum())  # 5-minute bars with no spread recorded
-    t, every, events, cx = five_trades(fr)
+    t, every, events, cx = five_trades(fr, with_round=True)
     every.to_parquet(FX_TRADES, index=False)
     gc.trade_file(every, events, cx, gl.STORE / FX_FILE)
     placed = pd.to_datetime(cx.m["ts_utc"].to_numpy()[t["i"]], utc=True)

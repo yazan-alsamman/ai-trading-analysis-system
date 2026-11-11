@@ -219,7 +219,7 @@ with Yazan; forward paper log; P9.
 in `docs/phase3/TRIALS.md`).** Gold level breaks with stop orders: **v1 frozen 2026-11-05** (LVL4H
 + PIVOT with M8, `docs/strategies/GOLD_V1.md`) after its **lockbox exam passed** (+0.052 R a trade
 on real ticks, SE 0.071, `GOLD_LOCKBOX_EXAM.md`; **the XAUUSD lockbox file was opened once for it**;
-the five other lockbox files stay sealed). Shadows PIVW, ASIA, PWHL (`GOLD_SHADOW.md`). Live EA
+the five other lockbox files stay sealed). Shadows PIVW, ASIA, PWHL (`GOLD_SHADOW.md`) and, from 2026-11-11, ROUND ($50 multiples, `GOLD_ROUND.md` §6). Live EA
 `tools/mt5/GoldLive.mq5`, matched to Python in the tester; **FxPro demo since 2026-11-10 on a
 MetaTrader VPS** (account 592239561; RiskPct 0.5, ShadowRiskPct 0.5, MaxOpenRiskPct 3, daily stop
 3%, drawdown stop 25%); stop rules: −0.10 R at the 100th trade, then every 50. Weekly check:

@@ -32,7 +32,7 @@ from app.research import gold_lab as gl
 from app.research import gold_live as gv
 
 REPORT = gl.OUT_DIR / "gold_demo_check.md"
-STRATEGIES = ("LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL")
+STRATEGIES = ("LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL", "ROUND")
 SERVER_TZ = "Europe/Athens"
 STOP_AT, STOP_EVERY, STOP_LINE = 100, 50, -0.10
 WARM = pd.Timedelta(days=21)
@@ -222,7 +222,7 @@ def python_trades(export: Path, start: pd.Timestamp) -> tuple[pd.DataFrame, pd.T
     """The five strategies on the export, placed from ``start``; and the server time up to which
     both sides are complete (the start of the export's last server day)."""
     fr = ge.frames_from_lines(gv.fx_lines(export))
-    _, every, _, cx = gv.five_trades(fr, start=start)
+    _, every, _, cx = gv.five_trades(fr, start=start, with_round=True)
     u = pd.to_datetime(cx.m["ts_utc"].to_numpy()[every["i"]], utc=True)
     every["bar_server"] = u.tz_convert(SERVER_TZ).tz_localize(None).strftime("%Y.%m.%d %H:%M:%S")
     first = pd.Timestamp(cx.m["ts_utc"].iloc[0]).tz_convert(SERVER_TZ).tz_localize(None)

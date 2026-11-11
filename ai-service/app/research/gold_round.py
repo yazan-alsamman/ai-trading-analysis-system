@@ -27,6 +27,7 @@ FX_REPORT = gl.OUT_DIR / "gold_round_fxpro.md"
 CHOICE = gl.STORE / "gold_round_choice.json"
 TUNE_END = gc.TUNE_END
 STEPS = (10.0, 25.0, 50.0, 100.0)
+SHADOW_STEP = 50.0  # the demo shadow (Fadi, 2026-11-11; GOLD_ROUND.md section 6)
 
 
 def round_levels(cx: gl.Ctx, step: float) -> dict[str, np.ndarray]:

@@ -2,8 +2,10 @@
 //| GoldLive.mq5: gold v1 live (ai-service/docs/strategies/GOLD_V1.md)|
 //| LVL4H and PIVOT level breaks with M8 management, computed from    |
 //| the terminal's bars, for the demo account. The shadow strategies   |
-//| PIVW, ASIA and PWHL (GOLD_SHADOW.md) run beside v1 with their own  |
-//| magic numbers and ShadowRiskPct; MaxOpenRiskPct caps the risk of   |
+//| PIVW, ASIA, PWHL (GOLD_SHADOW.md) and ROUND (the $50 multiples     |
+//| around the previous day's close, GOLD_ROUND.md §6) run beside v1   |
+//| with their own magic numbers and ShadowRiskPct; MaxOpenRiskPct caps|
+//| the risk of                                                        |
 //| every open trade and order of the EA together.                     |
 //| Account guards (GOLD_V1.md, stop rules 4): a daily loss of         |
 //| DailyLossPct of the trading day's opening equity closes the EA's   |
@@ -36,23 +38,25 @@ input bool   TradePIVOT  = true;
 input bool   TradePIVW   = true;                 // shadow: R1 / S1 with LVL4H's distance and cap
 input bool   TradeASIA   = true;                 // shadow: the Asian range, 19:00-02:00 New York
 input bool   TradePWHL   = true;                 // shadow: the previous week's high and low
+input bool   TradeROUND  = true;                 // shadow: the $50 multiples around yesterday's close
 input double ShadowRiskPct  = 0.25;              // % of equity a shadow trade
 input double MaxOpenRiskPct = 2.0;               // cap on the open risk of the EA (0: none; tests)
 input double DailyLossPct   = 2.0;               // stop for the day at this loss (0: none; tests)
 input double MaxDrawdownPct = 10.0;              // stop at this drawdown from the peak (0: none; tests)
 input bool   ResetGuards    = false;             // true once: clear a drawdown stop, peak = equity now
 input bool   SignalsOnly = false;                // log the signals, place nothing
-input long   MagicBase   = 20261106;             // LVL4H base, PIVOT +1, PIVW +2, ASIA +3, PWHL +4
+input long   MagicBase   = 20261106;             // LVL4H base, PIVOT +1, PIVW +2, ASIA +3, PWHL +4, ROUND +5
 input string LogFile     = "gold_live_log.csv";  // in <Common>/Files
 input int    Bars5m      = 8000;                 // M5 history for the ATRs (about 28 days)
 
-#define NS 5
+#define NS 6
 #define NK 4
-string   SNAME[NS]   = {"LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL"};
+string   SNAME[NS]   = {"LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL", "ROUND"};
 string   KNAME[NS][NK] = {{"PDH", "PDL", "5DH", "5DL"}, {"R1", "S1", "", ""}, {"R1", "S1", "", ""},
-                          {"ASH", "ASL", "", ""}, {"PWH", "PWL", "", ""}};
-int      NKINDS[NS]  = {4, 2, 2, 2, 2};
-int      HORIZON[NS] = {200, 48, 200, 200, 200};
+                          {"ASH", "ASL", "", ""}, {"PWH", "PWL", "", ""}, {"RU", "RD", "", ""}};
+int      NKINDS[NS]  = {4, 2, 2, 2, 2, 2};
+int      HORIZON[NS] = {200, 48, 200, 200, 200, 200};
+const double ROUND_STEP = 50.0;   // ROUND: the multiples of $50 around the previous day's close
 const double LVL_MULT   = 0.75;
 const double LVL_CAP    = 0.05;
 const double COMMISSION = 0.07;   // $ per oz, round trip
@@ -286,6 +290,9 @@ bool Levels(const long key, double &lv[][NK])
       lv[4][0] = lv[4][0] == 0.0 ? D1[q].h : MathMax(lv[4][0], D1[q].h);
       lv[4][1] = lv[4][1] == 0.0 ? D1[q].l : MathMin(lv[4][1], D1[q].l);
      }
+   // ROUND: RD = the $50 multiple at or below the previous day's close, RU = the next one up
+   lv[5][1] = MathFloor(D1[p].c / ROUND_STEP) * ROUND_STEP;
+   lv[5][0] = lv[5][1] + ROUND_STEP;
    return true;
   }
 
@@ -305,6 +312,7 @@ bool Enabled(const int s)
   {
    bool on[NS];
    on[0] = TradeLVL4H; on[1] = TradePIVOT; on[2] = TradePIVW; on[3] = TradeASIA; on[4] = TradePWHL;
+   on[5] = TradeROUND;
    return on[s];
   }
 
@@ -513,8 +521,9 @@ void Signals(const datetime bar)
       placed_day = key;
       for(int s = 0; s < NS; s++) for(int k = 0; k < NK; k++) filled_today[s][k] = false;
       Log("DAY", -1, "", 0, bar, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0,
-          StringFormat("PDH %.2f; PDL %.2f; 5DH %.2f; 5DL %.2f; R1 %.2f; S1 %.2f; PWH %.2f; PWL %.2f",
-                       lv[0][0], lv[0][1], lv[0][2], lv[0][3], lv[1][0], lv[1][1], lv[4][0], lv[4][1]));
+          StringFormat("PDH %.2f; PDL %.2f; 5DH %.2f; 5DL %.2f; R1 %.2f; S1 %.2f; PWH %.2f; PWL %.2f; "
+                       "RU %.2f; RD %.2f", lv[0][0], lv[0][1], lv[0][2], lv[0][3], lv[1][0], lv[1][1],
+                       lv[4][0], lv[4][1], lv[5][0], lv[5][1]));
      }
    if(key != asia_day && InWindow(ny))
      {

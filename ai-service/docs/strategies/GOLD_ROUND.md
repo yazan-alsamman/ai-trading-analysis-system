@@ -69,3 +69,20 @@ move at $1,200 and is 0.25% at $4,000; the four steps cover that range.
 - About 0.4 trades a day ($25), not one or two.
 
 **Decision (Fadi, 2026-11-10): the registered rule is kept.** ROUND is not added to the demo.
+
+## 6. Addendum (2026-11-11): $50 added to the demo as a shadow (ROUND)
+
+Fadi's decision ("Yes, add it") after the descriptive combination (`gold_round_combo.md`): on
+FxPro 2016-02 to 2026-11-05 the five with ROUND $50 make +0.042 R a trade (sum +306 R, drawdown
+124 R) against +0.031 (+201 R, 126 R); ROUND $50 alone +0.132 R over 794 trades, from 2026-01-12
++0.044 over 174. **Chosen after seeing the results, and the same break failed on six untouched
+markets (`docs/discovery/LEAD_GRID.md`), so the demo is its test, not its proof.**
+
+- **In the EA:** strategy `ROUND`, levels RU / RD = the $50 multiples above and at or below the
+  previous trading day's close, LVL4H's frozen engine (stop entry with the break, D = 0.75 x
+  ATR(4h), cost cap 0.05, window 02:00-16:00 New York, horizon 200 bars, M8, 16:45 exit), magic
+  `MagicBase + 5`, `ShadowRiskPct`, input `TradeROUND`. Python twin: `gold_live.five_trades(...,
+  with_round=True)` (`gold_round.SHADOW_STEP = 50`); `gold-demo check` lists it.
+- **How it is judged on the demo:** as the other shadows; the demo's stop rule applies to it on its
+  own trades (mean net R at or below −0.10 R at its 100th trade, then every 50: off). It becomes
+  part of v1 only by a new registered decision after at least 150 demo trades.
