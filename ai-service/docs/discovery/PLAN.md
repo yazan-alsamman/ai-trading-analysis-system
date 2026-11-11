@@ -223,3 +223,12 @@ de Prado and O'Hara (2012); MetaTrader 5 help, "Basic Principles".
 - **D3 draft (2026-11-11).** `PREREG_2.md` written and **approved by Fadi the same day** (tag `discovery-prereg-2`): 30 cells x 7 horizons = 210
   map cells, E0 and placebos per family, gates, prior exposure and a power statement from noise
   only. Nothing run.
+- **D4 (2026-11-11): the map is negative; the round ends** (`map.md`, `PREREG_2.md` §6.6). 210 cells,
+  40,741 events, 280,061 placebo events. 28 cells reach |mean z| >= 2, but they are small cells
+  (TOP3 126, MONTHEND 48) or long horizons with t below 2.6 against E0; one cell passes the t gates
+  (F1 UNCONF-k0.5-w30 at 1 minute, +0.38 cost units: far below the size gate); none survives
+  Benjamini-Hochberg at 10%. PBO 0.73 (the in-sample best cell is usually below the median out of
+  sample); Deflated Sharpe of the best cell 0.54-0.60. The largest coherent pattern is continuation
+  after a $50 / $100 grid break at 1-4 hours (z +3.2 to +4.1, t 2.2-2.6 against E0 and the
+  placebo), the same direction as the five's level breaks, and not significant after the map's
+  multiplicity. No confirmation read, no model, no second map on these data.
