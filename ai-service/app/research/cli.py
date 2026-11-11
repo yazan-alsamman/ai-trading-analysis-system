@@ -108,6 +108,46 @@ def main(argv: list[str]) -> int:
         from app.research.gold_demo import main as gold_demo
 
         return gold_demo(argv[1:])
+    if argv and argv[0] == "five-nas":
+        from app.research.five_nas import main as five_nas
+
+        return five_nas(argv[1:])
+    if argv and argv[0] == "gold-hold":
+        from app.research.gold_hold import main as gold_hold
+
+        return gold_hold(argv[1:])
+    if argv and argv[0] == "gold-fade":
+        from app.research.gold_fade import main as gold_fade
+
+        return gold_fade(argv[1:])
+    if argv and argv[0] == "gold-loss":
+        from app.research.gold_loss import main as gold_loss
+
+        return gold_loss(argv[1:])
+    if argv and argv[0] == "gold-sl":
+        from app.research.gold_sl import main as gold_sl
+
+        return gold_sl(argv[1:])
+    if argv and argv[0] == "gold-path":
+        from app.research.gold_path import main as gold_path
+
+        return gold_path(argv[1:])
+    if argv and argv[0] == "gold-time":
+        from app.research.gold_time import main as gold_time
+
+        return gold_time(argv[1:])
+    if argv and argv[0] == "gold-usd":
+        from app.research.gold_usd import main as gold_usd
+
+        return gold_usd(argv[1:])
+    if argv and argv[0] == "gold-round":
+        from app.research.gold_round import main as gold_round
+
+        return gold_round(argv[1:])
+    if argv and argv[0] == "gold-exit":
+        from app.research.gold_exit import main as gold_exit
+
+        return gold_exit(argv[1:])
     if argv and argv[0] == "gold-pbk":
         from app.research.gold_pbk import main as gold_pbk
 

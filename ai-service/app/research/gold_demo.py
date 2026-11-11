@@ -77,15 +77,66 @@ def _decode(raw: bytes) -> str:
 
 
 def report_tables(text: str) -> dict[str, pd.DataFrame]:
-    """The Positions, Orders and Deals tables (all text). Hidden cells are dropped, except that a
-    hidden cell in a data row without one in its header (the Positions comment) becomes Comment."""
+    """The Positions, Orders, Deals and Open Positions tables (all text) of an HTML report."""
     p = _Cells()
     p.feed(text)
+    return tables_from_rows(p.rows)
+
+
+def xlsx_rows(raw: bytes) -> list[list[tuple[str, bool]]]:
+    """The first sheet of an MT5 "Open XML" report as rows of (text, False) cells."""
+    import io
+    import re
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(raw))
+    s = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    shared = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).iter(f"{s}si"):
+            shared.append("".join(t.text or "" for t in si.iter(f"{s}t")))
+    sheet = sorted(n for n in z.namelist() if n.startswith("xl/worksheets/sheet"))[0]
+    rows = []
+    for r in ET.fromstring(z.read(sheet)).iter(f"{s}row"):
+        cells = {}
+        for c in r.iter(f"{s}c"):
+            letters = re.match(r"[A-Z]+", c.get("r", "A")).group(0)
+            col = 0
+            for ch in letters:
+                col = col * 26 + ord(ch) - 64
+            v = c.find(f"{s}v")
+            if c.get("t") == "s" and v is not None:
+                text = shared[int(v.text)]
+            elif c.get("t") == "inlineStr":
+                text = "".join(t.text or "" for t in c.iter(f"{s}t"))
+            else:
+                text = v.text if v is not None and v.text else ""
+            cells[col - 1] = " ".join(text.split())
+        width = max(cells) + 1 if cells else 0
+        rows.append([(cells.get(k, ""), False) for k in range(width)])
+    return rows
+
+
+def read_report(path: Path) -> dict[str, pd.DataFrame]:
+    raw = path.read_bytes()
+    if raw[:2] == b"PK":  # an .xlsx is a zip file
+        return tables_from_rows(xlsx_rows(raw))
+    return report_tables(_decode(raw))
+
+
+SECTIONS = ("Positions", "Orders", "Deals", "Open Positions")
+
+
+def tables_from_rows(rows: list[list[tuple[str, bool]]]) -> dict[str, pd.DataFrame]:
+    """Each section's rows under its header, to the next title or empty row. Hidden cells are
+    dropped, except that a hidden cell in a data row without one in its header (the HTML
+    Positions comment) becomes Comment."""
     out: dict[str, pd.DataFrame] = {}
-    rows, k = p.rows, 0
+    k = 0
     while k < len(rows):
         texts = [c for c, _ in rows[k] if c]
-        if len(texts) == 1 and texts[0] in ("Positions", "Orders", "Deals") and k + 1 < len(rows):
+        if len(texts) == 1 and texts[0] in SECTIONS and k + 1 < len(rows):
             name = texts[0]
             head, seen = [], {}
             for c, hid in rows[k + 1]:
@@ -96,7 +147,7 @@ def report_tables(text: str) -> dict[str, pd.DataFrame]:
                 head.append(c if n == 0 else f"{c}_{n + 1}")
             data = []
             k += 2
-            while k < len(rows) and any(c for c, _ in rows[k]):
+            while k < len(rows) and sum(1 for c, _ in rows[k] if c) > 1:
                 cells = rows[k]
                 shown = [c for c, hid in cells if not hid]
                 extra = " ".join(c for c, hid in cells if hid and c)
@@ -121,12 +172,17 @@ def demo_trades(tables: dict[str, pd.DataFrame], symbol: str = "GOLD") -> pd.Dat
     price; NaN for a market entry), fill, first SL, D, lots, exit price and time, exit (sl / ea),
     net money, gross R (from the level, as Python) and net R (money over D x lots x 100)."""
     pos, orders, deals = tables["Positions"], tables["Orders"], tables.get("Deals")
+    if pos.empty:
+        return pd.DataFrame()
     pos = pos[pos["Symbol"] == symbol].copy()
+    o = orders.set_index("Order")
+    # the .xlsx report has no comment on positions: take the opening order's (same id)
+    own = pos["Comment"] if "Comment" in pos else pd.Series("", index=pos.index)
+    pos["Comment"] = own.where(own.astype(bool), pos["Position"].map(o["Comment"]).fillna(""))
     first = pos["Comment"].str.split().str[0]
     pos = pos[first.isin(STRATEGIES)].copy()
     if pos.empty:
         return pd.DataFrame()
-    o = orders.set_index("Order")
     pos["strategy"] = pos["Comment"].str.split().str[0]
     pos["kind"] = pos["Comment"].str.split().str[1:].str.join(" ")
     pos["dir"] = np.where(pos["Type"].str.lower().str.startswith("buy"), 1, -1)
@@ -290,8 +346,98 @@ def render(j: pd.DataFrame, demo: pd.DataFrame, meta: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def check(report: Path, export: Path, start: pd.Timestamp) -> str:
-    demo = demo_trades(report_tables(_decode(report.read_bytes())))
+def orders_table(tables: dict[str, pd.DataFrame], balance: float) -> list[str]:
+    """Per strategy: the orders the EA placed (not counting the expired ones, whose comment MT5
+    replaces), their lots, D and the risk a trade they come to on ``balance``."""
+    o = tables["Orders"]
+    o = o[o["Comment"].str.split().str[0].isin(STRATEGIES)].copy()
+    o["strategy"] = o["Comment"].str.split().str[0]
+    o["lots"] = _num(o["Volume"].str.split("/").str[0])
+    o["D"] = (_num(o["Price"]) - _num(o["S / L"])).abs()
+    o["risk_pct"] = o["lots"] * o["D"] * gv.CONTRACT / balance * 100
+    lines = [
+        "| Strategy | Orders placed | Lots | D ($, median) | Risk a trade (% of the balance) |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for s in STRATEGIES:
+        g = o[o["strategy"] == s]
+        if g.empty:
+            lines.append(f"| {s} | 0 | - | - | - |")
+            continue
+        lots = ", ".join(f"{x:.2f}" for x in sorted(g["lots"].unique()))
+        lines.append(f"| {s} | {len(g)} | {lots} | {g['D'].median():.2f} "
+                     f"| {g['risk_pct'].median():.2f}% |")  # fmt: skip
+    return lines
+
+
+def demo_only(tables: dict[str, pd.DataFrame], demo: pd.DataFrame, meta: dict) -> str:
+    """The demo's own trades and orders, without Python (no export covers the days yet)."""
+    openp = tables.get("Open Positions", pd.DataFrame())
+    if len(openp) and "Symbol" in openp:
+        openp = openp[openp["Symbol"].astype(str).str.len() > 0]
+    lines = [
+        "# Gold demo: the account's own record",
+        "",
+        f"_`python -m app research gold-demo check` without `--export`: `{meta['report']}`. "
+        "No GOLD export covers these days yet, so Python's trades are not compared._",
+        "",
+        f"## Orders by strategy (balance {meta['balance']:,.2f})",
+        "",
+        *orders_table(tables, meta["balance"]),
+        "",
+        "## Closed trades",
+        "",
+        "| Opened (server) | Strategy | Kind | Dir | Level | Fill | Slip $ | D | Lots | Exit "
+        "| Exit price | Gross R | Net R | Money |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        *[
+            f"| {r.opened:%Y.%m.%d %H:%M:%S} | {r.strategy} | {r.kind} | {int(r.dir):+d} "
+            f"| {r.level:.2f} | {r.fill:.2f} | {r.slip:+.2f} | {r.risk:.2f} | {r.lots:.2f} "
+            f"| {r.exit} | {r.exit_price:.2f} | {r.gross:+.3f} | {r.net:+.3f} | {r.money:+.2f} |"
+            for r in demo.itertuples()
+        ],
+        "",
+        "## Open positions",
+        "",
+        *(
+            [
+                "| Time | Strategy | Type | Volume | Price | S / L | Profit |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+            ]
+            + [
+                f"| {r['Time']} | {r.get('Comment', '')} | {r['Type']} | {r['Volume']} "
+                f"| {r['Price']} | {r['S / L']} | {r.get('Profit', '')} |"
+                for _, r in openp.iterrows()
+            ]
+            if len(openp)
+            else ["None."]
+        ),  # fmt: skip
+        "",
+        "## The stop rules (`GOLD_V1.md`)",
+        "",
+        "| Strategy | Demo trades | Mean net R | Reading |",
+        "| --- | --- | --- | --- |",
+        *[
+            f"| {n} | {c} | {m:+.3f} | {st} |" if c else f"| {n} | 0 | - | {st} |"
+            for n, c, m, st in stop_status(
+                demo if len(demo) else pd.DataFrame({"strategy": [], "net": []})
+            )
+        ],  # fmt: skip
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def balance_of(tables: dict[str, pd.DataFrame]) -> float:
+    d = tables.get("Deals", pd.DataFrame())
+    b = _num(d["Balance"]).dropna() if "Balance" in d else pd.Series(dtype=float)
+    return float(b.iloc[-1]) if len(b) else np.nan
+
+
+def check(report: Path, export: Path | None, start: pd.Timestamp) -> str:
+    tables = read_report(report)
+    demo = demo_trades(tables)
+    if export is None:
+        return demo_only(tables, demo, {"report": report.name, "balance": balance_of(tables)})
     py, end = python_trades(export, start)
     s0 = start.tz_convert(SERVER_TZ).tz_localize(None)
     if len(demo):
@@ -306,8 +452,8 @@ def check(report: Path, export: Path, start: pd.Timestamp) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app research gold-demo")
     ap.add_argument("step", choices=("check",))
-    ap.add_argument("--report", type=Path, required=True, help="MT5 history report (HTML)")
-    ap.add_argument("--export", type=Path, required=True, help="FxPro GOLD M1 export")
+    ap.add_argument("--report", type=Path, required=True, help="MT5 history report (HTML/XLSX)")
+    ap.add_argument("--export", type=Path, help="FxPro GOLD M1 export (none: the demo alone)")
     ap.add_argument("--start", default="2026-11-10", help="first demo day (UTC date)")
     args = ap.parse_args(argv)
     text = check(args.report, args.export, pd.Timestamp(args.start, tz="UTC"))

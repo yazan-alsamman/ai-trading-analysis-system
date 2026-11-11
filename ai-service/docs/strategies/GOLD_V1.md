@@ -217,6 +217,22 @@ stays on the VPS, so the check reads what the account records:
 The strategy is the order comment the EA writes ("LVL4H PDL"), so trades of any other program on
 the account are left out. Trades are compared up to the start of the export's last server day.
 
+**The lot size on the first day (2026-11-10, from the account report).**
+
+- On a $10,000 account with D about $28 (0.75 × ATR(4h)), a 0.25% shadow trade is 0.009 lots, below
+  FxPro's 0.01 minimum. **PIVW, ASIA and PWHL placed no orders** (the EA skips them, "size").
+- LVL4H's 0.5% rounds down to 0.01 lots, about **0.28%** a trade. PIVOT (D about $15) is about
+  0.45%.
+- **Decision (Fadi, 2026-11-10): keep the account and the settings as they are.** While D stays
+  this large, the shadow strategies do not trade on the demo and gather no trades for the stop
+  rules, and LVL4H trades at about half its registered risk. Net R is unaffected (it is per unit
+  of risk); only the money and the account guards' reach change.
+- **Changed the same day (Fadi, 2026-11-10, after the first report): `ShadowRiskPct = 0.5` and
+  `MaxOpenRiskPct = 3`**, so the shadow strategies trade too. On $10,000 a 0.5% shadow trade is
+  0.01 lots while D ≤ $50 (about 0.28% at D $28, after the lot rounds down). `RiskPct` stays 0.5;
+  the cap goes to 3% because five strategies at 0.5% can hold 2.5%. `DailyLossPct = 3` and
+  `MaxDrawdownPct = 25` stay. Migrated to the VPS when no trade is open.
+
 ### Stop rules (written 2026-11-07, before the demo; Fadi: "Yes, write and commit")
 
 A trade's net R is its net money (profit + commission + swap + fee, the EA's `DEAL` rows) over

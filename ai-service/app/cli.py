@@ -36,6 +36,7 @@ COMMANDS = {
     "features": "app.features.setup_features",
     "live": "app.live.replay",
     "strategies": "app.strategies.cli",
+    "discovery": "app.discovery.cli",
 }
 
 

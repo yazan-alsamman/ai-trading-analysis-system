@@ -235,3 +235,87 @@ def test_match_and_the_stop_rules() -> None:
     many = pd.DataFrame({"strategy": "ASIA", "net": [-0.2] * 120})
     st = {n: s for n, _, _, s in gd.stop_status(many)}
     assert "checked at 100" in st["ASIA"] and "stop" in st["ASIA"]
+
+
+def xlsx(rows: list[list[str]]) -> bytes:
+    """A minimal .xlsx with inline strings, as MT5's "Open XML" report lays it out."""
+    import io
+    import zipfile
+
+    def cell(r: int, c: int, v: str) -> str:
+        ref = chr(65 + c) + str(r + 1)
+        return f'<c r="{ref}" t="inlineStr"><is><t>{v}</t></is></c>'
+
+    body = "".join(
+        f'<row r="{r + 1}">' + "".join(cell(r, c, v) for c, v in enumerate(row) if v) + "</row>"
+        for r, row in enumerate(rows)
+    )
+    ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        sheet = f'<worksheet xmlns="{ns}"><sheetData>{body}</sheetData></worksheet>'
+        z.writestr("xl/worksheets/sheet1.xml", sheet)
+    return buf.getvalue()
+
+
+def test_the_xlsx_report_takes_the_comment_from_the_order(tmp_path) -> None:
+    pos_head = ["Time", "Position", "Symbol", "Type", "Volume", "Price", "S / L", "T / P",
+                "Time", "Price", "Commission", "Swap", "Profit"]  # fmt: skip
+    rows = [
+        ["Trade History Report"],
+        ["Positions"],
+        pos_head,
+        [
+            "2026.11.10 12:17:00",
+            "101",
+            "GOLD",
+            "sell",
+            "0.03",
+            "4080.17",
+            "4062.11",
+            "",
+            "2026.11.10 16:20:00",
+            "4053.86",
+            "-0.22",
+            "0.00",
+            "78.93",
+        ],  # fmt: skip
+        ["Orders"],
+        [
+            "Open Time",
+            "Order",
+            "Symbol",
+            "Type",
+            "Volume",
+            "Price",
+            "S / L",
+            "T / P",
+            "Time",
+            "State",
+            "",
+            "Comment",
+        ],  # fmt: skip
+        [
+            "2026.11.10 12:15:00",
+            "101",
+            "GOLD",
+            "sell stop",
+            "0.03 / 0.03",
+            "4080.22",
+            "4096.27",
+            "",
+            "2026.11.10 12:17:00",
+            "filled",
+            "",
+            "PIVOT S1",
+        ],  # fmt: skip
+        ["Deals"],
+    ]
+    path = tmp_path / "r.xlsx"
+    path.write_bytes(xlsx(rows))
+    t = gd.demo_trades(gd.read_report(path))
+    assert t[["strategy", "kind", "bar_server"]].values.tolist() == [
+        ["PIVOT", "S1", "2026.11.10 12:15:00"]
+    ]
+    assert t["risk"].iloc[0] == pytest.approx(16.05)
+    assert t["net"].iloc[0] == pytest.approx((78.93 - 0.22) / (16.05 * 3))

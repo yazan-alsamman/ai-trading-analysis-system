@@ -214,6 +214,30 @@ activated. Addendum 1 (S1 + M8, trial 26) approved 2026-10-31. **Stage E closed 
 management M8 consistent (+0.010 R), **activated**; Addendum 1 (S1 + M8) not consistent (net
 -0.077). Research plan complete; S1-S8 served as unvalidated. Next: write-up; serving (stage F)
 with Yazan; forward paper log; P9.
+
+**Commercial gold track (2026-11-01 to 11-11, exploratory, outside the registered plan; every look
+in `docs/phase3/TRIALS.md`).** Gold level breaks with stop orders: **v1 frozen 2026-11-05** (LVL4H
++ PIVOT with M8, `docs/strategies/GOLD_V1.md`) after its **lockbox exam passed** (+0.052 R a trade
+on real ticks, SE 0.071, `GOLD_LOCKBOX_EXAM.md`; **the XAUUSD lockbox file was opened once for it**;
+the five other lockbox files stay sealed). Shadows PIVW, ASIA, PWHL (`GOLD_SHADOW.md`). Live EA
+`tools/mt5/GoldLive.mq5`, matched to Python in the tester; **FxPro demo since 2026-11-10 on a
+MetaTrader VPS** (account 592239561; RiskPct 0.5, ShadowRiskPct 0.5, MaxOpenRiskPct 3, daily stop
+3%, drawdown stop 25%); stop rules: −0.10 R at the 100th trade, then every 50. Weekly check:
+`python -m app research gold-demo check --report <MT5 report .html/.xlsx> [--export <GOLD M1>]`.
+On FxPro 2016-2026 the five make about +0.026 R a trade with slip (largest drawdown about 134 R).
+**Everything else tried on gold was dropped** (about 30 registered looks): ORB, pullback, 50%
+retrace, night reversion, value area, daily swing, regime switch, dealing range, the AH bot clone
+with filters and meta-labeling, PBK pullback-before-break, round numbers (3 of 4 conditions; too
+close to the five), the dollar's lead, time-of-day (intraday momentum, London to New York, the
+night), losing-trade filters, a model fading the five's predicted losers (Brier skill ≤ 0). Exits:
+no fixed target, tighter SL or overnight hold beats M8 with the 16:45 close (`GOLD_EXIT`,
+`GOLD_SL`, `GOLD_HOLD`). `gold_path.md`: after an entry gold is close to a random walk (a +0.04 D
+push in the first 5-15 minutes). **The five on the unseen Nasdaq 100 lose** (−0.078 R, below a
+random side; `FIVE_NAS100.md`), and RECLAIM there does not hold (`FIVE_NAS_RECLAIM.md`).
+**Discovery round 2 (markout map, `docs/discovery/PLAN.md`)**: plan corrected and accepted (gates
+2 cost units, t ≥ 3, 224 cells; silver a feature only); D1-D2 in progress (MT5 calendar 2010-2026
+imported, `python -m app discovery calendar|drivers|count`; Dukascopy dollar index and US bond M1
+2018 on downloading); no outcome computed; `PREREG_2.md` next, for Fadi's approval.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
