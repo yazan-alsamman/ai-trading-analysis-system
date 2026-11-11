@@ -220,3 +220,6 @@ de Prado and O'Hara (2012); MetaTrader 5 help, "Basic Principles".
   server time) that carry the day's whole high and low (`GOLD_MAGNET.md` §6); silver was re-stored
   without them. The XAUUSD research store does not have them. (c) The calendar's repeated rows are
   real (euro-area and German releases at the same minute; the 2013 shutdown's double releases).
+- **D3 draft (2026-11-11).** `PREREG_2.md` written and **approved by Fadi the same day** (tag `discovery-prereg-2`): 30 cells x 7 horizons = 210
+  map cells, E0 and placebos per family, gates, prior exposure and a power statement from noise
+  only. Nothing run.
