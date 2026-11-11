@@ -126,3 +126,14 @@ primary + 48 secondary cells.
 | D10 | Standard spread 0.35 until measured |
 | D11 | the pass rules of §6 |
 | D12 | entries 02:00-13:00 New York |
+
+## Addendum 1 (2026-11-11, before any outcome; L0 counts only)
+
+Found on a one-year trial of the code (signal counts only): the rule "target = the next level of
+the same family, stop = the midpoint to the one behind" needs three levels, so the range families
+could not trade their own edges: SESS-A and SESS-L (two levels) gave **no signal**; PREV-D, PREV-W
+(high, low, close) traded only the close; FIB only its 50%. **Fadi's decision ("Yes, add
+projections"): the range families get their range's projections**: high + 1 and 2 ranges, low - 1
+and 2 ranges (`families.projected`). FIB also gets 0% and 100%. SESS-A then gives about 2,700
+signals a year, SESS-L about 1,800. LIQ stays as registered (about one event a year: near empty).
+Also fixed: a slow loop in the level-life code (no change in what it computes).
