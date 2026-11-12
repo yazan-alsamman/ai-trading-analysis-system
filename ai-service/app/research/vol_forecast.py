@@ -15,27 +15,30 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from app.discovery.events import TOP3
 from app.research import decide as dc
 from app.research import gold_lab as gl
+from app.scoring import volatility as vs
+from app.scoring.volatility import (  # the served definitions
+    HAR,
+    NEWS,
+    W_END,
+    W_FROM,
+    WEEK,
+    at_ny,
+    days,
+    news,
+)
 
+NY, FED, TOP3 = vs.NY, vs.FED, vs.TOP3
 ROOT = Path(__file__).resolve().parents[2]
 CAL = ROOT / "data" / "processed" / "calendar.parquet"
 REPORT = ROOT / "docs" / "vol" / "vol_forecast_result.md"  # not VOL_FORECAST.md (Windows case)
-NY = "America/New_York"
-W_FROM, W_END = 2 * 60, 16 * 60 + 45  # window: bar opens >= 02:00, closes <= 16:45 New York
 W_BARS = (W_END - W_FROM) // 5  # 177
-MIN_SHARE, MAX_GAP = 0.9, 30  # share of window bars, longest missing time (minutes)
-EARLY = 8 * 60 + 30
 FIRST, LAST = pd.Timestamp("2012-01-02"), pd.Timestamp("2026-01-09")
 TEST_YEARS = tuple(range(2018, 2026))
 HOLD_FROM = pd.Timestamp("2024-07-01")
 BOOT, SEED, LGB_SEED = 10_000, 20261113, 20261112
-FED = "Fed Interest Rate Decision"
 MODELS = ("M0", "M1", "M2", "M3", "M4")
-HAR = ["rv1", "rv5", "rv22", "on"]
-NEWS = ["top3", "fed", "uh1", "uh2", "early"]
-WEEK = ["tue", "wed", "thu", "fri"]
 X = {"M1": ["atr"], "M2": HAR, "M3": HAR + NEWS + WEEK, "M4": HAR + NEWS + WEEK + ["atr"]}
 LGB = dict(num_leaves=7, n_estimators=300, learning_rate=0.03, min_child_samples=50,
            subsample=0.8, subsample_freq=1, colsample_bytree=1.0, random_state=LGB_SEED,
@@ -45,66 +48,11 @@ LGB = dict(num_leaves=7, n_estimators=300, learning_rate=0.03, min_child_samples
 # --- the days ----------------------------------------------------------------------------------
 
 
-def at_ny(days: pd.DatetimeIndex | pd.Series, minutes: int) -> pd.DatetimeIndex:
-    """The UTC instant of ``minutes`` after New York midnight on each (naive) date."""
-    d = pd.DatetimeIndex(days) + pd.Timedelta(minutes=minutes)
-    return d.tz_localize(NY).tz_convert("UTC")
-
-
-def days(m: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
-    """One row per New York weekday with window bars (RV, bars, missing time, range, the price
-    at 02:00, the bars closing by 02:00 and by 16:45) and the running sum of squared returns."""
-    ny = m["ts_utc"].dt.tz_convert(NY)
-    omin = (ny.dt.hour * 60 + ny.dt.minute).to_numpy()
-    c = m["close"].to_numpy(float)
-    r2 = np.r_[0.0, np.diff(np.log(c))] ** 2
-    win = (omin >= W_FROM) & (omin + 5 <= W_END) & (ny.dt.day_of_week < 5).to_numpy()
-    w = pd.DataFrame({"day": ny.dt.tz_localize(None).dt.normalize().to_numpy()[win],
-                      "omin": omin[win], "r2": r2[win], "high": m["high"].to_numpy()[win],
-                      "low": m["low"].to_numpy()[win]})  # fmt: skip
-    prev = w.groupby("day")["omin"].shift(1).fillna(W_FROM - 5).to_numpy()
-    w["miss"] = w["omin"].to_numpy() - prev - 5
-    g = w.groupby("day")
-    d = pd.DataFrame({"rv": g["r2"].sum(), "n": g["omin"].size(), "hi": g["high"].max(),
-                      "lo": g["low"].min(), "miss": g["miss"].max(),
-                      "last": g["omin"].max()})  # fmt: skip
-    d["miss"] = np.maximum(d["miss"], W_END - 5 - d["last"])
-    d["used"] = (d["n"] >= MIN_SHARE * W_BARS) & (d["miss"] <= MAX_GAP)
-    # the price at 02:00: the last bar closing by then
-    cu = m["close_utc"].to_numpy()
-    k02 = np.searchsorted(cu, at_ny(d.index, W_FROM).to_numpy(), "right") - 1
-    d["p02"] = np.where(k02 >= 0, c[np.maximum(k02, 0)], np.nan)
-    d["k02"] = k02
-    d["k1645"] = np.searchsorted(cu, at_ny(d.index, W_END).to_numpy(), "right") - 1
-    return d.drop(columns=["last"]), np.cumsum(r2)
-
-
-def news(cal: pd.DataFrame, index: pd.DatetimeIndex) -> pd.DataFrame:
-    """Scheduled USD importance-3 releases inside each day's window (02:00-16:45 inclusive)."""
-    u = cal[(cal["currency"] == "USD") & (cal["importance"] == 3)]
-    t = u["ts_utc"].dt.tz_convert(NY)
-    mins = (t.dt.hour * 60 + t.dt.minute).to_numpy()
-    e = pd.DataFrame({"day": t.dt.tz_localize(None).dt.normalize().to_numpy(), "min": mins,
-                      "event": u["event"].to_numpy()})  # fmt: skip
-    e = e[(e["min"] >= W_FROM) & (e["min"] <= W_END)]
-    e["top3"] = e["event"].isin(TOP3)
-    e["fed"] = e["event"] == FED
-    e["other"] = ~e["top3"]
-    e["early"] = e["min"] <= EARLY
-    g = e.groupby("day")[["top3", "fed", "other", "early"]].sum().reindex(index, fill_value=0)
-    out = pd.DataFrame(index=index)
-    out["top3"] = g["top3"] > 0
-    out["fed"] = g["fed"] > 0
-    out["uh1"] = g["other"] == 1
-    out["uh2"] = g["other"] >= 2
-    out["early"] = g["early"] > 0
-    return out.astype(float)
-
-
 def features(m: pd.DataFrame, h4: pd.DataFrame, cal: pd.DataFrame,
-             first: pd.Timestamp = FIRST, last: pd.Timestamp = LAST) -> pd.DataFrame:  # fmt: skip
+             first: pd.Timestamp = FIRST, last: pd.Timestamp = LAST,
+             step: int = 5) -> pd.DataFrame:  # fmt: skip
     """Used days with the target (log RV) and every feature known at 02:00 New York."""
-    d, cum = days(m)
+    d, cum = days(m, step)
     u = d[d["used"]].copy()
     rv = u["rv"]
     u["y"] = np.log(rv)
