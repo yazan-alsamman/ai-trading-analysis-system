@@ -56,3 +56,15 @@ Passing all four leads to a registered test on the five FX pairs, then a demo sh
 t is reported against the research bar (about +0.17 R by chance as the best of about 75 looks).
 
 Count: 4 cells in `TRIALS.md`.
+
+## 5. Outcome (2026-11-12): dropped (no cell qualifies)
+
+`gold_vp2_result.md`.
+
+- **RE-ENTRY to the POC:** wins 56-60% of trades but loses after costs: TPO −0.083 R (960 trades,
+  gross +0.011), TICK −0.051 (961, gross +0.045) on 2012-2021; −0.005 / −0.074 on the check. Its
+  value area does no better than the shifted copies (t +0.46 / +1.27).
+- **ACCEPTED break:** −0.62 / −0.64 R on 2012-2021 (win 20%, gross −0.11 / −0.15): the stop 0.25 x
+  ATR(15m) inside the edge is close, so costs are 0.40 R a trade and most trades return inside.
+  Worse than the shifted copies (t −0.95 / −0.80).
+- TPO and tick volume give the same picture. The 2026 column holds a few trades only.
