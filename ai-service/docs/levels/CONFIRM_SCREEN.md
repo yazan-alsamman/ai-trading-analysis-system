@@ -70,3 +70,11 @@ pairs, Holm over the methods tested). Nothing else is decided here.
 
 Count: 15 screen cells in `TRIALS.md`. Code: `app/levels/confirm.py`, `python -m app levels
 confirm`. Report: `confirm_screen_result.md`.
+
+## Outcome (2026-11-12): no method passes the screen
+
+`confirm_screen_result.md`. **Every method loses after costs** (−0.04 to −0.32 R a trade) and none
+beats its shifted copies by t >= 1.5 with a positive net (R7 has t +1.62 but −0.228 R). Gross R is
+−0.05 to +0.09: the confirmations do not add a direction. The largest gross readings: B5 squeeze
++0.086 (332 trades, net −0.042; copies −0.153, t +0.97), R3 engulfing +0.075 (net −0.064, t −0.03),
+B3 strong candle +0.031 (net −0.038, t +0.56). No full test follows.
