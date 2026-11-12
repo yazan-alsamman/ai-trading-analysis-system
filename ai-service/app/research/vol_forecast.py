@@ -101,7 +101,8 @@ def news(cal: pd.DataFrame, index: pd.DatetimeIndex) -> pd.DataFrame:
     return out.astype(float)
 
 
-def features(m: pd.DataFrame, h4: pd.DataFrame, cal: pd.DataFrame) -> pd.DataFrame:
+def features(m: pd.DataFrame, h4: pd.DataFrame, cal: pd.DataFrame,
+             first: pd.Timestamp = FIRST, last: pd.Timestamp = LAST) -> pd.DataFrame:  # fmt: skip
     """Used days with the target (log RV) and every feature known at 02:00 New York."""
     d, cum = days(m)
     u = d[d["used"]].copy()
@@ -124,7 +125,7 @@ def features(m: pd.DataFrame, h4: pd.DataFrame, cal: pd.DataFrame) -> pd.DataFra
     for i, name in enumerate(WEEK, start=1):
         u[name] = (wd == i).astype(float)
     u["year"] = u.index.year
-    u = u[(u.index >= FIRST) & (u.index <= LAST)]
+    u = u[(u.index >= first) & (u.index <= last)]
     return u.dropna(subset=["y", "atr", *HAR])
 
 
