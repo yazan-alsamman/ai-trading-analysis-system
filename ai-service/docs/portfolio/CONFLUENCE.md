@@ -77,3 +77,15 @@ changes.
 Counted in N, logged in `docs/phase3/TRIALS.md`. Code: `app/research/confluence.py`,
 `python -m app research confluence`, committed before the run. Report:
 `docs/portfolio/confluence_result.md`.
+
+## Outcome (2026-11-12): hypothesis C does not pass
+
+`confluence_result.md` (code `ec0ca97`). Pooled D = +0.005 R gross (95% −0.032 to +0.039, p
+0.40); d > 0 in 3 of 6 markets (EURUSD +0.027, GBPUSD +0.047, USDJPY +0.064; NAS100 −0.025, AUDUSD
+−0.023, USDCAD −0.059), none with its interval above 0. The gold pattern is treated as specific to
+the data it was found on; nothing changes, and no demo check is set up for it.
+
+Seen with it (decides nothing): the five's gross R is positive in every k bucket on all six
+markets (about +0.03 to +0.10 R a trade), and the net is mostly negative with these costs; pooled
+net R with slip k = 0 −0.044 vs k >= 1 +0.024, a gap that comes from cost per R, not from direction.
+

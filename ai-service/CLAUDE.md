@@ -255,7 +255,8 @@ from the backend (proposal for Yazan in `SERVING.md` §5); until then it says `i
 **The five as a portfolio (`docs/portfolio/RISK_SPLIT.md`, 2026-11-12): splitting risk across same-direction
 trades fails** (Sharpe and drawdown worse): same-direction trades correlate (rho 0.66) but are the best
 ones; trades with no other of the five open (k = 0, 53%) carry almost no edge (store +0.009, FxPro −0.021 R).
-Confluence is a new, untested hypothesis; only forward data can test it.
+Confluence was then tested on six markets never read for it (`CONFLUENCE.md`): **does not pass**
+(+0.005 R gross, p 0.40, 3 of 6 positive); it is treated as specific to gold's data.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
