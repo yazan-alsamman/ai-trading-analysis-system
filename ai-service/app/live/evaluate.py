@@ -50,6 +50,7 @@ from app.contract import (
 )
 from app.live.frames import DataQualityError, build_frames
 from app.live.scanner import LiveSetup, Step, scan
+from app.scoring import volatility as vol
 
 SERVICE_VERSION = "0.1.0"
 FEATURES_VERSION = "none"  # v1 computes no model features
@@ -65,6 +66,7 @@ class LiveVersions(Versions):
 
 class LiveEvaluateResponse(EvaluateResponse):
     versions: LiveVersions
+    volatility: vol.VolatilityOutlook | None = None  # information only (docs/vol/SERVING.md)
 
 
 class UnknownInput(ValueError):
@@ -179,6 +181,20 @@ def _transition(sid: str, before: SetupState, step: Step) -> Transition:
     )
 
 
+def volatility(req: EvaluateRequest) -> vol.VolatilityOutlook:
+    """Today's volatility outlook for gold (``docs/vol/SERVING.md``); it touches nothing else in
+    the answer."""
+    if req.instrument != "XAUUSD" or "15m" not in req.bars:
+        return vol.VolatilityOutlook(status="not_supported")
+    bars = req.bars["15m"]
+    ts = pd.to_datetime([b.ts for b in bars], utc=True)
+    m = pd.DataFrame({"ts_utc": ts, "close_utc": ts + pd.Timedelta(minutes=15),
+                      "open": [b.o for b in bars], "high": [b.h for b in bars],
+                      "low": [b.l for b in bars], "close": [b.c for b in bars]})  # fmt: skip
+    as_of = pd.Timestamp(req.bar_close_ts).tz_convert("UTC")
+    return vol.outlook(m, vol.calendar_frame(req.calendar), as_of)
+
+
 def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
     prof, inst = config_for(req)
     p = strategy(prof.rules)
@@ -251,4 +267,5 @@ def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
         new_setups=new_setups,
         transitions=transitions,
         abstentions=abstentions,
+        volatility=volatility(req),
     )

@@ -58,3 +58,29 @@ and the request's calendar; otherwise null with a reason:
 
 Until (1) and (2) hold, the object comes back with no forecast and the reason (`insufficient_history`,
 `outside_window`), and nothing else in the response changes.
+
+## Outcome (2026-11-12): the 15m M3 passes and is served
+
+`serving_check.md` (code `d4042cb`): QLIKE M1 0.170, M3 0.148 (−0.022, Holm p 0.002, better in 6 of
+8 years, 2024-07 on −0.013); M2 again no better than the ATR. Range multipliers k: p20 1.06, p50
+1.41, p80 1.97. Frozen in `app/config/volatility_v1.json` (3,462 days, 2012-01-03 to 2026-01-09).
+
+In the service: `app/scoring/volatility.py` (`outlook`), `/v1/evaluate` answers carry
+`volatility` (`app/live/evaluate.py`). Tests (`tests/test_volatility_outlook.py`): the served
+features equal the research's, nothing after 02:00 is read, the statuses, the TOP3 titles, and an
+evaluate answer is the same apart from the new field. With today's backend settings (2,000 x 15m,
+calendar ±6 h) the object says `insufficient_history`; §5 is the proposal for Yazan.
+
+Example, a CPI day (illustration of the format only):
+
+```json
+"volatility": {
+  "status": "ok", "model": "vol-m3-15m-v1", "day": "2026-11-12",
+  "window": "02:00-16:45 America/New_York", "expected_move_pct": 0.95,
+  "range_pct": {"p20": 1.01, "p50": 1.34, "p80": 1.87},
+  "range_usd": {"p20": 41.2, "p50": 54.9, "p80": 76.4},
+  "level": "lively",
+  "news": [{"ts": "2026-11-12T13:30:00Z", "title": "CPI m/m", "top3": true}]
+}
+```
+

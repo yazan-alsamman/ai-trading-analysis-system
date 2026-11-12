@@ -247,6 +247,11 @@ scheduled USD news + weekday (M3) forecasts the five's window RV better than ATR
 the five?) **does not pass** (`VOL_PART2.md`: D x M3/ATR ratio, −0.003 R a day, p 0.55; FxPro 2026
 −0.019): the five keep the ATR; the forecast serves the product's "expected range today". Direction
 stays unforecastable; size is forecastable but does not pay in the five.
+**Served as user information (Fadi, 2026-11-12, `docs/vol/SERVING.md`):** the 15m M3 passed its check
+(QLIKE 0.148 vs 0.170) and is frozen (`app/config/volatility_v1.json`, `vol-m3-15m-v1`);
+`/v1/evaluate` answers carry an additive `volatility` object (expected move, range p20/p50/p80, level,
+the day's USD news) that changes nothing else. It needs about 2,500 x 15m bars and the day's calendar
+from the backend (proposal for Yazan in `SERVING.md` §5); until then it says `insufficient_history`.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
