@@ -74,7 +74,7 @@ def cut_bars(frame: pd.DataFrame, cell: str) -> tuple[np.ndarray, np.ndarray]:
     return cut, blocked
 
 
-def trades(frame: pd.DataFrame, cell: str, fill: str = "real") -> pd.DataFrame:
+def trades(frame: pd.DataFrame, cell: str, fill: str = "real", commission=None) -> pd.DataFrame:
     """Every trade of a cell. ``fill = "ha"``: entries and exits at HA prices (the artefact)."""
     o, h, lo, c = (frame[k].to_numpy() for k in ("open", "high", "low", "close"))
     spread = frame["spread_mean"].to_numpy()
@@ -100,7 +100,9 @@ def trades(frame: pd.DataFrame, cell: str, fill: str = "real") -> pd.DataFrame:
     out = pd.DataFrame(rows, columns=["i", "k", "x", "dir", "entry", "exit_px", "why"])
     out["risk"] = atr[out["i"]]
     out["gross"] = out["dir"] * (out["exit_px"] - out["entry"]) / out["risk"]
-    out["cost"] = (spread[out["k"]] + gl.COMMISSION) / out["risk"]
+    comm = gl.COMMISSION if commission is None else commission  # FX: an array by bar
+    comm_k = comm[out["k"]] if np.ndim(comm) else comm
+    out["cost"] = (spread[out["k"]] + comm_k) / out["risk"]
     out["net"] = out["gross"] - out["cost"]
     out["net2"] = out["gross"] - 2 * out["cost"]
     out["year"] = frame["close_utc"].dt.year.to_numpy()[out["i"]]

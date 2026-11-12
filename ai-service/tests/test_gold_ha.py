@@ -59,3 +59,23 @@ def test_day_cell_closes_at_16_45_new_york() -> None:
     close_ny = f["close_utc"].dt.tz_convert("America/New_York").iloc[k]
     assert (close_ny.hour, close_ny.minute) == (16, 45)
     assert blocked[k + 1] and not blocked[k]
+
+
+def test_fx_nights_count_rollovers_and_wednesday_triples() -> None:
+    from app.research import ha_fx
+
+    # 4h bars from Monday 2024-03-04 21:00 UTC (17:00 New York) for a week
+    ts = pd.date_range("2024-03-04 21:00", periods=24, freq="4h", tz="UTC")
+    f = pd.DataFrame({"ts_utc": ts, "close_utc": ts + pd.Timedelta("4h")})
+    # in at bar 1 (Monday 21:00 NY... = Tuesday 01:00 UTC), out at bar 13 (Thursday)
+    t = pd.DataFrame({"k": [1], "x": [13], "why": ["flip"]})
+    # rollovers held: Tuesday 17:00 (1) and Wednesday 17:00 (3)
+    assert ha_fx.nights(t, f)[0] == 4
+
+
+def test_commission_per_bar() -> None:
+    f = frame(list(np.linspace(1.10, 1.12, 30)) + list(np.linspace(1.12, 1.09, 30)))
+    f["spread_mean"] = 0.0
+    a = g.trades(f, "H24", commission=np.full(len(f), 0.0001))
+    b = g.trades(f, "H24", commission=0.0001)
+    pd.testing.assert_series_equal(a["cost"], b["cost"])
