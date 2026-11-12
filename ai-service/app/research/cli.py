@@ -136,6 +136,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_cost import main as gold_cost
 
         return gold_cost(argv[1:])
+    if argv and argv[0] == "risk-split":
+        from app.research.risk_split import main as risk_split
+
+        return risk_split(argv[1:])
     if argv and argv[0] == "vol-serving":
         from app.research.vol_serving import main as vol_serving
 
