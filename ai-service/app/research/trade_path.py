@@ -17,7 +17,7 @@ import pandas as pd
 from app.research import gold_lab as gl
 from app.research import gold_night as gn
 
-REPORT = gl.OUT_DIR / "trade_path.md"
+REPORT = gl.OUT_DIR / "trade_path_result.md"  # not trade_path.md: TRADE_PATH.md on Windows
 YEARS = (2012, 2021)
 LADDER = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5)
 SPEED = ((0, 15), (15, 60), (60, 180), (180, 10_000))  # minutes to +1 R
