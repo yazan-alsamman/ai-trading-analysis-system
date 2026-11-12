@@ -43,3 +43,11 @@ returns to an edge and closes on it, trade away from it) and **break**.
 
 Count: 2 primary + 4 secondary cells in `TRIALS.md`. Code: `app/levels/ob.py`,
 `python -m app levels ob`. Report: `ob_result.md`.
+
+## 3. Outcome (2026-11-12): negative
+
+`ob_result.md`. **0 of 2 primary tests, 0 of 4 families.** 12,416 blocks on 15m and 3,263 on 1h
+(2011-2026). Breaks −0.288 R a trade (6,051 trades; shifted copies −0.289, t +0.03); rejections,
+the classic order-block trade, −0.308 R (1,983 trades; shifted copies −0.294, t −0.35). Every year
+loses. Price treats a block's edges no differently from the same edges moved to random prices.
+No FX confirmation, no demo shadow.
