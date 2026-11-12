@@ -4,6 +4,7 @@
     python -m app levels discover  # L1: discovery, gold 2012-2021, against 200 shifted copies
     python -m app levels discover --from 2024-01-01 --to 2026-01-10   # the same, another period
     python -m app levels ob        # order blocks as a family (ORDER_BLOCKS.md)
+    python -m app levels confirm   # 15 confirmation methods, the screen (CONFIRM_SCREEN.md)
 
 L0 reads no outcome: no price after an order's entry bar."""
 
@@ -120,6 +121,10 @@ def main(argv: list[str]) -> int:
         REPORT.write_text(count(), encoding="utf-8", newline="\n")
         print(f"wrote {REPORT}")
         return 0
+    if argv and argv[0] == "confirm":
+        from app.levels.confirm import main as confirm
+
+        return confirm()
     if argv and argv[0] == "ob":
         from app.levels.ob import main as ob
 

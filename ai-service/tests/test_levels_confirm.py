@@ -1,103 +1,87 @@
-"""Addendum 2 confirmation (app/research/levels_confirm.py): the first-passage rule on hand-built
-bars, the touches on a synthetic market, the decision rule, the report and the guards. Nothing
-here reads the confirmation store."""
+"""The confirmation screen (app/levels/confirm.py) on hand-built bars."""
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from app.research import levels_confirm as lc
-from tests.strategy_data import market
+from app.levels import confirm as cf
+from app.levels import families as fm
+from tests.test_gold_pbk import ctx
 
 
-def bars(path: list[tuple[float, float]], n: int = 120) -> tuple[np.ndarray, np.ndarray]:
-    """Highs and lows: the given bars, then flat bars at 100 (long enough for the windows)."""
-    hi, lo = np.full(n, 100.0), np.full(n, 100.0)
-    for j, (h, low) in enumerate(path):
-        hi[j], lo[j] = h, low
-    return hi, lo
+def make(o, h, lo, c):
+    return ctx(*(np.asarray(x, float) for x in (o, h, lo, c)))  # ATR(5m) = 1
 
 
-def passage(path, up=True, lv=100.0, d=1.0):
-    hi, lo = bars(path)
-    out, cont = lc.first_passage(hi, lo, np.array([0]), np.array([lv]), np.array([d]),
-                                 np.array([up]))  # fmt: skip
-    return out[0], cont[0]
+def flat(n, p=100.0):
+    a = np.full(n, p)
+    return a.copy(), a + 0.1, a - 0.1, a.copy()
 
 
-def test_first_passage_on_hand_built_bars() -> None:
-    # touched from below at bar 0; then down 1 before up 1: a bounce
-    assert passage([(100.0, 99.5), (100.2, 98.9)])[0] == "bounce"
-    # then up 1 first: a break, then 2 through before back to 100: continuation
-    assert passage([(100.0, 99.5), (101.1, 100.4), (102.1, 101.5)]) == ("break", 1.0)
-    # a break that comes back to the level first: no continuation
-    assert passage([(100.0, 99.5), (101.1, 100.4), (100.8, 99.9)]) == ("break", 0.0)
-    # the touch bar itself reaching D through counts as a break; its low does not count
-    assert passage([(101.2, 98.0), (100.5, 100.1)])[0] == "break"
-    # one bar reaching both: ambiguous
-    assert passage([(100.0, 99.5), (101.5, 98.5)])[0] == "ambiguous"
-    # nothing within 48 bars
-    assert passage([(100.0, 99.5)])[0] == "none"
-    # approached from above: mirrored
-    assert passage([(100.5, 100.0), (101.1, 99.8)], up=False)[0] == "bounce"
+def test_lattice_break_and_rejection_events() -> None:
+    o, h, lo, c = flat(60, 2005.0)
+    c[55], h[55] = 2010.5, 2010.6  # a close above 2010 + 0.25: break up
+    h[57], c[57] = 2010.0, 2005.0  # from 2005: up to 2010, close back below: rejected
+    cx = make(o, h, lo, c)
+    ev = cf.base_lattice(cx, fm.rnd(cx, 10.0))
+    b = ev[(ev["kind"] == "break") & (ev["i"] == 55)].iloc[0]
+    assert (b["d"], b["level"], b["target"], b["behind"]) == (1.0, 2010.0, 2020.0, 2000.0)
+    r = ev[(ev["kind"] == "reject") & (ev["i"] == 57)].iloc[0]
+    assert (r["d"], r["level"], r["target"]) == (-1.0, 2010.0, 2000.0)
 
 
-@pytest.fixture(scope="module")
-def synthetic():
-    rng = np.random.default_rng(lc.SEED)
-    fr = market("XAUUSD", start="2023-09-25", end="2023-11-18")
-    return lc.outcomes(lc.touches(fr, "XAUUSD", 10.0, rng))
+def test_b1_b3_and_r4_from_a_break() -> None:
+    o, h, lo, c = flat(60)
+    # bar 52: a strong break of 101 (body 1.5 ATR, close at the top); bar 53 closes above 101
+    o[52], c[52], h[52], lo[52] = 100.0, 101.5, 101.55, 99.95
+    o[53], c[53], h[53], lo[53] = 101.5, 101.2, 101.6, 101.1
+    o[54:57], c[54:57], h[54:57], lo[54:57] = 101.3, 101.3, 101.4, 101.2  # holds above
+    cx = make(o, h, lo, c)
+    ind = cf.Ind(cx, None)
+    ev = pd.DataFrame(
+        {
+            "i": [52],
+            "kind": ["break"],
+            "d": [1.0],
+            "level": [101.0],
+            "target": [102.0],
+            "behind": [100.0],
+        }
+    )
+    s = cf.methods(cx, ind, ev).set_index("method")
+    assert s.loc["B1", "i"] == 53 and s.loc["B1", "stop"] == pytest.approx(101.1 - 0.1)
+    assert s.loc["B3", "i"] == 52
+    assert "R4" not in s.index  # it did not fall back
+    c2 = c.copy()
+    c2[53] = 100.8  # back below 101 the next bar: a fakeout
+    cx2 = make(o, h, lo, c2)
+    s2 = cf.methods(cx2, cf.Ind(cx2, None), ev).set_index("method")
+    assert s2.loc["R4", "d"] == -1.0 and s2.loc["R4", "target"] == 100.0
 
 
-def test_touches_on_a_synthetic_market(synthetic) -> None:
-    d = synthetic
-    assert set(d.kind) == {"PDH", "PDL", "5DH", "5DL", "ROUND"}
-    assert d.placebo.any() and (~d.placebo).any()
-    assert set(d.outcome) <= {"break", "bounce", "none", "ambiguous"}
-    assert d.t.min() >= lc.START
-    ny = d.t.dt.tz_convert("America/New_York")
-    assert ny.dt.hour.between(2, 15).all() and (ny.dt.day_of_week < 5).all()
-    # at most one first touch per day and day level
-    day = ny.dt.date
-    days = d[d.kind != "ROUND"].assign(day=day)
-    assert not days.duplicated(["symbol", "kind", "placebo", "day"]).any()
+def test_r2_pin_bar() -> None:
+    o, h, lo, c = flat(60)
+    o[55], c[55], h[55], lo[55] = 100.0, 99.9, 101.2, 99.85  # a long upper wick through 101
+    cx = make(o, h, lo, c)
+    ev = pd.DataFrame(
+        {
+            "i": [55],
+            "kind": ["reject"],
+            "d": [-1.0],
+            "level": [101.0],
+            "target": [100.0],
+            "behind": [102.0],
+        }
+    )
+    s = cf.methods(cx, cf.Ind(cx, None), ev)
+    r = s[s["method"] == "R2"].iloc[0]
+    assert r["stop"] == pytest.approx(101.2 + 0.1)
 
 
-def test_the_decision_needs_both_conditions() -> None:
-    def diff(v, p=0.01):
-        return lc.Diff(100, 0.45, 100, 0.45 - v, v, v - 0.01, v + 0.01, p)
-
-    four = {f"I{k}": diff(-0.02) for k in range(4)} | {"I4": diff(0.01), "I5": diff(0.01)}
-    assert lc.decide(diff(-0.03), four) == "H_L1 passed"
-    three = {f"I{k}": diff(-0.02) for k in range(3)} | {f"I{k}": diff(0.01) for k in (3, 4, 5)}
-    assert lc.decide(diff(-0.03), three) == "H_L1 not passed"
-    assert lc.decide(diff(-0.03, p=0.2), four) == "H_L1 not passed"
-
-
-def test_render(synthetic) -> None:
-    rng = np.random.default_rng(1)
-    d = pd.concat([synthetic, synthetic.assign(symbol="XAGUSD")], ignore_index=True)
-    md = lc.render(d, rng, "a" * 40, "b" * 40, "2026-11-04", boot=200)
-    for text in ("once", "## Decision (section 5)", "All six, pooled", "H_L1", "## Per instrument",
-                 "Continuation", "lockbox was not read"):  # fmt: skip
-        assert text in md, text
-
-
-def test_the_reading_is_refused_a_second_time(tmp_path) -> None:
-    done = tmp_path / "levels_confirm.md"
-    done.write_text("read")
-    with pytest.raises(PermissionError, match="once only"):
-        lc.preconditions(done)
-
-
-def test_the_reading_needs_an_approved_addendum(tmp_path) -> None:
-    a = tmp_path / "ADDENDUM.md"
-    a.write_text("| Approval date | (date) |\n")
-    with pytest.raises(PermissionError, match="not approved"):
-        lc.preconditions(tmp_path / "none.md", a)
-
-
-def test_specs_cover_the_registered_instruments() -> None:
-    assert list(lc.INSTRUMENTS) == ["NZDUSD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "XAGUSD"]
-    assert set(lc.STEP) == set(lc.INSTRUMENTS)
-    assert lc.INSTRUMENTS["XAGUSD"].contract_size == 5000
+def test_simulate_target_and_stop() -> None:
+    o, h, lo, c = flat(20)
+    h[5] = 102.5  # after an entry at 100 (bar 3's open), the target 102 is hit on bar 5
+    cx = make(o, h, lo, c)
+    sig = pd.DataFrame({"method": ["B1"], "i": [2], "d": [1.0], "stop": [99.0], "target": [102.0]})
+    t = cf.simulate(cx, sig, "X").iloc[0]
+    assert t["exit"] == "target" and t["gross"] == pytest.approx(2.0)
