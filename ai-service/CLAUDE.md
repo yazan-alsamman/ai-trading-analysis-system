@@ -244,7 +244,9 @@ fake spikes: F1 reads the dollar from 2019, the bond from 2020); no outcome comp
 **Volatility forecast, part 1 (`docs/vol/VOL_FORECAST.md`, 2026-11-12): passes.** At 02:00 New York, HAR +
 scheduled USD news + weekday (M3) forecasts the five's window RV better than ATR(4h) (QLIKE 0.105 vs
 0.128, Holm p 0.0003, 7 of 8 years; R^2 0.62 vs 0.52); the news calendar is the gain. Part 2 (does it help
-the five?) needs its own registration. Direction stays unforecastable; size is forecastable.
+the five?) **does not pass** (`VOL_PART2.md`: D x M3/ATR ratio, −0.003 R a day, p 0.55; FxPro 2026
+−0.019): the five keep the ATR; the forecast serves the product's "expected range today". Direction
+stays unforecastable; size is forecastable but does not pay in the five.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

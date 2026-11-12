@@ -78,3 +78,14 @@ today" message only.
 One look at the five's trades: logged in `docs/phase3/TRIALS.md` and counted in N. Code:
 `app/research/vol_part2.py`, `python -m app research vol-part2 --export <GOLD M1>`, committed before
 the run. Report: `docs/vol/vol_part2_result.md`.
+
+## Outcome (2026-11-12): VOL does not pass; the five keep the ATR
+
+`vol_part2_result.md` (code `e6e73e1`; BASE reproduces `gold_live.five_trades` exactly, 7,571
+trades). Store 2018 to 2026-01-09, 1,938 days: mean x −0.003 R a day (95% −0.045 to +0.039, p
+0.55); 2018-2021 −0.016, 2022 on +0.008; net R a trade +0.047 (VOL) vs +0.048 (BASE). FxPro 2026
+(unseen) −0.019 R a day. The ratio is mostly 0.83-1.19 (1.24 on TOP3 days): a better volatility
+forecast moves the stop little and changes nothing measurable. The five's results by forecast
+quintile show no ordering (description only). The forecast stays for the product's "expected range
+today" message.
+
