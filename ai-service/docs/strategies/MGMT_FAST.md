@@ -39,3 +39,15 @@ management changes only by his registered decision). Also reported: the sum and 
 R, the share of trades that are fast, and each strategy.
 
 Count: 4 cells in `TRIALS.md`.
+
+## 3. Outcome (2026-11-12): M8 stays
+
+`mgmt_fast_result.md`. BASE reproduced the five's 8,189 trades exactly (checked before the run).
+
+- **2012-2021:** every cell is a little above BASE (+0.004 to +0.016 R a trade) but none reaches
+  t >= 2 (A1 +0.016, t 1.58; F2 +0.005, t 0.97): condition 1 fails.
+- **The same cells after:** below BASE on 2022 to 2026-01-09 (−0.002 to −0.005 R) and on FxPro
+  (−0.001 to −0.005 R), with larger drawdowns for A1, F2 and F3.
+- **Why stage 1's reading did not turn into money:** fast trades are only 7-11% of the trades, and
+  M8 already keeps most of their run (it trails; it does not take profit). Stage 1's +0.67 R
+  measured a path held on the original stop to 16:45, a different and riskier position.
