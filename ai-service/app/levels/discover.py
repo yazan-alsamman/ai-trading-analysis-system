@@ -31,9 +31,16 @@ from app.levels import trades as tr
 from app.research import gold_lab as gl
 
 ROOT = Path(__file__).resolve().parents[2]
-REPORT = ROOT / "docs" / "levels" / "discovery.md"
 OUT = ROOT / "data" / "processed" / "levels"
-FROM, TO = pd.Timestamp("2012-01-01", tz="UTC"), pd.Timestamp("2022-01-01", tz="UTC")
+# The registered discovery period; LEVELS_FROM / LEVELS_TO (set by ``levels discover --from
+# --to``, read again by each worker) run the same code on another period, descriptively.
+FROM = pd.Timestamp(os.environ.get("LEVELS_FROM", "2012-01-01"), tz="UTC")
+TO = pd.Timestamp(os.environ.get("LEVELS_TO", "2022-01-01"), tz="UTC")
+DEFAULT = FROM == pd.Timestamp("2012-01-01", tz="UTC") and TO == pd.Timestamp(
+    "2022-01-01", tz="UTC"
+)
+TAG = "" if DEFAULT else f"_{FROM:%Y%m%d}_{TO:%Y%m%d}"
+REPORT = ROOT / "docs" / "levels" / f"discovery{TAG}.md"
 COPIES, SEED = 200, 20261116
 # each worker holds the bars (about 0.8 GB): 2 by default on this 16 GB machine
 WORKERS = int(os.environ.get("LEVELS_WORKERS", "2"))
@@ -208,7 +215,8 @@ def evaluate(real: pd.DataFrame, plc: pd.DataFrame, n_blocks: int) -> tuple[pd.D
 
 def report(prim: pd.DataFrame, sec: pd.DataFrame, real: pd.DataFrame, days: int) -> str:
     lines = [
-        "# Level families: discovery (L1, gold 2012-2021)",
+        f"# Level families: {'discovery (L1, gold 2012-2021)' if DEFAULT else 'descriptive run'}"
+        + ("" if DEFAULT else f", gold {FROM:%Y-%m-%d} to {TO:%Y-%m-%d} (decides nothing)"),
         "",
         "_`python -m app levels discover`, registered in `SPEC.md` (tag `levels-spec`). Net R a "
         "trade, Raw costs unless stated; placebo = 200 shifted copies of each family; t from a "
@@ -282,8 +290,8 @@ def main() -> int:
         parts = pool.map(_copy, jobs, chunksize=1)
     plc = pd.concat([p for p in parts if len(p)], ignore_index=True)
     OUT.mkdir(parents=True, exist_ok=True)
-    real.to_parquet(OUT / "discovery_trades.parquet", index=False)
-    plc.to_parquet(OUT / "discovery_placebo.parquet", index=False)
+    real.to_parquet(OUT / f"discovery{TAG}_trades.parquet", index=False)
+    plc.to_parquet(OUT / f"discovery{TAG}_placebo.parquet", index=False)
     n_blocks = int(blocks(cx, np.array([np.flatnonzero(in_period)[-1]]))[0]) + 1
     prim, sec = evaluate(real, plc, n_blocks)
     days = len(np.unique(cx.ny_day[in_period & (cx.weekday < 5)]))

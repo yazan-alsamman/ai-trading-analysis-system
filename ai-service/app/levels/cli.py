@@ -2,6 +2,7 @@
 
     python -m app levels count     # L0: signals and orders per family, behaviour and year; power
     python -m app levels discover  # L1: discovery, gold 2012-2021, against 200 shifted copies
+    python -m app levels discover --from 2024-01-01 --to 2026-01-10   # the same, another period
 
 L0 reads no outcome: no price after an order's entry bar."""
 
@@ -119,6 +120,11 @@ def main(argv: list[str]) -> int:
         print(f"wrote {REPORT}")
         return 0
     if argv and argv[0] == "discover":
+        import os
+
+        for flag, var in (("--from", "LEVELS_FROM"), ("--to", "LEVELS_TO")):
+            if flag in argv:
+                os.environ[var] = argv[argv.index(flag) + 1]
         from app.levels.discover import main as discover
 
         return discover()
