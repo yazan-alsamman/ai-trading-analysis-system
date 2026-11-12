@@ -219,20 +219,19 @@ def fmt_summary(name: str, s: pd.DataFrame) -> list[str]:
 
 
 def episodes(d: pd.DataFrame, top: int = 3) -> list[tuple[int, int, float]]:
-    """The deepest BASE drawdowns: (peak day, trough day, depth), non-overlapping."""
-    c = d["BASE"].cumsum()
-    out, used = [], np.zeros(len(c), bool)
-    vals = c.to_numpy()
-    for _ in range(top):
-        peak = np.maximum.accumulate(np.where(used, -np.inf, vals))
-        dd = np.where(used, -np.inf, peak - vals)
-        e = int(np.argmax(dd))
-        if not np.isfinite(dd[e]) or dd[e] <= 0:
-            break
-        s = int(np.flatnonzero((vals[: e + 1] == peak[e]) & ~used[: e + 1])[-1])
-        out.append((int(c.index[s]), int(c.index[e]), float(dd[e])))
-        used[s : e + 1] = True
-    return out
+    """The deepest BASE drawdowns: (peak day, trough day, depth). An episode runs from a new high
+    of the cumulative sum to the next one; its depth is the high minus the episode's low."""
+    c = d["BASE"].cumsum().to_numpy()
+    peak = np.maximum.accumulate(np.r_[0.0, c])[1:]
+    seg = np.cumsum(c >= peak)
+    out = []
+    for s_ in np.unique(seg):
+        k = np.flatnonzero(seg == s_)
+        low = k[np.argmin(c[k])]
+        depth = peak[k[0]] - c[low]
+        if depth > 0:
+            out.append((int(d.index[k[0]]), int(d.index[low]), float(depth)))
+    return sorted(out, key=lambda e: -e[2])[:top]
 
 
 def report(st: dict, fx: dict) -> str:

@@ -69,3 +69,9 @@ def test_day_table_and_boot_are_paired() -> None:
     b = rs.boot(d)
     assert b["SPLIT"]["diff"] == 0 and b["SPLIT"]["lo"] == 0 and b["SPLIT"]["hi"] == 0
     assert b["SPLIT"]["holm"] >= b["SPLIT"]["p"]
+
+
+def test_episodes_do_not_overlap() -> None:
+    d = pd.DataFrame({"BASE": [1.0, -3.0, 4.0, -1.0, -1.0, 5.0, -0.5]},
+                     index=[1, 2, 3, 4, 5, 6, 7])  # fmt: skip
+    assert rs.episodes(d) == [(1, 2, 3.0), (3, 5, 2.0), (6, 7, 0.5)]
