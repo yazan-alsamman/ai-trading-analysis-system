@@ -136,6 +136,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_cost import main as gold_cost
 
         return gold_cost(argv[1:])
+    if argv and argv[0] == "vol-forecast":
+        from app.research.vol_forecast import main as vol_forecast
+
+        return vol_forecast(argv[1:])
     if argv and argv[0] == "gold-magnet":
         from app.research.gold_magnet import main as gold_magnet
 

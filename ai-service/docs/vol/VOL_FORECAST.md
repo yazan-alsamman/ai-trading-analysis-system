@@ -98,6 +98,21 @@ the five keep the ATR.
   20th / 80th percentiles per forecast decile (what an "expected range today" message would say).
 - The days dropped by the rule in §2, per year.
 
+## Addendum 1 (2026-11-12, while writing the code, before any run)
+
+1. **`atr` is scale-free:** log(ATR(14, 4h) / the close at 02:00). As first written it was the log
+   of ATR in dollars, while RV is in log returns; gold's price went from about $1,600 to $4,500, so
+   a fixed a + b x log ATR would drift and handicap the baseline unfairly. The five use the dollar
+   ATR for D, but their results are in R, so only the relative size matters.
+2. Details the text left open: a window return is close to close against the previous 5m bar in
+   the store (for the 02:00 bar, the 01:55 bar's close); `on` sums the squared 5m returns of the
+   bars closing after 16:45 New York of the previous used day and by 02:00 today; `usd_high` counts
+   releases, not release times (NFP, the unemployment rate and earnings at 08:30 count as three);
+   the window for news is 02:00-16:45 New York inclusive; a missing-time gap is measured from 01:55
+   to 16:45 (the bar opens around the window).
+3. Product readout: the window's range is reported in dollars and as a % of the 02:00 price, per
+   forecast decile of the model with the lowest mean QLIKE.
+
 ## 8. Bookkeeping
 
 Code: `app/research/vol_forecast.py`, `python -m app research vol-forecast`, committed before the
