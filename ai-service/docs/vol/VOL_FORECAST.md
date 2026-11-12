@@ -118,3 +118,14 @@ the five keep the ATR.
 Code: `app/research/vol_forecast.py`, `python -m app research vol-forecast`, committed before the
 run. Report: `docs/vol/vol_forecast_result.md`. Logged in `docs/phase3/TRIALS.md` as a forecast look:
 it simulates no trade and so does not add to N for the Deflated Sharpe of any strategy.
+
+## Outcome (2026-11-12): part 1 passes (M3 and M4 beat the ATR)
+
+`vol_forecast_result.md` (code `b5d75b5`). 1,996 test days 2018 to 2026-01-09. Mean QLIKE: M1 ATR
+0.128, M2 HAR 0.127 (not better, Holm p 0.32), **M3 HAR + news 0.105** (−0.024, 95% −0.032 to
+−0.014, Holm p 0.0003, 7 of 8 years, 2024-07 on −0.020), M4 LightGBM 0.109 (Holm p 0.006, 7 of 8,
+−0.020). R^2 of log RV: ATR 0.52, M3 0.62. The gain is the calendar: on TOP3 days QLIKE 0.223 (ATR)
+against 0.132 (M3); weekday dummies (Monday's window about 25% quieter) add the rest; the history
+terms alone (M2) do no better than the ATR. The one year M3 loses to the ATR is 2020. **M3 goes to
+part 2**, which needs its own registration.
+

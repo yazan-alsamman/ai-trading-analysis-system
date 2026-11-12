@@ -241,6 +241,10 @@ data; gross +0.074 beats a random side, the cost takes it; `FIVE_NAS100.md`), an
 2 cost units, t ≥ 3, 224 cells; silver a feature only); D1-D2 in progress (MT5 calendar 2010-2026
 imported, `python -m app discovery calendar|drivers|count`; Dukascopy dollar index and US bond stored;
 fake spikes: F1 reads the dollar from 2019, the bond from 2020); no outcome computed; `PREREG_2.md` approved 2026-11-11; **the map (210 cells, 2018-2021) is negative: no cell passes, the round ends** (`docs/discovery/map.md`); a planted-edge check found the simulator exact and the map weak at 60-240 minutes (`INJECT.md`); the one lead (round-number break continuation) failed on six untouched markets (`LEAD_GRID.md`). **Level families (Fadi's idea, `docs/levels/SPEC.md`): 24 families x break / rejection against 200 shifted copies, negative (0 of 8)**; order blocks the same way, negative (`docs/levels/ORDER_BLOCKS.md`).
+**Volatility forecast, part 1 (`docs/vol/VOL_FORECAST.md`, 2026-11-12): passes.** At 02:00 New York, HAR +
+scheduled USD news + weekday (M3) forecasts the five's window RV better than ATR(4h) (QLIKE 0.105 vs
+0.128, Holm p 0.0003, 7 of 8 years; R^2 0.62 vs 0.52); the news calendar is the gain. Part 2 (does it help
+the five?) needs its own registration. Direction stays unforecastable; size is forecastable.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
