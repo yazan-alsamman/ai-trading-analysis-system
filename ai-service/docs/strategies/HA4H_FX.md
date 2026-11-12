@@ -36,3 +36,11 @@ Code: `app/research/ha_fx.py`, `python -m app research ha-fx [--export <GOLD M1>
   demo shadow. If not: the 4h gold reading stays a lead only.
 
 Count: 1 primary cell (+ 5 pairs reported) in `TRIALS.md`.
+
+## Outcome (2026-11-12): does not generalise
+
+`ha4h_fx_result.md`. **Pooled, 0.5 pip: −0.077 R a trade (16,620 trades), t −1.39 against a random
+side; 0 of 5 pairs positive.** Gross R on the five pairs is −0.040 to +0.052 (pooled −0.003): the
+colour carries no direction there; USDJPY is the only one above zero (+0.052, t +1.6 at 0.5 pip).
+Gold on FxPro (reported, seen): gross +0.050, net +0.008 without swap and −0.003 at $0.10 a night.
+The 4h gold reading in `GOLD_HA.md` stays a lead that other markets do not support.
