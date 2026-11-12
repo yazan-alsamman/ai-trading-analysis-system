@@ -41,3 +41,20 @@ Report: `gold_ha_result.md`.
 4. Daily net R correlation with each of the five demo strategies < +0.2.
 
 Count: 2 cells in `TRIALS.md` (the artefact and the other frames are logged as descriptive).
+
+## 4. Outcome (2026-11-12): 15m dropped; the HA-price fill is a large artefact; a 4h lead
+
+`gold_ha_result.md`.
+
+- **15m: dropped at condition 1.** About 19 flips a day; gross about 0 (−0.012 / −0.009 R) against
+  a cost of 0.28 R a trade on 2012-2021: net −0.29 R, every year negative; 2022 to 2026-01-09
+  −0.08 R; FxPro −0.20 R. The colour adds nothing over a random side (t −2.3 / −1.6).
+- **The artefact (reported):** the same trades filled at HA prices show **+0.43 R** (2012-2021)
+  and **+0.67 R** (2022-2026) instead of −0.29 / −0.08. An HA-chart backtest that fills at HA
+  prices invents about 0.7 R a trade; this is most likely the source of the trader's results.
+- **A lead, not a result (reported, deciding nothing):** on **4h** the flips have a gross edge
+  over a random side in both periods: +0.066 R (t 2.6 against E0) on 2012-2021 and +0.128 R
+  (t 3.4) on 2022 to 2026-01-09; net +0.006 and +0.111 R, about 1.1 trades a day. Swap is not
+  charged and 4h trades hold over nights, so the net is optimistic. It is a trend-following rule,
+  the style parked for the many-markets project; any use needs its own registration and a test on
+  data not used here.
