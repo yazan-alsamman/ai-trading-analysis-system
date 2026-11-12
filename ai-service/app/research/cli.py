@@ -112,6 +112,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_c123 import main as gold_c123
 
         return gold_c123(argv[1:])
+    if argv and argv[0] == "gold-vp2":
+        from app.research.gold_vp2 import main as gold_vp2
+
+        return gold_vp2(argv[1:])
     if argv and argv[0] == "ha-fx":
         from app.research.ha_fx import main as ha_fx
 
