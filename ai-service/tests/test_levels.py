@@ -169,3 +169,25 @@ def test_fast_signals_equal_the_reference() -> None:
     b = ev.discrete_signals(cx, fam).reset_index(drop=True)
     assert len(a) > 20
     pd.testing.assert_frame_equal(a, b, check_dtype=False)
+
+
+def test_order_block_bullish() -> None:
+    # a swing high of 105 at bar 3 (confirmed at bar 6), a down candle at bar 8, then a
+    # two-bar displacement up that closes above 105 and leaves a gap (low[10] > high[8])
+    o = np.array([100, 101, 102, 103, 102, 101, 100, 100.5, 101.5, 101.0, 103.0, 106.0])
+    c = np.array([101, 102, 103, 104, 101, 100, 100.5, 101.5, 101.0, 103.0, 106.0, 106.5])
+    h = np.maximum(o, c) + 0.2
+    lo = np.minimum(o, c) - 0.2
+    h[3] = 105.0
+    lo[10] = 102.0  # above high[8] = 101.7
+    ts = pd.date_range("2024-03-05", periods=len(c), freq="15min", tz="UTC")
+    f = pd.DataFrame(
+        {"open": o, "high": h, "low": lo, "close": c, "close_utc": ts + pd.Timedelta("15min")}
+    )
+    ob = fm.order_block_points(f)
+    b = ob[ob["side"] == 1]
+    assert len(b) == 1 and b["j"].iloc[0] == 8
+    assert b["proximal"].iloc[0] == pytest.approx(h[8]) and b["distal"].iloc[0] == pytest.approx(
+        lo[8]
+    )
+    assert pd.Timestamp(b["known"].iloc[0], tz="UTC") == f["close_utc"].iloc[10]

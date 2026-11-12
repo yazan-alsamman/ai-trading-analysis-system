@@ -345,6 +345,72 @@ def fvg_and_ifvg(cx: gl.Ctx, frame: pd.DataFrame, tf: str) -> tuple[Discrete, Di
     )
 
 
+OB_DISP_ATR = 1.0  # ORDER_BLOCKS.md §1
+OB_SPANS = (2, 3)
+
+
+def last_confirmed(frame: pd.DataFrame, k: int = SWING_K) -> tuple[np.ndarray, np.ndarray]:
+    """Per frame bar: the last swing high and swing low confirmed by that bar (NaN before)."""
+    n = len(frame)
+    sh, sl = np.full(n, np.nan), np.full(n, np.nan)
+    pts = swing_points(frame, k)
+    for side, out in ((1, sh), (-1, sl)):
+        p = pts[pts["side"] == side]
+        conf = p["j"].to_numpy() + k
+        val = pd.Series(np.nan, index=range(n))
+        val.iloc[conf[conf < n]] = p["level"].to_numpy()[conf < n]
+        out[:] = val.ffill().to_numpy()
+    return sh, sl
+
+
+def order_block_points(frame: pd.DataFrame) -> pd.DataFrame:
+    """Order blocks (ORDER_BLOCKS.md §1): bar j, the last opposite candle before a displacement
+    of 2-3 bars that closes >= 1 ATR beyond it, breaks the last confirmed swing and leaves a gap.
+    One row per block: proximal and distal edges, side (+1 bullish), known (close of j+m), j."""
+    o, h, lo, c = (frame[k].to_numpy() for k in ("open", "high", "low", "close"))
+    atr = gl.wilder(h, lo, c)
+    close = _naive(frame["close_utc"])
+    sh, sl = last_confirmed(frame)
+    n = len(c)
+    rows = []
+    for j in range(n - 2):
+        for side in (1, -1):
+            if (side > 0 and not c[j] < o[j]) or (side < 0 and not c[j] > o[j]):
+                continue
+            for m in OB_SPANS:
+                t = j + m
+                if t >= n:
+                    break
+                if side > 0:
+                    disp = c[t] - h[j] >= OB_DISP_ATR * atr[j]
+                    bos = np.isfinite(sh[j]) and c[t] > sh[j]
+                    gap = any(lo[q] > h[q - 2] for q in range(j + 2, t + 1))
+                else:
+                    disp = lo[j] - c[t] >= OB_DISP_ATR * atr[j]
+                    bos = np.isfinite(sl[j]) and c[t] < sl[j]
+                    gap = any(h[q] < lo[q - 2] for q in range(j + 2, t + 1))
+                if disp and bos and gap:
+                    prox, dist = (h[j], lo[j]) if side > 0 else (lo[j], h[j])
+                    rows.append((prox, dist, side, close[t], j))
+                    break
+    return pd.DataFrame(rows, columns=["proximal", "distal", "side", "known", "j"])
+
+
+def order_blocks(cx: gl.Ctx, frame: pd.DataFrame, tf: str) -> Discrete:
+    """Both edges of each block, live until a close beyond the distal edge by b or 5 days."""
+    ob = order_block_points(frame)
+    if ob.empty:
+        return Discrete(f"OB-{tf}", _recs([], [], []), kind="ob")
+    pts = pd.DataFrame(
+        {"level": ob["distal"], "side": -ob["side"], "known": ob["known"], "j": ob["j"]}
+    )  # the distal edge breaks against the block's side
+    pts2, start, end = _ends(cx, pts)
+    keep = bar_at(cx, ob["known"].to_numpy("datetime64[ns]")) < len(cx.c)
+    prox = ob["proximal"].to_numpy()[keep]
+    lv = np.r_[pts2["level"].to_numpy(), prox]
+    return Discrete(f"OB-{tf}", _recs(lv, np.r_[start, start], np.r_[end, end]), kind="ob")
+
+
 def real(cx: gl.Ctx, fr: dict[str, pd.DataFrame]) -> list[Discrete]:
     out = [
         prev_day(cx),
