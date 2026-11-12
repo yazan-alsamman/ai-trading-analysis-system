@@ -92,3 +92,21 @@ registration.
 A look at the five's trades: logged in `docs/phase3/TRIALS.md` and counted in N. Code:
 `app/research/risk_split.py`, `python -m app research risk-split --export <GOLD M1>`, committed before
 the run. Report: `docs/portfolio/risk_split_result.md`.
+
+## Outcome (2026-11-12): no rule passes; the EA keeps equal risk
+
+`risk_split_result.md` (code `58d9063`; the drawdown-episode table, reported only, was fixed after
+the first run in the next commit and the run repeated: nothing else changed). rho = +0.66 (2,636
+pairs): same-direction trades are strongly correlated, as thought. **But splitting lowers the
+Sharpe** (store 2022 to 2026-01-09: SPLIT −0.017, LEARNED −0.013, both with the 95% interval below 0)
+and **raises** the drawdown at equal return on both feeds (FxPro: 125 R BASE, 517 R LEARNED).
+
+The reason is in the overlap table: **trades entered while others of the five are open in the same
+direction are the best ones.** Mean net R with slip by k: store 0: +0.009, 1: +0.048, 2: +0.136,
+3+: +0.135; FxPro 0: −0.021, 1: +0.060, 2: +0.118, 3+: +0.108. About 53% of trades have k = 0 and
+carry almost no edge. This was seen after the run, on every year of both feeds: it is a new
+hypothesis (confluence), not a result, and any test of it needs data not yet seen (the demo going
+forward).
+
+BASE's deepest drawdown on FxPro: 125 R from 2016-06-21 to 2020-10-27.
+

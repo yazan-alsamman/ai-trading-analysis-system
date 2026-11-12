@@ -252,6 +252,10 @@ stays unforecastable; size is forecastable but does not pay in the five.
 `/v1/evaluate` answers carry an additive `volatility` object (expected move, range p20/p50/p80, level,
 the day's USD news) that changes nothing else. It needs about 2,500 x 15m bars and the day's calendar
 from the backend (proposal for Yazan in `SERVING.md` §5); until then it says `insufficient_history`.
+**The five as a portfolio (`docs/portfolio/RISK_SPLIT.md`, 2026-11-12): splitting risk across same-direction
+trades fails** (Sharpe and drawdown worse): same-direction trades correlate (rho 0.66) but are the best
+ones; trades with no other of the five open (k = 0, 53%) carry almost no edge (store +0.009, FxPro −0.021 R).
+Confluence is a new, untested hypothesis; only forward data can test it.
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
