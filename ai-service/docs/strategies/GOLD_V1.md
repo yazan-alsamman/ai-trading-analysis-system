@@ -232,6 +232,12 @@ the account are left out. Trades are compared up to the start of the export's la
   0.01 lots while D ≤ $50 (about 0.28% at D $28, after the lot rounds down). `RiskPct` stays 0.5;
   the cap goes to 3% because five strategies at 0.5% can hold 2.5%. `DailyLossPct = 3` and
   `MaxDrawdownPct = 25` stay. Migrated to the VPS when no trade is open.
+- **2026-11-12: the EA with ROUND** (`GOLD_ROUND.md` §6) migrated with no trade open,
+  `TradeROUND = true`, `MaxOpenRiskPct = 3.5` (six strategies at 0.5%), `DailyLossPct = 3`,
+  `MaxDrawdownPct = 25`. A first migration carried two charts with the EA (two copies placing the
+  same orders, about 2 minutes); fixed by removing the second chart and migrating again: the VPS
+  shows 1 chart, 1 expert (15:18 server time). The VPS plan is one month from 2026-11-10 with
+  auto-renewal off: it must be renewed before about 2026-12-10.
 
 ### Stop rules (written 2026-11-07, before the demo; Fadi: "Yes, write and commit")
 
