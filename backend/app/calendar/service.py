@@ -25,6 +25,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
+from app.ai.contract import NEW_YORK, d1_close, d1_open
 from app.calendar import forexfactory
 from app.calendar.events import (
     EventIn,
@@ -238,6 +239,20 @@ def evaluate_item(event: EconomicEvent) -> dict[str, str]:
     }
 
 
+DAY_WINDOW = ((2, 0), (16, 45))  # New York time: the window of the day's high USD events
+DAY_CURRENCY = "USD"
+
+
+def day_window(bar_ts: datetime) -> tuple[datetime, datetime]:
+    """02:00 to 16:45 America/New_York (UTC) of the New York trading day of ``bar_ts`` (17:00
+    to 17:00; the day is named after its close, like the ``1d`` bars and the volatility day)."""
+    day = d1_close(d1_open(bar_ts)).astimezone(NEW_YORK).date()
+    (h0, m0), (h1, m1) = DAY_WINDOW
+    start = datetime(day.year, day.month, day.day, h0, m0, tzinfo=NEW_YORK)
+    end = datetime(day.year, day.month, day.day, h1, m1, tzinfo=NEW_YORK)
+    return start.astimezone(UTC), end.astimezone(UTC)
+
+
 async def for_evaluate(
     session: AsyncSession,
     bar_ts: datetime,
@@ -246,22 +261,50 @@ async def for_evaluate(
     as_of: datetime | None = None,
     min_impact: str = "medium",
     currencies: Sequence[str] | None = None,
+    limit: int = 500,
 ) -> list[dict[str, str]]:
     """The ``calendar`` list of an evaluate request (B9): the events with a time between
     ``bar_ts - window`` and ``bar_ts + window``, as known at ``as_of`` (default now; a backtest
     passes the bar's time), of ``CALENDAR_CURRENCIES`` and at least ``min_impact``. The AI
     engine abstains within ±30 minutes of a ``high`` event; ``medium`` is passed too so it can
-    use them as features."""
+    use them as features.
+
+    B13 (every profile): plus the USD ``high`` events between 02:00 and 16:45 America/New_York
+    of the bar's New York trading day (:func:`day_window`), each event once, in time order. One
+    query. At most ``limit`` events: past it, the medium events farthest from the bar go
+    first, then the farthest high ones."""
+    wanted = [c.upper() for c in (currencies or get_settings().calendar_currency_list)]
+    day_start, day_end = day_window(bar_ts)
     events = await latest_as_of(
         session,
-        bar_ts - window,
-        bar_ts + window,
+        min(bar_ts - window, day_start),
+        max(bar_ts + window, day_end),
         as_of=as_of,
-        currencies=currencies or get_settings().calendar_currency_list,
+        currencies=sorted({*wanted, DAY_CURRENCY}) if wanted else None,  # none: every one
         min_impact=min_impact,
         timed_only=True,
     )
-    return [evaluate_item(e) for e in events]
+    kept = [
+        e
+        for e in events
+        if (
+            bar_ts - window <= e.scheduled_at <= bar_ts + window
+            and (not wanted or e.currency in wanted)
+        )
+        or (
+            e.currency == DAY_CURRENCY
+            and e.impact == "high"
+            and day_start <= e.scheduled_at <= day_end
+        )
+    ]
+    if len(kept) > limit:
+        nearest = sorted(
+            range(len(kept)),
+            key=lambda i: (kept[i].impact != "high", abs(kept[i].scheduled_at - bar_ts)),
+        )
+        keep = set(nearest[:limit])
+        kept = [e for i, e in enumerate(kept) if i in keep]
+    return [evaluate_item(e) for e in kept]
 
 
 async def history(session: AsyncSession, key: str) -> list[EconomicEvent]:

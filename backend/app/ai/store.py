@@ -21,6 +21,13 @@ ai-service decides setups and their states; the backend only records them:
   transaction (B11): the alerts survive a crash and are sent by ``ai_alerts.dispatch``.
 - ``open_setups`` gives the next request's ``open_setups``: the last payload of every
   non-final setup, in a stable order.
+- Contract 0.3.0 (B13): ``exit_type`` (null: target) and ``exit_reason`` are stored from the
+  setup, ``exit_reason`` also from the CLOSED transition (never cleared once known). A
+  ``sl_moved`` transition stays in the same state: it updates ``ai_setups.sl`` and is kept as
+  an event with the new ``sl`` (several per setup, deduped by ``(setup_id, to, at)`` like every
+  event). An invalid one (another state on each side, not the setup's state, no ``sl``, ``sl``
+  on the wrong side of ``entry``) is skipped and counted as a contract **warning**; the rest of
+  the response is applied. ``store_volatility`` keeps the first ``ok`` volatility of a day.
 """
 
 from __future__ import annotations
@@ -39,6 +46,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.contract import (
     ALLOWED_TRANSITIONS,
     FINAL_STATES,
+    PRICED_STATES,
+    SL_MOVED,
     STATE_RANK,
     EvaluateRequest,
     EvaluateResponse,
@@ -47,8 +56,19 @@ from app.ai.contract import (
     SetupState,
     Transition,
     Versions,
+    Volatility,
+    VolatilityStatus,
+    sl_on_the_right_side,
 )
-from app.models.ai import AIModelVersion, AISetup, AISetupEvent, AISetupOutbox, AISetupTake
+from app.core.config import get_settings
+from app.models.ai import (
+    AIModelVersion,
+    AISetup,
+    AISetupEvent,
+    AISetupOutbox,
+    AISetupTake,
+    AIVolatilityDaily,
+)
 from app.models.instrument import Instrument
 
 logger = logging.getLogger(__name__)
@@ -68,6 +88,7 @@ MUTABLE = (
     "horizon_until",
     "evidence",
     "features",
+    "exit_type",
 )
 FINAL = frozenset(s.value for s in FINAL_STATES)
 
@@ -80,6 +101,11 @@ class StateChange:
     at: datetime
     reason: str | None = None
     realized_r: float | None = None
+    sl: float | None = None  # a stop move (from_state == to_state, reason sl_moved)
+
+    @property
+    def sl_moved(self) -> bool:
+        return self.sl is not None and self.from_state == self.to_state
 
 
 @dataclass(frozen=True)
@@ -102,12 +128,18 @@ class ApplyResult:
     # the response contradicts itself or our records (a state going backwards): logged as an
     # error and shown in /admin/system/status; our state is kept
     contract_errors: list[Rejection] = field(default_factory=list)
+    # outside the contract but harmless, e.g. an invalid sl_moved (skipped): logged, counted
+    warnings: list[Rejection] = field(default_factory=list)
+    sl_moves: int = 0  # stop moves recorded (contract 0.3.0)
     state_changes: list[StateChange] = field(default_factory=list)
 
 
 def _values(setup: Setup) -> dict[str, Any]:
     data = {name: getattr(setup, name) for name in MUTABLE}
     data["grade"] = setup.grade.value if setup.grade is not None else None
+    data["exit_type"] = setup.exit_type.value if setup.exit_type is not None else None
+    if setup.exit_reason is not None:  # never cleared once known (also from the transition)
+        data["exit_reason"] = setup.exit_reason
     return data
 
 
@@ -149,6 +181,7 @@ async def _event(
     request_id: str,
     reason: str | None = None,
     realized_r: float | None = None,
+    sl: float | None = None,
 ) -> bool:
     inserted = await session.scalar(
         insert(AISetupEvent)
@@ -159,6 +192,7 @@ async def _event(
             at=at,
             reason=reason,
             realized_r=realized_r,
+            sl=sl,
             request_id=request_id,
         )
         .on_conflict_do_nothing(index_elements=["setup_id", "to_state", "at"])
@@ -195,36 +229,70 @@ async def _close_takes(
     )
 
 
+def _outbox_row(c: StateChange) -> dict[str, Any]:
+    return {
+        "setup_id": c.setup_id,
+        "from_state": c.from_state,
+        "to_state": c.to_state,
+        "at": c.at,
+        "reason": (c.reason or None) and c.reason[:255],
+        "realized_r": c.realized_r,
+    }
+
+
 async def enqueue_alerts(session: AsyncSession, changes: Sequence[StateChange]) -> int:
     """The outbox rows of the alerts (B11), in the caller's transaction: one per state change,
-    never for DEVELOPING; a change already enqueued (same setup and state) adds nothing."""
+    never for DEVELOPING; a change already enqueued (same setup and state) adds nothing. A stop
+    move (``sl_moved``, contract 0.3.0) is enqueued only while ``AI_NOTIFY_SL_MOVED`` is on,
+    one row per move (same setup and ``at``: nothing added)."""
     rows = [
-        {
-            "setup_id": c.setup_id,
-            "from_state": c.from_state,
-            "to_state": c.to_state,
-            "at": c.at,
-            "reason": (c.reason or None) and c.reason[:255],
-            "realized_r": c.realized_r,
-        }
+        _outbox_row(c)
         for c in changes
-        if c.to_state != SetupState.DEVELOPING.value
+        if c.to_state != SetupState.DEVELOPING.value and not c.sl_moved
     ]
-    if not rows:
-        return 0
-    inserted = await session.scalars(
-        insert(AISetupOutbox)
-        .values(rows)
-        .on_conflict_do_nothing(index_elements=["setup_id", "to_state"])
-        .returning(AISetupOutbox.id)
+    moves = (
+        [{**_outbox_row(c), "sl": c.sl} for c in changes if c.sl_moved]
+        if get_settings().ai_notify_sl_moved
+        else []
     )
-    return len(list(inserted))
+    count = 0
+    if rows:
+        inserted = await session.scalars(
+            insert(AISetupOutbox)
+            .values(rows)
+            .on_conflict_do_nothing(
+                index_elements=["setup_id", "to_state"], index_where=AISetupOutbox.sl.is_(None)
+            )
+            .returning(AISetupOutbox.id)
+        )
+        count += len(list(inserted))
+    if moves:
+        inserted = await session.scalars(
+            insert(AISetupOutbox)
+            .values(moves)
+            .on_conflict_do_nothing(
+                index_elements=["setup_id", "at"], index_where=AISetupOutbox.sl.is_not(None)
+            )
+            .returning(AISetupOutbox.id)
+        )
+        count += len(list(inserted))
+    return count
 
 
 def _reject(result: ApplyResult, setup_id: str, reason: str) -> None:
     result.rejected.append(Rejection(setup_id, reason))
     logger.warning(
         "ai-service result rejected: setup %s: %s (%s)", setup_id, reason, result.request_id
+    )
+
+
+def _warn(result: ApplyResult, setup_id: str, reason: str) -> None:
+    result.warnings.append(Rejection(setup_id, reason))
+    logger.warning(
+        "ai-service contract warning: setup %s: %s (%s); skipped",
+        setup_id,
+        reason,
+        result.request_id,
     )
 
 
@@ -397,6 +465,8 @@ async def _reconcile(
             )
         row.state = theirs.value
         payload = {**payload, "state": row.state}
+    if setup.exit_reason is not None and row.exit_reason is None:
+        row.exit_reason = setup.exit_reason  # 0.3.0: on the setup, or on its CLOSED transition
     if ours in FINAL_STATES:
         result.unchanged += 1  # final: never changes again
         return
@@ -433,6 +503,9 @@ async def _apply_transition(
     if (t.setup_id, t.to.value, t.at) in known:
         result.transitions_known += 1  # already recorded: a re-applied response
         return
+    if t.reason == SL_MOVED:
+        await _apply_sl_moved(session, result, req, t, row, known, now)
+        return
     current = SetupState(row.state)
     if STATE_RANK[t.from_] < STATE_RANK[current] and (
         t.to == current or STATE_RANK[t.to] < STATE_RANK[current]
@@ -464,6 +537,8 @@ async def _apply_transition(
     row.state = t.to.value
     if t.realized_r is not None:
         row.realized_r = t.realized_r
+    if t.exit_reason is not None:
+        row.exit_reason = t.exit_reason
     payload = copy.deepcopy(row.last_payload)
     payload["state"] = t.to.value
     row.last_payload = payload
@@ -473,6 +548,94 @@ async def _apply_transition(
     result.state_changes.append(
         StateChange(t.setup_id, current.value, t.to.value, t.at, t.reason, t.realized_r)
     )
+
+
+async def _apply_sl_moved(
+    session: AsyncSession,
+    result: ApplyResult,
+    req: EvaluateRequest,
+    t: Transition,
+    row: AISetup,
+    known: set[tuple[str, str, datetime]],
+    now: datetime,
+) -> None:
+    """A stop move (contract 0.3.0): same state on both sides, the setup's own state (ARMED or
+    ACTIVE), a new ``sl`` on the right side of ``entry``. Recorded as an event with the new
+    ``sl`` and in ``ai_setups.sl``; ``last_payload`` is left to the setup's own item in
+    ``new_setups``. An invalid move is a warning and is skipped; one the setup has already
+    passed (it is final now) is history, skipped silently."""
+    current = SetupState(row.state)
+    if t.from_ != t.to:
+        _warn(result, t.setup_id, f"sl_moved from {t.from_.value} to {t.to.value}")
+        return
+    if t.from_ != current:
+        if STATE_RANK[t.from_] < STATE_RANK[current]:
+            result.transitions_known += 1  # before the setup moved on (each response repeats)
+            return
+        _warn(result, t.setup_id, f"sl_moved in {t.from_.value} but the setup is {current.value}")
+        return
+    if current not in PRICED_STATES:
+        _warn(result, t.setup_id, f"sl_moved in {current.value}")
+        return
+    if t.sl is None:
+        _warn(result, t.setup_id, "sl_moved without sl")
+        return
+    if not sl_on_the_right_side(row.direction, row.entry, t.sl):
+        _warn(
+            result,
+            t.setup_id,
+            f"sl_moved: sl {t.sl} on the wrong side of entry {row.entry} ({row.direction})",
+        )
+        return
+    if not await _event(
+        session,
+        t.setup_id,
+        current.value,
+        current.value,
+        t.at,
+        req.request_id,
+        reason=SL_MOVED,
+        sl=t.sl,
+    ):
+        result.transitions_known += 1  # a move at the same at as the state's own event
+        return
+    known.add((t.setup_id, t.to.value, t.at))
+    row.sl = t.sl
+    row.last_request_id = req.request_id
+    row.updated_at = now
+    result.sl_moves += 1
+    result.state_changes.append(
+        StateChange(t.setup_id, current.value, current.value, t.at, SL_MOVED, sl=t.sl)
+    )
+
+
+async def store_volatility(
+    session: AsyncSession, instrument: Instrument, request_id: str, vol: Volatility
+) -> bool:
+    """Keep the first ``ok`` volatility of a New York trading day (insert, on conflict do
+    nothing: the value is fixed for the whole day). True when this one was stored. Other
+    statuses are never stored."""
+    if vol.status != VolatilityStatus.ok.value or vol.day is None:
+        return False
+    stored = await session.scalar(
+        insert(AIVolatilityDaily)
+        .values(
+            instrument_id=instrument.id,
+            day=vol.day,
+            status=vol.status,
+            model=vol.model,
+            expected_move_pct=vol.expected_move_pct,
+            range_pct=vol.range_pct.model_dump(mode="json") if vol.range_pct else None,
+            range_usd=vol.range_usd.model_dump(mode="json") if vol.range_usd else None,
+            level=vol.level,
+            news=[n.model_dump(mode="json") for n in vol.news],
+            request_id=request_id,
+        )
+        .on_conflict_do_nothing(index_elements=["instrument_id", "day"])
+        .returning(AIVolatilityDaily.day)
+    )
+    await session.commit()
+    return stored is not None
 
 
 async def open_setups(

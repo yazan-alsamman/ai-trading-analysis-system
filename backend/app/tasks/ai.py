@@ -1,7 +1,8 @@
 """The AI engine tasks (B9, app/ai/evaluate.py and app/ai/explain.py; docs/ai-contract.md).
 
-- ``ai.evaluate_tick`` (beat at each 15m boundary): one ``ai.evaluate`` per instrument and
-  profile for the bar that just closed, ``AI_EVALUATE_DELAY_SECONDS`` after the boundary.
+- ``ai.evaluate_tick`` (beat at each 5m boundary): one ``ai.evaluate`` per instrument and
+  profile whose bar just closed (intraday 15m, gold_levels 5m), ``AI_EVALUATE_DELAY_SECONDS``
+  after the boundary.
   Nothing is scheduled while ``AI_EVALUATE_ENABLED`` is false (the default).
 - ``ai.evaluate`` (default queue, the ``worker`` service): one run; a duplicate is a no-op.
 - ``ai.explain`` (notifications queue): ``/v1/explain`` for a newly ARMED setup in one
@@ -38,8 +39,8 @@ def evaluate_tick() -> int:
     name="ai.evaluate",
     acks_late=True,  # redelivered if the worker dies; the run key makes a second run a no-op
     reject_on_worker_lost=True,
-    soft_time_limit=110,
-    time_limit=120,
+    soft_time_limit=evaluation.EVALUATE_TIME_LIMIT - 10,
+    time_limit=evaluation.EVALUATE_TIME_LIMIT,  # a run never reaches the next 5m boundary
     ignore_result=True,
 )
 def evaluate(source: str, symbol: str, profile: str, bar_close_ts: str) -> dict:
