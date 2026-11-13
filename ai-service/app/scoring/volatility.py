@@ -144,6 +144,7 @@ class Range(BaseModel):
 
 class NewsItem(BaseModel):
     ts: str
+    ts_ny: str  # HH:MM New York, for the user's text
     title: str
     top3: bool
 
@@ -215,7 +216,8 @@ def outlook(m: pd.DataFrame, cal: pd.DataFrame, as_of: pd.Timestamp,
     t = u["ts_utc"].dt.tz_convert(NY)
     mins_e = t.dt.hour * 60 + t.dt.minute
     on_day = (t.dt.tz_localize(None).dt.normalize() == day) & (mins_e >= W_FROM) & (mins_e <= W_END)
-    items = [NewsItem(ts=ts.strftime("%Y-%m-%dT%H:%M:%SZ"), title=str(title), top3=ev in TOP3)
+    items = [NewsItem(ts=ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      ts_ny=ts.tz_convert(NY).strftime("%H:%M"), title=str(title), top3=ev in TOP3)
              for ts, title, ev in zip(u["ts_utc"][on_day], u.get("title", u["event"])[on_day],
                                       u["event"][on_day], strict=True)]  # fmt: skip
     return VolatilityOutlook(

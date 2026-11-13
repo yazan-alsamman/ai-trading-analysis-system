@@ -195,6 +195,14 @@ def volatility(req: EvaluateRequest) -> vol.VolatilityOutlook:
     return vol.outlook(m, vol.calendar_frame(req.calendar), as_of)
 
 
+def with_vol(setup: dict[str, Any], vo: vol.VolatilityOutlook) -> dict[str, Any]:
+    """A new setup's evidence carries the day's outlook when there is one, so ``/v1/explain``
+    needs nothing but the setup (``docs/phase7/PLAN.md`` F2)."""
+    if vo.status == "ok":
+        setup["evidence"]["volatility"] = vo.model_dump(mode="json")
+    return setup
+
+
 def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
     prof, inst = config_for(req)
     p = strategy(prof.rules)
@@ -208,6 +216,7 @@ def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
             versions=ver,
             abstentions=[Abstention(reason=e.reason, detail=e.detail)],
         )
+    vo = volatility(req)
     found = scan(live.frames, p, inst)
     as_of = live.as_of
     by_id = {setup_id(req, ls): ls for ls in found if not ls.rejected}
@@ -220,13 +229,13 @@ def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
             continue
         if ls.created_at == as_of:  # rule 1
             first, *rest = ls.path
-            new_setups.append(Setup.model_validate(payload(req, ls, first)))
+            new_setups.append(Setup.model_validate(with_vol(payload(req, ls, first), vo)))
             before = first.state
             for step in rest:
                 transitions.append(_transition(sid, before, step))
                 before = step.state
         elif ls.state not in FINAL_STATES:  # rule 4
-            new_setups.append(Setup.model_validate(payload(req, ls, ls.path[-1])))
+            new_setups.append(Setup.model_validate(with_vol(payload(req, ls, ls.path[-1]), vo)))
 
     for sid, old in sorted(echoed.items()):
         if old.state in FINAL_STATES:
@@ -267,5 +276,5 @@ def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
         new_setups=new_setups,
         transitions=transitions,
         abstentions=abstentions,
-        volatility=volatility(req),
+        volatility=vo,
     )

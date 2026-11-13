@@ -1,14 +1,21 @@
 """ai-service: the stateless inference service (contract B7, ``app/contract.py``).
 
-    POST /v1/evaluate   the bar that just closed -> new setups, transitions, abstentions (P6)
-    POST /v1/size       lots for one setup and one account (P6)
-    GET  /health        status and versions
+POST /v1/evaluate   the bar that just closed -> new setups, transitions, abstentions (P6)
+POST /v1/size       lots for one setup and one account (P6)
+GET  /health        status and versions
 
-``/v1/explain`` follows in P7."""
+POST /v1/explain    the setup in Arabic or English: the template (P7 F2), every number checked"""
 
 from fastapi import FastAPI, HTTPException
 
-from app.contract import EvaluateRequest, SizeRequest, SizeResponse
+from app.agent.explain import explain
+from app.contract import (
+    EvaluateRequest,
+    ExplainRequest,
+    ExplainResponse,
+    SizeRequest,
+    SizeResponse,
+)
 from app.live.evaluate import (
     FEATURES_VERSION,
     SERVICE_VERSION,
@@ -53,3 +60,8 @@ def size_setup(req: SizeRequest) -> SizeResponse:
     except UnknownSetup as e:
         detail = [{"loc": ["body", "setup", "setup_id"], "msg": str(e), "type": "value_error"}]
         raise HTTPException(status_code=422, detail=detail) from e
+
+
+@app.post("/v1/explain", response_model=ExplainResponse)
+def explain_setup(req: ExplainRequest) -> ExplainResponse:
+    return explain(req)

@@ -272,6 +272,9 @@ F1 engine built and checked (650/650 trades match the research on 2025-07 to 202
 `docs/phase7/gold_levels_check.md`); not served until Yazan agrees `docs/phase7/CONTRACT_PROPOSAL.md`.
 Found on the way: when two levels of one strategy are touched on the same bar, `gold_lab.simulate`'s
 unstable sort may take the farther level's entry (43 such trades in six months, one with a different R).
+**F2 done (2026-11-13):** `POST /v1/explain` answers with a checked template (Arabic / English;
+`verified: true, template_used: true`); generic number checker `app/agent/verify.py`; L1 texts say no
+edge was found. Next: F3 (Gemini text in front of the template; needs `GEMINI_API_KEY`).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

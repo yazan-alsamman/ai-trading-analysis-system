@@ -109,4 +109,15 @@ rules.
   level, as the EA's stop orders fill, while the research code's unstable sort took the farther
   one's entry (research code unchanged). Contract proposal for Yazan: `CONTRACT_PROPOSAL.md`.
   Serving waits for it.
+- **2026-11-13, F2 done.** `POST /v1/explain` (`app/main.py`, `app/agent/explain.py`): templates in
+  formal Arabic (as the contract's example) and English for the registry's strategies (every
+  state: pending, open, closed, expired, not taken), for L1 (marked: no edge found after costs) and
+  a plain one for anything else; every text closes with "information about a rule, not advice".
+  The generic number checker (`app/agent/verify.py`): every number must be in the setup (fields,
+  nested, numbers inside strings) or the strategy's description; Arabic-Indic digits, the Arabic
+  decimal sign and thousands separators read. Tests (`tests/test_explain.py`): every template
+  verified in both languages, **every planted wrong number caught** (each number of each text
+  changed in turn), the contract example and a live L1 setup through the endpoint. New setups of
+  `/v1/evaluate` carry the day's volatility outlook in `evidence.volatility` (news times in New York
+  time, `ts_ny`), so `/v1/explain` needs nothing but the setup.
 

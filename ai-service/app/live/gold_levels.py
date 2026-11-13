@@ -65,7 +65,8 @@ class LevelSetup:
 
     @property
     def state(self) -> str:
-        return self.path[-1].state
+        """The contract state: a stop move (``SL_MOVED``) keeps the trade ``ACTIVE``."""
+        return next(p.state for p in reversed(self.path) if p.state != "SL_MOVED")
 
 
 def specs(cx: gl.Ctx) -> dict[str, tuple[dict, np.ndarray, int, float | None]]:
@@ -289,4 +290,6 @@ def payload(ls: LevelSetup, instrument: str, profile: str, tick: float = 0.01) -
     if ls.state == "CLOSED":
         out["exit_reason"] = ls.path[-1].reason
         out["realized_r"] = ls.path[-1].realized_r
+    elif ls.state == "INVALIDATED":
+        out["state_reason"] = ls.path[-1].reason
     return out

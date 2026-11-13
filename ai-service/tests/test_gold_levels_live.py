@@ -118,3 +118,12 @@ def test_with_current_day_adds_the_day_in_progress_once() -> None:
     d1 = f["D1"]
     assert d1["ts_utc"].iloc[-1] == lv.at_ny(20250401, 17 * 60)
     assert len(lv.with_current_day(d1, f["5m"])) == len(d1)
+
+
+def test_a_moved_stop_keeps_the_trade_active() -> None:
+    t = day_at(20250402, "09:30")
+    moved = [s for s in lv.scan_day(frames(t), t) if s.path[-1].state == "SL_MOVED"]
+    assert moved
+    for s in moved:
+        assert s.state == "ACTIVE" and lv.payload(s, "XAUUSD", "gold_levels")["state"] == "ACTIVE"
+        assert s.sl == s.path[-1].sl
