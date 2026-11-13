@@ -263,6 +263,11 @@ against history; a "Health" section of `gold-demo check`. Reference built once w
 reference --export <GOLD M1 from 2016>` (stored in `data/processed`, untracked).
 **Range exhaustion (`docs/vol/EXHAUSTION.md`, 2026-11-13): does not pass**; breaks after the day used
 much of its forecast move did better, not worse (+0.090 vs +0.054 R, 2022-2026).
+**P7 started 2026-11-13 (`docs/phase7/PLAN.md`).** Decisions (Fadi): the LLM is **Gemini 3.6 Flash**
+(`google-genai`, as the backend's chart analysis) behind a thin interface; the five (+ ROUND) are
+served by ai-service as a new `gold_levels` profile and explained (F1 serve, F2 template, F3 Gemini +
+number checker, F4 gate: zero invented numbers, F5 chat agent later). F1 needs a contract change
+with Yazan (`tp` nullable for trailing exits, `sl` moves, 5m bars).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
