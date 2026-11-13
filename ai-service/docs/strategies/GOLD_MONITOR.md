@@ -86,6 +86,14 @@ and D can react within weeks.
 
 Nothing is tightened or loosened after a reading.
 
+## Addendum 1 (2026-11-13, while writing the code, before it read the demo)
+
+The reference (§2) is computed **once** from the full FxPro export by `python -m app research
+gold-demo reference --export <GOLD M1 from 2016>`, which refuses unless every pool matches §2 (the
+same trade count, the mean within 0.002 R), chooses h and stores the trades and h
+(`data/processed/gold_monitor_reference.parquet` / `.json`); the weekly check reloads and re-checks
+them, so it does not need a 2016 export each week. The CUSUM simulation searches h up to 20.
+
 ## 6. Bookkeeping
 
 Code: `app/research/gold_monitor.py`, called by `python -m app research gold-demo check` (a new

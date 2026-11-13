@@ -68,9 +68,8 @@ def verify(t: pd.DataFrame) -> None:
 
 def week_of(ny_day: pd.Series) -> np.ndarray:
     d = pd.to_datetime(ny_day.astype(str), format="%Y%m%d")
-    return (
-        (d - pd.to_timedelta(d.dt.day_of_week, unit="D")).dt.strftime("%Y%m%d").astype(int).to_numpy()
-    )
+    monday = d - pd.to_timedelta(d.dt.day_of_week, unit="D")
+    return monday.dt.strftime("%Y%m%d").astype(int).to_numpy()
 
 
 def weeks(t: pd.DataFrame) -> list[np.ndarray]:
