@@ -1,10 +1,12 @@
 # ai-service contract (B7), AI storage (B8) and the evaluate task (B9)
 
-> **Version `0.2.2`.** Fadi's answers to the 17 open points of `0.1.0-draft` are applied; each
+> **Version `0.3.0`.** Fadi's answers to the 17 open points of `0.1.0-draft` are applied; each
 > point and its decision is in [section 7](#7-the-17-points-answered-by-fadi). 0.2.1 (Fadi, 25
 > Oct): v1 has no model, the rules run alone, so `ok` comes with `versions.model` null. 0.2.2:
 > `/v1/size` gets the instrument's fixed trading cost, `instrument_spec.cost_per_unit`
-> ([changelog](#13-changelog)). `/v1` only ever gains fields and the version follows semver.
+> ([changelog](#13-changelog)). 0.3.0 (B13): the `gold_levels` profile (exits without a target,
+> `sl_moved`) and the daily `volatility` block, [section 14](#14-contract-030-gold_levels-and-daily-volatility-b13).
+> `/v1` only ever gains fields and the version follows semver.
 > What still waits on Fadi (final bar counts and
 > a maximum request size with his P6, the explain timeout with his P7) is in
 > [section 12](#12-open-issues); how to turn the evaluation on is in
@@ -281,6 +283,9 @@ stateless and may ignore it.
 | `AI_PROFILES` | `intraday` |
 | `AI_EVALUATE_DELAY_SECONDS` | `20` |
 | `AI_EXPLAIN_LANGS` | `ar,en` |
+| `AI_GOLD_LEVELS_BARS` | `5m:3000,1h:500,4h:300,1d:260` (B13, `timeframe:count`; the smallest timeframe is the decision bar) |
+| `AI_GOLD_LEVELS_INSTRUMENTS` | `fxpro:XAU/USD` (B13; `gold_levels` runs only when it is listed in `AI_PROFILES`) |
+| `AI_NOTIFY_SL_MOVED` | `true` (B13: the `sl_moved` alert, to the users who took the setup) |
 | `AI_SIZE_LOCAL_FALLBACK_ON_404` | `true` (flip to `false` after Fadi's P6) |
 | `DATA_QUALITY_ALERT_COOLDOWN_SECONDS` | `1800` |
 
@@ -325,11 +330,14 @@ fixed: [risk-management.md](risk-management.md#backtests-and-plans-in-another-ac
 
 ## 8. The evaluate task
 
-**Schedule.** Beat runs `ai.evaluate_tick` at each 15m boundary (`:00 :15 :30 :45`). While
+**Schedule.** Beat runs `ai.evaluate_tick` at each 5m boundary (B13; it was 15m). While
 `AI_EVALUATE_ENABLED=true` it schedules one `ai.evaluate(source, symbol, profile,
-bar_close_ts)` per instrument in `AI_EVALUATE_INSTRUMENTS` and profile in `AI_PROFILES`, with
-`eta = boundary + AI_EVALUATE_DELAY_SECONDS` (20 s: the 15m bar is closed and stored) and an
-expiry of one bar. Disabled: nothing is scheduled, and a run already queued does nothing.
+bar_close_ts)` per profile in `AI_PROFILES` whose own step falls on the boundary (`intraday`:
+15m, at `:00 :15 :30 :45`, for the instruments of `AI_EVALUATE_INSTRUMENTS`; `gold_levels`:
+every 5m, for `AI_GOLD_LEVELS_INSTRUMENTS`), with `eta = boundary + AI_EVALUATE_DELAY_SECONDS`
+(20 s: the bar is closed and stored) and an expiry of `eta + max(step − 2 min, 1 min)`
+(13 min for `intraday`, 3 min for `gold_levels`), so a run that has not started before the
+next boundary is dropped, never piled up. A started run has a hard time limit of 120 s. Disabled: nothing is scheduled, and a run already queued does nothing.
 `ai.evaluate` runs on the default queue (the `worker` service); `ai.explain` on the
 notifications queue (also `worker`).
 
@@ -347,7 +355,7 @@ features: none}`, one abstention with the reason):
 | `bars_not_closed` | the 1m watermark has not reached `bar_close_ts` |
 | `market_closed` | the market is closed and the decision bar had no trading minute (weekends, breaks) |
 | `data_quality_degraded` | the B5 gate on the decision bar failed (gaps, a missing 1m bar in it, a spike, lag, no data) |
-| `decision_bar_missing` | no 15m bar ends at `bar_close_ts` |
+| `decision_bar_missing` | no bar of the profile's decision timeframe (15m `intraday`, 5m `gold_levels`) ends at `bar_close_ts` |
 | `decision_bar_no_spread` | the decision bar has no spread (Fadi, point 7) |
 
 A bar that closed just before a session break (gold at 17:00 New York) is still evaluated: the
@@ -491,6 +499,12 @@ and the same restart.
 - **`/v1/size`:** once P6 ships it, set `AI_SIZE_LOCAL_FALLBACK_ON_404=false`.
 - **`/v1/explain`** and its final timeout come with P7.
 - `created_at` is optional until ai-service sends it.
+- **B13, to confirm with Fadi** (section 14): a trailing stop that passes the entry (locking a
+  profit) is outside the rule "sl on the right side of entry": the backend skips such a
+  `sl_moved` with a warning, and a setup in ARMED/ACTIVE whose own `sl` is past its entry fails
+  validation (as for `target` setups since 0.1.0). If gold_levels stops can pass the entry, the
+  rule for `trailing` must become "sl on the right side of the *current price*" or none.
+- Y16 and Y17 still label every AI setup `15m` (`timeframe`), gold_levels included.
 
 ## 13. Changelog
 
@@ -500,3 +514,134 @@ and the same restart.
 | 0.2.0 | | Fadi's answers to the 17 points (section 7) |
 | 0.2.1 | 25 Oct 2026 | `status: ok` with `versions.model: null` is valid: v1 runs the rules alone, with `probability`, `ev_r`, `ev_r_lower` and `grade` null; the backend stores those setups. `model_unavailable` only means "a model is registered but not loaded" (Fadi). Example `evaluate-response-ok-rules-only.json` |
 | 0.2.2 | 25 Oct 2026 | `InstrumentSpec.cost_per_unit` (optional, additive): the instrument's fixed trading cost per unit, price units, per round trip (XAU/USD 0.25 per oz, Fadi), sent with `/v1/size` only (an evaluate body is unchanged; a spec without a cost serialises as in 0.2.1). Examples `size-request-fixed-cost.json` and `size-response-fixed-cost.json` |
+| 0.3.0 | 13 Nov 2026 | B13 (section 14): `Setup.exit_type` (`target` \| `trailing` \| `time`, absent = `target`) with a null `tp` and `r_multiple` for `trailing`/`time`; `exit_reason` on the setup and on the CLOSED transition; the `sl_moved` transition with `sl`; the optional `EvaluateResponse.volatility`. The calendar also carries the USD high events of the New York day (02:00-16:45). `intraday` bodies are byte-identical (golden test). Examples `evaluate-request-gold-levels.json`, `evaluate-response-gold-levels.json` |
+
+## 14. Contract 0.3.0: gold_levels and daily volatility (B13)
+
+Two requests from Fadi, both additive: an `intraday` request and its answer are byte-identical
+to 0.2.2 (`backend/tests/test_ai_intraday_golden.py` compares a whole life cycle, request
+bodies included, with `backend/tests/fixtures/ai_intraday_golden.json`, recorded on `main`
+before B13). Fadi's proposal file (`ai-service/docs/phase7/CONTRACT_PROPOSAL.md`) was not on
+any branch when this was written, so 0.3.0 follows the B13 prompt; where the proposal differs,
+the proposal wins in a follow-up.
+
+### The `gold_levels` profile
+
+Breakouts of five gold levels plus ROUND, XAU/USD only, evaluated every 5 minutes on a 5m
+decision bar (`bars`: `5m`, `1h`, `4h`, `1d`, counts from `AI_GOLD_LEVELS_BARS`; 5m bars and
+their spreads come from the `candles_5m` aggregate, spreads in 5m buckets). It runs only when
+`AI_PROFILES` lists it. Setup ids: `xauusd-gold_levels-<strategy>-<level>-<yyyymmdd>`
+(the existing `setup_id` pattern accepts them).
+
+- **`Setup.exit_type`**: `target` | `trailing` | `time`; absent means `target`, exactly as
+  before (stored as null). With `trailing` or `time`, `tp` and `r_multiple` are **null**, and
+  `entry` and `sl` stay required in ARMED/ACTIVE with `sl` on the right side of `entry`
+  (buy: `sl < entry`; sell: `sl > entry`). With `target`, `tp` stays required and on its side.
+- **`exit_reason`** (`stop`, `trailing_stop`, `time`, or today's values) is accepted on the
+  setup and on its CLOSED transition, and stored in `ai_setups.exit_reason`.
+- **`sl_moved`**: a transition in the same state, with the new `sl`:
+
+```json
+{"setup_id": "xauusd-gold_levels-lvl4h-pdh-20261113", "from": "ACTIVE", "to": "ACTIVE",
+ "at": "2026-11-13T15:25:00Z", "reason": "sl_moved", "realized_r": null, "sl": 4084.15}
+```
+
+  It may repeat; each move has its own `at`, so the `(setup_id, to, at)` dedupe keeps every
+  one. The backend checks it: the same state on both sides, the setup's current state
+  (ARMED or ACTIVE), `sl` present and on the entry's side. A valid move updates
+  `ai_setups.sl` and is an `ai_setup_events` row with the new `sl`; an invalid one is
+  skipped, logged and counted in the run's `contract_warnings` (the rest of the answer is
+  stored). A move older than the setup's current state (each answer repeats the history) is
+  skipped silently.
+- **EXPIRED** (16:00, the level was never touched, e.g. `level_not_touched`) and
+  **INVALIDATED** (touched but not opened: `cost_cap`, `strategy_busy`) come from ai-service;
+  they are stored with their reason and send **no** alert for a setup without a target (the
+  WebSocket frame is still published).
+- `/v1/size` is unchanged: the risk is `|entry − sl|` with the stop of the request.
+
+The full examples: [`evaluate-request-gold-levels.json`](api/ai-service-examples/evaluate-request-gold-levels.json)
+(an ACTIVE trailing setup echoed in `open_setups`) and
+[`evaluate-response-gold-levels.json`](api/ai-service-examples/evaluate-response-gold-levels.json)
+(two `sl_moved`, CLOSED with `exit_reason: trailing_stop`, one EXPIRED, one INVALIDATED
+`strategy_busy`, and a `volatility` block). The setup as answered:
+
+```json
+{
+ "setup_id": "xauusd-gold_levels-lvl4h-pdh-20261113", "state": "CLOSED", "direction": "buy",
+ "entry": 4086.5, "sl": 4084.15, "tp": null, "r_multiple": null, "exit_type": "trailing",
+ "exit_reason": "trailing_stop", "probability": null, "ev_r": null, "ev_r_lower": null,
+ "grade": null, "valid_until": "2026-11-13T21:00:00Z", "horizon_until": "2026-11-13T21:45:00Z",
+ "created_at": "2026-11-13T14:05:00Z",
+ "evidence": {"level": "pdh", "level_price": 4086.0, "strategy": "lvl4h"}, "features": {"atr_5m": 1.9}
+}
+```
+
+**What the apps get.** `exit_type`, `exit_reason`, `exit_label` and the stop history are on
+every AI setup view: `/api/v1/ai/setups` and its detail (`sl_history`), `/api/v1/ai/trades`,
+`/api/v1/predictions/{id}` for an AI setup (`ai.exit_type`, `ai.exit_label`, `ai.sl_history`,
+each event's `sl`) and the admin detail. `exit_label` is ready to show when there is no target:
+`{"ar": "الخروج: ستوب متحرك، أو الساعة 16:45 نيويورك", "en": "Exit: trailing stop, or 16:45 New York"}`
+(`time`: `{"ar": "الخروج: الوقف، أو الساعة 16:45 نيويورك", "en": "Exit: stop, or 16:45 New York"}`);
+null with a target. Y16 maps a CLOSED setup without a target by `realized_r` as before
+(`> 0` is `tp_hit`), with `risk_reward` null; Y17 uses `mean_realized_r` as before.
+
+**Alerts.** Follows are per profile as before. The ARMED text shows the exit label in place
+of the target. A stop move is an alert (`AI_NOTIFY_SL_MOVED=true`) to the users who **took**
+the setup only, never to every follower, with the new stop in the text, the same quiet hours
+and rate limits; its dedupe key is `ai:{setup_id}:sl_moved:{at}`. With the setting off,
+moves are stored but not queued.
+
+### `EvaluateResponse.volatility`
+
+Optional on every answer (absent: ignored, so older answers stay valid):
+
+```json
+{"status": "ok", "model": "vol-xau-1.0.0", "day": "2026-11-13",
+ "window": "02:00-16:45 America/New_York", "expected_move_pct": 1.1,
+ "range_pct": {"p20": 0.6, "p50": 0.9, "p80": 1.4},
+ "range_usd": {"p20": 24.47, "p50": 36.71, "p80": 57.1}, "level": "normal",
+ "news": [{"ts": "2026-11-13T13:30:00Z", "title": "CPI m/m", "top3": true}]}
+```
+
+Outside the window (or `insufficient_history`, `not_supported`) every number is null:
+
+```json
+{"status": "outside_window", "model": "vol-xau-1.0.0", "day": "2026-11-13",
+ "window": "02:00-16:45 America/New_York", "expected_move_pct": null,
+ "range_pct": {"p20": null, "p50": null, "p80": null},
+ "range_usd": {"p20": null, "p50": null, "p80": null}, "level": null, "news": []}
+```
+
+- `status`: `ok` | `outside_window` | `insufficient_history` | `not_supported`; `level`:
+  `quiet` | `normal` | `lively` | `very_lively`. Another value is stored as received with a
+  warning (`contract_warnings` of the run); a malformed block is dropped with a warning and
+  never fails the answer.
+- The backend keeps **the first `ok` of each New York day** in `ai_volatility_daily`
+  (primary key `(instrument_id, day)`, insert on conflict do nothing): the value is fixed for
+  the day. The last block received is also kept in Redis (`ai:volatility:last`, 7 days) for
+  `/admin/system/status` (`ai_evaluate.volatility.last_stored_day`, `last_received`).
+- `GET /api/v1/ai/volatility/today?instrument_id=` (any logged-in user): the stored day with
+  `level_label` `{ar, en}` (هادئ / عادي / نشِط / نشِط جداً), or `{"status": "pending",
+  "reason": "before_window" | "weekend" | "not_received"}`.
+- `GET /api/v1/ai/volatility?instrument_id=&from=&to=&limit=&offset=`: the history, newest
+  first.
+
+**Bar counts for the volatility model.** Fadi asks for `AI_BARS_15M=2500` (22 complete days
+before 02:00). The code default stays 2000 and the server keeps its value in this release. With
+2500, the oldest bars predate the stored spreads, so until enough live bars exist (or Fadi
+relaxes his spread check) ai-service may answer `missing_spread`; the backend itself only
+requires the spread of the decision bar. The switch is one `.env` line, done later.
+
+### Calendar (every profile)
+
+`calendar` keeps the events within ±6 h of the bar for the instrument's currencies and adds
+the **USD high** events between 02:00 and 16:45 America/New_York of the bar's New York trading
+day (17:00 to 17:00, named after its close): at 02:00 the 08:30 CPI and the 14:00 FOMC are in
+the list. Each event once, in time order, at most 500; if the limit is ever reached the
+farthest medium events go first.
+
+### On the server
+
+[docs/deployment.md, "تشغيل gold_levels على السيرفر"](deployment.md#تشغيل-gold_levels-على-السيرفر):
+add `gold_levels` to `AI_PROFILES` after Fadi deploys his side, and recreate only `worker`
+and `beat`.

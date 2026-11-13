@@ -317,6 +317,16 @@ ACTIVE, CLOSED, EXPIRED and INVALIDATED. B11 tells users about the state changes
 | `ARMED` (also a setup born ARMED) | active users who **follow** the setup's instrument and profile, whose `min_grade` the setup meets (A best; a follow without `min_grade` takes every grade), and who may read it (`may_read_ai_setup`). **While `AI_GRADES_ENABLED=false`** (the default: v1 returns no grades) `min_grade` is not applied: every follower, as with no minimum |
 | `ACTIVE`, `CLOSED`, `EXPIRED`, `INVALIDATED` | only the users who **took** the setup (`POST /ai/setups/{id}/take`) |
 | `DEVELOPING` | nobody, never |
+| a stop move (`sl_moved`, B13 `gold_levels`) | only the users who **took** the setup, while `AI_NOTIFY_SL_MOVED=true` (default); the text gives the new stop. With the setting off the move is stored and nobody is told |
+
+A setup **without a target** (`exit_type` `trailing` or `time`, B13) sends nothing on
+`EXPIRED` or `INVALIDATED` (the level was never touched, or it was touched but not opened):
+the state and its reason are shown in the app. Its ARMED text shows the exit
+(«الخروج: ستوب متحرك، أو الساعة 16:45 نيويورك» / "Exit: trailing stop, or 16:45 New York") in
+place of the target; `data` has `exit_type`, `exit_reason` and `exit_label` (and, on a stop
+move, `event: "sl_moved"`, `new_sl` and `transition.sl`). A stop move is deduplicated per
+`(setup_id, at)` (`ai:{setup_id}:sl_moved:{at}`), and is skipped as stale once the setup is
+final. Quiet hours and the hourly cap apply as for every event.
 
 A follower who did not take a setup hears nothing after ARMED.
 
