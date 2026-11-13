@@ -549,6 +549,8 @@ A setup as ai-service last described it. ``last_payload`` is the setup exactly a
 | `valid_until` | timestamp with time zone | yes |  |  |
 | `horizon_until` | timestamp with time zone | yes |  |  |
 | `realized_r` | double precision | yes |  |  |
+| `exit_type` | varchar(16) | yes |  |  |
+| `exit_reason` | varchar(64) | yes |  |  |
 | `evidence` | jsonb | no | `'{}'::jsonb` |  |
 | `features` | jsonb | no | `'{}'::jsonb` |  |
 | `last_payload` | jsonb | no |  |  |
@@ -565,6 +567,7 @@ A setup as ai-service last described it. ``last_payload`` is the setup exactly a
 - PK `pk` (setup_id)
 - FK (instrument_id) → instruments (id) ON DELETE CASCADE
 - CHECK `ck_ai_setups_direction`: `direction IN ('buy', 'sell')`
+- CHECK `ck_ai_setups_exit_type`: `exit_type IS NULL OR exit_type IN ('target', 'trailing', 'time')`
 - CHECK `ck_ai_setups_probability`: `probability IS NULL OR probability BETWEEN 0 AND 1`
 - CHECK `ck_ai_setups_state`: `state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
 
@@ -575,7 +578,7 @@ A setup as ai-service last described it. ``last_payload`` is the setup exactly a
 
 ### `ai_setup_events`
 
-Append-only history of a setup's states. ``from_state`` is null for its first appearance. Unique ``(setup_id, to_state, at)``: re-applying a response adds nothing.
+Append-only history of a setup's states. ``from_state`` is null for its first appearance. Unique ``(setup_id, to_state, at)``: re-applying a response adds nothing. A stop move (reason ``sl_moved``, contract 0.3.0) stays in the same state and has the new ``sl``; each move has its own ``at``.
 
 | Column | Type | Null | Default | Keys |
 |---|---|---|---|---|
@@ -586,6 +589,7 @@ Append-only history of a setup's states. ``from_state`` is null for its first ap
 | `at` | timestamp with time zone | no |  |  |
 | `reason` | varchar(255) | yes |  |  |
 | `realized_r` | double precision | yes |  |  |
+| `sl` | double precision | yes |  |  |
 | `request_id` | varchar(160) | no |  |  |
 | `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
 
@@ -693,7 +697,7 @@ A setup explained by ai-service ``/v1/explain`` in one language (filled by B9/B1
 
 ### `ai_setup_outbox`
 
-A setup state change to notify (B11): written by ``apply_evaluation`` in its own transaction, so no alert is lost on a crash; sent by the ``ai_alerts.dispatch`` task. Unique ``(setup_id, to_state)``: a replayed evaluation never enqueues twice. DEVELOPING is never written.
+A setup state change to notify (B11): written by ``apply_evaluation`` in its own transaction, so no alert is lost on a crash; sent by the ``ai_alerts.dispatch`` task. Unique ``(setup_id, to_state)`` for state changes and ``(setup_id, at)`` for stop moves (``sl`` set, 0024): a replayed evaluation never enqueues twice. DEVELOPING is never written.
 
 | Column | Type | Null | Default | Keys |
 |---|---|---|---|---|
@@ -704,6 +708,7 @@ A setup state change to notify (B11): written by ``apply_evaluation`` in its own
 | `at` | timestamp with time zone | no |  |  |
 | `reason` | varchar(255) | yes |  |  |
 | `realized_r` | double precision | yes |  |  |
+| `sl` | double precision | yes |  |  |
 | `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
 | `status` | varchar(16) | no | `pending` |  |
 | `attempts` | integer | no | `0` |  |
@@ -717,11 +722,35 @@ A setup state change to notify (B11): written by ``apply_evaluation`` in its own
 - FK (setup_id) → ai_setups (setup_id) ON DELETE CASCADE
 - CHECK `ck_ai_setup_outbox_status`: `status IN ('pending', 'done', 'skipped', 'failed')`
 - CHECK `ck_ai_setup_outbox_to`: `to_state IN ('DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED')`
-- UNIQUE `uq_ai_setup_outbox_setup_state` (setup_id, to_state)
 
 **Indexes**
 
 - `ix_ai_setup_outbox_due` (ai_setup_outbox.next_attempt_at) WHERE `status = 'pending'`
+- `uq_ai_setup_outbox_setup_state` UNIQUE (ai_setup_outbox.setup_id, ai_setup_outbox.to_state) WHERE `sl IS NULL`
+- `uq_ai_setup_outbox_sl_moved` UNIQUE (ai_setup_outbox.setup_id, ai_setup_outbox.at) WHERE `sl IS NOT NULL`
+
+### `ai_volatility_daily`
+
+The expected move of one New York trading day (contract 0.3.0 ``volatility``): the first ``ok`` answer of the day, never changed afterwards (insert, on conflict do nothing). ``level`` and ``status`` are stored as received (an unknown value too).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `instrument_id` | uuid | no |  | PK, FK |
+| `day` | date | no |  | PK |
+| `status` | varchar(32) | no |  |  |
+| `model` | varchar(128) | yes |  |  |
+| `expected_move_pct` | double precision | yes |  |  |
+| `range_pct` | jsonb | yes |  |  |
+| `range_usd` | jsonb | yes |  |  |
+| `level` | varchar(32) | yes |  |  |
+| `news` | jsonb | no | `'[]'::jsonb` |  |
+| `request_id` | varchar(160) | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (instrument_id, day)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
 
 ### `ai_alert_follows`
 

@@ -3,13 +3,14 @@ events, the model registry, per-user sizes and explanations. The backend never c
 setup: rows come from ai-service responses (``app/ai/store.py``)."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Double,
     ForeignKey,
@@ -29,6 +30,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 STATES = "'DEVELOPING', 'ARMED', 'ACTIVE', 'CLOSED', 'EXPIRED', 'INVALIDATED'"
+EXIT_TYPES = "'target', 'trailing', 'time'"
 
 
 class AISetup(Base):
@@ -42,6 +44,9 @@ class AISetup(Base):
         CheckConstraint("direction IN ('buy', 'sell')", name="ck_ai_setups_direction"),
         CheckConstraint(
             "probability IS NULL OR probability BETWEEN 0 AND 1", name="ck_ai_setups_probability"
+        ),
+        CheckConstraint(
+            f"exit_type IS NULL OR exit_type IN ({EXIT_TYPES})", name="ck_ai_setups_exit_type"
         ),
         Index("ix_ai_setups_open", "instrument_id", "profile", "state"),
         Index("ix_ai_setups_created", text("created_at DESC")),
@@ -65,6 +70,9 @@ class AISetup(Base):
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     horizon_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     realized_r: Mapped[float | None] = mapped_column(Double)
+    # 0024 (contract 0.3.0): null means target (a tp); trailing / time have no tp
+    exit_type: Mapped[str | None] = mapped_column(String(16))
+    exit_reason: Mapped[str | None] = mapped_column(String(64))  # e.g. trailing_stop, time
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     features: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     last_payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
@@ -83,7 +91,9 @@ class AISetup(Base):
 
 class AISetupEvent(Base):
     """Append-only history of a setup's states. ``from_state`` is null for its first
-    appearance. Unique ``(setup_id, to_state, at)``: re-applying a response adds nothing."""
+    appearance. Unique ``(setup_id, to_state, at)``: re-applying a response adds nothing. A stop
+    move (reason ``sl_moved``, contract 0.3.0) stays in the same state and has the new ``sl``;
+    each move has its own ``at``."""
 
     __tablename__ = "ai_setup_events"
     __table_args__ = (
@@ -103,6 +113,7 @@ class AISetupEvent(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     reason: Mapped[str | None] = mapped_column(String(255))
     realized_r: Mapped[float | None] = mapped_column(Double)
+    sl: Mapped[float | None] = mapped_column(Double)  # 0024: the new stop of an sl_moved
     request_id: Mapped[str] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp()
@@ -195,12 +206,26 @@ class AISetupTake(Base):
 class AISetupOutbox(Base):
     """A setup state change to notify (B11): written by ``apply_evaluation`` in its own
     transaction, so no alert is lost on a crash; sent by the ``ai_alerts.dispatch`` task.
-    Unique ``(setup_id, to_state)``: a replayed evaluation never enqueues twice. DEVELOPING is
-    never written."""
+    Unique ``(setup_id, to_state)`` for state changes and ``(setup_id, at)`` for stop moves
+    (``sl`` set, 0024): a replayed evaluation never enqueues twice. DEVELOPING is never
+    written."""
 
     __tablename__ = "ai_setup_outbox"
     __table_args__ = (
-        UniqueConstraint("setup_id", "to_state", name="uq_ai_setup_outbox_setup_state"),
+        Index(
+            "uq_ai_setup_outbox_setup_state",
+            "setup_id",
+            "to_state",
+            unique=True,
+            postgresql_where=text("sl IS NULL"),
+        ),
+        Index(
+            "uq_ai_setup_outbox_sl_moved",
+            "setup_id",
+            "at",
+            unique=True,
+            postgresql_where=text("sl IS NOT NULL"),
+        ),
         CheckConstraint(
             "status IN ('pending', 'done', 'skipped', 'failed')", name="ck_ai_setup_outbox_status"
         ),
@@ -221,6 +246,7 @@ class AISetupOutbox(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     reason: Mapped[str | None] = mapped_column(String(255))
     realized_r: Mapped[float | None] = mapped_column(Double)
+    sl: Mapped[float | None] = mapped_column(Double)  # 0024: set for a stop move (sl_moved)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp()
     )
@@ -314,5 +340,29 @@ class AIEvaluationRun(Base):
         DateTime(timezone=True), server_default=func.clock_timestamp()
     )
     finished_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+
+
+class AIVolatilityDaily(Base):
+    """The expected move of one New York trading day (contract 0.3.0 ``volatility``): the first
+    ``ok`` answer of the day, never changed afterwards (insert, on conflict do nothing).
+    ``level`` and ``status`` are stored as received (an unknown value too)."""
+
+    __tablename__ = "ai_volatility_daily"
+
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("instruments.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    status: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str | None] = mapped_column(String(128))
+    expected_move_pct: Mapped[float | None] = mapped_column(Double)
+    range_pct: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    range_usd: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    level: Mapped[str | None] = mapped_column(String(32))
+    news: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    request_id: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp()
     )
