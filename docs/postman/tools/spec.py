@@ -358,6 +358,8 @@ if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
 SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
 if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
 
+# A gold_levels setup (contract 0.3.0 example): no tp, trailing stop moved twice, then CLOSED
+GOLD_LEVELS_SETUP_ID = "xauusd-gold_levels-lvl4h-pdh-20261113"
 AI_INSTRUMENT_FALLBACK = """// AI setups are on the instrument of Strategies & Signals → Get prediction; without one, the chart instrument.
 if (!pm.variables.get("ai_instrument_id")) pm.environment.set("ai_instrument_id", pm.variables.get("instrument_id"));"""
 
@@ -1180,7 +1182,10 @@ FOLDERS: list[Folder] = [
                         "probability), `reason` and its `outcome` row (`horizon_bars`, `exit_ts`, "
                         "`exit_price`, `return_pct`, `mfe_pct`, `mae_pct`, `correct`, `cost_per_unit`, "
                         "`note`; null while open). An AI setup adds `ai`: `state`, `entry`, `sl`, `tp`, "
-                        "`grade`, `ev_r`, `valid_until` and its state `events`.\n\n"
+                        "`grade`, `ev_r`, `valid_until` and its state `events`; a setup without a target "
+                        "(`gold_levels`) has `tp` and `risk_reward` null, `exit_type` (`trailing` "
+                        "or `time`), `exit_reason`, `exit_label` (`ar`, `en`) and its stop moves "
+                        "(`sl_history`; events with reason `sl_moved` carry the new `sl`).\n\n"
                         "404 when the id is unknown or not yours to read. The AI setup's instrument "
                         "is stored as `ai_instrument_id` for Risk Management → Follow AI setups.",
                         path_vars={
@@ -1196,6 +1201,11 @@ FOLDERS: list[Folder] = [
                                 "200 Strategy signal (resolved)",
                                 200,
                                 path_vars={"prediction_id": "{{prediction_id}}"},
+                            ),
+                            Variant(
+                                "200 AI setup without a target (trailing stop)",
+                                200,
+                                path_vars={"prediction_id": f"ai:{GOLD_LEVELS_SETUP_ID}"},
                             ),
                             Variant(
                                 "404 Prediction not found",
@@ -1422,7 +1432,8 @@ FOLDERS: list[Folder] = [
                 "only from `min_grade` (`A` best … `D`; null: all). Nobody follows anything until "
                 "they ask. Idempotent: calling it again only changes `min_grade`. After ARMED "
                 "you hear about a setup (ACTIVE, CLOSED, EXPIRED, INVALIDATED) only if you took "
-                "it. 404 unknown instrument, 422 unknown profile (today: `intraday`).\n\n"
+                "it. 404 unknown instrument, 422 unknown profile (today: `intraday` and "
+                "`gold_levels`).\n\n"
                 "`min_grade` is always stored but applied only while grades are enabled "
                 "(`AI_GRADES_ENABLED`): the response's `min_grade_active` says which. In v1 "
                 "(rules only, no model) every grade is null, so `min_grade_active` is false and "
@@ -1498,8 +1509,65 @@ FOLDERS: list[Folder] = [
                 "GET",
                 "/me/ai/trades",
                 "Your taken AI setups, newest first: the take (lots, risk, entry, result) with "
-                "the setup's current `state`, direction and prices.",
+                "the setup's current `state`, direction and prices. A setup without a target "
+                "(`gold_levels`, contract 0.3.0) has `tp` null, `exit_type` `trailing` or `time` "
+                "(null or `target`: a normal tp), `exit_label` ready to show in Arabic and "
+                "English, and once it ended `exit_reason` (e.g. `trailing_stop`, `time`, `stop`, "
+                "`tp_hit`); `sl` is the current stop after its last move.",
                 query=[("limit", "50", "1–100"), ("offset", "0", "")],
+            ),
+            Req(
+                "ai_volatility_today",
+                "Today's expected move",
+                "GET",
+                "/ai/volatility/today",
+                'The card "توقع حركة اليوم" (B13, contract 0.3.0 `volatility`): the first `ok` '
+                "answer of ai-service for today's New York trading day (window 02:00 to 16:45 "
+                "America/New_York), fixed for the whole day. `status: ok` with `day`, `model`, "
+                "`expected_move_pct`, `range_pct` and `range_usd` (`p20`, `p50`, `p80`), "
+                "`level` with `level_label` (`ar`, `en`) and the day's high-impact `news`.\n\n"
+                "Before it is known: `status: pending` with `reason` `before_window` (before "
+                "02:00 New York), `weekend` or `not_received` (no answer yet). Any logged-in "
+                "user. 404 unknown instrument.",
+                query=[("instrument_id", "{{ai_instrument_id}}", "XAU/USD: the AI instrument")],
+                pre=AI_INSTRUMENT_FALLBACK,
+                variants=[
+                    Variant(
+                        "200 Pending (no answer for this instrument)",
+                        200,
+                        query={"instrument_id": "{{instrument_id}}"},
+                    ),
+                    Variant(
+                        "404 Instrument not found",
+                        404,
+                        query={"instrument_id": "00000000-0000-0000-0000-000000000000"},
+                    ),
+                ],
+            ),
+            Req(
+                "ai_volatility",
+                "Expected move history",
+                "GET",
+                "/ai/volatility",
+                "The stored days of an instrument (New York trading days), newest first, each "
+                "as in Today's expected move (with `level_label`), paged. 404 unknown instrument.",
+                query=[
+                    ("instrument_id", "{{ai_instrument_id}}", "XAU/USD: the AI instrument"),
+                    ("limit", "30", "1–200"),
+                    ("offset", "0", ""),
+                ],
+                optional_query=[
+                    ("from", "2026-11-01", "day >= from"),
+                    ("to", "2026-11-30", "day <= to"),
+                ],
+                pre=AI_INSTRUMENT_FALLBACK,
+                variants=[
+                    Variant(
+                        "422 limit above 200",
+                        422,
+                        query={"limit": "500"},
+                    ),
+                ],
             ),
             Req(
                 "ai_setup_untake",
@@ -3931,9 +3999,11 @@ FOLDERS: list[Folder] = [
                         "back-off, stored rows), the AI alert outbox (`ai_alerts`: rows per "
                         "status, oldest pending in seconds, `grades_enabled`: whether follows' `min_grade` "
                         "is applied, false in v1), the periodic AI evaluation "
-                        "(`ai_evaluate`: enabled, the last run of every instrument and profile "
+                        "(`ai_evaluate`: enabled, each profile's decision timeframe, instruments and "
+                        "bars (`profile_settings`), the last run of every instrument and profile "
                         "with status, reason, duration, request size and bars sent, counts of "
-                        "the last 24 h, the last contract error), the cTrader live feed (`feeds.ctrader`: "
+                        "the last 24 h, the last contract error, and `volatility`: the last "
+                        "stored day and the last status received), the cTrader live feed (`feeds.ctrader`: "
                         "enabled, linked, connected, last tick and bar, reconnects, token expiry, "
                         "last error; never the tokens), chart image analysis (`chart_analysis`: "
                         "enabled or why not, model, prompt version, and per status of the last 24 h "
@@ -3960,7 +4030,9 @@ FOLDERS: list[Folder] = [
                         "/admin/ai/setups",
                         "Newest first. A setup is one trade idea of the engine: direction, entry, "
                         "stop (`sl`), target (`tp`), `probability`, expected value in R (`ev_r`, "
-                        "`ev_r_lower`), `grade`, validity window and its `state` (DEVELOPING → "
+                        "`ev_r_lower`), `grade`, validity window, `exit_type` (`target`, or for "
+                        "`gold_levels` `trailing` / `time` with `tp` null), `exit_reason`, "
+                        "`exit_label` and its `state` (DEVELOPING → "
                         "ARMED → ACTIVE → CLOSED, or EXPIRED / INVALIDATED). `realized_r` is set "
                         "once it closes; the strategy, model and features versions that produced "
                         "it are kept. While ai-service runs the rules alone (v1, no model: "
@@ -3994,7 +4066,9 @@ FOLDERS: list[Folder] = [
                         "A setup with its `evidence`, `features`, the payload exactly as "
                         "ai-service last returned it (`last_payload`), every state event, "
                         "oldest first (`from_state` null: the setup appeared; `reason` and "
-                        "`realized_r` on the move that closed it), the stored per-user sizes "
+                        "`realized_r` on the move that closed it; `sl_moved` events, same state, "
+                        "carry the new `sl`), its stop moves (`sl_history`), the stored per-user "
+                        "sizes "
                         "(`sizes`), how many users took it (`takes_count`) and its alerts "
                         "(`outbox`, oldest first).",
                         auth="admin",
@@ -4002,10 +4076,15 @@ FOLDERS: list[Folder] = [
                         pre=SKIP_NO_AI_SETUP,
                         variants=[
                             Variant(
+                                "200 Setup with a trailing stop (gold_levels)",
+                                200,
+                                path_vars={"setup_id": GOLD_LEVELS_SETUP_ID},
+                            ),
+                            Variant(
                                 "404 Setup not found",
                                 404,
                                 path_vars={"setup_id": "unknown-setup"},
-                            )
+                            ),
                         ],
                     ),
                     Req(
