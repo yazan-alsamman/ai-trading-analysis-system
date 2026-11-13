@@ -15,6 +15,28 @@ shown (contract §9: `verified` / `template_used`).
    the L1 SMC setups, which showed no edge; the only strategies with one run on the EA alone. P7
    first serves them as a new profile, then explains them.
 
+## Built for more strategies (Fadi, 2026-11-13)
+
+F1-F3 are built so that a strategy added later is served and explained without new explanation
+code or a new contract negotiation:
+
+1. **A strategy registry** (`app/catalog/`): each strategy is an entry with an id, a version, the
+   code that computes its signals, and a **description file** in Arabic and English
+   (`app/catalog/descriptions/<id>.<lang>.md`) that states its logic in plain words. The LLM and the
+   template read the description; a new strategy brings a new description, not new explanation code.
+2. **One evidence shape** in every setup: common fields (entry type, entry, stop, **exit type**:
+   `target` / `trailing` / `time`, the time window, the strategy id and version, the day's volatility
+   outlook) and a list of strategy-specific facts, each `{key, value, label_ar, label_en}` (for
+   example the level's name). Template, LLM and checker read only this shape.
+3. **A generic number checker:** every number in a text must be a number of the setup or its
+   evidence; it knows nothing about any one strategy.
+4. **A general contract change:** instead of "tp may be null for the five", every setup carries an
+   `exit_type` (`target`, `trailing`, `time`); `tp` is required only with `target`; `sl` may move
+   while `ACTIVE` (a `sl_moved` transition). One negotiation with Yazan covers later strategies.
+
+Any new strategy still passes the research first (registration, test, unseen data) before it enters
+the registry; an explanation never makes a strategy without an edge look convincing.
+
 ## Steps
 
 ### F1. Serve the five in `/v1/evaluate` (needs Yazan's agreement on the contract)
@@ -75,3 +97,16 @@ contract is agreed with Yazan after F1-F4.
 F1's engine and tests can be built now; the contract change goes to Yazan in the same week. F2
 follows F1's setup shape. F3 needs `GEMINI_API_KEY`. Nothing here changes the EA or the five's
 rules.
+
+## Progress
+
+- **2026-11-13, F1 engine built, not served.** Registry and descriptions (`app/catalog/`), the
+  engine (`app/live/gold_levels.py`: one setup per strategy, level and day, its lifecycle and the
+  proposed payload), tests on synthetic bars (`tests/test_gold_levels_live.py`). Checked on the
+  store (`gold_levels_check.md`): 138 days of 2025-07 to 2026-01, request-sized frames, **650 of 650
+  trades matched**, no look-ahead (1,932 of 1,932 paths at 10:00 start the 16:55 path); one trade
+  differs, on a bar where two levels of one strategy were touched: the engine takes the nearer
+  level, as the EA's stop orders fill, while the research code's unstable sort took the farther
+  one's entry (research code unchanged). Contract proposal for Yazan: `CONTRACT_PROPOSAL.md`.
+  Serving waits for it.
+

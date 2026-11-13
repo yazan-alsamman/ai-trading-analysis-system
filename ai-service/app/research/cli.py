@@ -136,6 +136,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_cost import main as gold_cost
 
         return gold_cost(argv[1:])
+    if argv and argv[0] == "gold-levels-check":
+        from app.research.gold_levels_check import main as gold_levels_check
+
+        return gold_levels_check(argv[1:])
     if argv and argv[0] == "exhaustion":
         from app.research.exhaustion import main as exhaustion
 

@@ -268,6 +268,10 @@ much of its forecast move did better, not worse (+0.090 vs +0.054 R, 2022-2026).
 served by ai-service as a new `gold_levels` profile and explained (F1 serve, F2 template, F3 Gemini +
 number checker, F4 gate: zero invented numbers, F5 chat agent later). F1 needs a contract change
 with Yazan (`tp` nullable for trailing exits, `sl` moves, 5m bars).
+F1 engine built and checked (650/650 trades match the research on 2025-07 to 2026-01, no look-ahead;
+`docs/phase7/gold_levels_check.md`); not served until Yazan agrees `docs/phase7/CONTRACT_PROPOSAL.md`.
+Found on the way: when two levels of one strategy are touched on the same bar, `gold_lab.simulate`'s
+unstable sort may take the farther level's entry (43 such trades in six months, one with a different R).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
