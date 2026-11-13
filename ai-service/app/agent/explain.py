@@ -3,8 +3,13 @@
 The template is filled only with the setup's own fields, its evidence and its strategy's
 description, in Arabic (formal, as the contract's example) or English. Every text goes through the
 number checker (``app.agent.verify``); a template always passes it, so the answer is
-``verified: true, template_used: true`` (contract §9: shown to the user). F3 adds the LLM text in
-front of this, with the template as its fallback.
+``verified: true, template_used: true`` (contract §9: shown to the user).
+
+F3: with a provider configured (``app.agent.llm``), the model rewrites the template from the same
+facts (``prompts/explain_v1.md``); its text is shown only if it passes every check of
+``rejected`` (every number in the setup or the description, the required ending word for word, no
+advice words, the language, the length, no markdown, the strategy name and the direction kept):
+``verified: true, template_used: false``. Anything else answers with the template.
 
 Three templates: the registry's strategies (``evidence.strategy``: the gold levels), the L1 SMC
 setups of the ``intraday`` profile (marked unvalidated: the research found no edge), and a plain
@@ -12,12 +17,19 @@ one for anything else."""
 
 from __future__ import annotations
 
+import json
+import logging
+from functools import cache
+from pathlib import Path
 from typing import Any, Literal
 
+from app.agent.llm import LLM
+from app.agent.llm import default as llm_default
 from app.agent.verify import unverified
 from app.catalog import registry
 from app.contract import ExplainRequest, ExplainResponse
 
+logger = logging.getLogger(__name__)
 Lang = Literal["ar", "en"]
 DIR = {"ar": {"buy": "شراء", "sell": "بيع"}, "en": {"buy": "buy", "sell": "sell"}}
 VOL_LEVEL = {
@@ -274,10 +286,136 @@ def template(s: dict, lang: Lang) -> tuple[str, list[str]]:
     return plain_text(s, lang), [s]
 
 
-def explain_setup(s: dict[str, Any], lang: Lang) -> dict[str, Any]:
-    text, sources = template(s, lang)
+# --- the LLM in front of the template (F3) ------------------------------------------------------
+
+PROMPT_VERSION = "explain_v1"
+PROMPTS = Path(__file__).resolve().parent / "prompts"
+LANG_NAME = {"ar": "Arabic (formal Modern Standard Arabic)", "en": "English"}
+BANNED = {
+    "ar": (
+        "اشتر الآن",
+        "اشترِ الآن",
+        "بع الآن",
+        "بِع الآن",
+        "ننصح",
+        "أنصح",
+        "نوصي",
+        "أوصي",
+        "توصية",
+        "مضمون",
+        "مضمونة",
+        "مؤكد الربح",
+        "فرصة ذهبية",
+        "لا تفوّت",
+        "لا تفوت",
+    ),
+    "en": (
+        "buy now",
+        "sell now",
+        "you should",
+        "we recommend",
+        "i recommend",
+        "recommendation",
+        "guaranteed",
+        "sure profit",
+        "risk-free",
+        "don't miss",
+        "do not miss",
+        "opportunity",
+    ),
+}
+SETUP_KEYS = (
+    "state",
+    "direction",
+    "entry",
+    "sl",
+    "tp",
+    "r_multiple",
+    "exit_type",
+    "exit_reason",
+    "state_reason",
+    "realized_r",
+    "evidence",
+)
+
+
+@cache
+def system_prompt(version: str = PROMPT_VERSION) -> str:
+    return (PROMPTS / f"{version}.md").read_text(encoding="utf-8")
+
+
+def required_ending(s: dict, lang: Lang) -> str:
+    ev = s.get("evidence") or {}
+    if "level" in ev and "plan" in ev and ev.get("strategy") is None:  # L1
+        return f"{UNVALIDATED[lang]} {NOT_ADVICE[lang]}"
+    return NOT_ADVICE[lang]
+
+
+def request_text(s: dict, lang: Lang, ref: str, desc: str | None) -> str:
+    setup = {k: s[k] for k in SETUP_KEYS if s.get(k) is not None}
+    return "\n\n".join(
+        [
+            f"LANGUAGE: {LANG_NAME[lang]}",
+            f"STRATEGY DESCRIPTION:\n{desc or 'none'}",
+            f"SETUP (JSON):\n{json.dumps(setup, ensure_ascii=False, sort_keys=True)}",
+            f"REFERENCE TEXT:\n{ref}",
+            f"REQUIRED ENDING:\n{required_ending(s, lang)}",
+        ]
+    )
+
+
+def letters(text: str) -> tuple[int, int]:
+    arabic = sum("؀" <= ch <= "ۿ" for ch in text)
+    latin = sum(ch.isascii() and ch.isalpha() for ch in text)
+    return arabic, latin
+
+
+def rejected(text: str, s: dict, lang: Lang, sources: list) -> str | None:
+    """Why the model's text may not be shown, or ``None`` (it passes every check)."""
     bad = unverified(text, *sources)
-    return {"text": text, "verified": not bad, "template_used": True}
+    if bad:
+        return f"numbers not in the setup: {bad[:5]}"
+    if not text.rstrip().endswith(required_ending(s, lang)):
+        return "the required ending is missing"
+    low = text.lower()
+    hit = [w for w in BANNED[lang] if w in low]
+    if hit:
+        return f"advice words: {hit}"
+    if not 150 <= len(text) <= 2000:
+        return f"length {len(text)}"
+    arabic, latin = letters(text)
+    if (lang == "ar" and arabic <= latin) or (lang == "en" and arabic > 0):
+        return "wrong language"
+    if any(m in text for m in ("**", "##", "\n- ", "\n* ")):
+        return "markdown"
+    ev = s.get("evidence") or {}
+    name = ev.get("strategy")
+    if name and name not in text:
+        return "the strategy name is missing"
+    if s.get("direction") in DIR[lang] and DIR[lang][s["direction"]] not in low:
+        return "the direction is missing"
+    return None
+
+
+def explain_setup(s: dict[str, Any], lang: Lang, llm: LLM | None | bool = True) -> dict[str, Any]:
+    """The LLM's text when it passes every check; otherwise the template. ``llm``: ``True`` the
+    configured provider (none without a key), ``False``/``None`` the template only."""
+    text, sources = template(s, lang)
+    out = {"text": text, "verified": not unverified(text, *sources), "template_used": True}
+    model = llm_default() if llm is True else (llm or None)
+    if model is None:
+        return out
+    ev = s.get("evidence") or {}
+    entry = registry().get(ev.get("strategy", ""))
+    desc = entry.description(lang) if entry else None
+    reply = model.write(system_prompt(), request_text(s, lang, text, desc))
+    if reply.text is None:
+        return out
+    why = rejected(reply.text, s, lang, sources)
+    if why is not None:
+        logger.info("explain llm text rejected (%s): %s", PROMPT_VERSION, why)
+        return out
+    return {"text": reply.text, "verified": True, "template_used": False}
 
 
 def explain(req: ExplainRequest) -> ExplainResponse:

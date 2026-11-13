@@ -120,4 +120,15 @@ rules.
   changed in turn), the contract example and a live L1 setup through the endpoint. New setups of
   `/v1/evaluate` carry the day's volatility outlook in `evidence.volatility` (news times in New York
   time, `ts_ny`), so `/v1/explain` needs nothing but the setup.
+- **2026-11-13, F3 built (off until a key is set).** `app/agent/llm.py`: the provider interface and
+  Gemini (`google-genai==2.30.1`, the backend's pin; one attempt, `EXPLAIN_LLM_TIMEOUT_SECONDS`
+  default 20, low thinking, temperature 0.2, structured answer `{"text"}`; never raises).
+  `app/agent/prompts/explain_v1.md`: the system prompt (facts only from the setup, the description
+  and the template; numbers copied, never computed or spelled; no advice words; formal Arabic; the
+  required ending word for word). `explain.rejected`: the model's text is shown only if every
+  number is in the setup or the description, the ending is there word for word, no advice words,
+  the right language, 150-2,000 characters, no markdown, the strategy name and the direction kept;
+  otherwise the template. Tests with a fake model (`tests/test_explain.py`); CI never calls Gemini.
+  **To turn it on:** set `GEMINI_API_KEY` in ai-service's environment (locally and on the server);
+  optional `GEMINI_MODEL`. Next: F4, the gate on 50 setups with the real model.
 

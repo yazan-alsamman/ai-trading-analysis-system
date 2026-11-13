@@ -274,7 +274,9 @@ Found on the way: when two levels of one strategy are touched on the same bar, `
 unstable sort may take the farther level's entry (43 such trades in six months, one with a different R).
 **F2 done (2026-11-13):** `POST /v1/explain` answers with a checked template (Arabic / English;
 `verified: true, template_used: true`); generic number checker `app/agent/verify.py`; L1 texts say no
-edge was found. Next: F3 (Gemini text in front of the template; needs `GEMINI_API_KEY`).
+edge was found. **F3 built (2026-11-13):** Gemini (`app/agent/llm.py`, prompt `explain_v1`) writes in
+front of the template; shown only if it passes `explain.rejected` (numbers, ending, no advice, language,
+length, name, direction); off until `GEMINI_API_KEY` is set. Next: F4 gate (50 setups, real model).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
