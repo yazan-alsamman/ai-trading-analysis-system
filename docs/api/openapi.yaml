@@ -1513,9 +1513,11 @@ paths:
       tags:
       - admin
       summary: Get Setup
-      description: 'A setup with its last payload, every state event (oldest first), the stored per-user
+      description: 'A setup with its last payload, every state event (oldest first) and its stop moves
 
-        sizes, how many users took it, and its alerts (outbox).'
+        (``sl_history``), the stored per-user sizes, how many users took it, and its alerts
+
+        (outbox).'
       operationId: admin_get_setup
       parameters:
       - name: setup_id
@@ -2574,6 +2576,164 @@ paths:
                 $ref: '#/components/schemas/Error'
         '403':
           description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/ai/volatility/today:
+    get:
+      tags:
+      - ai
+      summary: Volatility Today
+      description: 'Today''s expected move ("توقع حركة اليوم"): the first ``ok`` answer of ai-service
+        for
+
+        today''s New York trading day (02:00 to 16:45 America/New_York), fixed for the whole day,
+
+        with ``level_label`` in Arabic and English. Before it is known: ``status: pending`` with
+
+        ``reason`` ``before_window`` (before 02:00 New York), ``weekend`` or ``not_received``. 404
+
+        unknown instrument.'
+      operationId: ai_volatility_today
+      parameters:
+      - name: instrument_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Instrument Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VolatilityToday'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/ai/volatility:
+    get:
+      tags:
+      - ai
+      summary: Volatility History
+      description: 'The stored days (New York trading days), newest first, with ``level_label``. 404
+
+        unknown instrument.'
+      operationId: ai_volatility_history
+      parameters:
+      - name: instrument_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Instrument Id
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          description: day >= from
+          title: From
+        description: day >= from
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          description: day <= to
+          title: To
+        description: day <= to
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 30
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_VolatilityRead_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
           content:
             application/json:
               schema:
@@ -11210,11 +11370,13 @@ components:
           - type: number
           - type: 'null'
           title: Sl
+          description: the current stop (after the last move)
         tp:
           anyOf:
           - type: number
           - type: 'null'
           title: Tp
+          description: null for a setup without a target (exit_type)
         grade:
           anyOf:
           - type: string
@@ -11231,6 +11393,33 @@ components:
             format: date-time
           - type: 'null'
           title: Valid Until
+        exit_type:
+          anyOf:
+          - type: string
+            enum:
+            - target
+            - trailing
+            - time
+          - type: 'null'
+          title: Exit Type
+          description: 'null: target (a tp); trailing / time: no tp (gold_levels)'
+        exit_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Exit Reason
+          description: why it exited (e.g. trailing_stop, time, stop, tp_hit)
+        exit_label:
+          anyOf:
+          - $ref: '#/components/schemas/ExitLabel'
+          - type: 'null'
+          description: ready to show for a setup without a target; null otherwise
+        sl_history:
+          items:
+            $ref: '#/components/schemas/SlMove'
+          type: array
+          title: Sl History
+          description: the stop moves (sl_moved), oldest first
         events:
           items:
             $ref: '#/components/schemas/PredictionEvent'
@@ -11304,6 +11493,22 @@ components:
       description: The risk values AI setups are sized with (read-only; docs/risk-management.md).
     AISetupDetail:
       properties:
+        exit_type:
+          anyOf:
+          - type: string
+            enum:
+            - target
+            - trailing
+            - time
+          - type: 'null'
+          title: Exit Type
+          description: 'null: target (a tp); trailing / time: no tp and no r_multiple (gold_levels)'
+        exit_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Exit Reason
+          description: why it exited (e.g. trailing_stop, time, stop, tp_hit)
         setup_id:
           type: string
           title: Setup Id
@@ -11424,6 +11629,12 @@ components:
           type: array
           title: Events
           description: oldest first
+        sl_history:
+          items:
+            $ref: '#/components/schemas/SlMoveRead'
+          type: array
+          title: Sl History
+          description: the stop moves (sl_moved), oldest first
         sizes:
           items:
             $ref: '#/components/schemas/AISetupSizeBrief'
@@ -11440,6 +11651,13 @@ components:
           type: array
           title: Outbox
           description: its alerts (B11), oldest first
+        exit_label:
+          anyOf:
+          - $ref: '#/components/schemas/ExitLabel'
+          - type: 'null'
+          description: 'ready to show for a setup without a target, Arabic and English, e.g. ''Exit: trailing
+            stop, or 16:45 New York''; null when the setup has a target'
+          readOnly: true
       type: object
       required:
       - setup_id
@@ -11472,6 +11690,7 @@ components:
       - sizes
       - takes_count
       - outbox
+      - exit_label
       title: AISetupDetail
     AISetupEventRead:
       properties:
@@ -11496,6 +11715,12 @@ components:
           - type: number
           - type: 'null'
           title: Realized R
+        sl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sl
+          description: 'a stop move (reason sl_moved, same state): the new stop'
         request_id:
           type: string
           title: Request Id
@@ -11515,6 +11740,22 @@ components:
       title: AISetupEventRead
     AISetupRead:
       properties:
+        exit_type:
+          anyOf:
+          - type: string
+            enum:
+            - target
+            - trailing
+            - time
+          - type: 'null'
+          title: Exit Type
+          description: 'null: target (a tp); trailing / time: no tp and no r_multiple (gold_levels)'
+        exit_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Exit Reason
+          description: why it exited (e.g. trailing_stop, time, stop, tp_hit)
         setup_id:
           type: string
           title: Setup Id
@@ -11616,6 +11857,13 @@ components:
           type: string
           format: date-time
           title: Updated At
+        exit_label:
+          anyOf:
+          - $ref: '#/components/schemas/ExitLabel'
+          - type: 'null'
+          description: 'ready to show for a setup without a target, Arabic and English, e.g. ''Exit: trailing
+            stop, or 16:45 New York''; null when the setup has a target'
+          readOnly: true
       type: object
       required:
       - setup_id
@@ -11641,6 +11889,7 @@ components:
       - last_request_id
       - created_at
       - updated_at
+      - exit_label
       title: AISetupRead
     AISetupSizeBrief:
       properties:
@@ -11761,6 +12010,22 @@ components:
       title: AISizeRead
     AITradeRead:
       properties:
+        exit_type:
+          anyOf:
+          - type: string
+            enum:
+            - target
+            - trailing
+            - time
+          - type: 'null'
+          title: Exit Type
+          description: 'null: target (a tp); trailing / time: no tp and no r_multiple (gold_levels)'
+        exit_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Exit Reason
+          description: why it exited (e.g. trailing_stop, time, stop, tp_hit)
         setup_id:
           type: string
           title: Setup Id
@@ -11834,6 +12099,13 @@ components:
           - type: number
           - type: 'null'
           title: Tp
+        exit_label:
+          anyOf:
+          - $ref: '#/components/schemas/ExitLabel'
+          - type: 'null'
+          description: 'ready to show for a setup without a target, Arabic and English, e.g. ''Exit: trailing
+            stop, or 16:45 New York''; null when the setup has a target'
+          readOnly: true
       type: object
       required:
       - setup_id
@@ -11852,6 +12124,7 @@ components:
       - entry
       - sl
       - tp
+      - exit_label
       title: AITradeRead
     AccountIn:
       properties:
@@ -14468,6 +14741,19 @@ components:
       - source
       title: EventRead
       description: One version of an event (the newest known at ``as_of`` in a list).
+    ExitLabel:
+      properties:
+        ar:
+          type: string
+          title: Ar
+        en:
+          type: string
+          title: En
+      type: object
+      required:
+      - ar
+      - en
+      title: ExitLabel
     ExpertCard:
       properties:
         id:
@@ -15807,6 +16093,19 @@ components:
       additionalProperties: false
       type: object
       title: Layout
+    LevelLabel:
+      properties:
+        ar:
+          type: string
+          title: Ar
+        en:
+          type: string
+          title: En
+      type: object
+      required:
+      - ar
+      - en
+      title: LevelLabel
     LikeState:
       properties:
         liked:
@@ -16108,6 +16407,12 @@ components:
           - type: number
           - type: 'null'
           title: Realized R
+        sl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sl
+          description: 'a stop move (sl_moved): the new stop'
         created_at:
           type: string
           format: date-time
@@ -16662,6 +16967,29 @@ components:
       - limit
       - offset
       title: Page[UserRead]
+    Page_VolatilityRead_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/VolatilityRead'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: Page[VolatilityRead]
     Page_dict_:
       properties:
         items:
@@ -17345,7 +17673,8 @@ components:
         timeframe:
           type: string
           title: Timeframe
-          description: 'the signal''s timeframe; AI setups: 15m (the decision bar)'
+          description: 'the signal''s timeframe; AI setups: 15m (intraday''s decision bar; also the label
+            of gold_levels setups, whose decision bar is 5m)'
         strategy_key:
           type: string
           title: Strategy Key
@@ -17468,6 +17797,12 @@ components:
           - type: number
           - type: 'null'
           title: Realized R
+        sl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sl
+          description: 'a stop move (reason sl_moved, same state): the new stop'
       type: object
       required:
       - from_state
@@ -17513,7 +17848,8 @@ components:
         timeframe:
           type: string
           title: Timeframe
-          description: 'the signal''s timeframe; AI setups: 15m (the decision bar)'
+          description: 'the signal''s timeframe; AI setups: 15m (intraday''s decision bar; also the label
+            of gold_levels setups, whose decision bar is 5m)'
         strategy_key:
           type: string
           title: Strategy Key
@@ -18277,6 +18613,25 @@ components:
       - closed
       - no_data
       title: QualityStatus
+    Quantiles:
+      properties:
+        p20:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: P20
+        p50:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: P50
+        p80:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: P80
+      type: object
+      title: Quantiles
     QuietHours:
       properties:
         start:
@@ -19283,6 +19638,36 @@ components:
       - buy
       - sell
       title: SignalSide
+    SlMove:
+      properties:
+        at:
+          type: string
+          format: date-time
+          title: At
+        sl:
+          type: number
+          title: Sl
+          description: the new stop
+      type: object
+      required:
+      - at
+      - sl
+      title: SlMove
+    SlMoveRead:
+      properties:
+        at:
+          type: string
+          format: date-time
+          title: At
+        sl:
+          type: number
+          title: Sl
+          description: the new stop
+      type: object
+      required:
+      - at
+      - sl
+      title: SlMoveRead
     SourceRead:
       properties:
         id:
@@ -20420,6 +20805,170 @@ components:
       - private
       - public
       title: Visibility
+    VolatilityRead:
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+          title: Instrument Id
+        day:
+          type: string
+          format: date
+          title: Day
+          description: the New York trading day
+        status:
+          type: string
+          title: Status
+          description: ok (another value only as ai-service sent it)
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        window:
+          type: string
+          title: Window
+          default: 02:00-16:45 America/New_York
+        expected_move_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Expected Move Pct
+        range_pct:
+          anyOf:
+          - $ref: '#/components/schemas/Quantiles'
+          - type: 'null'
+          description: p20 / p50 / p80 of the day's range, %
+        range_usd:
+          anyOf:
+          - $ref: '#/components/schemas/Quantiles'
+          - type: 'null'
+          description: p20 / p50 / p80 of the day's range, USD
+        level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Level
+          description: quiet, normal, lively, very_lively (as received)
+        news:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: News
+          description: '[{ts, title, top3}] as received'
+        request_id:
+          type: string
+          title: Request Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        level_label:
+          anyOf:
+          - $ref: '#/components/schemas/LevelLabel'
+          - type: 'null'
+          description: Arabic and English label of level; null when unknown
+          readOnly: true
+      type: object
+      required:
+      - instrument_id
+      - day
+      - status
+      - model
+      - expected_move_pct
+      - range_pct
+      - range_usd
+      - level
+      - news
+      - request_id
+      - created_at
+      - level_label
+      title: VolatilityRead
+      description: 'The expected move of one New York trading day (02:00 to 16:45 America/New_York): the
+
+        first ``ok`` answer of ai-service that day, fixed for the whole day.'
+    VolatilityToday:
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+          title: Instrument Id
+        day:
+          type: string
+          format: date
+          title: Day
+          description: today's New York trading day
+        status:
+          type: string
+          title: Status
+          description: ok (stored), or pending
+        reason:
+          anyOf:
+          - type: string
+            enum:
+            - before_window
+            - weekend
+            - not_received
+          - type: 'null'
+          title: Reason
+          description: 'pending: before 02:00 New York, a weekend day, or no ok answer yet'
+        window:
+          type: string
+          title: Window
+          default: 02:00-16:45 America/New_York
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        expected_move_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Expected Move Pct
+        range_pct:
+          anyOf:
+          - $ref: '#/components/schemas/Quantiles'
+          - type: 'null'
+        range_usd:
+          anyOf:
+          - $ref: '#/components/schemas/Quantiles'
+          - type: 'null'
+        level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Level
+        level_label:
+          anyOf:
+          - $ref: '#/components/schemas/LevelLabel'
+          - type: 'null'
+        news:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: News
+        request_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Id
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - instrument_id
+      - day
+      - status
+      - reason
+      title: VolatilityToday
+      description: 'Today''s card: the stored day, or ``status: pending`` with why.'
     WeekPoint:
       properties:
         day:

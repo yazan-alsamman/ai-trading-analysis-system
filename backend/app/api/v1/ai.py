@@ -1,14 +1,19 @@
 """AI setups for users (B10, docs/risk-management.md#ai-setups): the size of a setup for your
 account, "I took this trade", and your taken trades. AI setups are global: whoever may read
-signals may use them (``strategy_resolver.may_read_ai_setup``)."""
+signals may use them (``strategy_resolver.may_read_ai_setup``). The day's expected move (B13,
+contract 0.3.0 ``volatility``): any logged-in user, read-only."""
 
 import uuid
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
+from sqlalchemy import func, select
 
-from app.ai import explain, follows, sizing, takes
+from app.ai import explain, follows, sizing, takes, volatility
 from app.api.deps import CurrentUser, SessionDep, SignalsReader
+from app.models.ai import AIVolatilityDaily
+from app.models.instrument import Instrument
 from app.schemas.ai import (
     AIExplanationRead,
     AISizeInputs,
@@ -18,6 +23,8 @@ from app.schemas.ai import (
     FollowRead,
     TakeIn,
     TakeRead,
+    VolatilityRead,
+    VolatilityToday,
 )
 from app.schemas.common import Page
 from app.services import risk_service
@@ -170,7 +177,66 @@ async def my_ai_trades(
             entry=s.entry,
             sl=s.sl,
             tp=s.tp,
+            exit_type=s.exit_type,
+            exit_reason=s.exit_reason,
         )
         for t, s in rows
     ]
     return Page[AITradeRead](items=items, total=total, limit=limit, offset=offset)
+
+
+# --- the day's expected move (B13, contract 0.3.0) -----------------------------------------------
+
+
+async def _instrument_or_404(session, instrument_id: uuid.UUID) -> None:
+    if await session.get(Instrument, instrument_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Instrument not found")
+
+
+@router.get("/ai/volatility/today", response_model=VolatilityToday)
+async def volatility_today(instrument_id: uuid.UUID, _: CurrentUser, session: SessionDep):
+    """Today's expected move ("توقع حركة اليوم"): the first ``ok`` answer of ai-service for
+    today's New York trading day (02:00 to 16:45 America/New_York), fixed for the whole day,
+    with ``level_label`` in Arabic and English. Before it is known: ``status: pending`` with
+    ``reason`` ``before_window`` (before 02:00 New York), ``weekend`` or ``not_received``. 404
+    unknown instrument."""
+    await _instrument_or_404(session, instrument_id)
+    found = await volatility.today(session, instrument_id, datetime.now(UTC))
+    if found["row"] is not None:
+        stored = VolatilityRead.model_validate(found["row"]).model_dump(exclude={"window"})
+        return VolatilityToday(**stored, reason=None)
+    return VolatilityToday(**{k: v for k, v in found.items() if k != "row"})
+
+
+@router.get("/ai/volatility", response_model=Page[VolatilityRead])
+async def volatility_history(
+    instrument_id: uuid.UUID,
+    _: CurrentUser,
+    session: SessionDep,
+    from_: Annotated[date | None, Query(alias="from", description="day >= from")] = None,
+    to: Annotated[date | None, Query(description="day <= to")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 30,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    """The stored days (New York trading days), newest first, with ``level_label``. 404
+    unknown instrument."""
+    await _instrument_or_404(session, instrument_id)
+    where = [AIVolatilityDaily.instrument_id == instrument_id]
+    if from_ is not None:
+        where.append(AIVolatilityDaily.day >= from_)
+    if to is not None:
+        where.append(AIVolatilityDaily.day <= to)
+    total = await session.scalar(select(func.count()).select_from(AIVolatilityDaily).where(*where))
+    rows = await session.scalars(
+        select(AIVolatilityDaily)
+        .where(*where)
+        .order_by(AIVolatilityDaily.day.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return Page[VolatilityRead](
+        items=[VolatilityRead.model_validate(r) for r in rows],
+        total=total or 0,
+        limit=limit,
+        offset=offset,
+    )

@@ -274,6 +274,19 @@ def _ai_setup(data: dict[str, Any], lang: str) -> tuple[str, str]:
     state = str(data.get("state", "ARMED"))
     side = t(lang, f"side.{data.get('direction', 'buy')}")
     symbol = instrument.get("symbol", "?")
+    # contract 0.3.0: a setup without a target (gold_levels) shows its exit rule instead
+    exit_label = (data.get("exit_label") or {}).get(lang) if data.get("tp") is None else None
+    if data.get("event") == "sl_moved":
+        # the stop away from the entry, like every stop shown (Fadi's rounding rule)
+        _, new_sl, _ = round_levels(
+            str(data.get("direction", "buy")), None, data.get("new_sl"), None, 10.0**-digits
+        )
+        lines = [t(lang, "ai_setup.new_sl", sl=num(new_sl, digits))]
+        if exit_label:
+            lines.append(exit_label)
+        if data.get("late"):
+            lines.append(t(lang, "ai_setup.late"))
+        return t(lang, "ai_setup.sl_moved.title", side=side, symbol=symbol), "\n".join(lines)
     title = t(
         lang,
         f"ai_setup.{state}.title",
@@ -293,24 +306,36 @@ def _ai_setup(data: dict[str, Any], lang: str) -> tuple[str, str]:
             data.get("tp"),
             10.0**-digits,
         )
-        lines.append(
-            t(
-                lang,
-                "ai_setup.prices",
-                entry=num(entry, digits),
-                sl=num(sl, digits),
-                tp=num(tp, digits),
+        if exit_label:
+            lines.append(
+                t(lang, "ai_setup.prices_no_tp", entry=num(entry, digits), sl=num(sl, digits))
             )
-        )
+            lines.append(exit_label)
+        else:
+            lines.append(
+                t(
+                    lang,
+                    "ai_setup.prices",
+                    entry=num(entry, digits),
+                    sl=num(sl, digits),
+                    tp=num(tp, digits),
+                )
+            )
     if state == "ARMED":
         probability = data.get("probability")
         grade = data.get("grade")  # always null in v1 (Fadi): the line leaves it out
         # v1 runs the rules alone (contract 0.2.1): no probability reads "n/a", never "0%"
         key = "ai_setup.scores" if grade else "ai_setup.scores_no_grade"
+        if exit_label:  # no target, no R multiple (the grade is left out too)
+            key = "ai_setup.scores_no_tp"
+            if probability is None:
+                key = "ai_setup.scores_no_model_no_tp"
+        elif probability is None:
+            key = "ai_setup.scores_no_model"
         lines.append(
             t(
                 lang,
-                key if probability is not None else "ai_setup.scores_no_model",
+                key,
                 grade=grade,
                 probability=num(probability * 100 if probability is not None else None, 0),
                 r_multiple=num(data.get("r_multiple"), 1),

@@ -13,7 +13,10 @@ class PredictionRead(BaseModel):
     source: Source
     instrument_id: uuid.UUID
     symbol: str
-    timeframe: str = Field(description="the signal's timeframe; AI setups: 15m (the decision bar)")
+    timeframe: str = Field(
+        description="the signal's timeframe; AI setups: 15m (intraday's decision bar; also the "
+        "label of gold_levels setups, whose decision bar is 5m)"
+    )
     strategy_key: str = Field(description="the strategy key; AI setups: their profile")
     direction: Literal["buy", "sell"]
     probability: float | None = Field(
@@ -44,17 +47,42 @@ class PredictionEvent(BaseModel):
     at: datetime
     reason: str | None
     realized_r: float | None
+    sl: float | None = Field(
+        default=None, description="a stop move (reason sl_moved, same state): the new stop"
+    )
+
+
+class SlMove(BaseModel):
+    at: datetime
+    sl: float = Field(description="the new stop")
+
+
+class ExitLabel(BaseModel):
+    ar: str
+    en: str
 
 
 class AIPredictionDetail(BaseModel):
     setup_id: str
     state: str
     entry: float | None
-    sl: float | None
-    tp: float | None
+    sl: float | None = Field(description="the current stop (after the last move)")
+    tp: float | None = Field(description="null for a setup without a target (exit_type)")
     grade: str | None
     ev_r: float | None
     valid_until: datetime | None
+    exit_type: Literal["target", "trailing", "time"] | None = Field(
+        default=None, description="null: target (a tp); trailing / time: no tp (gold_levels)"
+    )
+    exit_reason: str | None = Field(
+        default=None, description="why it exited (e.g. trailing_stop, time, stop, tp_hit)"
+    )
+    exit_label: ExitLabel | None = Field(
+        default=None, description="ready to show for a setup without a target; null otherwise"
+    )
+    sl_history: list[SlMove] = Field(
+        default_factory=list, description="the stop moves (sl_moved), oldest first"
+    )
     events: list[PredictionEvent] = Field(description="state events, oldest first")
 
 
