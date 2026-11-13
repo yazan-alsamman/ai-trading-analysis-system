@@ -261,6 +261,8 @@ Confluence was then tested on six markets never read for it (`CONFLUENCE.md`): *
 decision:** A process checks, B Bayesian edge (ALL6 red under 10%), C CUSUM (h 3.75), D drawdown
 against history; a "Health" section of `gold-demo check`. Reference built once with `gold-demo
 reference --export <GOLD M1 from 2016>` (stored in `data/processed`, untracked).
+**Range exhaustion (`docs/vol/EXHAUSTION.md`, 2026-11-13): does not pass**; breaks after the day used
+much of its forecast move did better, not worse (+0.090 vs +0.054 R, 2022-2026).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

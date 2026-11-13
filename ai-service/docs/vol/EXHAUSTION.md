@@ -70,3 +70,13 @@ cut-off) and its EA step (the EA needs the 02:00 forecast). A fail leaves the fi
 A look at the five's trades: counted in N, logged in `docs/phase3/TRIALS.md`. Code:
 `app/research/exhaustion.py`, `python -m app research exhaustion --export <GOLD M1>`, committed
 before the run. Report: `docs/vol/exhaustion_result.md`.
+
+## Outcome (2026-11-13): hypothesis X does not pass; no exhaustion
+
+`exhaustion_result.md` (code `b5acef7`). Cut-off u = 0.767. On 2022 to 2026-01-09 the top tercile
+made **more**, not less: +0.090 R vs +0.054 (d +0.037, 95% −0.070 to +0.143, p 0.75); FxPro 2026
+the same way (+0.092 vs +0.049); 2018-2021 equal (+0.027 vs +0.026). Breaks after the day has used
+much of its forecast move do not do worse; if anything gold continues (as `RISK_SPLIT.md` hinted).
+Within entry-time blocks the picture is mixed (02:00-08:00 top better; 08:00-16:00 the rest better
+on fewer trades) and the u deciles show no ordering: description only. The five stay as they are.
+
