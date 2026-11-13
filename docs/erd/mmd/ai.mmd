@@ -16,6 +16,8 @@ erDiagram
         timestamptz valid_until
         timestamptz horizon_until
         double realized_r
+        varchar exit_type
+        varchar exit_reason
         jsonb evidence
         jsonb features
         jsonb last_payload
@@ -35,6 +37,7 @@ erDiagram
         timestamptz at
         varchar reason
         double realized_r
+        double sl
         varchar request_id
         timestamptz created_at
     }
@@ -89,12 +92,26 @@ erDiagram
         timestamptz at
         varchar reason
         double realized_r
+        double sl
         timestamptz created_at
         varchar status
         int attempts
         timestamptz next_attempt_at
         varchar last_error
         timestamptz processed_at
+    }
+    ai_volatility_daily {
+        uuid instrument_id PK, FK
+        date day PK
+        varchar status
+        varchar model
+        double expected_move_pct
+        jsonb range_pct
+        jsonb range_usd
+        varchar level
+        jsonb news
+        varchar request_id
+        timestamptz created_at
     }
     ai_alert_follows {
         uuid user_id PK, FK
@@ -131,3 +148,4 @@ erDiagram
     ai_setup_takes }o--|| ai_setups : "setup_id"
     ai_setup_takes }o--|| users : "user_id"
     ai_setups }o--|| instruments : "instrument_id"
+    ai_volatility_daily }o--|| instruments : "instrument_id"

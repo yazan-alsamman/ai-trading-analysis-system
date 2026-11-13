@@ -34,6 +34,7 @@ flowchart LR
         ai_setup_takes[ai_setup_takes]
         ai_setup_explanations[ai_setup_explanations]
         ai_setup_outbox[ai_setup_outbox]
+        ai_volatility_daily[ai_volatility_daily]
         ai_alert_follows[ai_alert_follows]
         ai_evaluation_runs[ai_evaluation_runs]
     end
@@ -86,6 +87,7 @@ flowchart LR
     ai_setup_takes --> ai_setups
     ai_setup_takes -.-> users
     ai_setups --> instruments
+    ai_volatility_daily --> instruments
     api_keys -.-> users
     backtest_trades --> backtests
     backtests --> instruments

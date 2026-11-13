@@ -19,6 +19,8 @@ MODELS = {
     "evaluate-response-ok": c.EvaluateResponse,
     "evaluate-response-ok-rules-only": c.EvaluateResponse,
     "evaluate-response-model-unavailable": c.EvaluateResponse,
+    "evaluate-request-gold-levels": c.EvaluateRequest,
+    "evaluate-response-gold-levels": c.EvaluateResponse,
     "size-request": c.SizeRequest,
     "size-response": c.SizeResponse,
     "size-request-fixed-cost": c.SizeRequest,
@@ -188,8 +190,8 @@ def test_contract_module_needs_only_pydantic() -> None:
 # --- contract 0.2.0 (Fadi's answers) ------------------------------------------------------------
 
 
-def test_version_is_0_2_2() -> None:
-    assert c.CONTRACT_VERSION == "0.2.2"
+def test_version_is_0_3_0() -> None:
+    assert c.CONTRACT_VERSION == "0.3.0"
 
 
 def test_cost_per_unit_is_optional_and_sent_when_set() -> None:
@@ -321,3 +323,15 @@ def test_round_levels_stop_away_target_toward(direction, levels, expected) -> No
     """Fadi (point 2): rounding never makes the risk smaller or the reward larger."""
     tick = 0.01
     assert c.round_levels(direction, *levels, tick) == expected
+
+
+def test_gold_levels_example_is_0_3_0() -> None:
+    """The gold_levels examples: trailing exits without tp, two stop moves, a volatility block."""
+    req = c.EvaluateRequest.model_validate(load("evaluate-request-gold-levels"))
+    assert req.profile == "gold_levels" and set(req.bars) == {"5m", "1h", "4h", "1d"}
+    resp = c.EvaluateResponse.model_validate(load("evaluate-response-gold-levels"))
+    assert all(s.exit_type == c.ExitType.trailing and s.tp is None for s in resp.new_setups)
+    moves = [t for t in resp.transitions if t.reason == c.SL_MOVED]
+    assert [t.sl for t in moves] == [4081.4, 4084.15]
+    assert resp.volatility is not None and resp.volatility.level == "normal"
+    assert resp.volatility_error is None

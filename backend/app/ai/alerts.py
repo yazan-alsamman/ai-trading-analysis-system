@@ -13,6 +13,12 @@ DEVELOPING) in the evaluation's own transaction, so no alert is lost on a crash.
   row is ``failed`` (ERROR log, admins notified) until an admin retries it.
 
 Who gets what is :func:`recipients`; what is skipped as too late is :func:`stale_reason`.
+
+Contract 0.3.0 (B13): a stop move (an outbox row with ``sl``) goes to the takers only, while
+``AI_NOTIFY_SL_MOVED`` is on, with the new stop (inbox ``dedup_key``
+``ai:{setup_id}:sl_moved:{at}``). A setup without a target (``exit_type`` trailing or time)
+shows its exit rule (``exit_label``) instead of a target, and its EXPIRED / INVALIDATED (never
+opened) notify nobody: they are stored and sent on the live topic only.
 """
 
 from __future__ import annotations
@@ -28,7 +34,7 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.ai import explain, sizing
+from app.ai import explain, labels, sizing
 from app.ai.client import AIContractError, AIServiceClient, AIUnavailableError
 from app.ai.contract import ExplainRequest, Setup, iso_z
 from app.core.config import get_settings
@@ -47,6 +53,8 @@ logger = logging.getLogger(__name__)
 
 ARMED = "ARMED"
 FINAL = frozenset({"CLOSED", "EXPIRED", "INVALIDATED"})
+NOT_OPENED = frozenset({"EXPIRED", "INVALIDATED"})
+NO_TARGET = frozenset({"trailing", "time"})
 GRADES = ("A", "B", "C", "D")  # A best
 EXPLAIN_TIMEOUT = 8.0  # seconds; one attempt (an alert must not wait for an explanation)
 FAILED_NAMESPACE = uuid.UUID("0b5c4d8e-6a0f-4f5e-9e43-1c1f8ad0b511")
@@ -82,17 +90,24 @@ def min_grade_active() -> bool:
     return get_settings().ai_grades_enabled
 
 
-async def recipients(session: AsyncSession, setup: AISetup, to_state: str) -> list[User]:
+async def recipients(
+    session: AsyncSession, setup: AISetup, to_state: str, *, sl_moved: bool = False
+) -> list[User]:
     """Who is told about a state change:
 
     - ``ARMED`` (also a setup born ARMED): the active users who follow the setup's instrument
       and profile, whose ``min_grade`` the setup meets, and who may read it. While
       ``AI_GRADES_ENABLED`` is off (v1: no grades) ``min_grade`` is not applied: every
       follower, as with no minimum;
-    - ``ACTIVE``, ``CLOSED``, ``EXPIRED``, ``INVALIDATED``: only the users who took it.
+    - ``ACTIVE``, ``CLOSED``, ``EXPIRED``, ``INVALIDATED``: only the users who took it;
+    - a stop move (``sl_moved``): only the users who took it;
+    - a setup without a target (``exit_type`` trailing or time, gold_levels) that ends
+      ``EXPIRED`` or ``INVALIDATED`` (never opened): nobody.
 
     Followers who did not take a setup hear nothing after ARMED."""
-    if to_state == ARMED:
+    if to_state in NOT_OPENED and setup.exit_type in NO_TARGET:
+        return []
+    if to_state == ARMED and not sl_moved:
         rows = await session.execute(
             select(User, AIAlertFollow.min_grade)
             .join(AIAlertFollow, AIAlertFollow.user_id == User.id)
@@ -120,7 +135,14 @@ async def recipients(session: AsyncSession, setup: AISetup, to_state: str) -> li
 
 
 def stale_reason(row: AISetupOutbox, setup: AISetup, now: datetime) -> str | None:
-    """Why an ARMED alert is not sent any more (no late alerts); None: send it."""
+    """Why an ARMED alert or a stop move is not sent any more (no late alerts); None: send
+    it."""
+    if row.sl is not None:  # a stop move
+        if not get_settings().ai_notify_sl_moved:
+            return "sl_moved notifications are off (AI_NOTIFY_SL_MOVED)"
+        if setup.state in FINAL:
+            return f"stale: the setup is {setup.state} now"
+        return None
     if row.to_state != ARMED:
         return None
     if setup.state != ARMED:
@@ -156,7 +178,7 @@ class _Run:
 
 
 def _base_data(row: AISetupOutbox, setup: AISetup, instrument: Instrument, late: bool) -> dict:
-    return {
+    data = {
         "setup_id": setup.setup_id,
         "state": row.to_state,
         "transition": {
@@ -187,6 +209,23 @@ def _base_data(row: AISetupOutbox, setup: AISetup, instrument: Instrument, late:
         "realized_r": row.realized_r,
         "late": late,
     }
+    # contract 0.3.0, only for setups that have them (an intraday alert is as before)
+    if setup.exit_type is not None:
+        data["exit_type"] = setup.exit_type
+        data["exit_reason"] = setup.exit_reason
+        data["exit_label"] = labels.exit_label(setup.exit_type)
+    if row.sl is not None:
+        data["event"] = "sl_moved"
+        data["new_sl"] = row.sl
+        data["transition"]["sl"] = row.sl
+    return data
+
+
+def dedup_key(row: AISetupOutbox) -> str:
+    """The inbox key: one notification per state, and per stop move."""
+    if row.sl is not None:
+        return f"ai:{row.setup_id}:sl_moved:{iso_z(row.at)}"
+    return f"ai:{row.setup_id}:{row.to_state}"
 
 
 def _size_data(result: Any) -> dict[str, Any]:
@@ -285,13 +324,14 @@ async def _items(
     run: _Run,
 ) -> list[notifications.NotifyItem]:
     instrument = await session.get(Instrument, setup.instrument_id)
-    late = (
-        row.to_state != ARMED
-        and (now - row.created_at).total_seconds() > get_settings().ai_alerts_max_age_seconds
-    )
+    late = (row.to_state != ARMED or row.sl is not None) and (
+        now - row.created_at
+    ).total_seconds() > get_settings().ai_alerts_max_age_seconds
     base = _base_data(row, setup, instrument, late)
     extra: dict[uuid.UUID, dict[str, Any]] = {u.id: {} for u in users}
-    if row.to_state == ARMED:
+    if row.sl is not None:
+        pass  # a stop move: the new stop only
+    elif row.to_state == ARMED:
         for user_id, size in (await _sizes(factory, setup.setup_id, users, run)).items():
             extra[user_id]["size"] = size
         prefs = await prefs_mod.load(session, [u.id for u in users])
@@ -322,7 +362,7 @@ async def _items(
             user_id=user.id,
             type=NotificationType.ai_setup,
             data={**base, **extra[user.id]},
-            dedup_key=f"ai:{setup.setup_id}:{row.to_state}",
+            dedup_key=dedup_key(row),
             severity=severity,
         )
         for user in users
@@ -330,7 +370,7 @@ async def _items(
 
 
 def _frame(row: AISetupOutbox, setup: AISetup) -> dict[str, Any]:
-    return {
+    frame = {
         "type": "ai_setup",
         "setup": setup.last_payload,
         "transition": {
@@ -342,6 +382,9 @@ def _frame(row: AISetupOutbox, setup: AISetup) -> dict[str, Any]:
             "realized_r": row.realized_r,
         },
     }
+    if row.sl is not None:  # contract 0.3.0: a stop move carries the new stop
+        frame["transition"]["sl"] = row.sl
+    return frame
 
 
 # --- dispatching ---------------------------------------------------------------------------------
@@ -363,7 +406,7 @@ async def _handle(
     if reason is not None:
         row.status, row.last_error = "skipped", reason
         return "skipped", None, None
-    users = await recipients(session, setup, row.to_state)
+    users = await recipients(session, setup, row.to_state, sl_moved=row.sl is not None)
     prepared = None
     if users:
         items = await _items(session, factory, row, setup, users, now, run)

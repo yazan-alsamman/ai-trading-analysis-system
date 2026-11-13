@@ -54,15 +54,18 @@ async def list_setups(
 async def get_setup(
     setup_id: Annotated[str, Path(max_length=128)], _: AdminUser, session: SessionDep
 ):
-    """A setup with its last payload, every state event (oldest first), the stored per-user
-    sizes, how many users took it, and its alerts (outbox)."""
+    """A setup with its last payload, every state event (oldest first) and its stop moves
+    (``sl_history``), the stored per-user sizes, how many users took it, and its alerts
+    (outbox)."""
     row = await session.get(AISetup, setup_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Setup not found")
-    events = await session.scalars(
-        select(AISetupEvent)
-        .where(AISetupEvent.setup_id == setup_id)
-        .order_by(AISetupEvent.at, AISetupEvent.id)
+    events = list(
+        await session.scalars(
+            select(AISetupEvent)
+            .where(AISetupEvent.setup_id == setup_id)
+            .order_by(AISetupEvent.at, AISetupEvent.id)
+        )
     )
     sizes = await session.scalars(
         select(AISetupSize)
@@ -82,6 +85,7 @@ async def get_setup(
             "features": row.features,
             "last_payload": row.last_payload,
             "events": [AISetupEventRead.model_validate(e) for e in events],
+            "sl_history": [{"at": e.at, "sl": e.sl} for e in events if e.sl is not None],
             "sizes": [AISetupSizeBrief.model_validate(r) for r in sizes],
             "takes_count": takes_count,
             "outbox": [OutboxRead.model_validate(r) for r in outbox],

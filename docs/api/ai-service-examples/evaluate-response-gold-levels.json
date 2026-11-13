@@ -1,0 +1,186 @@
+{
+ "request_id": "xauusd-gold_levels-2026-11-13T15:40:00Z",
+ "status": "ok",
+ "versions": {
+  "strategy": "xau-gold-levels-1.0.0",
+  "model": null,
+  "features": "f-3"
+ },
+ "new_setups": [
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdh-20261113",
+   "state": "CLOSED",
+   "direction": "buy",
+   "entry": 4086.5,
+   "sl": 4084.15,
+   "tp": null,
+   "r_multiple": null,
+   "exit_type": "trailing",
+   "probability": null,
+   "ev_r": null,
+   "ev_r_lower": null,
+   "grade": null,
+   "valid_until": "2026-11-13T21:00:00Z",
+   "horizon_until": "2026-11-13T21:45:00Z",
+   "created_at": "2026-11-13T14:05:00Z",
+   "evidence": {
+    "level": "pdh",
+    "level_price": 4086.0,
+    "strategy": "lvl4h"
+   },
+   "features": {
+    "atr_5m": 1.9
+   },
+   "exit_reason": "trailing_stop"
+  },
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdl-20261113",
+   "state": "EXPIRED",
+   "direction": "sell",
+   "entry": 4060.5,
+   "sl": 4065.5,
+   "tp": null,
+   "r_multiple": null,
+   "exit_type": "trailing",
+   "probability": null,
+   "ev_r": null,
+   "ev_r_lower": null,
+   "grade": null,
+   "valid_until": "2026-11-13T21:00:00Z",
+   "horizon_until": "2026-11-13T21:45:00Z",
+   "created_at": "2026-11-13T07:05:00Z",
+   "evidence": {
+    "level": "pdl",
+    "level_price": 4061.0,
+    "strategy": "lvl4h"
+   },
+   "features": {}
+  },
+  {
+   "setup_id": "xauusd-gold_levels-round-r4100-20261113",
+   "state": "INVALIDATED",
+   "direction": "buy",
+   "entry": 4100.5,
+   "sl": 4095.5,
+   "tp": null,
+   "r_multiple": null,
+   "exit_type": "trailing",
+   "probability": null,
+   "ev_r": null,
+   "ev_r_lower": null,
+   "grade": null,
+   "valid_until": "2026-11-13T21:00:00Z",
+   "horizon_until": "2026-11-13T21:45:00Z",
+   "created_at": "2026-11-13T14:05:00Z",
+   "evidence": {
+    "level": "round",
+    "level_price": 4100.0,
+    "strategy": "round"
+   },
+   "features": {}
+  }
+ ],
+ "transitions": [
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdh-20261113",
+   "from": "DEVELOPING",
+   "to": "ARMED",
+   "at": "2026-11-13T14:05:00Z",
+   "reason": "level_armed",
+   "realized_r": null
+  },
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdh-20261113",
+   "from": "ARMED",
+   "to": "ACTIVE",
+   "at": "2026-11-13T14:20:00Z",
+   "reason": "entry_filled",
+   "realized_r": null
+  },
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdh-20261113",
+   "from": "ACTIVE",
+   "to": "ACTIVE",
+   "at": "2026-11-13T15:10:00Z",
+   "reason": "sl_moved",
+   "realized_r": null,
+   "sl": 4081.4
+  },
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdh-20261113",
+   "from": "ACTIVE",
+   "to": "ACTIVE",
+   "at": "2026-11-13T15:25:00Z",
+   "reason": "sl_moved",
+   "realized_r": null,
+   "sl": 4084.15
+  },
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdh-20261113",
+   "from": "ACTIVE",
+   "to": "CLOSED",
+   "at": "2026-11-13T15:38:00Z",
+   "reason": "trailing_stop",
+   "realized_r": -0.29,
+   "exit_reason": "trailing_stop"
+  },
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdl-20261113",
+   "from": "DEVELOPING",
+   "to": "ARMED",
+   "at": "2026-11-13T07:05:00Z",
+   "reason": "level_armed",
+   "realized_r": null
+  },
+  {
+   "setup_id": "xauusd-gold_levels-lvl4h-pdl-20261113",
+   "from": "ARMED",
+   "to": "EXPIRED",
+   "at": "2026-11-13T15:40:00Z",
+   "reason": "level_not_touched",
+   "realized_r": null
+  },
+  {
+   "setup_id": "xauusd-gold_levels-round-r4100-20261113",
+   "from": "DEVELOPING",
+   "to": "ARMED",
+   "at": "2026-11-13T14:05:00Z",
+   "reason": "level_armed",
+   "realized_r": null
+  },
+  {
+   "setup_id": "xauusd-gold_levels-round-r4100-20261113",
+   "from": "ARMED",
+   "to": "INVALIDATED",
+   "at": "2026-11-13T15:35:00Z",
+   "reason": "strategy_busy",
+   "realized_r": null
+  }
+ ],
+ "abstentions": [],
+ "volatility": {
+  "status": "ok",
+  "model": "vol-xau-1.0.0",
+  "day": "2026-11-13",
+  "window": "02:00-16:45 America/New_York",
+  "expected_move_pct": 1.1,
+  "range_pct": {
+   "p20": 0.6,
+   "p50": 0.9,
+   "p80": 1.4
+  },
+  "range_usd": {
+   "p20": 24.47,
+   "p50": 36.71,
+   "p80": 57.1
+  },
+  "level": "normal",
+  "news": [
+   {
+    "ts": "2026-11-13T13:30:00Z",
+    "title": "CPI m/m",
+    "top3": true
+   }
+  ]
+ }
+}

@@ -1,8 +1,12 @@
 """The periodic evaluation (B9, docs/ai-contract.md#8-the-evaluate-task).
 
-At each 15m boundary the ``ai.evaluate_tick`` beat task schedules one ``ai.evaluate`` per
-instrument (``AI_EVALUATE_INSTRUMENTS``) and profile (``AI_PROFILES``), ``AI_EVALUATE_DELAY_
-SECONDS`` after the boundary. One run (:func:`run`):
+At each 5m boundary the ``ai.evaluate_tick`` beat task schedules one ``ai.evaluate`` per
+profile (``AI_PROFILES``) whose decision timeframe closes there and instrument of that profile,
+``AI_EVALUATE_DELAY_SECONDS`` after the boundary. A profile's decision timeframe is the smallest
+timeframe of its bar counts (B13): ``intraday`` (and any other profile) 15m with
+``AI_EVALUATE_INSTRUMENTS`` and ``AI_BARS_*``; ``gold_levels`` 5m with
+``AI_GOLD_LEVELS_INSTRUMENTS`` and ``AI_GOLD_LEVELS_BARS``. A 15m boundary is also a 5m one.
+One run (:func:`run`):
 
 1. **One run per key.** A Redis key ``(instrument, profile, bar_close_ts)`` set with NX and an
    expiry: a retried or duplicated task finds it and does nothing.
@@ -11,7 +15,7 @@ SECONDS`` after the boundary. One run (:func:`run`):
    ai-service: no specs, the bars are not closed yet, the data-quality gate is not ok (closed
    market, degraded, no data), the decision bar is missing or has no spread.
    - bars cut at the last closed bar (the aggregates are ``materialized_only = false``): the
-     counts from ``AI_BARS_*``, the spread of each bar the average of its 1m spreads;
+     profile's counts, the spread of each bar the average of its 1m spreads;
    - ``1d``: New York trading days (17:00 to 17:00 America/New_York), built on the fly from
      the 1h aggregate (itself from the 1m data; the boundary is always on a UTC hour, so the
      result is the same as from 1m);
@@ -26,6 +30,13 @@ SECONDS`` after the boundary. One run (:func:`run`):
    ``ai.explain`` per newly ARMED setup and language. None of these can fail the run.
 5. The run is stored in ``ai_evaluation_runs`` (status, reason, duration, request size, bar
    coverage, a summary of the answer).
+6. Contract 0.3.0: the answer's optional ``volatility`` is kept (the first ``ok`` of each New
+   York trading day in ``ai_volatility_daily``; the last status received in Redis).
+
+No pile-up (B13): a queued run expires ``EVALUATE_TIME_LIMIT`` before the profile's next
+boundary, and a run is killed after ``EVALUATE_TIME_LIMIT`` seconds, so a run started by its
+expiry has ended before the next boundary's run starts (``ai.evaluate`` keeps the per-bar run
+key against duplicates).
 """
 
 from __future__ import annotations
@@ -67,14 +78,17 @@ from app.services.market_service import floor_to_bucket
 
 logger = logging.getLogger(__name__)
 
-DECISION = "15m"  # the decision bar: the smallest timeframe, its close is bar_close_ts
+DECISION = "15m"  # intraday's decision bar: the smallest timeframe, its close is bar_close_ts
 STEP = TIMEFRAMES[DECISION]
+TICK = TIMEFRAMES["5m"]  # the beat tick: the smallest decision timeframe of any profile
+EVALUATE_TIME_LIMIT = 120  # seconds: the hard time limit of the ai.evaluate task
 LOCK_KEY = "ai:evaluate:run:"  # + instrument:profile:bar_close_ts -> set once per run
 LOCK_SECONDS = 6 * 3600
 UNREACHABLE_KEY = "ai:evaluate:unreachable-logged"  # set: logged within the hour
 UNREACHABLE_LOG_SECONDS = 3600
 CONTRACT_ERROR_KEY = "ai:evaluate:contract-error"  # the last contract error (JSON)
 CONTRACT_ERROR_TTL = 7 * 24 * 3600
+VOLATILITY_LAST_KEY = "ai:volatility:last"  # the last volatility status received (JSON)
 MAX_OPEN_SETUPS = 200
 MAX_CALENDAR = 500
 # what a local abstention says it comes from (the backend never claims a model)
@@ -87,9 +101,17 @@ def contract_symbol(instrument: Instrument) -> str:
     return re.sub(r"[^A-Z0-9]", "", instrument.symbol.upper())[:16]
 
 
-def decision_bar_close(now: datetime) -> datetime:
-    """The close of the last 15m bar at ``now`` (the boundary the tick fired on)."""
-    return floor_to_bucket(now.astimezone(UTC), STEP)
+def decision_timeframe(profile: str) -> str:
+    """The profile's decision timeframe: the smallest of its bar counts (``intraday`` 15m,
+    ``gold_levels`` 5m)."""
+    counts = [tf for tf in get_settings().ai_profile_bar_counts(profile) if tf != "1d"]
+    return min(counts, key=lambda tf: TIMEFRAMES[tf]) if counts else DECISION
+
+
+def decision_bar_close(now: datetime, step: timedelta = STEP) -> datetime:
+    """The close of the last bar of ``step`` (default 15m) at ``now`` (the boundary the tick
+    fired on)."""
+    return floor_to_bucket(now.astimezone(UTC), step)
 
 
 # --- the request ---------------------------------------------------------------------------------
@@ -116,23 +138,31 @@ def _bar(ts: datetime, o: float, h: float, lo: float, c: float, spread: float | 
 
 
 async def _spreads(
-    session: AsyncSession, instrument: Instrument, start: datetime, end: datetime
+    session: AsyncSession,
+    instrument: Instrument,
+    start: datetime,
+    end: datetime,
+    bucket: timedelta = STEP,
 ) -> dict[datetime, tuple[float, int]]:
-    """15m bucket -> (sum, count) of the 1m spreads in ``[start, end)``: one query, the larger
-    timeframes add up the 15m buckets they contain."""
+    """``bucket`` (the decision timeframe: 15m, or 5m for gold_levels) -> (sum, count) of the
+    1m spreads in ``[start, end)``: one query, the larger timeframes add up the buckets they
+    contain."""
     rows = await session.execute(
         text(
-            "SELECT time_bucket(INTERVAL '15 minutes', ts) AS b, sum(spread), count(spread) "
+            "SELECT time_bucket(CAST(:bucket AS interval), ts) AS b, sum(spread), count(spread) "
             "FROM candles_1m WHERE instrument_id = :id AND ts >= :start AND ts < :end "
             "AND spread IS NOT NULL GROUP BY b"
         ),
-        {"id": instrument.id, "start": start, "end": end},
+        {"id": instrument.id, "start": start, "end": end, "bucket": bucket},
     )
     return {b: (float(total), int(n)) for b, total, n in rows.all()}
 
 
 def _spread(
-    spreads: dict[datetime, tuple[float, int]], start: datetime, step: timedelta
+    spreads: dict[datetime, tuple[float, int]],
+    start: datetime,
+    step: timedelta,
+    bucket: timedelta = STEP,
 ) -> float | None:
     total = count = 0.0
     k = start
@@ -140,7 +170,7 @@ def _spread(
         if k in spreads:
             total += spreads[k][0]
             count += spreads[k][1]
-        k += STEP
+        k += bucket
     return None if not count else round(total / count, 10)
 
 
@@ -185,7 +215,9 @@ async def build_request(
     """The evaluate request of the bar closing at ``bar_close_ts``, or why there is none."""
     now = (now or datetime.now(UTC)).astimezone(UTC)
     settings = get_settings()
-    counts = settings.ai_bar_counts
+    counts = settings.ai_profile_bar_counts(profile)
+    decision_tf = decision_timeframe(profile)
+    step = TIMEFRAMES[decision_tf]
     coverage: dict[str, dict[str, Any]] = {}
     try:
         spec = instrument_spec(instrument)
@@ -196,7 +228,7 @@ async def build_request(
         detail = {"watermark": iso_z(watermark) if watermark else None}
         return Built(None, coverage, Skip("bars_not_closed", detail))
     report = await data_quality.load_and_assess(
-        session, instrument, Timeframe.m15, now, bar=bar_close_ts - STEP
+        session, instrument, Timeframe(decision_tf), now, bar=bar_close_ts - step
     )
     detail = {
         "status": report.status.value,
@@ -209,7 +241,7 @@ async def build_request(
             if instrument.session_calendar
             else data_quality.ALWAYS_OPEN
         )
-        expected = sessions.expected_bar_starts(cal, bar_close_ts - STEP, bar_close_ts)
+        expected = sessions.expected_bar_starts(cal, bar_close_ts - step, bar_close_ts)
         if next(iter(expected), None) is None:
             return Built(None, coverage, Skip("market_closed", detail))
     if report.failed:
@@ -220,21 +252,22 @@ async def build_request(
         for tf, n in counts.items()
         if tf != "1d"
     }
-    decision = rows.get(DECISION) or []
-    if not decision or decision[-1].ts != bar_close_ts - STEP:
+    decision = rows.get(decision_tf) or []
+    if not decision or decision[-1].ts != bar_close_ts - step:
         last = iso_z(decision[-1].ts) if decision else None
-        return Built(None, coverage, Skip("decision_bar_missing", {"last_15m_bar": last}))
-    oldest = min((r[0].ts for r in rows.values() if r), default=bar_close_ts - STEP)
-    spreads = await _spreads(session, instrument, oldest, bar_close_ts)
+        detail = {f"last_{decision_tf}_bar": last}
+        return Built(None, coverage, Skip("decision_bar_missing", detail))
+    oldest = min((r[0].ts for r in rows.values() if r), default=bar_close_ts - step)
+    spreads = await _spreads(session, instrument, oldest, bar_close_ts, step)
     bars: dict[str, list[dict]] = {}
     for tf, candles in rows.items():
-        step = TIMEFRAMES[tf]
+        size = TIMEFRAMES[tf]
         bars[tf] = [
-            _bar(r.ts, r.open, r.high, r.low, r.close, _spread(spreads, r.ts, step))
+            _bar(r.ts, r.open, r.high, r.low, r.close, _spread(spreads, r.ts, size, step))
             for r in candles
         ]
-    if bars[DECISION][-1]["spread"] is None:
-        detail = {"bar": bars[DECISION][-1]["ts"]}
+    if bars[decision_tf][-1]["spread"] is None:
+        detail = {"bar": bars[decision_tf][-1]["ts"]}
         return Built(None, coverage, Skip("decision_bar_no_spread", detail))
     if counts.get("1d"):
         days = await _daily_bars(session, instrument, counts["1d"], bar_close_ts)
@@ -345,8 +378,10 @@ async def _flag_contract_error(
         logger.exception("ai evaluate: could not flag the contract error")
 
 
-def _summary(resp: EvaluateResponse, applied: store.ApplyResult) -> dict[str, Any]:
-    return {
+def _summary(
+    resp: EvaluateResponse, applied: store.ApplyResult, volatility: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    out = {
         "response_status": resp.status.value,
         "versions": resp.versions.model_dump(),
         "abstentions": [a.model_dump() for a in resp.abstentions][:20],
@@ -364,6 +399,16 @@ def _summary(resp: EvaluateResponse, applied: store.ApplyResult) -> dict[str, An
             for c in applied.state_changes
         ][:50],
     }
+    # contract 0.3.0: only when there is something (an intraday summary is as before)
+    if applied.warnings:
+        out["contract_warnings"] = [
+            {"setup_id": r.setup_id, "reason": r.reason} for r in applied.warnings
+        ][:20]
+    if applied.sl_moves:
+        out["sl_moves"] = applied.sl_moves
+    if volatility is not None:
+        out["volatility"] = volatility
+    return out
 
 
 async def _record(
@@ -430,7 +475,7 @@ async def after_commit(
         out["errors"].append(f"kick: {type(exc).__name__}")
     targets: dict[str, str] = {}
     for change in applied.state_changes:
-        if change.to_state in ("ARMED", "ACTIVE"):
+        if change.to_state in ("ARMED", "ACTIVE") and not change.sl_moved:
             targets[change.setup_id] = change.to_state
     for setup_id, state in targets.items():
         try:
@@ -449,7 +494,7 @@ async def after_commit(
         except Exception as exc:  # noqa: BLE001 - e.g. no specs; the alert reports it per user
             logger.warning("ai evaluate: sizing %s failed: %s", setup_id, exc)
             out["errors"].append(f"size {setup_id}: {type(exc).__name__}")
-    armed = [c.setup_id for c in applied.state_changes if c.to_state == "ARMED"]
+    armed = [c.setup_id for c in applied.state_changes if c.to_state == "ARMED" and not c.sl_moved]
     for setup_id in dict.fromkeys(armed):
         for lang in get_settings().ai_explain_lang_list:
             try:
@@ -595,6 +640,7 @@ async def _call_and_apply(
     async with factory() as session:
         fresh = await session.get(Instrument, instrument.id)
         applied = await store.apply_evaluation(session, fresh, req, resp)
+    volatility = await _volatility(factory, redis, instrument, req, resp, name)
     if applied.contract_errors:
         reasons = [f"{e.setup_id}: {e.reason}" for e in applied.contract_errors]
         await _flag_contract_error(
@@ -602,7 +648,7 @@ async def _call_and_apply(
         )
     status = "ok" if resp.status.value == "ok" else "abstained"
     reason = None if status == "ok" else resp.status.value
-    result = RunResult(status, reason, detail=_summary(resp, applied), **base)
+    result = RunResult(status, reason, detail=_summary(resp, applied, volatility), **base)
     result.applied = applied
     logger.info(
         "ai evaluate %s/%s %s: %s (%d bytes, %d new, %d transitions)",
@@ -617,31 +663,102 @@ async def _call_and_apply(
     return result
 
 
+# --- volatility (contract 0.3.0) -----------------------------------------------------------------
+
+
+async def _volatility(
+    factory: async_sessionmaker[AsyncSession],
+    redis: Redis,
+    instrument: Instrument,
+    req: EvaluateRequest,
+    resp: EvaluateResponse,
+    name: str,
+) -> dict[str, Any] | None:
+    """Keep the answer's ``volatility``: the first ``ok`` of the day is stored, the last status
+    received goes to Redis (``/admin/system/status``). None when the answer has none. Never
+    raises: a failure is logged and reported in the run's summary."""
+    if resp.volatility_error is not None:
+        logger.warning(
+            "ai evaluate %s %s: malformed volatility dropped: %s",
+            name,
+            req.request_id,
+            resp.volatility_error,
+        )
+        return {"status": None, "error": resp.volatility_error}
+    vol = resp.volatility
+    if vol is None:
+        return None
+    for warning in vol.warnings():
+        logger.warning("ai evaluate %s %s: %s (stored as received)", name, req.request_id, warning)
+    out: dict[str, Any] = {"status": vol.status, "day": vol.day.isoformat() if vol.day else None}
+    try:
+        async with factory() as session:
+            out["stored"] = await store.store_volatility(session, instrument, req.request_id, vol)
+    except Exception as exc:  # noqa: BLE001 - the evaluation itself is stored
+        logger.exception("ai evaluate %s %s: storing the volatility failed", name, req.request_id)
+        out["error"] = f"{type(exc).__name__}: {exc}"[:300]
+    last = {
+        "at": iso_z(datetime.now(UTC)),
+        "instrument": name,
+        "request_id": req.request_id,
+        "status": vol.status,
+        "day": out["day"],
+        "level": vol.level,
+        "stored": out.get("stored", False),
+    }
+    try:
+        await redis.set(VOLATILITY_LAST_KEY, json.dumps(last), ex=CONTRACT_ERROR_TTL)
+    except Exception:  # noqa: BLE001
+        logger.warning("ai evaluate: could not record the last volatility status")
+    return out
+
+
 # --- the schedule --------------------------------------------------------------------------------
 
 
 def targets() -> list[tuple[str, str, str]]:
-    """``(source, symbol, profile)`` of every scheduled evaluation (empty when disabled)."""
+    """``(source, symbol, profile)`` of every scheduled evaluation (empty when disabled): each
+    profile of ``AI_PROFILES`` on its own instruments (``gold_levels``:
+    ``AI_GOLD_LEVELS_INSTRUMENTS``; the others ``AI_EVALUATE_INSTRUMENTS``), instrument by
+    instrument."""
     settings = get_settings()
     if not settings.ai_evaluate_enabled:
         return []
+    profiles = settings.ai_profile_list
+    per_profile = {p: settings.ai_profile_instrument_list(p) for p in profiles}
+    instruments = list(
+        dict.fromkeys(pair for p in profiles for pair in per_profile[p])
+    )  # in AI_PROFILES then AI_*_INSTRUMENTS order
     return [
         (source, symbol, profile)
-        for source, symbol in settings.ai_evaluate_instrument_list
-        for profile in settings.ai_profile_list
+        for source, symbol in instruments
+        for profile in profiles
+        if (source, symbol) in per_profile[profile]
     ]
 
 
 def schedule(
     now: datetime, apply_async: Callable[..., Any]
 ) -> list[tuple[str, str, str, datetime]]:
-    """The beat tick: one ``ai.evaluate`` per target for the bar closing at the boundary,
-    ``AI_EVALUATE_DELAY_SECONDS`` after it. Returns what was scheduled."""
-    bar_close_ts = decision_bar_close(now)
-    eta = bar_close_ts + timedelta(seconds=get_settings().ai_evaluate_delay_seconds)
+    """The beat tick (every 5m): one ``ai.evaluate`` per target whose decision timeframe
+    closes at this boundary (15m profiles at :00 :15 :30 :45, gold_levels at every 5m), for the
+    bar closing there, ``AI_EVALUATE_DELAY_SECONDS`` after it. A queued run expires
+    ``EVALUATE_TIME_LIMIT`` seconds before the profile's next run is due, so runs of one target
+    never overlap or pile up. Returns what was scheduled."""
+    boundary = decision_bar_close(now, TICK)
+    delay = timedelta(seconds=get_settings().ai_evaluate_delay_seconds)
     out = []
+    steps: dict[str, timedelta] = {}
     for source, symbol, profile in targets():
-        apply_async((source, symbol, profile, iso_z(bar_close_ts)), eta=eta, expires=eta + STEP)
+        if profile not in steps:
+            steps[profile] = TIMEFRAMES[decision_timeframe(profile)]
+        step = steps[profile]
+        bar_close_ts = decision_bar_close(boundary, step)
+        if bar_close_ts != boundary:
+            continue  # this profile's bar is still forming
+        eta = bar_close_ts + delay
+        expires = eta + max(step - timedelta(seconds=EVALUATE_TIME_LIMIT), timedelta(minutes=1))
+        apply_async((source, symbol, profile, iso_z(bar_close_ts)), eta=eta, expires=expires)
         out.append((source, symbol, profile, bar_close_ts))
     return out
 
@@ -692,13 +809,47 @@ async def status(session: AsyncSession, redis: Redis) -> dict[str, Any]:
         contract_error = json.loads(raw) if raw else None
     except Exception:  # noqa: BLE001
         contract_error = None
+    try:
+        raw = await redis.get(VOLATILITY_LAST_KEY)
+        last_volatility = json.loads(raw) if raw else None
+    except Exception:  # noqa: BLE001
+        last_volatility = None
+    stored = (
+        await session.execute(
+            text(
+                "SELECT i.source, i.symbol, v.day, v.status, v.level, v.created_at "
+                "FROM ai_volatility_daily v JOIN instruments i ON i.id = v.instrument_id "
+                "ORDER BY v.day DESC, v.created_at DESC LIMIT 1"
+            )
+        )
+    ).first()
     return {
         "enabled": settings.ai_evaluate_enabled,
         "instruments": [f"{s}:{y}" for s, y in settings.ai_evaluate_instrument_list],
         "profiles": settings.ai_profile_list,
         "delay_seconds": settings.ai_evaluate_delay_seconds,
         "bars": settings.ai_bar_counts,
+        "profile_settings": {
+            p: {
+                "timeframe": decision_timeframe(p),
+                "instruments": [f"{s}:{y}" for s, y in settings.ai_profile_instrument_list(p)],
+                "bars": settings.ai_profile_bar_counts(p),
+            }
+            for p in settings.ai_profile_list
+        },
         "last_runs": last,
         "runs_last_24h": counts,
         "last_contract_error": contract_error,
+        "volatility": {
+            "last_stored_day": None
+            if stored is None
+            else {
+                "instrument": f"{stored.source}:{stored.symbol}",
+                "day": stored.day.isoformat(),
+                "status": stored.status,
+                "level": stored.level,
+                "stored_at": iso_z(stored.created_at),
+            },
+            "last_received": last_volatility,
+        },
     }

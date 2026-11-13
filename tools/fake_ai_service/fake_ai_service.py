@@ -13,11 +13,19 @@ driven with ``POST /_fake/mode`` to return what a test needs:
   ARMED and ACTIVE with the same ``at``, then CLOSED), ``examples`` (the ok example),
   ``model_unavailable``, ``abstain`` (``ok`` with an abstention and no setup, as the v1 rules
   answer when nothing qualifies), ``backwards`` (the lifecycle, then the setup sent back as
-  DEVELOPING), ``422``, ``503``, ``404``;
+  DEVELOPING), ``gold_levels`` (contract 0.3.0, :func:`_gold_levels`: a setup without a target,
+  ``exit_type: trailing``, going ARMED, ACTIVE, two ``sl_moved``, then CLOSED with
+  ``exit_reason: trailing_stop``; beside it one setup EXPIRED and one INVALIDATED
+  ``strategy_busy``), ``422``, ``503``, ``404``;
 - ``size``: ``404`` (default: no ``/v1/size`` yet, as before Fadi's P6), ``ok`` (the example),
   ``503``;
 - ``explain``: ``404`` (default, before P7), ``verified`` (the example), ``template``
-  (verified false, template_used true), ``unverified`` (both false), ``503``.
+  (verified false, template_used true), ``unverified`` (both false), ``503``;
+- ``volatility`` (contract 0.3.0, added to every ``ok`` evaluate answer): ``auto`` (default:
+  ``ok`` when ``bar_close_ts`` is inside 02:00-16:45 New York of a weekday,
+  ``outside_window`` otherwise), ``off`` (no field, as before 0.3.0), ``ok``,
+  ``outside_window``, ``insufficient_history``, ``not_supported``, ``unknown_level`` (``ok``
+  with the level ``extreme``), ``malformed`` (a number that is not one).
 
 Deterministic: the same evaluate body always gets the same response bytes (Fadi, point 16).
 Request bodies may be gzip-compressed (``Content-Encoding: gzip``). ``GET /_fake/requests``
@@ -34,9 +42,11 @@ import gzip
 import hashlib
 import json
 import os
+from datetime import datetime, timedelta
 from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
@@ -50,9 +60,10 @@ EXAMPLES = (
 VERSIONS = {"strategy": "fake-1.0.0", "model": "fake-model-1", "features": "fake-f1"}
 RULES_ONLY_VERSIONS = {**VERSIONS, "model": None}  # v1: the rules alone (contract 0.2.1)
 MODEL_SCORES = ("probability", "ev_r", "ev_r_lower", "grade")
-DEFAULT_MODES = {"evaluate": "lifecycle", "size": "404", "explain": "404"}
+DEFAULT_MODES = {"evaluate": "lifecycle", "size": "404", "explain": "404", "volatility": "auto"}
+NEW_YORK = ZoneInfo("America/New_York")
 
-app = FastAPI(title="fake ai-service (dev/CI only)", version="0.2.1")
+app = FastAPI(title="fake ai-service (dev/CI only)", version="0.3.0")
 
 
 class _State:
@@ -192,6 +203,167 @@ def _lifecycle(body: dict[str, Any], mode: str) -> dict[str, Any]:
     }
 
 
+def _smallest(bars: dict[str, list]) -> list[dict[str, Any]]:
+    order = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
+    return bars[min(bars, key=order.index)]
+
+
+def _ts(value: str) -> datetime:
+    return datetime.fromisoformat(value)
+
+
+def _trading_day(ts: datetime) -> datetime:
+    """The New York trading day (17:00 to 17:00, named after its close) of ``ts``, as a
+    midnight New York datetime."""
+    local = ts.astimezone(NEW_YORK)
+    day = local.date() + timedelta(days=1 if local.hour >= 17 else 0)
+    return datetime(day.year, day.month, day.day, tzinfo=NEW_YORK)
+
+
+def _gold_levels(body: dict[str, Any]) -> dict[str, Any]:
+    """Contract 0.3.0: gold_levels setups have no target (``exit_type: trailing``, ``tp`` and
+    ``r_multiple`` null). One new request per step:
+
+    - setup A (buy, pdh): 0 ARMED, 1 ACTIVE, 2 and 3 a ``sl_moved`` each (the stop moves up,
+      still below the entry), 4 CLOSED ``exit_reason: trailing_stop``, ``realized_r`` 1.6;
+    - setup B (sell, pdl): 0 ARMED, 2 EXPIRED (the level was never touched);
+    - setup C (buy, round): 0 ARMED, 2 INVALIDATED ``strategy_busy`` (touched, not opened).
+    """
+    if body["request_id"] not in STATE.steps:
+        STATE.steps.append(body["request_id"])
+    k = STATE.steps.index(body["request_id"])
+    if STATE.first is None:
+        STATE.first = body
+    first = STATE.first
+    tick = first["instrument_spec"]["tick_size"]
+    entry = _tick(_smallest(first["bars"])[-1]["c"], tick)
+    times = [s.split("-", 2)[2] for s in STATE.steps]  # the bar_close_ts of each step
+    born = first["bar_close_ts"]
+    day = _trading_day(_ts(born)).strftime("%Y%m%d")
+    prefix = f"{first['instrument'].lower()}-{first['profile']}"
+    stops = [_tick(entry - n * 100 * tick, tick) for n in (5, 3, 1)]  # moves toward the entry
+
+    def setup(sid, direction, state, sl, **extra) -> dict[str, Any]:
+        return {
+            "setup_id": sid,
+            "state": state,
+            "direction": direction,
+            "entry": entry,
+            "sl": sl,
+            "tp": None,
+            "r_multiple": None,
+            "probability": None,
+            "ev_r": None,
+            "ev_r_lower": None,
+            "grade": None,
+            "valid_until": None,
+            "horizon_until": None,
+            "created_at": born,
+            "exit_type": "trailing",
+            "evidence": {"fake": True, "level": sid.split("-")[-2]},
+            "features": {"step": k},
+            **extra,
+        }
+
+    a, b, c = (f"{prefix}-lvl4h-pdh-{day}", f"{prefix}-lvl4h-pdl-{day}",
+               f"{prefix}-round-r{int(entry)}-{day}")  # fmt: skip
+    history = [  # (setup, from, to, step, reason, extra)
+        (a, "DEVELOPING", "ARMED", 0, "level_armed", {}),
+        (b, "DEVELOPING", "ARMED", 0, "level_armed", {}),
+        (c, "DEVELOPING", "ARMED", 0, "level_armed", {}),
+        (a, "ARMED", "ACTIVE", 1, "entry_filled", {}),
+        (a, "ACTIVE", "ACTIVE", 2, "sl_moved", {"sl": stops[1]}),
+        (b, "ARMED", "EXPIRED", 2, "level_not_touched", {}),
+        (c, "ARMED", "INVALIDATED", 2, "strategy_busy", {}),
+        (a, "ACTIVE", "ACTIVE", 3, "sl_moved", {"sl": stops[2]}),
+        (a, "ACTIVE", "CLOSED", 4, "trailing_stop",
+         {"realized_r": 1.6, "exit_reason": "trailing_stop"}),
+    ]  # fmt: skip
+    done = [h for h in history if h[3] <= k]
+
+    def state_of(sid: str) -> str:
+        return [h[2] for h in done if h[0] == sid][-1]
+
+    sl_a = ([stops[0]] + [h[5]["sl"] for h in done if h[0] == a and "sl" in h[5]])[-1]
+    a_state = state_of(a)
+    setups = [
+        setup(a, "buy", a_state, sl_a,
+              **({"exit_reason": "trailing_stop"} if a_state == "CLOSED" else {})),
+        setup(b, "sell", state_of(b), _tick(entry + 5 * 100 * tick, tick)),
+        setup(c, "buy", state_of(c), stops[0]),
+    ]  # fmt: skip
+    transitions = [
+        {
+            "setup_id": sid,
+            "from": frm,
+            "to": to,
+            "at": times[step],
+            "reason": reason,
+            "realized_r": extra.get("realized_r"),
+            **{key: extra[key] for key in ("sl", "exit_reason") if key in extra},
+        }
+        for sid, frm, to, step, reason, extra in done
+    ]
+    return {
+        "request_id": body["request_id"],
+        "status": "ok",
+        "versions": {**RULES_ONLY_VERSIONS, "strategy": "fake-gold-levels-1.0.0"},
+        "new_setups": setups,
+        "transitions": transitions,
+        "abstentions": [],
+    }
+
+
+VOLATILITY_STATUSES = ("ok", "outside_window", "insufficient_history", "not_supported")
+
+
+def _volatility(body: dict[str, Any]) -> dict[str, Any] | None:
+    """The ``volatility`` block (contract 0.3.0) for the request's bar, by the
+    ``volatility`` mode."""
+    mode = STATE.modes["volatility"]
+    if mode == "off":
+        return None
+    close = _ts(body["bar_close_ts"])
+    local = close.astimezone(NEW_YORK)
+    day = _trading_day(close)
+    status = mode
+    if mode == "auto":
+        inside = (
+            local.date() == day.date()
+            and day.weekday() < 5
+            and (2, 0) <= (local.hour, local.minute) <= (16, 45)
+        )
+        status = "ok" if inside else "outside_window"
+    elif mode in ("unknown_level", "malformed"):
+        status = "ok"
+    out: dict[str, Any] = {
+        "status": status,
+        "model": "fake-vol-1",
+        "day": day.date().isoformat(),
+        "window": "02:00-16:45 America/New_York",
+        "expected_move_pct": None,
+        "range_pct": {"p20": None, "p50": None, "p80": None},
+        "range_usd": {"p20": None, "p50": None, "p80": None},
+        "level": None,
+        "news": [],
+    }
+    if status != "ok":
+        return out
+    price = _smallest(body["bars"])[-1]["c"]
+    pct = {"p20": 0.6, "p50": 0.9, "p80": 1.4}
+    news = [e for e in body.get("calendar", []) if e["impact"] == "high"][:5]
+    out.update(
+        expected_move_pct=1.1,
+        range_pct=pct,
+        range_usd={k: round(price * v / 100, 2) for k, v in pct.items()},
+        level="extreme" if mode == "unknown_level" else "normal",
+        news=[{"ts": e["ts"], "title": e["title"], "top3": i < 3} for i, e in enumerate(news)],
+    )
+    if mode == "malformed":
+        out["expected_move_pct"] = "a lot"
+    return out
+
+
 def _versions() -> dict[str, Any]:
     return RULES_ONLY_VERSIONS if STATE.modes["evaluate"] == "rules_only" else VERSIONS
 
@@ -226,8 +398,12 @@ async def evaluate(request: Request) -> Response:
                 **example("evaluate-response-model-unavailable"),
                 "request_id": body["request_id"],
             }
+        elif mode == "gold_levels":
+            out = _gold_levels(body)
         else:
             out = _lifecycle(body, mode)
+        if out.get("status") == "ok" and (volatility := _volatility(body)) is not None:
+            out["volatility"] = volatility
         STATE.answers[key] = json.dumps(out, sort_keys=True).encode()
     return Response(STATE.answers[key], media_type="application/json")
 

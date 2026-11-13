@@ -413,3 +413,32 @@ workflow يدوي فقط (`.github/workflows/prod-smoke.yml`، لا يعمل ت�
   `ai_alerts.grades_enabled`. بلا migration وبلا خدمة إنتاج جديدة ولا منفذ عام.
 - مدة مهمة `e2e` في CI: نحو 4:05 دقائق (كانت 2:19 إلى 3:08 على main)؛ خطوة الاختبارات 139 ث بدل 65 ث، معظم الزيادة من
   `test_11` (نحو 36 ث: إعادة إنشاء الـ backend مرتين).
+
+## تشغيل gold_levels على السيرفر
+(B13، العقد 0.3.0، التفاصيل في [ai-contract.md القسم 14](ai-contract.md#14-contract-030-gold_levels-and-daily-volatility-b13))
+- النشر نفسه لا يغيّر شيئاً على السيرفر: Migration **0024** إضافية (أعمدة فارغة `exit_type` و`exit_reason` في `ai_setups`،
+  و`sl` في `ai_setup_events` و`ai_setup_outbox`، وجدول جديد `ai_volatility_daily`)، و`AI_PROFILES` يبقى `intraday`،
+  و`AI_BARS_15M` على السيرفر يبقى كما هو. تُضاف تلقائياً من `.env.example`: `AI_GOLD_LEVELS_BARS=5m:3000,1h:500,4h:300,1d:260`،
+  `AI_GOLD_LEVELS_INSTRUMENTS=fxpro:XAU/USD`، `AI_NOTIFY_SL_MOVED=true`.
+- مهمة beat `ai.evaluate_tick` تعمل الآن كل 5 دقائق (كانت كل 15)، وتجدول `intraday` عند حدود الـ 15 دقيقة فقط كما كان.
+  بلا خدمة جديدة ولا منفذ عام.
+- **بعد أن ينشر فادي جهته فقط** (ai-service يفهم `gold_levels`)، سطر واحد في `.env` ثم إعادة إنشاء `worker` و`beat` فقط:
+  ```bash
+  cd /opt/trading
+  sed -i 's/^AI_PROFILES=.*/AI_PROFILES=intraday,gold_levels/' .env
+  grep -E '^AI_(PROFILES|GOLD_LEVELS_|NOTIFY_SL_MOVED)' .env
+  docker compose -p trading -f docker-compose.yml --env-file .env --env-file image.env \
+    up -d --no-deps --force-recreate worker beat
+  # بعد حد الـ 5 دقائق التالي + 20 ث: آخر تشغيل لكل ملف تداول، وآخر يوم تذبذب مخزّن
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://127.0.0.1:8080/api/v1/admin/system/status \
+    | python3 -c 'import json,sys; s=json.load(sys.stdin)["ai_evaluate"]; print(json.dumps({k: s.get(k) for k in ("profiles","profile_settings","volatility","last_runs")}, indent=1))'
+  ```
+  للإيقاف: نفس السطر بـ `AI_PROFILES=intraday` ونفس إعادة الإنشاء. تنبيه تحريك الستوب يطفأ بـ `AI_NOTIFY_SL_MOVED=false`
+  (ثم `worker` فقط).
+- الذاكرة: قيس محلياً عامل بإعدادات الإنتاج (`--concurrency 2`، حد 384m بلا swap) والملفّان على نفس حد الـ 15 دقيقة
+  وبالعدد الكامل من الشموع (intraday 2000 ثم 2500 من 15m، وgold_levels 3000 من 5m، وسنة من 1m في القاعدة): الذروة
+  **272MiB من 384MiB** (نحو 71%)، وكل عملية فرعية تزيد نحو 13 إلى 15MiB أثناء التقييم. حجم الطلب نحو 450KB لـ intraday
+  و590KB لـ gold_levels. لذلك لا تغيير في `mem_limit`.
+- صورة الـ backend تثبّت الآن `celery[redis]`: kombu 5.7 يستورد `packaging` لنقل redis ولا يعلنه إلا في إضافة `redis`،
+  فبناء جديد للصورة بدونها يُسقط `worker` و`beat` عند الإقلاع (`No module named 'packaging'`).
+- `AI_BARS_15M=2500` (طلب فادي لنموذج التذبذب) **ليس جزءاً من هذا النشر**: يُغيَّر لاحقاً بسطر `.env` واحد في برومبت سيرفر.

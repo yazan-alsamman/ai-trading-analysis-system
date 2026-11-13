@@ -1,14 +1,39 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.ai import labels
 from app.ai.contract import SetupState
 from app.core.config import get_settings
+from app.schemas.predictions import ExitLabel
+
+EXIT_TYPE_DOC = "null: target (a tp); trailing / time: no tp and no r_multiple (gold_levels)"
+EXIT_LABEL_DOC = (
+    "ready to show for a setup without a target, Arabic and English, e.g. 'Exit: trailing "
+    "stop, or 16:45 New York'; null when the setup has a target"
+)
 
 
-class AISetupRead(BaseModel):
+class _Exit(BaseModel):
+    """Contract 0.3.0: how a setup exits."""
+
+    exit_type: Literal["target", "trailing", "time"] | None = Field(
+        default=None, description=EXIT_TYPE_DOC
+    )
+    exit_reason: str | None = Field(
+        default=None, description="why it exited (e.g. trailing_stop, time, stop, tp_hit)"
+    )
+
+    @computed_field(description=EXIT_LABEL_DOC)
+    @property
+    def exit_label(self) -> ExitLabel | None:
+        label = labels.exit_label(self.exit_type)
+        return ExitLabel(**label) if label else None
+
+
+class AISetupRead(_Exit):
     model_config = ConfigDict(from_attributes=True)
 
     setup_id: str
@@ -44,6 +69,9 @@ class AISetupEventRead(BaseModel):
     at: datetime
     reason: str | None
     realized_r: float | None
+    sl: float | None = Field(
+        default=None, description="a stop move (reason sl_moved, same state): the new stop"
+    )
     request_id: str
     created_at: datetime
 
@@ -70,6 +98,7 @@ class OutboxRead(BaseModel):
     at: datetime
     reason: str | None
     realized_r: float | None
+    sl: float | None = Field(default=None, description="a stop move (sl_moved): the new stop")
     created_at: datetime
     status: Literal["pending", "done", "skipped", "failed"]
     attempts: int
@@ -78,11 +107,19 @@ class OutboxRead(BaseModel):
     processed_at: datetime | None
 
 
+class SlMoveRead(BaseModel):
+    at: datetime
+    sl: float = Field(description="the new stop")
+
+
 class AISetupDetail(AISetupRead):
     evidence: dict[str, Any]
     features: dict[str, Any]
     last_payload: dict[str, Any] = Field(description="the setup exactly as last returned")
     events: list[AISetupEventRead] = Field(description="oldest first")
+    sl_history: list[SlMoveRead] = Field(
+        default_factory=list, description="the stop moves (sl_moved), oldest first"
+    )
     sizes: list[AISetupSizeBrief] = Field(description="the stored per-user sizes (B10)")
     takes_count: int = Field(description="users who said they took it")
     outbox: list[OutboxRead] = Field(description="its alerts (B11), oldest first")
@@ -142,7 +179,7 @@ class TakeRead(BaseModel):
     close_reason: str | None
 
 
-class AITradeRead(TakeRead):
+class AITradeRead(TakeRead, _Exit):
     instrument_id: uuid.UUID
     profile: str
     direction: str
@@ -211,3 +248,66 @@ class AIModelRead(BaseModel):
     metrics: dict[str, Any]
     is_active: bool
     notes: str | None
+
+
+# --- the daily volatility (B13, contract 0.3.0) --------------------------------------------------
+
+
+class LevelLabel(BaseModel):
+    ar: str
+    en: str
+
+
+class Quantiles(BaseModel):
+    p20: float | None = None
+    p50: float | None = None
+    p80: float | None = None
+
+
+class VolatilityRead(BaseModel):
+    """The expected move of one New York trading day (02:00 to 16:45 America/New_York): the
+    first ``ok`` answer of ai-service that day, fixed for the whole day."""
+
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
+
+    instrument_id: uuid.UUID
+    day: date = Field(description="the New York trading day")
+    status: str = Field(description="ok (another value only as ai-service sent it)")
+    model: str | None
+    window: str = Field(default="02:00-16:45 America/New_York")
+    expected_move_pct: float | None
+    range_pct: Quantiles | None = Field(description="p20 / p50 / p80 of the day's range, %")
+    range_usd: Quantiles | None = Field(description="p20 / p50 / p80 of the day's range, USD")
+    level: str | None = Field(description="quiet, normal, lively, very_lively (as received)")
+    news: list[dict[str, Any]] = Field(description="[{ts, title, top3}] as received")
+    request_id: str
+    created_at: datetime
+
+    @computed_field(description="Arabic and English label of level; null when unknown")
+    @property
+    def level_label(self) -> LevelLabel | None:
+        label = labels.level_label(self.level)
+        return LevelLabel(**label) if label else None
+
+
+class VolatilityToday(BaseModel):
+    """Today's card: the stored day, or ``status: pending`` with why."""
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    instrument_id: uuid.UUID
+    day: date = Field(description="today's New York trading day")
+    status: str = Field(description="ok (stored), or pending")
+    reason: Literal["before_window", "weekend", "not_received"] | None = Field(
+        description="pending: before 02:00 New York, a weekend day, or no ok answer yet"
+    )
+    window: str = "02:00-16:45 America/New_York"
+    model: str | None = None
+    expected_move_pct: float | None = None
+    range_pct: Quantiles | None = None
+    range_usd: Quantiles | None = None
+    level: str | None = None
+    level_label: LevelLabel | None = None
+    news: list[dict[str, Any]] = Field(default_factory=list)
+    request_id: str | None = None
+    created_at: datetime | None = None

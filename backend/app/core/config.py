@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     ai_evaluate_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
     ai_profiles: str = "intraday"  # comma list; intraday only in v1 (Fadi)
     ai_evaluate_delay_seconds: int = 20
+    # The gold_levels profile (B13, contract 0.3.0): evaluated every 5m (its smallest timeframe)
+    # on its own instruments and bar counts, only once "gold_levels" is in AI_PROFILES. Every
+    # other profile keeps AI_EVALUATE_INSTRUMENTS and AI_BARS_* (15m)
+    ai_gold_levels_bars: str = "5m:3000,1h:500,4h:300,1d:260"  # timeframe:count comma list
+    ai_gold_levels_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
+    # a stop move (sl_moved) is notified to the users who took the setup (never to followers)
+    ai_notify_sl_moved: bool = True
     # AI setup sizing (B10, docs/risk-management.md#ai-setups): auto = ai-service /v1/size, then
     # the local B4 lot sizing if it is unavailable; remote = no fallback (503); local = never call
     ai_size_mode: str = "auto"
@@ -324,6 +331,19 @@ class Settings(BaseSettings):
         """``(source, symbol)`` of AI_EVALUATE_INSTRUMENTS, normalised like stored ones."""
         return _pairs(self.ai_evaluate_instruments)
 
+    def ai_profile_bar_counts(self, profile: str) -> dict[str, int]:
+        """Bars per timeframe of a profile's requests: ``gold_levels`` from
+        AI_GOLD_LEVELS_BARS, every other profile from AI_BARS_* (0 leaves a timeframe out)."""
+        if profile == GOLD_LEVELS:
+            return _counts(self.ai_gold_levels_bars)
+        return self.ai_bar_counts
+
+    def ai_profile_instrument_list(self, profile: str) -> list[tuple[str, str]]:
+        """``(source, symbol)`` a profile is evaluated on."""
+        if profile == GOLD_LEVELS:
+            return _pairs(self.ai_gold_levels_instruments)
+        return self.ai_evaluate_instrument_list
+
     @property
     def ai_profile_list(self) -> list[str]:
         out = []
@@ -355,6 +375,28 @@ class Settings(BaseSettings):
     def backtest_quota(self, role: str) -> tuple[int, int]:
         """(concurrent queued + running, per UTC day; 0 = unlimited)."""
         return getattr(self, f"backtest_concurrent_{role}"), getattr(self, f"backtest_daily_{role}")
+
+
+GOLD_LEVELS = "gold_levels"
+_KNOWN_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "4h", "1d")
+
+
+def _counts(value: str) -> dict[str, int]:
+    """``5m:3000,1h:500`` -> ``{"5m": 3000, "1h": 500}`` (unknown timeframes, malformed and
+    non-positive counts are ignored), smallest timeframe first."""
+    out: dict[str, int] = {}
+    for item in value.split(","):
+        tf, sep, count = item.strip().partition(":")
+        tf = tf.strip().lower()
+        if not sep or tf not in _KNOWN_TIMEFRAMES:
+            continue
+        try:
+            n = int(count.strip())
+        except ValueError:
+            continue
+        if n > 0:
+            out[tf] = n
+    return {tf: out[tf] for tf in _KNOWN_TIMEFRAMES if tf in out}
 
 
 def _pairs(value: str) -> list[tuple[str, str]]:

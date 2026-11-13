@@ -57,9 +57,12 @@ class Market:
     """The run's AI market: candles up to the last closed minute, topped up before each
     evaluation so the gate's freshness check (lag <= 120 s) holds however long the step takes."""
 
+    profile = PROFILE
+    suffix = "AI"
+
     def __init__(self, http, world):
         self.http, self.world = http, world
-        self.id, self.symbol = new_market(http, world, "AI", **SPECS)
+        self.id, self.symbol = new_market(http, world, self.suffix, **SPECS)
         self.start = this_minute() - HISTORY * MINUTE
         self.end = self.start  # first minute not written yet
         self.top_up()
@@ -78,7 +81,7 @@ class Market:
     def evaluate(self, bar_close) -> dict:
         """Queue ``ai.evaluate`` for the bar closing at ``bar_close`` and wait for its run."""
         self.top_up()
-        send_task("ai.evaluate", "e2e", self.symbol, PROFILE, iso_z(bar_close))
+        send_task("ai.evaluate", "e2e", self.symbol, self.profile, iso_z(bar_close))
 
         def recorded():
             runs = system_status(self.http, self.world)["ai_evaluate"]["last_runs"]
@@ -87,7 +90,7 @@ class Market:
                     r
                     for r in runs
                     if r["instrument"] == f"e2e:{self.symbol}"
-                    and r["profile"] == PROFILE
+                    and r["profile"] == self.profile
                     and r["bar_close_ts"] == iso_z(bar_close)
                 ),
                 None,
