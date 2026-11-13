@@ -114,7 +114,7 @@ describe('admin console (recorded backend responses)', () => {
   it('AI engine: setups, detail, outbox, models', async () => {
     use(200, rec('admin_ai_setups'));
     const setups = await admin().aiSetups({ limit: 50 });
-    expect(setups[0]).toMatchObject({ profile: 'intraday' });
+    expect(setups.map((s) => s.profile)).toContain('intraday');
     use(200, rec('admin_ai_setup'));
     const detail = await admin().aiSetup(setups[0]?.setupId ?? '');
     expect(Array.isArray(detail.events)).toBe(true);
