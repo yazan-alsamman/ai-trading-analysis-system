@@ -2,6 +2,7 @@
 
     python -m app research gold-demo check --report <ReportHistory-*.html> --export <GOLD M1 csv>
         [--start 2026-11-10]
+    python -m app research gold-demo reference --export <GOLD M1 from 2016>  # the monitor, once
 
 The EA runs on a MetaTrader VPS, so its log file stays there. This check reads what the account
 itself records instead:
@@ -436,8 +437,11 @@ def balance_of(tables: dict[str, pd.DataFrame]) -> float:
 def check(report: Path, export: Path | None, start: pd.Timestamp) -> str:
     tables = read_report(report)
     demo = demo_trades(tables)
+    from app.research import gold_monitor as gm
+
     if export is None:
-        return demo_only(tables, demo, {"report": report.name, "balance": balance_of(tables)})
+        text = demo_only(tables, demo, {"report": report.name, "balance": balance_of(tables)})
+        return text + "\n" + "\n".join(gm.health(demo, None))
     py, end = python_trades(export, start)
     s0 = start.tz_convert(SERVER_TZ).tz_localize(None)
     if len(demo):
@@ -446,16 +450,27 @@ def check(report: Path, export: Path | None, start: pd.Timestamp) -> str:
     j = match(py, demo if len(demo) else pd.DataFrame(columns=["strategy", "bar_server"]))
     meta = {"report": report.name, "export": export.name, "start": f"{s0:%Y-%m-%d %H:%M}",
             "end": f"{end:%Y-%m-%d %H:%M}"}  # fmt: skip
-    return render(j, demo, meta)
+    m = j["_merge"].value_counts()
+    matched = (int(m.get("both", 0)), int(m.get("right_only", 0)), int(m.get("left_only", 0)))
+    return render(j, demo, meta) + "\n" + "\n".join(gm.health(demo, matched))
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app research gold-demo")
-    ap.add_argument("step", choices=("check",))
-    ap.add_argument("--report", type=Path, required=True, help="MT5 history report (HTML/XLSX)")
+    ap.add_argument("step", choices=("check", "reference"))
+    ap.add_argument("--report", type=Path, help="MT5 history report (HTML/XLSX); check only")
     ap.add_argument("--export", type=Path, help="FxPro GOLD M1 export (none: the demo alone)")
     ap.add_argument("--start", default="2026-11-10", help="first demo day (UTC date)")
     args = ap.parse_args(argv)
+    if args.step == "reference":
+        from app.research import gold_monitor as gm
+
+        if args.export is None:
+            ap.error("reference needs --export (a GOLD M1 export from 2016)")
+        print(gm.build_reference(args.export))
+        return 0
+    if args.report is None:
+        ap.error("check needs --report")
     text = check(args.report, args.export, pd.Timestamp(args.start, tz="UTC"))
     REPORT.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {REPORT}")
