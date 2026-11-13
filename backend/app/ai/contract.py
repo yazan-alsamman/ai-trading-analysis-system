@@ -1,12 +1,15 @@
 """The ai-service contract (B7, docs/ai-contract.md): requests the backend sends and responses
 it accepts on ``POST /v1/evaluate``, ``/v1/size`` and ``/v1/explain``.
 
-Version 0.2.2 (``CONTRACT_VERSION``): Fadi's answers to the 17 open points of 0.1.0-draft are
+Version 0.3.0 (``CONTRACT_VERSION``): Fadi's answers to the 17 open points of 0.1.0-draft are
 applied (docs/ai-contract.md section 7); 0.2.1 accepts ``ok`` with ``versions.model`` null (v1
 runs the rules alone, Fadi 25 Oct); 0.2.2 adds the optional ``InstrumentSpec.cost_per_unit``
-(the fixed trading cost per unit, sent with ``/v1/size``). ``/v1`` only ever gains fields; the
-version follows semver. The generated document is docs/api/ai-service.openapi.yaml
-(``scripts/ai_contract.py``); example payloads are in docs/api/ai-service-examples/.
+(the fixed trading cost per unit, sent with ``/v1/size``); 0.3.0 adds the ``gold_levels``
+profile's fields (``Setup.exit_type`` and ``exit_reason``, setups without ``tp``, the
+``sl_moved`` transition with ``sl``) and the optional ``EvaluateResponse.volatility``.
+``/v1`` only ever gains fields; the version follows semver. The generated document is
+docs/api/ai-service.openapi.yaml (``scripts/ai_contract.py``); example payloads are in
+docs/api/ai-service-examples/.
 
 Depends on pydantic only, so ai-service can vendor this file as it is.
 
@@ -23,7 +26,7 @@ Depends on pydantic only, so ai-service can vendor this file as it is.
 from __future__ import annotations
 
 import copy
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN, Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
@@ -43,7 +46,7 @@ from pydantic import (
 )
 from pydantic_core import to_jsonable_python
 
-CONTRACT_VERSION = "0.2.2"
+CONTRACT_VERSION = "0.3.0"
 
 
 # --- shared types -------------------------------------------------------------------------------
@@ -80,6 +83,27 @@ ALLOWED_TRANSITIONS: dict[SetupState, frozenset[SetupState]] = {
     SetupState.ARMED: frozenset({SetupState.ACTIVE, SetupState.EXPIRED, SetupState.INVALIDATED}),
     SetupState.ACTIVE: frozenset({SetupState.CLOSED}),
 }
+
+
+class ExitType(StrEnum):
+    """How an ARMED/ACTIVE setup exits (0.3.0). Absent means ``target``, as before 0.3.0."""
+
+    target = "target"  # at tp or sl: tp is required (and r_multiple may be set)
+    trailing = "trailing"  # a trailing stop or a time exit (gold_levels): no tp, no r_multiple
+    time = "time"  # the stop or a time exit only: no tp, no r_multiple
+
+
+NO_TARGET = frozenset({ExitType.trailing, ExitType.time})
+# the reason of a transition that only moves the stop of a setup (same state on both sides,
+# with the new ``sl``; 0.3.0)
+SL_MOVED = "sl_moved"
+
+
+def sl_on_the_right_side(direction: str, entry: float | None, sl: float | None) -> bool:
+    """buy: sl < entry; sell: sl > entry."""
+    if entry is None or sl is None:
+        return False
+    return sl < entry if direction == "buy" else sl > entry
 
 
 class Direction(StrEnum):
@@ -291,6 +315,9 @@ class Setup(BaseModel):
     Unknown fields are kept, and a setup parsed from JSON serialises back to that exact JSON,
     so ``open_setups`` echoes it unchanged. In ``ARMED`` and ``ACTIVE``, ``entry``, ``sl`` and
     ``tp`` are required and on the right side: buy ``sl < entry < tp``, sell ``tp < entry < sl``.
+    0.3.0: with ``exit_type`` ``trailing`` or ``time`` there is no target: ``tp`` and
+    ``r_multiple`` are null, ``entry`` and ``sl`` stay required (buy ``sl < entry``, sell
+    ``sl > entry``).
     """
 
     model_config = ConfigDict(extra="allow")
@@ -322,6 +349,17 @@ class Setup(BaseModel):
     )
     evidence: dict[str, Any] = Field(default_factory=dict)
     features: dict[str, Any] = Field(default_factory=dict)
+    exit_type: ExitType | None = Field(
+        default=None,
+        description="0.3.0: target (absent: target, as before), trailing or time. trailing and "
+        "time have no target: tp and r_multiple are null",
+    )
+    exit_reason: str | None = Field(
+        default=None,
+        max_length=64,
+        description="0.3.0: why a closed setup exited, e.g. tp_hit, sl_hit, stop, trailing_stop, "
+        "time (also accepted on the CLOSED transition)",
+    )
 
     @model_validator(mode="wrap")
     @classmethod
@@ -335,6 +373,17 @@ class Setup(BaseModel):
     @model_validator(mode="after")
     def _prices(self) -> Self:
         if self.state not in PRICED_STATES:
+            return self
+        if self.exit_type in NO_TARGET:
+            name = self.exit_type.value
+            if self.entry is None or self.sl is None:
+                raise ValueError(f"a {self.state.value} setup needs entry and sl")
+            if self.tp is not None or self.r_multiple is not None:
+                raise ValueError(f"exit_type {name}: tp and r_multiple must be null")
+            if not sl_on_the_right_side(self.direction.value, self.entry, self.sl):
+                raise ValueError(
+                    "buy: sl < entry" if self.direction == Direction.buy else "sell: sl > entry"
+                )
             return self
         if self.entry is None or self.sl is None or self.tp is None:
             raise ValueError(f"a {self.state.value} setup needs entry, sl and tp")
@@ -428,11 +477,98 @@ class Transition(_Response):
     at: UtcDatetime
     reason: str | None = Field(default=None, max_length=255)
     realized_r: Finite | None = Field(default=None, description="set when it closes")
+    sl: Price | None = Field(
+        default=None,
+        description="0.3.0, reason sl_moved: the new stop (from and to are the same state; it "
+        "may repeat, each move at its own at)",
+    )
+    exit_reason: str | None = Field(
+        default=None,
+        max_length=64,
+        description="0.3.0, on the CLOSED transition: stop, trailing_stop, time, tp_hit, ...",
+    )
 
 
 class Abstention(_Response):
     reason: str = Field(max_length=64, examples=["high_impact_event"])
     detail: dict[str, Any] = Field(default_factory=dict, description="an object (Fadi, point 14)")
+
+
+class VolatilityStatus(StrEnum):
+    ok = "ok"
+    outside_window = "outside_window"
+    insufficient_history = "insufficient_history"
+    not_supported = "not_supported"
+
+
+class VolatilityLevel(StrEnum):
+    quiet = "quiet"
+    normal = "normal"
+    lively = "lively"
+    very_lively = "very_lively"
+
+
+VOLATILITY_WINDOW = "02:00-16:45 America/New_York"
+OptionalFinite = Annotated[float, Field(allow_inf_nan=False)] | None
+
+
+class Quantiles(_Response):
+    """The day's range, quantiles of the model's distribution."""
+
+    p20: OptionalFinite = None
+    p50: OptionalFinite = None
+    p80: OptionalFinite = None
+
+
+class VolatilityNews(_Response):
+    """A news event of the day the model took into account (kept as received)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    ts: UtcDatetime | None = None
+    title: str | None = Field(default=None, max_length=255)
+    top3: Any = Field(default=None, description="as sent by ai-service (stored as received)")
+
+
+class Volatility(_Response):
+    """0.3.0: the expected move of the New York trading day (Fadi's daily volatility model).
+    Optional and lenient: every number is null unless ``status`` is ``ok``; an unknown
+    ``status`` or ``level`` is kept as received (the backend logs a warning) and a malformed
+    block is dropped with a warning, never failing the response."""
+
+    status: str = Field(
+        max_length=32,
+        description="ok | outside_window | insufficient_history | not_supported (another value "
+        "is stored as received, with a warning)",
+        examples=["ok"],
+    )
+    model: str | None = Field(default=None, max_length=128)
+    day: date | None = Field(
+        default=None, description="the New York trading day, YYYY-MM-DD", examples=["2026-11-13"]
+    )
+    window: str | None = Field(default=None, max_length=64, examples=[VOLATILITY_WINDOW])
+    expected_move_pct: OptionalFinite = None
+    range_pct: Quantiles | None = None
+    range_usd: Quantiles | None = None
+    level: str | None = Field(
+        default=None,
+        max_length=32,
+        description="quiet | normal | lively | very_lively (another value is stored as "
+        "received, with a warning)",
+        examples=["normal"],
+    )
+    news: list[VolatilityNews] = Field(default_factory=list, max_length=100)
+
+    def warnings(self) -> list[str]:
+        """What is outside the known values (stored anyway)."""
+        out = []
+        if self.status not in VolatilityStatus.__members__:
+            out.append(f"unknown volatility status {self.status!r}")
+        if self.level is not None and self.level not in VolatilityLevel.__members__:
+            out.append(f"unknown volatility level {self.level!r}")
+        if self.status == VolatilityStatus.ok and self.day is None:
+            out.append("volatility ok without a day")
+        return out
 
 
 class EvaluateResponse(_Response):
@@ -447,6 +583,31 @@ class EvaluateResponse(_Response):
     new_setups: list[Setup] = Field(default_factory=list)
     transitions: list[Transition] = Field(default_factory=list)
     abstentions: list[Abstention] = Field(default_factory=list)
+    volatility: Volatility | None = Field(
+        default=None,
+        description="0.3.0, optional: the day's expected move. Absent: ignored; malformed: "
+        "dropped with a warning (the rest of the response is used)",
+    )
+    _volatility_error: str | None = PrivateAttr(default=None)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _lenient_volatility(cls, data: Any, handler: ValidatorFunctionWrapHandler) -> Any:
+        """A malformed ``volatility`` never fails the response: it is dropped, and the error is
+        kept in ``volatility_error`` (logged by the caller)."""
+        if not isinstance(data, dict) or data.get("volatility") is None:
+            return handler(data)
+        try:
+            Volatility.model_validate(data["volatility"])
+        except ValueError as exc:
+            resp = handler({k: v for k, v in data.items() if k != "volatility"})
+            resp._volatility_error = str(exc)[:300]
+            return resp
+        return handler(data)
+
+    @property
+    def volatility_error(self) -> str | None:
+        return self._volatility_error
 
 
 # --- size ---------------------------------------------------------------------------------------

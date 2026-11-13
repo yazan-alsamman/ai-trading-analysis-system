@@ -7,7 +7,8 @@ The schemas come from ``app/ai/contract.py`` (pydantic only: this script needs n
 from the backend, so the api-contract CI job runs it with just pydantic and PyYAML). The
 example payloads of docs/api/ai-service-examples/ are embedded, so they cannot drift either.
 Version 0.2.0 applies Fadi's answers (docs/ai-contract.md); 0.2.1 accepts ``ok`` without a model;
-0.2.2 adds ``InstrumentSpec.cost_per_unit``.
+0.2.2 adds ``InstrumentSpec.cost_per_unit``; 0.3.0 adds the ``gold_levels`` profile (exits without a
+target, ``sl_moved``) and the daily ``volatility`` block.
 """
 
 from __future__ import annotations
@@ -43,9 +44,10 @@ DESCRIPTION = """\
 The stateless trading engine (ai-service, owned by Fadi). The backend owns the data,
 the schedule, the storage and the delivery; ai-service decides setups and their states.
 
-**Version 0.2.2**: Fadi's answers to the 17 open points of 0.1.0-draft are applied
+**Version 0.3.0**: Fadi's answers to the 17 open points of 0.1.0-draft are applied
 (docs/ai-contract.md, section 7); 0.2.1 accepts `status: ok` with `versions.model` null; 0.2.2
-adds the optional `instrument_spec.cost_per_unit` to `/v1/size`.
+adds the optional `instrument_spec.cost_per_unit` to `/v1/size`; 0.3.0 adds the `gold_levels`
+profile (`exit_type`, `exit_reason`, `sl_moved`) and the optional daily `volatility` block.
 `/v1` changes only by adding fields; `info.version` follows semver; ai-service reports its
 versions in every answer and in `/health`. Generated from
 backend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by hand).
@@ -68,6 +70,17 @@ backend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by han
 - `instrument_spec.cost_per_unit` (0.2.2, `/v1/size` only): the instrument's fixed trading
   cost per unit, price units, per round trip (XAU/USD 0.25 per oz, whatever the real
   spread). Size with a risk per unit of `|entry - sl| + cost_per_unit`; absent: none.
+- `gold_levels` (0.3.0): XAU/USD only, a 5m decision bar (`bars` has `5m`, `1h`, `4h`,
+  `1d`). `Setup.exit_type` is `target` (absent: as before), `trailing` or `time`; with
+  `trailing` or `time`, `tp` and `r_multiple` are null and the setup exits on its stop or at
+  16:45 America/New_York. A closed setup may carry `exit_reason` (`stop`, `trailing_stop`,
+  `time`, ...) on the setup and on its CLOSED transition. A stop move is a transition in the
+  same state with `reason: sl_moved` and the new `sl` (several per setup, each a distinct
+  `at`; `sl` must stay on the entry's side, otherwise it is skipped with a warning).
+- `volatility` (0.3.0, optional on every answer): the expected move of the New York trading
+  day, window 02:00-16:45 America/New_York. Numbers are null unless `status` is `ok`; the
+  backend keeps the first `ok` of each day. Unknown `status`/`level` values are stored with a
+  warning; a malformed block is dropped with a warning, never failing the answer.
 - Responses may carry fields this document does not list (the backend ignores them).
 - 422: the request does not match the contract (never retried). 5xx, timeouts and connection
   errors are retried by the backend with the same body. A model is registered but not
@@ -141,9 +154,10 @@ def build() -> dict[str, Any]:
                 "Evaluate the bar that just closed: new setups, transitions, abstentions",
                 c.EvaluateRequest,
                 c.EvaluateResponse,
-                {"intraday": "evaluate-request"},
+                {"intraday": "evaluate-request", "gold_levels": "evaluate-request-gold-levels"},
                 {
                     "ok": "evaluate-response-ok",
+                    "gold_levels": "evaluate-response-gold-levels",
                     "ok_rules_only": "evaluate-response-ok-rules-only",
                     "model_unavailable": "evaluate-response-model-unavailable",
                 },
