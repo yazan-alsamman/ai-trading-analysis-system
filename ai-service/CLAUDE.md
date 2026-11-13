@@ -257,6 +257,10 @@ trades fails** (Sharpe and drawdown worse): same-direction trades correlate (rho
 ones; trades with no other of the five open (k = 0, 53%) carry almost no edge (store +0.009, FxPro −0.021 R).
 Confluence was then tested on six markets never read for it (`CONFLUENCE.md`): **does not pass**
 (+0.005 R gross, p 0.40, 3 of 6 positive); it is treated as specific to gold's data.
+**Live monitor (`docs/strategies/GOLD_MONITOR.md`, 2026-11-13) replaces the old stop rule as the
+decision:** A process checks, B Bayesian edge (ALL6 red under 10%), C CUSUM (h 3.75), D drawdown
+against history; a "Health" section of `gold-demo check`. Reference built once with `gold-demo
+reference --export <GOLD M1 from 2016>` (stored in `data/processed`, untracked).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.

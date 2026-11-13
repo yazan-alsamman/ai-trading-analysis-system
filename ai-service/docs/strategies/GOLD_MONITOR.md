@@ -100,3 +100,15 @@ Code: `app/research/gold_monitor.py`, called by `python -m app research gold-dem
 "Health" section of `gold_demo_check.md`; `--export` is needed for A1 and for the reference check
 of §2). Committed before it reads the demo. Tests on hand-built trades. This decides no strategy's
 rules, so it is not a trial; it is logged in `docs/phase3/TRIALS.md` among the measurements.
+
+## The reference, built (2026-11-13)
+
+`gold-demo reference` on `GOLD_M1_201501020000_202611052359.csv` (code `f764532`): 7,236 trades,
+every pool as §2. **h = 3.75**: a false alarm on average every 2,030 trades of a sound edge; an edge
+0.10 R worse is found in about 579 trades on average (about six months at 22 a week).
+
+First reading (the 8 trades already seen, 2026-11-13): **amber** on A4 only (gross − net 0.039 R
+over 8 trades). A4 as registered counts entry slippage too, and one fill gapped $6.73 past its level
+(LVL4H, 2026-11-10); A2 (slippage alone) is +0.036 R, under its line. Amber means look, no change;
+the rule is left as registered. B: ALL6 P(edge > 0) 68%; C: S 0.00; D: no drawdown.
+
