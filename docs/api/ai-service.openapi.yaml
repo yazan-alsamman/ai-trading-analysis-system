@@ -29,15 +29,16 @@ info:
     \ are null and the setup exits on its stop or at\n  16:45 America/New_York. A closed setup may carry\
     \ `exit_reason` (`stop`, `trailing_stop`,\n  `time`, ...) on the setup and on its CLOSED transition.\
     \ A stop move is a transition in the\n  same state with `reason: sl_moved` and the new `sl` (several\
-    \ per setup, each a distinct\n  `at`; `sl` must stay on the entry's side, otherwise it is skipped\
-    \ with a warning).\n- `volatility` (0.3.0, optional on every answer): the expected move of the New\
-    \ York trading\n  day, window 02:00-16:45 America/New_York. Numbers are null unless `status` is `ok`;\
-    \ the\n  backend keeps the first `ok` of each day. Unknown `status`/`level` values are stored with\
-    \ a\n  warning; a malformed block is dropped with a warning, never failing the answer.\n- Responses\
-    \ may carry fields this document does not list (the backend ignores them).\n- 422: the request does\
-    \ not match the contract (never retried). 5xx, timeouts and connection\n  errors are retried by the\
-    \ backend with the same body. A model is registered but not\n  loaded: 200 with `status: model_unavailable`\
-    \ (nothing is stored).\n"
+    \ per setup, each a distinct\n  `at`). With a target, `sl` stays on the entry's side; a `trailing`\
+    \ or `time` stop is on the\n  entry's side while ARMED and may pass the entry once ACTIVE (profit\
+    \ locked). An invalid move\n  is skipped with a warning.\n- `volatility` (0.3.0, optional on every\
+    \ answer): the expected move of the New York trading\n  day, window 02:00-16:45 America/New_York.\
+    \ Numbers are null unless `status` is `ok`; the\n  backend keeps the first `ok` of each day. Unknown\
+    \ `status`/`level` values are stored with a\n  warning; a malformed block is dropped with a warning,\
+    \ never failing the answer.\n- Responses may carry fields this document does not list (the backend\
+    \ ignores them).\n- 422: the request does not match the contract (never retried). 5xx, timeouts and\
+    \ connection\n  errors are retried by the backend with the same body. A model is registered but not\n\
+    \  loaded: 200 with `status: model_unavailable` (nothing is stored).\n"
 servers:
 - url: http://ai-service:8001
   description: inside the compose network
@@ -1329,9 +1330,11 @@ components:
 
         0.3.0: with ``exit_type`` ``trailing`` or ``time`` there is no target: ``tp`` and
 
-        ``r_multiple`` are null, ``entry`` and ``sl`` stay required (buy ``sl < entry``, sell
+        ``r_multiple`` are null, ``entry`` and ``sl`` stay required; an ARMED setup has ``sl`` on
 
-        ``sl > entry``).'
+        the entry''s side (buy ``sl < entry``, sell ``sl > entry``), an ACTIVE one may have its stop
+
+        past the entry (a trailing stop locking in profit).'
       properties:
         setup_id:
           maxLength: 128
@@ -1438,7 +1441,8 @@ components:
           - type: 'null'
           default: null
           description: '0.3.0: target (absent: target, as before), trailing or time. trailing and time
-            have no target: tp and r_multiple are null'
+            have no target: tp and r_multiple are null; once ACTIVE their sl may be past the entry (a
+            trailing stop locking in profit)'
         exit_reason:
           anyOf:
           - maxLength: 64

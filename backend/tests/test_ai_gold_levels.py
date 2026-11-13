@@ -221,6 +221,24 @@ def test_exit_type_rules(changes: dict, message: str) -> None:
         c.Setup.model_validate(gl_setup(**changes))
 
 
+@pytest.mark.parametrize("exit_type", ["trailing", "time"])
+def test_an_active_no_target_stop_may_pass_the_entry(exit_type: str) -> None:
+    """A trailing stop locks in profit past the entry once ACTIVE; an ARMED one may not."""
+    buy = c.Setup.model_validate(gl_setup("ACTIVE", sl=4105.0, exit_type=exit_type))
+    assert buy.sl == 4105.0 and buy.entry == 4100.0
+    sell = gl_setup("ACTIVE", direction="sell", sl=4095.0, exit_type=exit_type)
+    assert c.Setup.model_validate(sell).sl == 4095.0
+    with pytest.raises(ValidationError, match="buy: sl < entry"):
+        c.Setup.model_validate(gl_setup("ARMED", sl=4105.0, exit_type=exit_type))
+    with pytest.raises(ValidationError, match="a ACTIVE setup needs entry and sl"):
+        c.Setup.model_validate(gl_setup("ACTIVE", sl=None, exit_type=exit_type))
+    with pytest.raises(ValidationError, match="greater than 0"):
+        c.Setup.model_validate(gl_setup("ACTIVE", sl=-1.0, exit_type=exit_type))
+    target = {**gl_setup("ACTIVE", sl=4105.0), "exit_type": "target", "tp": 4120.0}
+    with pytest.raises(ValidationError, match="buy: sl < entry < tp"):
+        c.Setup.model_validate(target)  # a setup with a target: unchanged
+
+
 def test_a_target_still_needs_tp_and_echo_is_exact() -> None:
     target = {**gl_setup(), "exit_type": "target", "tp": 4120.0, "r_multiple": 2.0}
     assert c.Setup.model_validate(target).tp == 4120.0
@@ -346,7 +364,6 @@ async def test_an_invalid_sl_moved_is_a_warning(session: AsyncSession, gold, cap
     await armed_then_active(session, gold)
     caplog.set_level(logging.WARNING, logger="app.ai.store")
     bad = [
-        move("ACTIVE", "ACTIVE", T[2], reason="sl_moved", sl=4105.0),  # above a buy's entry
         move("ACTIVE", "ACTIVE", T[2] + MIN, reason="sl_moved"),  # no sl
         move("ACTIVE", "ARMED", T[2] + 2 * MIN, reason="sl_moved", sl=4095.0),  # two states
     ]
@@ -354,7 +371,6 @@ async def test_an_invalid_sl_moved_is_a_warning(session: AsyncSession, gold, cap
     result = await apply(session, gold, T[2], new=[gl_setup("ACTIVE", sl=4094.0)],
                          transitions=[*HISTORY, *bad, good])  # fmt: skip
     assert [w.reason for w in result.warnings] == [
-        "sl_moved: sl 4105.0 on the wrong side of entry 4100.0 (buy)",
         "sl_moved without sl",
         "sl_moved from ACTIVE to ARMED",
     ]
@@ -369,6 +385,32 @@ async def test_an_invalid_sl_moved_is_a_warning(session: AsyncSession, gold, cap
                           sl=4095.0)],
     )  # fmt: skip
     assert [w.reason for w in early.warnings] == ["sl_moved in ACTIVE but the setup is ARMED"]
+
+
+async def test_a_trailing_stop_past_the_entry_is_kept(session: AsyncSession, gold) -> None:
+    await armed_then_active(session, gold)
+    first = move("ACTIVE", "ACTIVE", T[2], reason="sl_moved", sl=4100.0)  # breakeven
+    second = move("ACTIVE", "ACTIVE", T[3], reason="sl_moved", sl=4106.5)  # profit locked
+    result = await apply(session, gold, T[3], new=[gl_setup("ACTIVE", sl=4106.5)],
+                         transitions=[*HISTORY, first, second])  # fmt: skip
+    assert result.warnings == [] and result.contract_errors == [] and result.sl_moves == 2
+    row = await fresh(session)
+    assert row.sl == 4106.5 and row.state == "ACTIVE"
+    assert [sl for *_, sl in await events(session) if sl is not None] == [4100.0, 4106.5]
+
+
+async def test_a_target_setup_keeps_the_entry_side_rule(session: AsyncSession, gold) -> None:
+    sid = "xauusd-gold_levels-target-1"
+    target = {"setup_id": sid, "exit_type": "target", "tp": 4120.0, "r_multiple": 2.0}
+    await apply(session, gold, T[0], new=[gl_setup("ARMED", **target)])
+    await apply(session, gold, T[1], new=[gl_setup("ACTIVE", **target)],
+                transitions=[move("ARMED", "ACTIVE", T[1], setup_id=sid)])  # fmt: skip
+    past = move("ACTIVE", "ACTIVE", T[2], setup_id=sid, reason="sl_moved", sl=4105.0)
+    result = await apply(session, gold, T[2], transitions=[past])
+    assert [w.reason for w in result.warnings] == [
+        "sl_moved: sl 4105.0 on the wrong side of entry 4100.0 (buy)"
+    ]
+    assert result.sl_moves == 0 and (await fresh(session, sid)).sl == 4090.0
 
 
 async def test_exit_reason_on_the_setup_and_the_outbox_setting(
@@ -739,6 +781,16 @@ async def test_sl_moved_goes_to_takers_only(
     # Arabic
     title, body = templates.inbox("ai_setup", note.data, "ar")
     assert title == "تحرّك الوقف: شراء XAU/USD" and body.startswith("الوقف الجديد: 4,094.25")
+    # the stop trails past the entry (profit locked): stored and told to the taker
+    past = move("ACTIVE", "ACTIVE", T[3], reason="sl_moved", sl=4104.5)
+    await apply(session, gold, T[3], new=[gl_setup("ACTIVE", sl=4104.5)],
+                transitions=[*HISTORY, moved, past])  # fmt: skip
+    assert (await fresh(session)).sl == 4104.5
+    assert await alerts.dispatch(session_factory, redis_client, client=ai.client()) == {"done": 1}
+    told = await notes(session, taker.id)
+    assert told[-1].data["new_sl"] == 4104.5 and told[-1].data.get("event") == "sl_moved"
+    assert told[-1].body.splitlines()[0] == "New stop: 4,104.50"
+    assert [n.data["state"] for n in await notes(session, follower.id)] == ["ARMED"]
 
 
 async def test_sl_moved_respects_quiet_hours_and_the_setting(

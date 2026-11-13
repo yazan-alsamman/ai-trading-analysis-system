@@ -25,8 +25,9 @@ ai-service decides setups and their states; the backend only records them:
   setup, ``exit_reason`` also from the CLOSED transition (never cleared once known). A
   ``sl_moved`` transition stays in the same state: it updates ``ai_setups.sl`` and is kept as
   an event with the new ``sl`` (several per setup, deduped by ``(setup_id, to, at)`` like every
-  event). An invalid one (another state on each side, not the setup's state, no ``sl``, ``sl``
-  on the wrong side of ``entry``) is skipped and counted as a contract **warning**; the rest of
+  event). An invalid one (another state on each side, not the setup's state, no ``sl``, or, for
+  a setup with a target only, ``sl`` on the wrong side of ``entry``: a trailing or time stop may
+  pass the entry to lock in profit) is skipped and counted as a contract **warning**; the rest of
   the response is applied. ``store_volatility`` keeps the first ``ok`` volatility of a day.
 """
 
@@ -46,6 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.contract import (
     ALLOWED_TRANSITIONS,
     FINAL_STATES,
+    NO_TARGET,
     PRICED_STATES,
     SL_MOVED,
     STATE_RANK,
@@ -72,6 +74,7 @@ from app.models.ai import (
 from app.models.instrument import Instrument
 
 logger = logging.getLogger(__name__)
+NO_TARGET_TYPES = frozenset(e.value for e in NO_TARGET)
 
 # The only state changes the backend records (contract 0.2.0, docs/ai-contract.md)
 ALLOWED = ALLOWED_TRANSITIONS
@@ -560,10 +563,11 @@ async def _apply_sl_moved(
     now: datetime,
 ) -> None:
     """A stop move (contract 0.3.0): same state on both sides, the setup's own state (ARMED or
-    ACTIVE), a new ``sl`` on the right side of ``entry``. Recorded as an event with the new
-    ``sl`` and in ``ai_setups.sl``; ``last_payload`` is left to the setup's own item in
-    ``new_setups``. An invalid move is a warning and is skipped; one the setup has already
-    passed (it is final now) is history, skipped silently."""
+    ACTIVE), a new ``sl``: with a target on the right side of ``entry``; a ``trailing`` or
+    ``time`` stop may pass the entry (any positive finite ``sl``, as the contract ensures).
+    Recorded as an event with the new ``sl`` and in ``ai_setups.sl``; ``last_payload`` is left
+    to the setup's own item in ``new_setups``. An invalid move is a warning and is skipped;
+    one the setup has already passed (it is final now) is history, skipped silently."""
     current = SetupState(row.state)
     if t.from_ != t.to:
         _warn(result, t.setup_id, f"sl_moved from {t.from_.value} to {t.to.value}")
@@ -580,7 +584,9 @@ async def _apply_sl_moved(
     if t.sl is None:
         _warn(result, t.setup_id, "sl_moved without sl")
         return
-    if not sl_on_the_right_side(row.direction, row.entry, t.sl):
+    if row.exit_type in NO_TARGET_TYPES:
+        pass  # a trailing or time stop may pass the entry (profit locked)
+    elif not sl_on_the_right_side(row.direction, row.entry, t.sl):
         _warn(
             result,
             t.setup_id,

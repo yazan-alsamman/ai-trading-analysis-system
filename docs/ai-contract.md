@@ -499,11 +499,10 @@ and the same restart.
 - **`/v1/size`:** once P6 ships it, set `AI_SIZE_LOCAL_FALLBACK_ON_404=false`.
 - **`/v1/explain`** and its final timeout come with P7.
 - `created_at` is optional until ai-service sends it.
-- **B13, to confirm with Fadi** (section 14): a trailing stop that passes the entry (locking a
-  profit) is outside the rule "sl on the right side of entry": the backend skips such a
-  `sl_moved` with a warning, and a setup in ARMED/ACTIVE whose own `sl` is past its entry fails
-  validation (as for `target` setups since 0.1.0). If gold_levels stops can pass the entry, the
-  rule for `trailing` must become "sl on the right side of the *current price*" or none.
+- **B13, for Fadi to confirm (not blocking)** (section 14): a `trailing` or `time` stop may pass
+  the entry once the setup is ACTIVE (a profit-locking trailing stop), and a stop move of such
+  a setup is accepted at any positive price. The entry-side rule stays for ARMED setups and
+  for setups with a target.
 - Y16 and Y17 still label every AI setup `15m` (`timeframe`), gold_levels included.
 
 ## 13. Changelog
@@ -535,8 +534,10 @@ their spreads come from the `candles_5m` aggregate, spreads in 5m buckets). It r
 
 - **`Setup.exit_type`**: `target` | `trailing` | `time`; absent means `target`, exactly as
   before (stored as null). With `trailing` or `time`, `tp` and `r_multiple` are **null**, and
-  `entry` and `sl` stay required in ARMED/ACTIVE with `sl` on the right side of `entry`
-  (buy: `sl < entry`; sell: `sl > entry`). With `target`, `tp` stays required and on its side.
+  `entry` and `sl` stay required in ARMED/ACTIVE. An ARMED setup has `sl` on the right side of
+  `entry` (buy: `sl < entry`; sell: `sl > entry`); an ACTIVE one may have its stop **past the
+  entry** (a trailing stop locking in profit), so only a positive, finite `sl` is required.
+  With `target` (or no `exit_type`), `tp` stays required and every price on its side, as before.
 - **`exit_reason`** (`stop`, `trailing_stop`, `time`, or today's values) is accepted on the
   setup and on its CLOSED transition, and stored in `ai_setups.exit_reason`.
 - **`sl_moved`**: a transition in the same state, with the new `sl`:
@@ -548,7 +549,9 @@ their spreads come from the `candles_5m` aggregate, spreads in 5m buckets). It r
 
   It may repeat; each move has its own `at`, so the `(setup_id, to, at)` dedupe keeps every
   one. The backend checks it: the same state on both sides, the setup's current state
-  (ARMED or ACTIVE), `sl` present and on the entry's side. A valid move updates
+  (ARMED or ACTIVE), `sl` present (a positive, finite price). For a `trailing` or `time` setup
+  the new stop may be past the entry (profit locked: e.g. `"sl": 4106.5` on a buy entered at
+  4086.5); only a setup with a target keeps `sl` on the entry's side. A valid move updates
   `ai_setups.sl` and is an `ai_setup_events` row with the new `sl`; an invalid one is
   skipped, logged and counted in the run's `contract_warnings` (the rest of the answer is
   stored). A move older than the setup's current state (each answer repeats the history) is

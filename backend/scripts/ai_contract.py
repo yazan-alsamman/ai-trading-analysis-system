@@ -76,7 +76,9 @@ backend/app/ai/contract.py by backend/scripts/ai_contract.py (do not edit by han
   16:45 America/New_York. A closed setup may carry `exit_reason` (`stop`, `trailing_stop`,
   `time`, ...) on the setup and on its CLOSED transition. A stop move is a transition in the
   same state with `reason: sl_moved` and the new `sl` (several per setup, each a distinct
-  `at`; `sl` must stay on the entry's side, otherwise it is skipped with a warning).
+  `at`). With a target, `sl` stays on the entry's side; a `trailing` or `time` stop is on the
+  entry's side while ARMED and may pass the entry once ACTIVE (profit locked). An invalid move
+  is skipped with a warning.
 - `volatility` (0.3.0, optional on every answer): the expected move of the New York trading
   day, window 02:00-16:45 America/New_York. Numbers are null unless `status` is `ok`; the
   backend keeps the first `ok` of each day. Unknown `status`/`level` values are stored with a

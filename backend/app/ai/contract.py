@@ -316,8 +316,9 @@ class Setup(BaseModel):
     so ``open_setups`` echoes it unchanged. In ``ARMED`` and ``ACTIVE``, ``entry``, ``sl`` and
     ``tp`` are required and on the right side: buy ``sl < entry < tp``, sell ``tp < entry < sl``.
     0.3.0: with ``exit_type`` ``trailing`` or ``time`` there is no target: ``tp`` and
-    ``r_multiple`` are null, ``entry`` and ``sl`` stay required (buy ``sl < entry``, sell
-    ``sl > entry``).
+    ``r_multiple`` are null, ``entry`` and ``sl`` stay required; an ARMED setup has ``sl`` on
+    the entry's side (buy ``sl < entry``, sell ``sl > entry``), an ACTIVE one may have its stop
+    past the entry (a trailing stop locking in profit).
     """
 
     model_config = ConfigDict(extra="allow")
@@ -352,7 +353,8 @@ class Setup(BaseModel):
     exit_type: ExitType | None = Field(
         default=None,
         description="0.3.0: target (absent: target, as before), trailing or time. trailing and "
-        "time have no target: tp and r_multiple are null",
+        "time have no target: tp and r_multiple are null; once ACTIVE their sl may be past the "
+        "entry (a trailing stop locking in profit)",
     )
     exit_reason: str | None = Field(
         default=None,
@@ -380,6 +382,8 @@ class Setup(BaseModel):
                 raise ValueError(f"a {self.state.value} setup needs entry and sl")
             if self.tp is not None or self.r_multiple is not None:
                 raise ValueError(f"exit_type {name}: tp and r_multiple must be null")
+            if self.state == SetupState.ACTIVE:
+                return self  # the stop may trail past the entry (profit locked)
             if not sl_on_the_right_side(self.direction.value, self.entry, self.sl):
                 raise ValueError(
                     "buy: sl < entry" if self.direction == Direction.buy else "sell: sl > entry"
