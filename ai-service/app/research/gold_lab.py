@@ -92,7 +92,10 @@ class Ctx:
 def context(fr: dict[str, pd.DataFrame]) -> Ctx:
     m = fr["5m"]
     o, h, lo, c = (m[k].to_numpy() for k in ("open", "high", "low", "close"))
-    a = {tf: wilder(*(fr[tf][k].to_numpy() for k in ("high", "low", "close"))) for tf in ("1h", "4h", "D1")}
+    a = {
+        tf: wilder(*(fr[tf][k].to_numpy() for k in ("high", "low", "close")))
+        for tf in ("1h", "4h", "D1")
+    }
     ny = m["ts_utc"].dt.tz_convert(NY)
     ny_min = (ny.dt.hour * 60 + ny.dt.minute).to_numpy()
     ny_day = (ny.dt.year * 10000 + ny.dt.month * 100 + ny.dt.day).to_numpy()
@@ -105,9 +108,24 @@ def context(fr: dict[str, pd.DataFrame]) -> Ctx:
     last = pd.Series(np.where(ok_end, idx, -1)).groupby(ny_day).transform("max").to_numpy()
     d1 = fr["D1"]
     day_idx = np.searchsorted(d1["ts_utc"].to_numpy(), m["ts_utc"].to_numpy(), "right") - 1
-    return Ctx(m, o, h, lo, c, m["spread_mean"].to_numpy(), wilder(h, lo, c),
-               on_5m(m, fr["1h"], a["1h"]), on_5m(m, fr["4h"], a["4h"]), on_5m(m, d1, a["D1"]),
-               ny_min, ny_day, ny.dt.day_of_week.to_numpy(), last, day_idx, d1)  # fmt: skip
+    return Ctx(
+        m,
+        o,
+        h,
+        lo,
+        c,
+        m["spread_mean"].to_numpy(),
+        wilder(h, lo, c),
+        on_5m(m, fr["1h"], a["1h"]),
+        on_5m(m, fr["4h"], a["4h"]),
+        on_5m(m, d1, a["D1"]),
+        ny_min,
+        ny_day,
+        ny.dt.day_of_week.to_numpy(),
+        last,
+        day_idx,
+        d1,
+    )
 
 
 # --- signals ---------------------------------------------------------------------------------
@@ -138,11 +156,15 @@ def frozen(fr: dict[str, pd.DataFrame], cx: Ctx) -> list[pd.DataFrame]:
         ok = (i < len(m_close)) & (m_close[np.minimum(i, len(m_close) - 1)] == close)
         step = int(pd.Timedelta(spec.frame).total_seconds() // 300)
         rows = {
-            "i": i, "dir": np.array([c.sign for c in cs]), "entry": np.array([c.entry for c in cs]),
+            "i": i,
+            "dir": np.array([c.sign for c in cs]),
+            "entry": np.array([c.entry for c in cs]),
             "risk": np.array([c.risk for c in cs]),
             "tp_r": np.array([c.r_multiple if c.r_multiple else np.nan for c in cs]),
-            "end": np.minimum(i + spec.horizon_bars * step, cx.deadline[np.minimum(i, len(m_close) - 1)]),
-        }  # fmt: skip
+            "end": np.minimum(
+                i + spec.horizon_bars * step, cx.deadline[np.minimum(i, len(m_close) - 1)]
+            ),
+        }
         d = _frame(rows, name)[ok]
         out.append(d)
         if name == "S6":
@@ -154,18 +176,33 @@ def _liquid(cx: Ctx) -> np.ndarray:
     return (cx.weekday < 5) & (cx.ny_min >= 120) & (cx.ny_min < 16 * 60)
 
 
-def _simple(cx: Ctx, name: str, sel: np.ndarray, d: np.ndarray, risk: np.ndarray, tp_r: float,
-            horizon: int) -> pd.DataFrame:  # fmt: skip
+def _simple(
+    cx: Ctx, name: str, sel: np.ndarray, d: np.ndarray, risk: np.ndarray, tp_r: float, horizon: int
+) -> pd.DataFrame:
     i = np.flatnonzero(sel & np.isfinite(risk) & (risk > 0))
-    return _frame({"i": i, "dir": d[i], "entry": cx.c[i], "risk": risk[i], "tp_r": tp_r,
-                   "end": np.minimum(i + horizon, cx.deadline[i])}, name)  # fmt: skip
+    return _frame(
+        {
+            "i": i,
+            "dir": d[i],
+            "entry": cx.c[i],
+            "risk": risk[i],
+            "tp_r": tp_r,
+            "end": np.minimum(i + horizon, cx.deadline[i]),
+        },
+        name,
+    )
 
 
 def ny_momentum(cx: Ctx) -> pd.DataFrame:
     """6: at the 10:25 bar's close (10:30 New York), the move since 09:30; >= 1 x ATR(1h): go
     with it, risk 1 x ATR(1h), TP 1.5 R, to 12:00."""
     at = cx.ny_min == 10 * 60 + 25
-    ref = pd.Series(np.where(cx.ny_min == 9 * 60 + 25, cx.c, np.nan)).groupby(cx.ny_day).transform("max").to_numpy()
+    ref = (
+        pd.Series(np.where(cx.ny_min == 9 * 60 + 25, cx.c, np.nan))
+        .groupby(cx.ny_day)
+        .transform("max")
+        .to_numpy()
+    )
     mv = cx.c - ref
     sel = at & (np.abs(mv) >= cx.atr1h) & (cx.weekday < 5)
     return _simple(cx, "NYMOM", sel, np.sign(mv), cx.atr1h, 1.5, 18)
@@ -175,7 +212,12 @@ def news_830(cx: Ctx) -> pd.DataFrame:
     """7 (proxy without a calendar): the 08:30-08:45 New York move; >= 0.75 x ATR(1h): go with it
     at 08:45, risk 1 x ATR(1h), TP 1.5 R, 2 h."""
     at = cx.ny_min == 8 * 60 + 40
-    ref = pd.Series(np.where(cx.ny_min == 8 * 60 + 30, cx.o, np.nan)).groupby(cx.ny_day).transform("max").to_numpy()
+    ref = (
+        pd.Series(np.where(cx.ny_min == 8 * 60 + 30, cx.o, np.nan))
+        .groupby(cx.ny_day)
+        .transform("max")
+        .to_numpy()
+    )
     mv = cx.c - ref
     sel = at & (np.abs(mv) >= 0.75 * cx.atr1h) & (cx.weekday < 5)
     return _simple(cx, "NEWS830", sel, np.sign(mv), cx.atr1h, 1.5, 24)
@@ -197,11 +239,16 @@ def extreme_bar(cx: Ctx) -> pd.DataFrame:
 def ema_cross(cx: Ctx, reverse: bool = False) -> pd.DataFrame:
     """12 (17 reversed): EMA 9 / 21 cross on 5m; SL 1.5 x ATR(5m), TP 1.5 R, 2 h."""
     s = pd.Series(cx.c)
-    f, slow = s.ewm(span=9, adjust=False).mean().to_numpy(), s.ewm(span=21, adjust=False).mean().to_numpy()
+    f, slow = (
+        s.ewm(span=9, adjust=False).mean().to_numpy(),
+        s.ewm(span=21, adjust=False).mean().to_numpy(),
+    )
     diff = np.sign(f - slow)
     cross = (diff != np.r_[0, diff[:-1]]) & (np.r_[0, diff[:-1]] != 0)
     d = diff * (-1 if reverse else 1)
-    return _simple(cx, "EMAX_R" if reverse else "EMAX", _liquid(cx) & cross, d, 1.5 * cx.atr5, 1.5, 24)
+    return _simple(
+        cx, "EMAX_R" if reverse else "EMAX", _liquid(cx) & cross, d, 1.5 * cx.atr5, 1.5, 24
+    )
 
 
 def rsi2(cx: Ctx, fr: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -215,11 +262,19 @@ def rsi2(cx: Ctx, fr: dict[str, pd.DataFrame]) -> pd.DataFrame:
     rsi = (100 - 100 / (1 + up / dn)).to_numpy()
     ema = c.ewm(span=200, adjust=False).mean().to_numpy()
     a15 = wilder(q["high"].to_numpy(), q["low"].to_numpy(), c.to_numpy())
-    d = np.where((rsi < 10) & (c.to_numpy() > ema), 1.0, np.where((rsi > 90) & (c.to_numpy() < ema), -1.0, 0.0))
+    d = np.where(
+        (rsi < 10) & (c.to_numpy() > ema),
+        1.0,
+        np.where((rsi > 90) & (c.to_numpy() < ema), -1.0, 0.0),
+    )
     # 15m signals at their close, on the 5m bar closing at the same time
     m_close = cx.m["close_utc"].to_numpy()
     j = np.searchsorted(m_close, q["close_utc"].to_numpy())
-    ok = (j < len(m_close)) & (m_close[np.minimum(j, len(m_close) - 1)] == q["close_utc"].to_numpy()) & (d != 0)
+    ok = (
+        (j < len(m_close))
+        & (m_close[np.minimum(j, len(m_close) - 1)] == q["close_utc"].to_numpy())
+        & (d != 0)
+    )
     sel = np.zeros(len(cx.c), bool)
     dd, rr = np.zeros(len(cx.c)), np.full(len(cx.c), np.nan)
     sel[j[ok]] = True
@@ -227,8 +282,9 @@ def rsi2(cx: Ctx, fr: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return _simple(cx, "RSI2", sel & _liquid(cx), dd, rr, 1.0, 24)
 
 
-def _level_trades(cx: Ctx, name: str, levels: dict[str, np.ndarray], dist: np.ndarray,
-                  horizon: int) -> pd.DataFrame:  # fmt: skip
+def _level_trades(
+    cx: Ctx, name: str, levels: dict[str, np.ndarray], dist: np.ndarray, horizon: int
+) -> pd.DataFrame:
     """A stop entry with the break at the first touch of the day of each level (the Addendum 2
     mechanism): entry at the level (or the bar open when it gapped through), SL / TP at D."""
     prev = np.r_[np.nan, cx.c[:-1]]
@@ -241,18 +297,33 @@ def _level_trades(cx: Ctx, name: str, levels: dict[str, np.ndarray], dist: np.nd
         idx = np.flatnonzero(ok & (up | dn) & np.isfinite(lv))
         first = pd.Series(idx).groupby(cx.day_idx[idx]).min().to_numpy()
         d = np.where(up[first], 1.0, -1.0)
-        entry = np.where(d > 0, np.maximum(lv[first], cx.o[first]), np.minimum(lv[first], cx.o[first]))
-        out.append(pd.DataFrame({"i": first, "dir": d, "entry": entry, "risk": dist[first], "tp_r": 1.0,
-                                 "end": np.minimum(first + horizon, cx.deadline[first])}))  # fmt: skip
+        entry = np.where(
+            d > 0, np.maximum(lv[first], cx.o[first]), np.minimum(lv[first], cx.o[first])
+        )
+        out.append(
+            pd.DataFrame(
+                {
+                    "i": first,
+                    "dir": d,
+                    "entry": entry,
+                    "risk": dist[first],
+                    "tp_r": 1.0,
+                    "end": np.minimum(first + horizon, cx.deadline[first]),
+                }
+            )
+        )
     return _frame(pd.concat(out, ignore_index=True).to_dict("list"), name)
 
 
 def levels_4h(cx: Ctx) -> pd.DataFrame:
     """10: the level break of Addendum 2 with D = ATR(14, 4h) to the session end."""
     dh, dl = cx.d1["high"].to_numpy(), cx.d1["low"].to_numpy()
-    lv = {"PDH": np.r_[np.nan, dh[:-1]], "PDL": np.r_[np.nan, dl[:-1]],
-          "5DH": pd.Series(dh).rolling(5).max().shift(1).to_numpy(),
-          "5DL": pd.Series(dl).rolling(5).min().shift(1).to_numpy()}  # fmt: skip
+    lv = {
+        "PDH": np.r_[np.nan, dh[:-1]],
+        "PDL": np.r_[np.nan, dl[:-1]],
+        "5DH": pd.Series(dh).rolling(5).max().shift(1).to_numpy(),
+        "5DL": pd.Series(dl).rolling(5).min().shift(1).to_numpy(),
+    }
     return _level_trades(cx, "LVL4H", lv, cx.atr4h, 200)
 
 
@@ -279,8 +350,17 @@ def reopen_gap(cx: Ctx) -> pd.DataFrame:
     risk = np.abs(gap)
     ok = (tp_dist > 0) & (risk > 0)
     i, d, risk, tp_dist = i[ok], d[ok], risk[ok], tp_dist[ok]
-    return pd.DataFrame({"strategy": "GAP", "i": i, "dir": d, "entry": cx.c[i], "risk": risk,
-                         "tp_r": tp_dist / risk, "end": np.minimum(i + 24, len(cx.c) - 1)})  # fmt: skip
+    return pd.DataFrame(
+        {
+            "strategy": "GAP",
+            "i": i,
+            "dir": d,
+            "entry": cx.c[i],
+            "risk": risk,
+            "tp_r": tp_dist / risk,
+            "end": np.minimum(i + 24, len(cx.c) - 1),
+        }
+    )
 
 
 def dollar_lead(cx: Ctx, other: dict[str, dict[str, pd.DataFrame]]) -> pd.DataFrame:
@@ -295,7 +375,12 @@ def dollar_lead(cx: Ctx, other: dict[str, dict[str, pd.DataFrame]]) -> pd.DataFr
         z.append(sign * zz)
     usd = np.nanmean(np.c_[z[0], z[1]], axis=1)
     gold_mv = np.abs(cx.c - np.r_[np.full(3, np.nan), cx.c[:-3]])
-    sel = _liquid(cx) & (np.abs(usd) >= 2) & (gold_mv < 0.3 * cx.atr5) & np.all(np.isfinite(np.c_[z[0], z[1]]), axis=1)
+    sel = (
+        _liquid(cx)
+        & (np.abs(usd) >= 2)
+        & (gold_mv < 0.3 * cx.atr5)
+        & np.all(np.isfinite(np.c_[z[0], z[1]]), axis=1)
+    )
     return _simple(cx, "USDLEAD", sel, -np.sign(usd), 1.5 * cx.atr5, 1.0, 12)
 
 
@@ -321,9 +406,19 @@ def big_day(cx: Ctx, sig: pd.DataFrame) -> pd.DataFrame:
 
 
 def all_signals(fr, cx: Ctx, other) -> pd.DataFrame:
-    parts = frozen(fr, cx) + [ny_momentum(cx), news_830(cx), extreme_bar(cx), ema_cross(cx),
-                              ema_cross(cx, reverse=True), rsi2(cx, fr), levels_4h(cx), pivots(cx),
-                              reopen_gap(cx), dollar_lead(cx, other), spread_spike(cx)]  # fmt: skip
+    parts = frozen(fr, cx) + [
+        ny_momentum(cx),
+        news_830(cx),
+        extreme_bar(cx),
+        ema_cross(cx),
+        ema_cross(cx, reverse=True),
+        rsi2(cx, fr),
+        levels_4h(cx),
+        pivots(cx),
+        reopen_gap(cx),
+        dollar_lead(cx, other),
+        spread_spike(cx),
+    ]
     s = pd.concat(parts, ignore_index=True)
     s = pd.concat([s, big_day(cx, s[s["strategy"].isin(BREAKOUTS)])], ignore_index=True)
     s = s[(s["i"] > 5) & (s["end"] > s["i"]) & (s["end"] < len(cx.c) - 1) & (s["risk"] > 0)]
@@ -340,7 +435,7 @@ def swing_lows(lo: np.ndarray, k: int = 2) -> np.ndarray:
     w = np.lib.stride_tricks.sliding_window_view(lo, 2 * k + 1)
     is_sw = w[:, k] == w.min(axis=1)
     val = np.full(len(lo), np.nan)
-    val[2 * k:] = np.where(is_sw, w[:, k], np.nan)
+    val[2 * k :] = np.where(is_sw, w[:, k], np.nan)
     return pd.Series(val).ffill().to_numpy()
 
 
@@ -401,16 +496,26 @@ def screen(trades: pd.DataFrame, cx: Ctx) -> pd.DataFrame:
     rows = []
     for (name, b), g in t.groupby(["strategy", "bundle"]):
         yr = g.groupby("year")["net"].mean()
-        rows.append({
-            "strategy": name, "bundle": b, "trades": len(g), "per_day": len(g) / days,
-            "gross": g["gross"].mean(), "cost": g["cost"].mean(), "net": g["net"].mean(),
-            "net_slip": g["net_slip"].mean(), "years_pos": (yr > 0).mean(),
-            "net_2012_18": g.loc[g["year"] <= 2018, "net"].mean(),
-            "net_2019_26": g.loc[g["year"] >= 2019, "net"].mean(),
-            "se": g["net"].std(ddof=1) / np.sqrt(len(g)),
-        })  # fmt: skip
+        rows.append(
+            {
+                "strategy": name,
+                "bundle": b,
+                "trades": len(g),
+                "per_day": len(g) / days,
+                "gross": g["gross"].mean(),
+                "cost": g["cost"].mean(),
+                "net": g["net"].mean(),
+                "net_slip": g["net_slip"].mean(),
+                "years_pos": (yr > 0).mean(),
+                "net_2012_18": g.loc[g["year"] <= 2018, "net"].mean(),
+                "net_2019_26": g.loc[g["year"] >= 2019, "net"].mean(),
+                "se": g["net"].std(ddof=1) / np.sqrt(len(g)),
+            }
+        )
     s = pd.DataFrame(rows)
-    s["survives"] = (s["net"] > 0) & (s["years_pos"] >= 0.6) & (s["net_2012_18"] > 0) & (s["net_2019_26"] > 0)
+    s["survives"] = (
+        (s["net"] > 0) & (s["years_pos"] >= 0.6) & (s["net_2012_18"] > 0) & (s["net_2019_26"] > 0)
+    )
     return s.sort_values("net", ascending=False).reset_index(drop=True)
 
 
@@ -428,22 +533,26 @@ def render(s: pd.DataFrame) -> str:
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for r in s.itertuples():
-        lines.append(f"| {r.strategy} | {r.bundle} | {r.trades:,} | {r.per_day:.2f} | {r.gross:+.3f} "
-                     f"| {r.cost:.3f} | {r.net:+.3f} ({r.se:.3f}) | {r.net_slip:+.3f} | {r.years_pos:.0%} "
-                     f"| {r.net_2012_18:+.3f} | {r.net_2019_26:+.3f} | {'yes' if r.survives else ''} |")  # fmt: skip
+        lines.append(
+            f"| {r.strategy} | {r.bundle} | {r.trades:,} | {r.per_day:.2f} | {r.gross:+.3f} "
+            f"| {r.cost:.3f} | {r.net:+.3f} ({r.se:.3f}) | {r.net_slip:+.3f} | {r.years_pos:.0%} "
+            f"| {r.net_2012_18:+.3f} | {r.net_2019_26:+.3f} | {'yes' if r.survives else ''} |"
+        )
     return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app research gold-lab")
     ap.add_argument("step", choices=("screen",))
-    args = ap.parse_args(argv)
+    ap.parse_args(argv)
     fr = load()
     cx = context(fr)
     other = {s: F.load(s, WARM, LOCKBOX) for s in ("EURUSD", "USDJPY")}
     sig = all_signals(fr, cx, other)
     print(f"{len(sig):,} signals:", sig.groupby("strategy").size().to_dict(), file=sys.stderr)
-    trades = pd.concat([simulate(sig, cx, b).assign(bundle=b) for b in ("M0", "M8")], ignore_index=True)
+    trades = pd.concat(
+        [simulate(sig, cx, b).assign(bundle=b) for b in ("M0", "M8")], ignore_index=True
+    )
     trades.to_parquet(STORE / "gold_lab_trades.parquet", index=False)
     s = screen(trades, cx)
     REPORT.write_text(render(s), encoding="utf-8", newline="\n")

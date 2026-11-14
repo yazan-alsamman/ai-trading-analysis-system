@@ -12,28 +12,32 @@
 # open / high / low / close (trades), vwap, bid_close / ask_close / mid_close (last quote),
 # spread_mean (mean quoted spread over the quote updates), depth_imb (mean of
 # (bidsize - asksize) / (bidsize + asksize) over the quote updates).
-from AlgorithmImports import *  # noqa: F403
 import io
 import os
 
 import numpy as np
 import pandas as pd
+from AlgorithmImports import *  # noqa: F403
 
 START, END = date(2025, 10, 1), date(2025, 12, 31)  # noqa: F405  the 3-month sample
 BIG = 10  # lots: a "large" trade
 KEY = "gc_flow/{:%Y%m}.csv"
 
 qb = QuantBook()  # noqa: F405
-canon = qb.add_future(Futures.Metals.GOLD, Resolution.MINUTE,  # noqa: F405
-                      extended_market_hours=True).symbol  # nearly 23 h a day, not only 08:20-13:30
+canon = qb.add_future(
+    Futures.Metals.GOLD,  # noqa: F405
+    Resolution.MINUTE,  # noqa: F405
+    extended_market_hours=True,
+).symbol  # nearly 23 h a day, not only 08:20-13:30
 added = set()
 
 
 def active_contract(d: date):  # noqa: F405
     """The listed contract with the most volume over the 3 days before ``d``."""
     t0 = datetime(d.year, d.month, d.day)  # noqa: F405
-    listed = sorted(qb.future_chain_provider.get_future_contract_list(canon, t0),
-                    key=lambda s: s.id.date)[:5]
+    listed = sorted(
+        qb.future_chain_provider.get_future_contract_list(canon, t0), key=lambda s: s.id.date
+    )[:5]
     best, best_vol = None, -1.0
     for c in listed:
         if c not in added:
@@ -50,13 +54,15 @@ def sign_trades(ticks: pd.DataFrame) -> pd.DataFrame:
     """Trades with the bid / ask in force just before them and a Lee-Ready sign."""
     t = ticks.reset_index()
     t = t.sort_values("time", kind="stable")
-    q = t[(t["bidprice"] > 0) | (t["askprice"] > 0)][["time", "bidprice", "askprice",
-                                                       "bidsize", "asksize"]].copy()
+    q = t[(t["bidprice"] > 0) | (t["askprice"] > 0)][
+        ["time", "bidprice", "askprice", "bidsize", "asksize"]
+    ].copy()
     q["bid"] = q["bidprice"].where(q["bidprice"] > 0).ffill()
     q["ask"] = q["askprice"].where(q["askprice"] > 0).ffill()
     tr = t[(t["quantity"] > 0) & t["lastprice"].notna()][["time", "lastprice", "quantity"]]
-    tr = pd.merge_asof(tr, q[["time", "bid", "ask"]], on="time", direction="backward",
-                       allow_exact_matches=False)
+    tr = pd.merge_asof(
+        tr, q[["time", "bid", "ask"]], on="time", direction="backward", allow_exact_matches=False
+    )
     mid = (tr["bid"] + tr["ask"]) / 2
     px = tr["lastprice"]
     tick = np.sign(px.diff()).replace(0, np.nan).ffill().fillna(0)
@@ -87,14 +93,22 @@ def minutes(d: date) -> pd.DataFrame:  # noqa: F405
         tr["bigs"] = np.where(tr["quantity"] >= BIG, tr["sell"], 0.0)
         tr["pv"] = tr["lastprice"] * tr["quantity"]
         g = tr.groupby("m")
-        m = pd.DataFrame({
-            "trades": g.size(), "volume": g["quantity"].sum(), "buy_vol": g["buy"].sum(),
-            "sell_vol": g["sell"].sum(), "unsigned_vol": g["unsigned"].sum(),
-            "big_buy": g["bigb"].sum(), "big_sell": g["bigs"].sum(),
-            "open": g["lastprice"].first(), "high": g["lastprice"].max(),
-            "low": g["lastprice"].min(), "close": g["lastprice"].last(),
-            "vwap": g["pv"].sum() / g["quantity"].sum(),
-        })
+        m = pd.DataFrame(
+            {
+                "trades": g.size(),
+                "volume": g["quantity"].sum(),
+                "buy_vol": g["buy"].sum(),
+                "sell_vol": g["sell"].sum(),
+                "unsigned_vol": g["unsigned"].sum(),
+                "big_buy": g["bigb"].sum(),
+                "big_sell": g["bigs"].sum(),
+                "open": g["lastprice"].first(),
+                "high": g["lastprice"].max(),
+                "low": g["lastprice"].min(),
+                "close": g["lastprice"].last(),
+                "vwap": g["pv"].sum() / g["quantity"].sum(),
+            }
+        )
         m["delta"] = m["buy_vol"] - m["sell_vol"]
         q = q.dropna(subset=["bid", "ask"]).copy()
         q["m"] = q["time"].dt.floor("min")
@@ -102,9 +116,17 @@ def minutes(d: date) -> pd.DataFrame:  # noqa: F405
         tot = q["bidsize"] + q["asksize"]
         q["imb"] = np.where(tot > 0, (q["bidsize"] - q["asksize"]) / tot, np.nan)
         gq = q.groupby("m")
-        m = m.join(pd.DataFrame({"bid_close": gq["bid"].last(), "ask_close": gq["ask"].last(),
-                                 "spread_mean": gq["spread"].mean(),
-                                 "depth_imb": gq["imb"].mean()}), how="outer")
+        m = m.join(
+            pd.DataFrame(
+                {
+                    "bid_close": gq["bid"].last(),
+                    "ask_close": gq["ask"].last(),
+                    "spread_mean": gq["spread"].mean(),
+                    "depth_imb": gq["imb"].mean(),
+                }
+            ),
+            how="outer",
+        )
         rows.append(m)
     if not rows:
         return pd.DataFrame()
@@ -147,7 +169,7 @@ def run(start: date = START, end: date = END) -> None:  # noqa: F405
                     m = minutes(d)
                     if len(m):
                         month.append(m.reset_index())
-                    span = (f"{m.index.min():%H:%M}-{m.index.max():%H:%M}" if len(m) else "-")
+                    span = f"{m.index.min():%H:%M}-{m.index.max():%H:%M}" if len(m) else "-"
                     print(d, "rows", len(m), m["contract"].iloc[0] if len(m) else "-", span)
                 except Exception as e:
                     print(d, "error", e)

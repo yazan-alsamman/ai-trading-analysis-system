@@ -164,16 +164,22 @@ def f3_placebo(m1: pd.DataFrame, cal: pd.DataFrame) -> pd.DataFrame:
     """F3's rule at the release's New York clock minute on the 5 nearest trading days with no
     high-importance USD release within 60 minutes."""
     usd = cal[cal["currency"] == "USD"]
-    every = np.sort(usd.loc[usd["importance"] == 3, "ts_utc"].dt.tz_convert("UTC")
-                    .dt.tz_localize(None).to_numpy("datetime64[m]").astype("int64"))  # fmt: skip
+    every = np.sort(
+        usd.loc[usd["importance"] == 3, "ts_utc"]
+        .dt.tz_convert("UTC")
+        .dt.tz_localize(None)
+        .to_numpy("datetime64[m]")
+        .astype("int64")
+    )
     sets = {"TOP3": usd[usd["event"].isin(ev.TOP3)], "HIGH": usd[usd["importance"] == 3]}
     ny_dates = m1["ts_utc"].dt.tz_convert(ev.NY).dt.normalize().dt.tz_localize(None)
     tdays = np.unique(ny_dates[ny_dates.dt.day_of_week < 5].to_numpy("datetime64[D]"))
     c = m1["close"].to_numpy()
     out = []
     for name, evs in sets.items():
-        r = pd.to_datetime(pd.Series(evs["ts_utc"].drop_duplicates().sort_values().to_numpy()),
-                           utc=True)  # fmt: skip
+        r = pd.to_datetime(
+            pd.Series(evs["ts_utc"].drop_duplicates().sort_values().to_numpy()), utc=True
+        )
         loc = r.dt.tz_convert(ev.NY)
         when = []
         for q in range(len(r)):
@@ -190,14 +196,23 @@ def f3_placebo(m1: pd.DataFrame, cal: pd.DataFrame) -> pd.DataFrame:
                     if abs((tdays[cand] - d0).astype(int)) > MAX_PLACEBO_GAP:
                         continue
                     t = pd.Timestamp(f"{tdays[cand]} {hhmm}").tz_localize(
-                        ev.NY, ambiguous="NaT", nonexistent="NaT")
+                        ev.NY, ambiguous="NaT", nonexistent="NaT"
+                    )
                     if t is pd.NaT:
                         continue
-                    tm = int(t.tz_convert("UTC").tz_localize(None).to_datetime64()
-                             .astype("datetime64[m]").astype("int64"))  # fmt: skip
+                    tm = int(
+                        t.tz_convert("UTC")
+                        .tz_localize(None)
+                        .to_datetime64()
+                        .astype("datetime64[m]")
+                        .astype("int64")
+                    )
                     j = np.searchsorted(every, tm)
-                    near = min(abs(every[jj] - tm) for jj in (j - 1, j) if 0 <= jj < len(every)) \
-                        if len(every) else np.inf  # fmt: skip
+                    near = (
+                        min(abs(every[jj] - tm) for jj in (j - 1, j) if 0 <= jj < len(every))
+                        if len(every)
+                        else np.inf
+                    )
                     if near > RELEASE_GAP:
                         when.append(t.tz_convert("UTC"))
                         got += 1
@@ -217,8 +232,9 @@ def f1_placebo(m1: pd.DataFrame, dxy: pd.DataFrame, bond: pd.DataFrame) -> pd.Da
     bond = bond[bond["ts_utc"] >= ev.BOND_FROM]
     parts = []
     for s in (DRIVER_SHIFT, -DRIVER_SHIFT):
-        parts.append(ev.f1(m1, dxy.assign(ts_utc=dxy["ts_utc"] + s),
-                           bond.assign(ts_utc=bond["ts_utc"] + s)))  # fmt: skip
+        parts.append(
+            ev.f1(m1, dxy.assign(ts_utc=dxy["ts_utc"] + s), bond.assign(ts_utc=bond["ts_utc"] + s))
+        )
     return pd.concat(parts, ignore_index=True)
 
 
@@ -242,8 +258,13 @@ def resamples(n_blocks: int, seed: int = SEED_BOOT, b: int = B) -> np.ndarray:
     return np.random.default_rng(seed).integers(0, n_blocks, size=(b, n_blocks))
 
 
-def boot_t(idx: np.ndarray, blk_a: np.ndarray, a: np.ndarray, blk_b: np.ndarray | None = None,
-           b: np.ndarray | None = None) -> tuple[float, float]:  # fmt: skip
+def boot_t(
+    idx: np.ndarray,
+    blk_a: np.ndarray,
+    a: np.ndarray,
+    blk_b: np.ndarray | None = None,
+    b: np.ndarray | None = None,
+) -> tuple[float, float]:
     """(observed difference, t) of mean(a) - mean(b) (b absent: mean(a)) under a joint block
     bootstrap with resampled block indices ``idx`` (B x blocks)."""
     nb = idx.shape[1]

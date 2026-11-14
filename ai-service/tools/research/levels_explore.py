@@ -30,9 +30,9 @@ STEP = {"XAUUSD": 10.0, "USDJPY": 0.5}
 SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD"]
 
 
-def wilder(h, l, c, n=14):
+def wilder(h, low, c, n=14):
     prev = np.r_[np.nan, c[:-1]]
-    tr = np.nanmax(np.c_[h - l, np.abs(h - prev), np.abs(l - prev)], axis=1)
+    tr = np.nanmax(np.c_[h - low, np.abs(h - prev), np.abs(low - prev)], axis=1)
     return pd.Series(tr).ewm(alpha=1 / n, adjust=False).mean().to_numpy()
 
 
@@ -47,11 +47,16 @@ def first_passage(hi, lo, i, lv, d, up):
     bnc = np.where(up[:, None], L <= bnc_t[:, None], H >= bnc_t[:, None])
     fb = np.where(brk.any(1), brk.argmax(1), HZ)
     fn = np.where(bnc.any(1), bnc.argmax(1), HZ)
-    out = np.where(fb < fn, "break", np.where(fn < fb, "bounce", np.where(fb == HZ, "none", "ambiguous")))
+    out = np.where(
+        fb < fn, "break", np.where(fn < fb, "bounce", np.where(fb == HZ, "none", "ambiguous"))
+    )
     out = np.where(brk0, "break", out)
     jb = np.where(brk0, i, i + 1 + np.minimum(fb, HZ - 1))  # bar of the break
     # continuation after a break: 2D beyond before back to the level
-    H2, L2 = swv(hi, HZ)[np.minimum(jb + 1, len(hi) - HZ)], swv(lo, HZ)[np.minimum(jb + 1, len(hi) - HZ)]
+    H2, L2 = (
+        swv(hi, HZ)[np.minimum(jb + 1, len(hi) - HZ)],
+        swv(lo, HZ)[np.minimum(jb + 1, len(hi) - HZ)],
+    )
     far, back = lv + 2 * s * d, lv
     go = np.where(up[:, None], H2 >= far[:, None], L2 <= far[:, None])
     ret = np.where(up[:, None], L2 <= back[:, None], H2 >= back[:, None])
@@ -73,7 +78,9 @@ for sym in SYMBOLS:
     k1 = np.searchsorted(h1["close_utc"].to_numpy(), m["ts_utc"].to_numpy(), "right") - 1
     D = np.where(k1 >= 0, a1[np.maximum(k1, 0)], np.nan)
     ad = wilder(*(d1[k].to_numpy() for k in ("high", "low", "close")))
-    kd = np.searchsorted(d1["ts_utc"].to_numpy(), m["ts_utc"].to_numpy(), "right") - 1  # current day
+    kd = (
+        np.searchsorted(d1["ts_utc"].to_numpy(), m["ts_utc"].to_numpy(), "right") - 1
+    )  # current day
     dh, dl = d1["high"].to_numpy(), d1["low"].to_numpy()
     pdh = np.r_[np.nan, dh[:-1]]
     pdl = np.r_[np.nan, dl[:-1]]
@@ -82,19 +89,26 @@ for sym in SYMBOLS:
     atrd = np.r_[np.nan, ad[:-1]]
     ny = m["ts_utc"].dt.tz_convert("America/New_York")
     ok = ((ny.dt.day_of_week < 5) & ny.dt.hour.between(2, 15)).to_numpy().copy()
-    ok &=(m["ts_utc"] >= START).to_numpy() & (np.arange(n) < n - 2 * HZ - 2) & np.isfinite(D) & (kd >= 6)
+    ok &= (
+        (m["ts_utc"] >= START).to_numpy()
+        & (np.arange(n) < n - 2 * HZ - 2)
+        & np.isfinite(D)
+        & (kd >= 6)
+    )
     price = cl
     comm = 0.07 if sym == "XAUUSD" else (7e-5 * price if sym.startswith("USD") else 7e-5)
     cost = m["spread_mean"].to_numpy() + comm
 
-    def events(level_of_day, name, placebo):
+    def events(level_of_day, name, placebo, kd=kd, prev=prev, hi=hi, lo=lo, ok=ok):
         lv = level_of_day[np.maximum(kd, 0)]
         up = (prev < lv) & (hi >= lv)
         dn = (prev > lv) & (lo <= lv)
         hit = ok & (up | dn) & np.isfinite(lv)
         idx = np.flatnonzero(hit)
         first = pd.Series(idx).groupby(kd[idx]).min().to_numpy()  # first touch of the day
-        return pd.DataFrame({"i": first, "lv": lv[first], "up": up[first], "kind": name, "placebo": placebo})
+        return pd.DataFrame(
+            {"i": first, "lv": lv[first], "up": up[first], "kind": name, "placebo": placebo}
+        )
 
     ev = []
     for name, arr in (("PDH", pdh), ("PDL", pdl), ("5DH", h5), ("5DL", l5)):
@@ -115,7 +129,9 @@ for sym in SYMBOLS:
     e = pd.concat(ev, ignore_index=True)
     i = e["i"].to_numpy()
     out, cont = first_passage(hi, lo, i, e["lv"].to_numpy(), D[i], e["up"].to_numpy())
-    e = e.assign(symbol=sym, outcome=out, cont=cont, cost_d=cost[i] / D[i], t=m["ts_utc"].to_numpy()[i])
+    e = e.assign(
+        symbol=sym, outcome=out, cont=cont, cost_d=cost[i] / D[i], t=m["ts_utc"].to_numpy()[i]
+    )
     rows.append(e)
 
 d = pd.concat(rows, ignore_index=True)
@@ -134,7 +150,10 @@ def diff_ci(g, col, B=2000):
     dif = s_r[k].sum(1) / n_r[k].sum(1) - s_p[k].sum(1) / n_p[k].sum(1)
     real, plac = s_r.sum() / n_r.sum(), s_p.sum() / n_p.sum()
     lo_, hi_ = np.percentile(dif, [2.5, 97.5])
-    return f"{n_r.sum():6d} | {real:.3f} | {n_p.sum():6d} | {plac:.3f} | {real - plac:+.3f} ({lo_:+.3f} to {hi_:+.3f})"
+    return (
+        f"{n_r.sum():6d} | {real:.3f} | {n_p.sum():6d} | {plac:.3f} | {real - plac:+.3f} "
+        f"({lo_:+.3f} to {hi_:+.3f})"
+    )
 
 
 hdr = "n real | rate real | n placebo | rate placebo | real - placebo (95%)"
@@ -151,12 +170,23 @@ for k, g in [*d.groupby("kind"), ("ALL", d)]:
 print("\nD. CONTINUATION after a break, by instrument")
 for k, g in d.groupby("symbol"):
     print(k, "|", diff_ci(g, "cont"))
-print("\nE. Outcome mix (real levels):", d[~d.placebo].outcome.value_counts(normalize=True).round(3).to_dict())
-print("   Outcome mix (placebo)    :", d[d.placebo].outcome.value_counts(normalize=True).round(3).to_dict())
+print(
+    "\nE. Outcome mix (real levels):",
+    d[~d.placebo].outcome.value_counts(normalize=True).round(3).to_dict(),
+)
+print(
+    "   Outcome mix (placebo)    :",
+    d[d.placebo].outcome.value_counts(normalize=True).round(3).to_dict(),
+)
 print("\nF. Economics per touch in D (gross = 2p - 1 for a fade with TP = SL = D; cost in D)")
 for k, g in d[~d.placebo].groupby("symbol"):
-    p = g.bounce.mean(); q = g.cont.mean()
-    print(k, f"| fade gross {2 * p - 1:+.3f} | breakout gross {2 * q - 1:+.3f} | cost {g.cost_d.mean():.3f}")
+    p = g.bounce.mean()
+    q = g.cont.mean()
+    print(
+        k,
+        f"| fade gross {2 * p - 1:+.3f} | breakout gross {2 * q - 1:+.3f} "
+        f"| cost {g.cost_d.mean():.3f}",
+    )
 print("\nG. Gold by year, bounce rate real vs placebo")
 gy = d[d.symbol == "XAUUSD"].groupby([d.t.dt.year, "placebo"]).bounce.mean().unstack().round(3)
 print(gy.to_string())

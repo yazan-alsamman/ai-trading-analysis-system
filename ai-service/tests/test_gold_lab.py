@@ -17,13 +17,22 @@ def ctx(path: list[tuple[float, float, float]], n: int = 60, spread: float = 0.2
     for k, (hh, ll, cc) in enumerate(path, start=1):
         h[k], lo[k], c[k] = hh, ll, cc
     last = len(path)
-    h[last + 1:], lo[last + 1:], c[last + 1:] = c[last], c[last], c[last]
+    h[last + 1 :], lo[last + 1 :], c[last + 1 :] = c[last], c[last], c[last]
     return SimpleNamespace(h=h, lo=lo, c=c, spread=np.full(n, spread), atr5=np.full(n, 1.0))
 
 
 def sig(tp_r=1.5, end=30, d=1.0):
-    return pd.DataFrame({"strategy": ["X"], "i": [0], "dir": [d], "entry": [100.0], "risk": [2.0],
-                         "tp_r": [tp_r], "end": [end]})  # fmt: skip
+    return pd.DataFrame(
+        {
+            "strategy": ["X"],
+            "i": [0],
+            "dir": [d],
+            "entry": [100.0],
+            "risk": [2.0],
+            "tp_r": [tp_r],
+            "end": [end],
+        }
+    )
 
 
 def test_m0_takes_the_first_of_sl_and_tp() -> None:
@@ -74,7 +83,9 @@ def synthetic():
 
 def test_signals_are_valid_on_a_synthetic_market(synthetic) -> None:
     cx, s = synthetic
-    assert {"S1", "S4", "S6", "S6R", "S7", "EMAX", "EMAX_R", "RSI2", "LVL4H", "PIVOT"} <= set(s.strategy)
+    assert {"S1", "S4", "S6", "S6R", "S7", "EMAX", "EMAX_R", "RSI2", "LVL4H", "PIVOT"} <= set(
+        s.strategy
+    )
     assert (s["risk"] > 0).all() and (s["end"] > s["i"]).all()
     assert set(np.unique(s["dir"])) <= {-1.0, 1.0}
     rev = s[s.strategy == "S6R"].set_index("i")["dir"]

@@ -50,8 +50,10 @@ def events_and_placebos(m1: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     bond = pd.read_parquet(DRIVERS / "USTBONDTRUSD.parquet")
     e = pd.concat([ev.f3(m1, cal), ev.f2(m1), ev.f1(m1, dxy, bond), ev.f5(m1)], ignore_index=True)
     grid = mk.f5_placebo(m1, np.random.default_rng(mk.SEED_PLACEBO))
-    p = pd.concat([mk.f3_placebo(m1, cal), mk.f2_placebo(m1), mk.f1_placebo(m1, dxy, bond), grid],
-                  ignore_index=True)  # fmt: skip
+    p = pd.concat(
+        [mk.f3_placebo(m1, cal), mk.f2_placebo(m1), mk.f1_placebo(m1, dxy, bond), grid],
+        ignore_index=True,
+    )
     return e, p
 
 
@@ -69,8 +71,13 @@ def in_period(m1: pd.DataFrame, x: pd.DataFrame, period: str) -> pd.DataFrame:
 # --- one period -----------------------------------------------------------------------------------
 
 
-def measure(m1: pd.DataFrame, e: pd.DataFrame, p: pd.DataFrame, period: str,
-            cells: list[tuple[str, str, int]] | None = None) -> pd.DataFrame:  # fmt: skip
+def measure(
+    m1: pd.DataFrame,
+    e: pd.DataFrame,
+    p: pd.DataFrame,
+    period: str,
+    cells: list[tuple[str, str, int]] | None = None,
+) -> pd.DataFrame:
     """Every (family, cell, h) row of the period (or only ``cells``)."""
     bx = mk.bars(m1)
     start = int(ev.minutes(pd.Series([pd.Timestamp(PERIODS[period][0], tz="UTC")]))[0])
@@ -99,19 +106,35 @@ def measure(m1: pd.DataFrame, e: pd.DataFrame, p: pd.DataFrame, period: str,
             d0, t0 = mk.boot_t(idx, blk, d)
             dp, tp = mk.boot_t(idx, blk, z, pblk, zp)
             ok = np.isfinite(d)
-            perf = [np.nanmean(d[ok & (quarter == q)]) if (ok & (quarter == q)).any() else np.nan
-                    for q in range(PBO_BLOCKS)]  # fmt: skip
+            perf = [
+                np.nanmean(d[ok & (quarter == q)]) if (ok & (quarter == q)).any() else np.nan
+                for q in range(PBO_BLOCKS)
+            ]
             dd = d[ok]
-            rows.append({
-                "family": fam, "cell": cell, "h": h, "n": int(np.isfinite(z).sum()),
-                "mean_z": np.nanmean(z), "mean_e0": np.nanmean(e0), "ex_e0": d0, "t_e0": t0,
-                "n_pl": int(np.isfinite(zp).sum()), "mean_pl": np.nanmean(zp), "ex_pl": dp,
-                "t_pl": tp, "mean_atr": np.nanmean(mk.atr_markout(bx, i, s, h)),
-                "stable": mk.stable(years, d, two_years=(fam == "F1" and period == "discovery")),
-                "sr": dd.mean() / dd.std(ddof=1) if len(dd) > 2 and dd.std() > 0 else np.nan,
-                "skew": pd.Series(dd).skew(), "kurt": pd.Series(dd).kurt() + 3,
-                **{f"q{q}": v for q, v in enumerate(perf)},
-            })  # fmt: skip
+            rows.append(
+                {
+                    "family": fam,
+                    "cell": cell,
+                    "h": h,
+                    "n": int(np.isfinite(z).sum()),
+                    "mean_z": np.nanmean(z),
+                    "mean_e0": np.nanmean(e0),
+                    "ex_e0": d0,
+                    "t_e0": t0,
+                    "n_pl": int(np.isfinite(zp).sum()),
+                    "mean_pl": np.nanmean(zp),
+                    "ex_pl": dp,
+                    "t_pl": tp,
+                    "mean_atr": np.nanmean(mk.atr_markout(bx, i, s, h)),
+                    "stable": mk.stable(
+                        years, d, two_years=(fam == "F1" and period == "discovery")
+                    ),
+                    "sr": dd.mean() / dd.std(ddof=1) if len(dd) > 2 and dd.std() > 0 else np.nan,
+                    "skew": pd.Series(dd).skew(),
+                    "kurt": pd.Series(dd).kurt() + 3,
+                    **{f"q{q}": v for q, v in enumerate(perf)},
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -161,8 +184,10 @@ def dsr(r: pd.DataFrame, n_trials: int) -> tuple[str, float]:
     row = r.iloc[k]
     s = abs(sr[k])
     var = np.var(sr[ok], ddof=1)
-    sr0 = np.sqrt(var) * ((1 - EULER_GAMMA) * norm.ppf(1 - 1 / n_trials)
-                          + EULER_GAMMA * norm.ppf(1 - 1 / (n_trials * EULER_E)))  # fmt: skip
+    sr0 = np.sqrt(var) * (
+        (1 - EULER_GAMMA) * norm.ppf(1 - 1 / n_trials)
+        + EULER_GAMMA * norm.ppf(1 - 1 / (n_trials * EULER_E))
+    )
     g3 = row["skew"] * np.sign(sr[k])
     den = np.sqrt(max(1 - g3 * s + (row["kurt"] - 1) / 4 * s**2, 1e-12))
     p = norm.cdf((s - sr0) * np.sqrt(row["n"] - 1) / den)
@@ -195,25 +220,39 @@ def map_report(r: pd.DataFrame, n_events: int, n_placebo: int) -> str:
         "",
     ]
     if r["passed"].any():
-        lines += ["**Survivors (to confirmation):**", "",
-                  "| Family | Cell | h | n | mean z | excess vs E0 (t) | vs placebo (t) |",
-                  "| --- | --- | --- | --- | --- | --- | --- |"]  # fmt: skip
+        lines += [
+            "**Survivors (to confirmation):**",
+            "",
+            "| Family | Cell | h | n | mean z | excess vs E0 (t) | vs placebo (t) |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
         for x in r[r["passed"]].itertuples():
-            lines.append(f"| {x.family} | {x.cell} | {x.h} | {x.n:,} | {x.mean_z:+.2f} "
-                         f"| {x.ex_e0:+.2f} ({x.t_e0:+.1f}) "
-                         f"| {x.ex_pl:+.2f} ({x.t_pl:+.1f}) |")  # fmt: skip
+            lines.append(
+                f"| {x.family} | {x.cell} | {x.h} | {x.n:,} | {x.mean_z:+.2f} "
+                f"| {x.ex_e0:+.2f} ({x.t_e0:+.1f}) "
+                f"| {x.ex_pl:+.2f} ({x.t_pl:+.1f}) |"
+            )
     else:
-        lines += ["**No cell passes discovery. By `PREREG_2.md` §6.6 the round ends with this "
-                  "negative report.**"]
+        lines += [
+            "**No cell passes discovery. By `PREREG_2.md` §6.6 the round ends with this "
+            "negative report.**"
+        ]
     names = [f"N = {n}" for n in DSR_N]
     ds = [dsr(r, n) for n in DSR_N]
-    lines += ["", f"PBO (CSCV, {PBO_BLOCKS} blocks): {pb:.2f}. Deflated Sharpe of the best cell "
-              f"({ds[0][0]}): " + ", ".join(f"{a} {b[1]:.3f}" for a, b in zip(names, ds,
-                                                                                  strict=True))
-              + " (N = 1,000 bounds every earlier setting plus this map).", ""]  # fmt: skip
-    lines += ["## The map: mean z (t against E0)", "",
-              "| Family | Cell | n (h = 5) | " + " | ".join(f"h = {h}" for h in mk.H) + " |",
-              "| --- | --- | --- |" + " --- |" * len(mk.H)]  # fmt: skip
+    lines += [
+        "",
+        f"PBO (CSCV, {PBO_BLOCKS} blocks): {pb:.2f}. Deflated Sharpe of the best cell "
+        f"({ds[0][0]}): "
+        + ", ".join(f"{a} {b[1]:.3f}" for a, b in zip(names, ds, strict=True))
+        + " (N = 1,000 bounds every earlier setting plus this map).",
+        "",
+    ]
+    lines += [
+        "## The map: mean z (t against E0)",
+        "",
+        "| Family | Cell | n (h = 5) | " + " | ".join(f"h = {h}" for h in mk.H) + " |",
+        "| --- | --- | --- |" + " --- |" * len(mk.H),
+    ]
     for (fam, cell), g in r.groupby(["family", "cell"], sort=True):
         g = g.set_index("h")
         cellv = []
@@ -227,10 +266,14 @@ def map_report(r: pd.DataFrame, n_events: int, n_placebo: int) -> str:
         n5 = int(g.loc[5, "n"]) if 5 in g.index else 0
         lines.append(f"| {fam} | {cell} | {n5:,} | " + " | ".join(cellv) + " |")
     top = r.reindex(r["mean_z"].abs().sort_values(ascending=False).index).head(15)
-    lines += ["", "Bold: |mean z| >= 2. The 15 largest |mean z| with every gate:", "",
-              "| Family | Cell | h | n | mean z | E0 | excess (t) | placebo | excess (t) | ATR "
-              "| stable | BH | passed |",
-              "|" + " --- |" * 13]  # fmt: skip
+    lines += [
+        "",
+        "Bold: |mean z| >= 2. The 15 largest |mean z| with every gate:",
+        "",
+        "| Family | Cell | h | n | mean z | E0 | excess (t) | placebo | excess (t) | ATR "
+        "| stable | BH | passed |",
+        "|" + " --- |" * 13,
+    ]
     for x in top.itertuples():
         lines.append(
             f"| {x.family} | {x.cell} | {x.h} | {x.n:,} | {x.mean_z:+.2f} | {x.mean_e0:+.2f} "
@@ -245,19 +288,27 @@ def confirm_report(r: pd.DataFrame, disc: pd.DataFrame) -> str:
     lines = ["# Discovery round 2: confirmation (D5, 2022 to 2026-01-09, read once)", ""]
     if r.empty:
         return "\n".join(lines + ["No cell passed discovery; nothing to confirm."]) + "\n"
-    m = r.merge(disc[["family", "cell", "h", "mean_z"]].rename(columns={"mean_z": "disc_z"}),
-                on=["family", "cell", "h"])  # fmt: skip
+    m = r.merge(
+        disc[["family", "cell", "h", "mean_z"]].rename(columns={"mean_z": "disc_z"}),
+        on=["family", "cell", "h"],
+    )
     m["p"] = mk.p_two_sided(m["t_e0"].to_numpy())
     m["holm"] = mk.holm(m["p"].to_numpy(), CONF_ALPHA)
-    m["confirmed"] = ((np.sign(m["mean_z"]) == np.sign(m["disc_z"]))
-                      & (m["mean_z"].abs() >= CONF_SIZE) & m["holm"])  # fmt: skip
-    lines += ["| Family | Cell | h | n | discovery z | mean z | excess vs E0 (t) | Holm "
-              "| confirmed |",
-              "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]  # fmt: skip
+    m["confirmed"] = (
+        (np.sign(m["mean_z"]) == np.sign(m["disc_z"]))
+        & (m["mean_z"].abs() >= CONF_SIZE)
+        & m["holm"]
+    )
+    lines += [
+        "| Family | Cell | h | n | discovery z | mean z | excess vs E0 (t) | Holm | confirmed |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
     for x in m.itertuples():
-        lines.append(f"| {x.family} | {x.cell} | {x.h} | {x.n:,} | {x.disc_z:+.2f} "
-                     f"| {x.mean_z:+.2f} | {x.ex_e0:+.2f} ({x.t_e0:+.1f}) "
-                     f"| {'yes' if x.holm else ''} | {'yes' if x.confirmed else ''} |")  # fmt: skip
+        lines.append(
+            f"| {x.family} | {x.cell} | {x.h} | {x.n:,} | {x.disc_z:+.2f} "
+            f"| {x.mean_z:+.2f} | {x.ex_e0:+.2f} ({x.t_e0:+.1f}) "
+            f"| {'yes' if x.holm else ''} | {'yes' if x.confirmed else ''} |"
+        )
     return "\n".join(lines) + "\n"
 
 
