@@ -24,7 +24,8 @@ BIG = 10  # lots: a "large" trade
 KEY = "gc_flow/{:%Y%m}.csv"
 
 qb = QuantBook()  # noqa: F405
-canon = qb.add_future(Futures.Metals.GOLD, Resolution.MINUTE).symbol  # noqa: F405
+canon = qb.add_future(Futures.Metals.GOLD, Resolution.MINUTE,  # noqa: F405
+                      extended_market_hours=True).symbol  # nearly 23 h a day, not only 08:20-13:30
 added = set()
 
 
@@ -36,7 +37,7 @@ def active_contract(d: date):  # noqa: F405
     best, best_vol = None, -1.0
     for c in listed:
         if c not in added:
-            qb.add_future_contract(c, Resolution.TICK)  # noqa: F405
+            qb.add_future_contract(c, Resolution.TICK, extended_market_hours=True)  # noqa: F405
             added.add(c)
         h = qb.history(c, t0 - timedelta(days=3), t0, Resolution.MINUTE)  # noqa: F405
         vol = float(h["volume"].sum()) if len(h) and "volume" in h.columns else 0.0
@@ -146,7 +147,8 @@ def run(start: date = START, end: date = END) -> None:  # noqa: F405
                     m = minutes(d)
                     if len(m):
                         month.append(m.reset_index())
-                    print(d, "rows", len(m), m["contract"].iloc[0] if len(m) else "-")
+                    span = (f"{m.index.min():%H:%M}-{m.index.max():%H:%M}" if len(m) else "-")
+                    print(d, "rows", len(m), m["contract"].iloc[0] if len(m) else "-", span)
                 except Exception as e:
                     print(d, "error", e)
                 if month:
