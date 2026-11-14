@@ -136,6 +136,10 @@ def main(argv: list[str]) -> int:
         from app.research.gold_cost import main as gold_cost
 
         return gold_cost(argv[1:])
+    if argv and argv[0] == "gold-oracle":
+        from app.research.gold_oracle import main as gold_oracle
+
+        return gold_oracle(argv[1:])
     if argv and argv[0] == "gold-levels-check":
         from app.research.gold_levels_check import main as gold_levels_check
 
