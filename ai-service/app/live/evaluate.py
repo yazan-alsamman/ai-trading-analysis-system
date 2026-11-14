@@ -66,7 +66,6 @@ class LiveVersions(Versions):
 
 class LiveEvaluateResponse(EvaluateResponse):
     versions: LiveVersions
-    volatility: vol.VolatilityOutlook | None = None  # information only (docs/vol/SERVING.md)
 
 
 class UnknownInput(ValueError):
@@ -276,5 +275,5 @@ def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
         new_setups=new_setups,
         transitions=transitions,
         abstentions=abstentions,
-        volatility=vo,
+        volatility=vo.model_dump(mode="json"),  # the contract's Volatility (0.3.0)
     )
