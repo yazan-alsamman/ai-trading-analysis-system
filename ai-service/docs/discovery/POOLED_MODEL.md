@@ -124,3 +124,18 @@ Counted in N, logged in `docs/phase3/TRIALS.md`. Code: `app/discovery/pooled.py`
 discovery pooled build|run`, committed before the run. `build` writes the candidate table and the
 features (no model, no outcome read beyond what the features allow); its counts may be read before
 `run`. Report: `docs/discovery/pooled_result.md`.
+
+## Outcome (2026-11-14): it does not pass
+
+`pooled_counts.md` (build) and `pooled_result.md` (run), code `e4897ab`. 59 of 96 cells kept, about
+87 candidates a day; the regenerated level families equal the stored run exactly. Validation
+(2020-2021): every LightGBM choice lost (−0.014 to −0.044 R); Ridge at tau 0.10 was chosen (+0.017 R,
+1.1 a day; all candidates −0.108). **Test 2022 to 2026-01-09: −0.031 R per selected trade** (95%
+−0.131 to +0.072, p 0.73), below the 95th percentile of random selections (+0.004; median −0.064),
+correlated +0.45 with the five and lowering their Sharpe (0.063 to 0.046); years alternate (2022
+−0.14, 2023 +0.14, 2024 −0.28, 2025 +0.17). FxPro 2026 +0.013 (329 trades): the only condition met.
+LightGBM's gain sits on the cost in R (0.48) and the cell (0.15); the combination features (other
+strategies' signals, the six open) carry almost none (0.00-0.01). **No edge in the combination of
+the tested strategies' trades: the search for an edge in gold's intraday trades ends here, as
+registered.**
+
