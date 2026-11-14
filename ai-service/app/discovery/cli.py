@@ -7,6 +7,10 @@ import sys
 
 
 def main(argv: list[str]) -> int:
+    if argv and argv[0] == "pooled":
+        from app.discovery.pooled import main as pooled
+
+        return pooled(argv[1:])
     if argv and argv[0] == "calendar":
         from app.discovery.calendar import main as calendar
 

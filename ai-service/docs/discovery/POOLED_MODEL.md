@@ -101,6 +101,23 @@ search for an edge in gold's intraday trades ends with it.
 - **Effective sample:** the number of distinct trading days; trades on one day are not independent,
   so every interval is by day blocks, never by trade.
 
+## Addendum 1 (2026-11-14, while writing the code, before any build or run)
+
+1. **The level families are regenerated for every year** (2012 to 2026-01-09) by today's
+   `app/levels` code in one run (real families only), instead of joining the stored runs with
+   2022-2023: one code version for all years. The build compares its 2012-2021 trades with the
+   stored run (count and net sum) and reports it.
+2. **The volatility features are out of sample from 2013:** each year's log F and M3 / ATR ratio
+   come from M3 and M1 fitted on the earlier years only (yearly, expanding); 2012 has none (missing,
+   which LightGBM takes as such and Ridge fills with the training median plus a missing flag). A
+   candidate entering before 02:00 New York has none either: the day's forecast is issued at 02:00.
+3. **Every feature of a candidate entering at bar e reads bars up to e - 1** (also for the lab
+   strategies that enter at a bar's close: one bar of information given up, never one too many),
+   and only trades whose exit bar is before e. A test changes every bar from e on and every
+   outcome of trades closing at or after e, and the features do not move.
+4. **FxPro 2026:** the dollar's-lead lab cell (USDLEAD) cannot be made there (its driver feeds are
+   sealed after 2026-01-09); if kept, it is absent from the FxPro readout only.
+
 ## 8. Bookkeeping
 
 Counted in N, logged in `docs/phase3/TRIALS.md`. Code: `app/discovery/pooled.py`, `python -m app
