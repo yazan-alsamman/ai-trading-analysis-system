@@ -5,8 +5,10 @@ run in the database:
 
 - ``ai``: AI setups that were published (reached ARMED, ACTIVE or CLOSED), derived from
   ``ai_setups`` and ``ai_setup_events``. Outcome: ARMED/ACTIVE ``open``; CLOSED ``tp_hit``
-  when ``realized_r > 0`` else ``sl_hit``; EXPIRED and INVALIDATED ``expired`` (INVALIDATED
-  after ACTIVE should not happen, Fadi: it is shown ``expired`` and logged as a warning).
+  when ``realized_r > 0`` else ``sl_hit`` (also a setup without a target, B13: its trailing
+  stop or time exit is judged by ``realized_r``, and its ``risk_reward`` is null); EXPIRED
+  and INVALIDATED ``expired`` (INVALIDATED after ACTIVE should not happen, Fadi: it is shown
+  ``expired`` and logged as a warning).
 - ``strategy``: buy/sell rows of ``signals`` with their ``signal_outcomes`` row: none yet
   ``open``, ``correct`` true ``tp_hit``, false ``sl_hit``, null (a data gap) ``expired`` with
   the reason in ``note``. Gap rows are left out of every stat (``excluded_count``).
@@ -42,6 +44,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai import labels
 from app.ai.evaluate import DECISION
 from app.models.ai import AISetup, AISetupEvent, AISetupTake
 from app.models.instrument import Instrument
@@ -287,6 +290,7 @@ async def get_prediction(session: AsyncSession, user: User, prediction_id: str) 
             .where(AISetupEvent.setup_id == setup.setup_id)
             .order_by(AISetupEvent.at, AISetupEvent.id)
         )
+        events = list(events)
         item["ai"] = {
             "setup_id": setup.setup_id,
             "state": setup.state,
@@ -296,6 +300,11 @@ async def get_prediction(session: AsyncSession, user: User, prediction_id: str) 
             "grade": setup.grade,
             "ev_r": setup.ev_r,
             "valid_until": setup.valid_until,
+            # contract 0.3.0 (gold_levels): no tp, a trailing stop or a time exit
+            "exit_type": setup.exit_type,
+            "exit_reason": setup.exit_reason,
+            "exit_label": labels.exit_label(setup.exit_type),
+            "sl_history": [{"at": e.at, "sl": e.sl} for e in events if e.sl is not None],
             "events": [
                 {
                     "from_state": e.from_state,
@@ -303,6 +312,7 @@ async def get_prediction(session: AsyncSession, user: User, prediction_id: str) 
                     "at": e.at,
                     "reason": e.reason,
                     "realized_r": e.realized_r,
+                    "sl": e.sl,
                 }
                 for e in events
             ],

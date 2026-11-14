@@ -16,6 +16,8 @@ MODELS = {
     "evaluate-response-ok": c.EvaluateResponse,
     "evaluate-response-ok-rules-only": c.EvaluateResponse,
     "evaluate-response-model-unavailable": c.EvaluateResponse,
+    "evaluate-request-gold-levels": c.EvaluateRequest,
+    "evaluate-response-gold-levels": c.EvaluateResponse,
     "size-request": c.SizeRequest,
     "size-response": c.SizeResponse,
     "size-request-fixed-cost": c.SizeRequest,

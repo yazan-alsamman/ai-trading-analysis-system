@@ -10,6 +10,7 @@ from app.models.ai import (
     AISetupOutbox,
     AISetupSize,
     AISetupTake,
+    AIVolatilityDaily,
 )
 from app.models.api_key import ApiKey, Scope
 from app.models.backtest import Backtest, BacktestStatus, BacktestTrade
@@ -82,6 +83,7 @@ __all__ = [
     "AISetupExplanation",
     "AISetupSize",
     "AISetupTake",
+    "AIVolatilityDaily",
     "ChartAnalysisRecord",
     "CheckoutSession",
     "CheckoutStatus",

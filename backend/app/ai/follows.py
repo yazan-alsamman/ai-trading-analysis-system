@@ -14,8 +14,8 @@ from app.models.ai import AIAlertFollow
 from app.models.instrument import Instrument
 from app.models.user import User
 
-# The profiles ai-service evaluates (the contract's ``profile``; to extend with Fadi)
-PROFILES = frozenset({"intraday"})
+# The profiles ai-service evaluates (the contract's ``profile``; gold_levels: B13, contract 0.3.0)
+PROFILES = frozenset({"intraday", "gold_levels"})
 
 
 async def list_follows(session: AsyncSession, user: User) -> list[AIAlertFollow]:

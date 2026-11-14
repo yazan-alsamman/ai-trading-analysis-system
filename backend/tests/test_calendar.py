@@ -261,10 +261,73 @@ async def test_for_evaluate(session: AsyncSession, db_connection) -> None:
     assert await service.for_evaluate(session, utc(2026, 1, 6, 5)) == []
     assert await service.for_evaluate(session, bar, as_of=T1 - timedelta(minutes=1)) == []
     euro = await service.for_evaluate(session, utc(2026, 1, 7, 10), currencies=["EUR"])
+    # B13: the USD high events of the day (02:00 to 16:45 New York) come whatever the currencies
     assert euro == [
         {"ts": "2026-01-07T10:00:00Z", "currency": "EUR", "impact": "high",
-         "title": "CPI Flash Estimate y/y"}
+         "title": "CPI Flash Estimate y/y"},
+        {"ts": "2026-01-07T13:15:00Z", "currency": "USD", "impact": "high",
+         "title": "ADP Non-Farm Employment Change"},
+        {"ts": "2026-01-07T15:00:00Z", "currency": "USD", "impact": "high",
+         "title": "JOLTS Job Openings"},
+        {"ts": "2026-01-07T19:00:00Z", "currency": "USD", "impact": "high",
+         "title": "FOMC Meeting Minutes"},
     ]  # fmt: skip
+
+
+async def test_for_evaluate_adds_the_usd_high_events_of_the_new_york_day(
+    session: AsyncSession,
+) -> None:
+    """B13: at 02:00 New York the day's 08:30 CPI and 14:00 FOMC are in the list (far beyond
+    ±6 h), once each, in time order; medium events stay in the ±6 h window only, and another
+    currency's high events too. Wednesday 11 Nov 2026 (EST: New York = UTC-5)."""
+    eur = EventIn.build(
+        source="forexfactory_live", currency="EUR", title="ECB Press Conference", impact="high",
+        scheduled_at=utc(2026, 11, 11, 18, 45),
+    )  # fmt: skip
+    await service.upsert_versions(
+        session,
+        [
+            usd("CPI m/m", utc(2026, 11, 11, 13, 30)),  # 08:30 New York
+            usd("FOMC Statement", utc(2026, 11, 11, 19)),  # 14:00 New York
+            usd("Late Speech", utc(2026, 11, 11, 22)),  # 17:00 New York: after 16:45
+            usd("Early Release", utc(2026, 11, 11, 6, 55)),  # 01:55 New York: before 02:00
+            usd("Retail Sales", utc(2026, 11, 11, 13, 30), impact="medium"),
+            usd("Overnight Data", utc(2026, 11, 11, 4), impact="medium"),  # within ±6 h
+            usd("Next Day CPI", utc(2026, 11, 12, 13, 30)),  # Thursday: another day
+            eur,
+        ],
+        utc(2026, 11, 9),
+    )
+    bar = utc(2026, 11, 11, 7)  # 02:00 New York
+    items = await service.for_evaluate(session, bar)
+    assert [(i["ts"], i["title"]) for i in items] == [
+        ("2026-11-11T04:00:00Z", "Overnight Data"),
+        ("2026-11-11T06:55:00Z", "Early Release"),  # within ±6 h of the bar
+        ("2026-11-11T13:30:00Z", "CPI m/m"),
+        ("2026-11-11T19:00:00Z", "FOMC Statement"),
+    ]
+    # a bar after 17:00 New York belongs to the next trading day (Thursday): its CPI, and the
+    # FOMC only while it is within ±6 h
+    late = await service.for_evaluate(session, utc(2026, 11, 11, 22, 15))  # 17:15 New York
+    assert [i["title"] for i in late] == ["FOMC Statement", "Late Speech", "Next Day CPI"]
+    # in the window and within ±6 h: once
+    noon = await service.for_evaluate(session, utc(2026, 11, 11, 17))  # 12:00 New York
+    titles = [i["title"] for i in noon]
+    assert titles == ["CPI m/m", "Retail Sales", "FOMC Statement", "Late Speech"]
+
+
+async def test_for_evaluate_limit_drops_the_farthest_medium_events_first(
+    session: AsyncSession,
+) -> None:
+    bar = utc(2026, 11, 11, 15)  # 10:00 New York
+    events = [
+        usd(f"Medium {k}", bar + timedelta(minutes=k), impact="medium") for k in (-200, 5, 300)
+    ]
+    events += [usd("CPI m/m", utc(2026, 11, 11, 13, 30)), usd("FOMC", utc(2026, 11, 11, 21, 30))]
+    await service.upsert_versions(session, events, utc(2026, 11, 9))
+    titles = [i["title"] for i in await service.for_evaluate(session, bar, limit=3)]
+    assert titles == ["CPI m/m", "Medium 5", "FOMC"]  # time order, the far mediums dropped
+    assert len(await service.for_evaluate(session, bar)) == 5
 
 
 # --- read API -----------------------------------------------------------------------------------

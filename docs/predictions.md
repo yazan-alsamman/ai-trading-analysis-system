@@ -18,12 +18,12 @@ There are two sources. Both come back in one shape.
 | What counts | setups that were **published**: they reached ARMED (or ACTIVE or CLOSED). DEVELOPING-only setups, and setups dropped before ARMED, are not predictions | every buy/sell row of `signals` (live engine) |
 | Stored in | nothing new: derived from `ai_setups` and `ai_setup_events` | `signals`, plus one `signal_outcomes` row once resolved |
 | `id` | `ai:<setup_id>` | `sig:<signal uuid>` |
-| `timeframe` | `15m` (the decision bar of ai-service) | the signal's timeframe |
+| `timeframe` | `15m` (the decision bar of ai-service; kept as `15m` for `gold_levels` too, whose bar is 5m) | the signal's timeframe |
 | `strategy_key` | the profile (`intraday`) | the strategy key (`ma_crossover`, `custom:<uuid>`, …) |
 | `generated_at` | when it was first published (the first ARMED/ACTIVE/CLOSED event; `created_at` if there is none) | when the signal was stored (`signals.created_at`, about the bar's close) |
 | `resolved_at` | the event of its final state | `signal_outcomes.resolved_at` |
 | `probability` | the setup's probability: **null in v1** (no model) | **null**: `strength` is a 0..1 *signal strength* (for example ADX/50, or the share of agreeing rules), documented in `libs/strategies`, not a probability |
-| `risk_reward` | `r_multiple` | null |
+| `risk_reward` | `r_multiple` (null for a setup without a target, B13 `gold_levels`) | null |
 | `realized_r` | the setup's `realized_r` | null |
 | `return_pct` | null | the move over the horizon, % |
 | `model_version` | as stored (null in v1) | null |

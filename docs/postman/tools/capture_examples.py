@@ -63,10 +63,10 @@ BACKEND = Path(__file__).resolve().parents[3] / "backend"
 AI_SETUP_ID = "xauusd-intraday-2026-10-19T14:15:00Z-buy"  # new_setups[0] of the example
 SEED_AI_SETUP = """
 import asyncio, json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from sqlalchemy import select, text
-from app.ai import contract as c, explain, store
+from app.ai import contract as c, explain, store, volatility
 from app.db.session import SessionLocal
 from app.models.instrument import Instrument
 
@@ -115,7 +115,15 @@ async def main():
         await explain.store_answer(
             session, setup_id, "ar", c.ExplainResponse.model_validate(load("explain-response"))
         )
-        print(first.inserted, second.transitions_applied)
+        # contract 0.3.0: gold_levels setups without a target (one CLOSED by its trailing stop
+        # after two sl_moved) and the day's volatility, stored for today's New York trading day
+        req = c.EvaluateRequest.model_validate(load("evaluate-request-gold-levels"))
+        resp = load("evaluate-response-gold-levels")
+        resp["volatility"]["day"] = volatility.trading_day(datetime.now(UTC)).isoformat()
+        parsed = c.EvaluateResponse.model_validate(resp)
+        gold_levels = await store.apply_evaluation(session, gold, req, parsed)
+        await store.store_volatility(session, gold, req.request_id, parsed.volatility)
+        print(first.inserted, second.transitions_applied, gold_levels.sl_moves)
 
 
 asyncio.run(main())
@@ -265,7 +273,7 @@ class Runner:
             path = path.replace(f":{name}", self.resolve(value))
         query = {k: self.resolve(v) for k, v, _ in req.query}
         if variant and variant.query is not None:
-            query.update(variant.query)
+            query.update({k: self.resolve(v) for k, v in variant.query.items()})
         headers = self.auth_headers(variant.auth if variant and variant.auth else req.auth)
         for k, v, _ in req.headers:
             headers[k] = self.resolve(v)
@@ -357,6 +365,10 @@ class Runner:
             self.vars["refresh_token"] = data["refresh_token"]
         if req.id == "auth_logout":
             self.vars.pop("refresh_token", None)
+        if req.id == "admin_ai_setups":
+            # the newest is a gold_levels setup (its own variant); Get AI setup shows the
+            # intraday one, which has sizes, a take and alerts
+            self.vars["ai_setup_id"] = AI_SETUP_ID
         if req.id == "users_me_password" and res.status_code == 204:
             self.vars["user_password"], self.vars["user_new_password"] = (
                 self.vars["user_new_password"],
@@ -662,6 +674,10 @@ class Runner:
             self.after(item, res)
             for variant in item.variants:
                 vres = self.send(item, variant)
+                if vres.status_code == 429 and variant.status != 429:
+                    # an IP limit (e.g. register) used up by the setup: wait it out once
+                    time.sleep(int(vres.headers.get("retry-after", "5")) + 1)
+                    vres = self.send(item, variant)
                 flag = "ok" if vres.status_code == variant.status else "!!"
                 print(f"{flag}   variant {variant.name!r}: {vres.status_code} {vres.text[:200]}")
                 self.record(item, variant.name, vres, variant)

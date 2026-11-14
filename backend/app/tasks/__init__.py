@@ -80,12 +80,13 @@ celery_app.conf.update(
         "notifications-digests": {"task": "notifications.digests", "schedule": crontab(minute="*")},
         # pending deliveries whose send task was lost (B11)
         "notifications-sweep": {"task": "notifications.sweep", "schedule": crontab(minute="*")},
-        # AI evaluations (B9): at each 15m boundary, one ai.evaluate per instrument and profile
+        # AI evaluations (B9, B13): at each 5m boundary, one ai.evaluate per instrument and
+        # profile whose bar closes there (intraday every 15m, gold_levels every 5m),
         # AI_EVALUATE_DELAY_SECONDS later; nothing while AI_EVALUATE_ENABLED is false
         "ai-evaluate-tick": {
             "task": "ai.evaluate_tick",
-            "schedule": crontab(minute="0,15,30,45"),
-            "options": {"expires": 300},
+            "schedule": crontab(minute="*/5"),
+            "options": {"expires": 240},
         },
         # AI setup alerts from the outbox (B11), every 30 s
         "ai-alerts-dispatch": {
