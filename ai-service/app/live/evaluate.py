@@ -50,6 +50,7 @@ from app.contract import (
 )
 from app.live.frames import DataQualityError, build_frames
 from app.live.scanner import LiveSetup, Step, scan
+from app.scoring import volatility as vol
 
 SERVICE_VERSION = "0.1.0"
 FEATURES_VERSION = "none"  # v1 computes no model features
@@ -179,6 +180,28 @@ def _transition(sid: str, before: SetupState, step: Step) -> Transition:
     )
 
 
+def volatility(req: EvaluateRequest) -> vol.VolatilityOutlook:
+    """Today's volatility outlook for gold (``docs/vol/SERVING.md``); it touches nothing else in
+    the answer."""
+    if req.instrument != "XAUUSD" or "15m" not in req.bars:
+        return vol.VolatilityOutlook(status="not_supported")
+    bars = req.bars["15m"]
+    ts = pd.to_datetime([b.ts for b in bars], utc=True)
+    m = pd.DataFrame({"ts_utc": ts, "close_utc": ts + pd.Timedelta(minutes=15),
+                      "open": [b.o for b in bars], "high": [b.h for b in bars],
+                      "low": [b.l for b in bars], "close": [b.c for b in bars]})  # fmt: skip
+    as_of = pd.Timestamp(req.bar_close_ts).tz_convert("UTC")
+    return vol.outlook(m, vol.calendar_frame(req.calendar), as_of)
+
+
+def with_vol(setup: dict[str, Any], vo: vol.VolatilityOutlook) -> dict[str, Any]:
+    """A new setup's evidence carries the day's outlook when there is one, so ``/v1/explain``
+    needs nothing but the setup (``docs/phase7/PLAN.md`` F2)."""
+    if vo.status == "ok":
+        setup["evidence"]["volatility"] = vo.model_dump(mode="json")
+    return setup
+
+
 def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
     prof, inst = config_for(req)
     p = strategy(prof.rules)
@@ -192,6 +215,7 @@ def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
             versions=ver,
             abstentions=[Abstention(reason=e.reason, detail=e.detail)],
         )
+    vo = volatility(req)
     found = scan(live.frames, p, inst)
     as_of = live.as_of
     by_id = {setup_id(req, ls): ls for ls in found if not ls.rejected}
@@ -204,13 +228,13 @@ def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
             continue
         if ls.created_at == as_of:  # rule 1
             first, *rest = ls.path
-            new_setups.append(Setup.model_validate(payload(req, ls, first)))
+            new_setups.append(Setup.model_validate(with_vol(payload(req, ls, first), vo)))
             before = first.state
             for step in rest:
                 transitions.append(_transition(sid, before, step))
                 before = step.state
         elif ls.state not in FINAL_STATES:  # rule 4
-            new_setups.append(Setup.model_validate(payload(req, ls, ls.path[-1])))
+            new_setups.append(Setup.model_validate(with_vol(payload(req, ls, ls.path[-1]), vo)))
 
     for sid, old in sorted(echoed.items()):
         if old.state in FINAL_STATES:
@@ -251,4 +275,5 @@ def evaluate(req: EvaluateRequest) -> LiveEvaluateResponse:
         new_setups=new_setups,
         transitions=transitions,
         abstentions=abstentions,
+        volatility=vo.model_dump(mode="json"),  # the contract's Volatility (0.3.0)
     )

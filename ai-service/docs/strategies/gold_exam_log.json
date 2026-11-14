@@ -1,0 +1,26 @@
+{
+  "registration": "docs/strategies/GOLD_LOCKBOX_EXAM.md",
+  "commit": "e45256a3ba00c8ced2516126dbc028438e10da72",
+  "file": "XAUUSD_M1_202601120101_202610202356.csv",
+  "sha256": "d95fca94160e513b1e5a28cc26de42f6ca3c0f776355f0f6ba18f590195499b9",
+  "opened_utc": "2026-11-05T10:18:00+00:00",
+  "frozen": {
+    "LVL4H": [
+      0.75,
+      "02-16",
+      0.05,
+      200
+    ],
+    "PIVOT": [
+      "02-16",
+      48
+    ],
+    "management": "M8",
+    "ai_filter": false
+  },
+  "last_bar_utc": "2026-10-20T20:55:00+00:00",
+  "trades": {
+    "LVL4H": 154,
+    "PIVOT": 135
+  }
+}

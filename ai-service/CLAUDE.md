@@ -201,7 +201,88 @@ armed L1 development setup; one active trade; family C fixed entry set; post-app
 computed on market data. Fadi approved the family C and approval-timing wording (2026-10-26, in
 `PREREG.md`) and the Stage A review points (2026-10-27: session end and its gaps, the 1h
 boundary, a_S without a swap export, complete S1 and S4 ranges, rollover price, T4 wording;
-`docs/strategies/STAGE_A.md`). PREREG not approved; no frozen commit recorded.
+`docs/strategies/STAGE_A.md`). Rules frozen at `b9ca2a8` (`main` after PR #77, tag
+`strategies-rules-v1`, 2026-10-29); pre-approval counts run 2026-10-29
+(`docs/strategies/counts.md`, candidates only). Stage C code built, not run (`python -m app
+research evaluate`, `post-counts`). **PREREG approved by Fadi 2026-10-30** (code `dc4ae2f`, seeds
+20261030 / 20261031). **Stage C done 2026-10-31** (code `57cc935`, `docs/strategies/evaluation.md`,
+trials 11-18): all eight strategies **unvalidated** (every mean net R below 0; S1 beats E0, d
++0.038, but not its costs). **Stage D done 2026-10-31** (`management.md`, trials 19-21): scalp
+management passed (M8, delta +0.015, Holm p 0.007; net still negative), intraday and swing not
+activated. Addendum 1 (S1 + M8, trial 26) approved 2026-10-31. **Stage E closed by Fadi 2026-10-31**
+(not run; family D p = 1). **Holdout read once 2026-10-31** (`docs/strategies/holdout.md`): scalp
+management M8 consistent (+0.010 R), **activated**; Addendum 1 (S1 + M8) not consistent (net
+-0.077). Research plan complete; S1-S8 served as unvalidated. Next: write-up; serving (stage F)
+with Yazan; forward paper log; P9.
+
+**Commercial gold track (2026-11-01 to 11-11, exploratory, outside the registered plan; every look
+in `docs/phase3/TRIALS.md`).** Gold level breaks with stop orders: **v1 frozen 2026-11-05** (LVL4H
++ PIVOT with M8, `docs/strategies/GOLD_V1.md`) after its **lockbox exam passed** (+0.052 R a trade
+on real ticks, SE 0.071, `GOLD_LOCKBOX_EXAM.md`; **the XAUUSD lockbox file was opened once for it**;
+the five other lockbox files stay sealed). Shadows PIVW, ASIA, PWHL (`GOLD_SHADOW.md`) and, from 2026-11-11, ROUND ($50 multiples, `GOLD_ROUND.md` §6). Live EA
+`tools/mt5/GoldLive.mq5`, matched to Python in the tester; **FxPro demo since 2026-11-10 on a
+MetaTrader VPS** (account 592239561; RiskPct 0.5, ShadowRiskPct 0.5, MaxOpenRiskPct 3, daily stop
+3%, drawdown stop 25%); stop rules: −0.10 R at the 100th trade, then every 50. Weekly check:
+`python -m app research gold-demo check --report <MT5 report .html/.xlsx> [--export <GOLD M1>]`.
+On FxPro 2016-2026 the five make about +0.031 R a trade with slip (largest drawdown about 126 R).
+**FxPro's M1 exports (GOLD, NAS100, XAGUSD) hold summary bars in 2017-2022** (real volume 0, tick
+volume > 5,000, the day's whole range): every FxPro reader drops them (`gold_live.summary_bar`); all
+FxPro checks were rerun 2026-11-11, no decision changed (`docs/data_quality/FXPRO_SUMMARY_BARS.md`).
+**Everything else tried on gold was dropped** (about 30 registered looks): ORB, pullback, 50%
+retrace, night reversion, value area, daily swing, regime switch, dealing range, the AH bot clone
+with filters and meta-labeling, PBK pullback-before-break, round numbers (3 of 4 conditions; too
+close to the five), the dollar's lead, time-of-day (intraday momentum, London to New York, the
+night), losing-trade filters (one kept as a paper shadow), the magnet to an untouched level, a model fading the five's predicted losers (Brier skill ≤ 0). Exits:
+no fixed target, tighter SL or overnight hold beats M8 with the 16:45 close (`GOLD_EXIT`,
+`GOLD_SL`, `GOLD_HOLD`). `gold_path.md`: after an entry gold is close to a random walk (a +0.04 D
+push in the first 5-15 minutes). **The five on the unseen Nasdaq 100 lose** (−0.040 R on clean
+data; gross +0.074 beats a random side, the cost takes it; `FIVE_NAS100.md`), and RECLAIM there does not hold (`FIVE_NAS_RECLAIM.md`).
+**Discovery round 2 (markout map, `docs/discovery/PLAN.md`)**: plan corrected and accepted (gates
+2 cost units, t ≥ 3, 224 cells; silver a feature only); D1-D2 in progress (MT5 calendar 2010-2026
+imported, `python -m app discovery calendar|drivers|count`; Dukascopy dollar index and US bond stored;
+fake spikes: F1 reads the dollar from 2019, the bond from 2020); no outcome computed; `PREREG_2.md` approved 2026-11-11; **the map (210 cells, 2018-2021) is negative: no cell passes, the round ends** (`docs/discovery/map.md`); a planted-edge check found the simulator exact and the map weak at 60-240 minutes (`INJECT.md`); the one lead (round-number break continuation) failed on six untouched markets (`LEAD_GRID.md`). **Level families (Fadi's idea, `docs/levels/SPEC.md`): 24 families x break / rejection against 200 shifted copies, negative (0 of 8)**; order blocks the same way, negative (`docs/levels/ORDER_BLOCKS.md`).
+**Volatility forecast, part 1 (`docs/vol/VOL_FORECAST.md`, 2026-11-12): passes.** At 02:00 New York, HAR +
+scheduled USD news + weekday (M3) forecasts the five's window RV better than ATR(4h) (QLIKE 0.105 vs
+0.128, Holm p 0.0003, 7 of 8 years; R^2 0.62 vs 0.52); the news calendar is the gain. Part 2 (does it help
+the five?) **does not pass** (`VOL_PART2.md`: D x M3/ATR ratio, −0.003 R a day, p 0.55; FxPro 2026
+−0.019): the five keep the ATR; the forecast serves the product's "expected range today". Direction
+stays unforecastable; size is forecastable but does not pay in the five.
+**Served as user information (Fadi, 2026-11-12, `docs/vol/SERVING.md`):** the 15m M3 passed its check
+(QLIKE 0.148 vs 0.170) and is frozen (`app/config/volatility_v1.json`, `vol-m3-15m-v1`);
+`/v1/evaluate` answers carry an additive `volatility` object (expected move, range p20/p50/p80, level,
+the day's USD news) that changes nothing else. It needs about 2,500 x 15m bars and the day's calendar
+from the backend (proposal for Yazan in `SERVING.md` §5); until then it says `insufficient_history`.
+**The five as a portfolio (`docs/portfolio/RISK_SPLIT.md`, 2026-11-12): splitting risk across same-direction
+trades fails** (Sharpe and drawdown worse): same-direction trades correlate (rho 0.66) but are the best
+ones; trades with no other of the five open (k = 0, 53%) carry almost no edge (store +0.009, FxPro −0.021 R).
+Confluence was then tested on six markets never read for it (`CONFLUENCE.md`): **does not pass**
+(+0.005 R gross, p 0.40, 3 of 6 positive); it is treated as specific to gold's data.
+**Live monitor (`docs/strategies/GOLD_MONITOR.md`, 2026-11-13) replaces the old stop rule as the
+decision:** A process checks, B Bayesian edge (ALL6 red under 10%), C CUSUM (h 3.75), D drawdown
+against history; a "Health" section of `gold-demo check`. Reference built once with `gold-demo
+reference --export <GOLD M1 from 2016>` (stored in `data/processed`, untracked).
+**Range exhaustion (`docs/vol/EXHAUSTION.md`, 2026-11-13): does not pass**; breaks after the day used
+much of its forecast move did better, not worse (+0.090 vs +0.054 R, 2022-2026).
+**Pooled model over all tested strategies' trades (`docs/discovery/POOLED_MODEL.md`, 2026-11-14): does not
+pass** (59 cells, ~87 candidates a day; Ridge −0.031 R per selected trade on 2022-2026, p 0.73, below random
+selection's 95th percentile; the combination features carry no gain). **The search for an edge in gold's
+intraday trades is closed**; the five stay the only strategies, on the demo under the monitor.
+**Cost-sensitivity map (`docs/discovery/COST_SENSITIVITY.md`, 2026-11-14): cost is not the key** (at half the
+cost only lab copies of the five's levels come alive; at zero cost 4 of 98; the gross-positive cells were noise).
+**P7 started 2026-11-13 (`docs/phase7/PLAN.md`).** Decisions (Fadi): the LLM is **Gemini 3.6 Flash**
+(`google-genai`, as the backend's chart analysis) behind a thin interface; the five (+ ROUND) are
+served by ai-service as a new `gold_levels` profile and explained (F1 serve, F2 template, F3 Gemini +
+number checker, F4 gate: zero invented numbers, F5 chat agent later). F1 needs a contract change
+with Yazan (`tp` nullable for trailing exits, `sl` moves, 5m bars).
+F1 engine built and checked (650/650 trades match the research on 2025-07 to 2026-01, no look-ahead;
+`docs/phase7/gold_levels_check.md`); not served until Yazan agrees `docs/phase7/CONTRACT_PROPOSAL.md`.
+Found on the way: when two levels of one strategy are touched on the same bar, `gold_lab.simulate`'s
+unstable sort may take the farther level's entry (43 such trades in six months, one with a different R).
+**F2 done (2026-11-13):** `POST /v1/explain` answers with a checked template (Arabic / English;
+`verified: true, template_used: true`); generic number checker `app/agent/verify.py`; L1 texts say no
+edge was found. **F3 built (2026-11-13):** Gemini (`app/agent/llm.py`, prompt `explain_v1`) writes in
+front of the template; shown only if it passes `explain.rejected` (numbers, ending, no advice, language,
+length, name, direction); off until `GEMINI_API_KEY` is set. Next: F4 gate (50 setups, real model).
 Clock: GBPUSD, USDJPY, AUDUSD, USDCAD history is stamped on shifted clocks in some periods;
 the importer detects and corrects them (`app/data/clock.py`, segments in `import.json`,
 `docs/data_quality/README.md` §1). The rule was set on the same data: say so in the thesis.
@@ -225,3 +306,13 @@ Layout: `app/main.py` (service), `app/config/` (instruments + D23 splits, TOML),
 - Agent data access: backend read-only endpoints vs data passed in the request (Yazan).
 - Which vision-capable LLM to start with (Fadi). Exact end date of the 2026 export (Fadi).
 - FxPro production route: cTrader Open API or Windows MT5 pusher (Yazan). Free historical calendar (Yazan).
+
+## Parked for later (Fadi, 2026-11-11: after the gold work is finished)
+
+- **Daily trend following across many markets.** The one style with long-run evidence (time-series
+  momentum, e.g. Moskowitz, Ooi and Pedersen 2012); gold's own daily swing test was positive in
+  every setting but had too few trades (`GOLD_SWING.md`). About 5-15 trades a year a market,
+  held for weeks, win rate about 35-40%, long flat spells; about 1-2 new trades a day needs 30-40
+  markets. Needs: FxPro daily (or M1) exports of 20-40 markets (indices, energies, metals, more FX),
+  their swap table (`tools/mt5/ExportSwaps.mq5`), and a registration before any run. A new
+  project, not a gold bot.

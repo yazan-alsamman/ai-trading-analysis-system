@@ -1,25 +1,32 @@
 # Pre-registration: signal strategies, trade management and AI layers
 
-**Status: DRAFT, not registered.** First written 2026-10-25; revised 2026-10-25 after Fadi's
-review of the decision tables (C1-C8, D1-D13, N1-N11, R1, the four final refinements); revised
+**Status: REGISTERED, approved by Fadi on 2026-10-30.** First written 2026-10-25; revised
+2026-10-25 after Fadi's review of the decision tables (C1-C8, D1-D13, N1-N11, R1, the four final
+refinements); revised
 2026-10-26 after the Stage A audit (family C selection, approval timing); revised 2026-10-27
 after Fadi's decisions on the Stage A review (the session end and its gaps, the 1h boundary, a_S
 without a swap export, complete ranges for S1 and S4, the rollover price, T4 wording;
-`STAGE_A.md`). It becomes binding when Fadi
-approves it as written and the approval date and commit are filled in. The rules are frozen at a
-recorded commit before any count. Before formal approval only the pre-approval candidate counts
-of section 12 may run; they use bars up to the signal bar only and choose nothing. Until approval
-no outcome of any strategy, bundle or model here (R, hit rate, exit reason, exit time, exit mix,
-MFE / MAE, equity) may be computed, printed or plotted, on any period, and no count that uses an
-exit may run.
+`STAGE_A.md`); swap snapshot and the `CURRENCY_SYMBOL` conversion fix 2026-10-28. **Rules frozen
+2026-10-29** at the `main` commit of PR #77 (tag `strategies-rules-v1`), before any count.
+**Approved as written on 2026-10-30**, after the pre-approval counts (`counts.md`) and before any
+outcome or any count that uses an exit; binding from then.
+The rules are frozen at a recorded commit before any count. Before formal approval only the
+pre-approval candidate counts of section 12 may run; they use bars up to the signal bar only and
+choose nothing. Until approval no outcome of any strategy, bundle or model here (R, hit rate,
+exit reason, exit time, exit mix, MFE / MAE, equity) may be computed, printed or plotted, on any
+period, and no count that uses an exit may run.
 
 | Field | Value |
 | --- | --- |
-| Rules frozen at commit | _(commit; before any count)_ |
-| Approved by | _(Fadi)_ |
-| Approval date | _(YYYY-MM-DD; after the pre-approval candidate counts, before any outcome or any count that uses an exit)_ |
-| Code version at approval | _(commit; the frozen commit unless a recorded new version)_ |
-| Seeds (E0, bootstrap) | _(fixed at approval)_ |
+| Rules frozen at commit | b9ca2a8065513c832ff88deac3c697b7dd44edf5 |
+| Freeze record | `main` after PR #77 (merged 2026-10-28), tag `strategies-rules-v1`, recorded 2026-10-29; the rule files (`app/strategies/cli.py`, `RULE_PATHS`) must match it for a count to run |
+| Approved by | Fadi |
+| Approval date | 2026-10-30 |
+| Code version at approval | dc4ae2f64411e685a6bf0af2b16f4c09122c7123 (the frozen rules of b9ca2a8 unchanged, plus the Stage C code: `app/research/strategy_eval.py`, `post_counts.py`) |
+| Seeds (E0, bootstrap) | 20261030, 20261031 |
+| Stage E (family D, AI) | closed by Fadi on 2026-10-31 without running (no strategy has a net edge to build on). D1-D4 are not tested: each enters Holm with p = 1 and is not activated (section 9); trials 22-25 not run. The single holdout reading follows this decision (section 10) |
+| Addenda | 1: S1 managed by M8, judged at the single holdout reading and in the forward paper log (`ADDENDUM_1_S1_M8.md`, approved 2026-10-31, trial 26) |
+| Code changes after approval | 2026-10-31, before any Stage C result: performance only in `app/research/strategy_eval.py` (rollover instants computed once per entry frame instead of per E0 draw, the same floats, tested; the New York year and hour of the E0 matching computed once instead of per trade; progress lines). No rule, statistic, seed or output changed. The commit Stage C ran on is recorded in `evaluation.md`. 2026-10-31, after the Stage C results: the Stage D command (`app/research/management_eval.py`), which only runs the family C functions frozen at `b9ca2a8` (`book`, `decide`) as section 9 states them; its choices where section 9 is silent are listed in `STAGE_A.md`. The commit Stage D runs on is recorded in `management.md`. 2026-10-31, after Stage E was closed: the holdout reading command (`app/research/holdout.py`), which computes only the registered holdout checks (section 9 for family C scalp, Addendum 1) |
 
 ## 1. Why, and what is not a goal
 

@@ -23,7 +23,7 @@ prints nothing.
 `libs/indicators` (`trading-indicators`) is now a dependency of ai-service: in the `research` and
 `dev` extras of `pyproject.toml` (with a `tool.uv.sources` path), installed in the local venv
 (`uv pip install -e ../libs/indicators`) and in CI (`.github/workflows/ci.yml`). It is not in the
-base dependencies, so the production image still builds. Full suite: 378 tests pass (2026-10-28,
+base dependencies, so the production image still builds. Full suite: 413 tests pass (2026-10-31,
 after the review decisions, on `ai/stage-a-engine` with `main`'s tests).
 
 ## Audit points (2026-10-26)
@@ -134,11 +134,67 @@ trade is open to the data end); DE 1.5 for S4 and S8, 1.2 otherwise, as constant
 
 ## Left for later stages
 
-- E0 for the new strategies (section 8: same instrument, year, New York hour, entry frame; coin
-  direction; same risk in ATR, TP rule, cost filter; 200 replications): Stage C.
-- Stage B: freezing the rules (the commit on `main` after the merge, recorded in `PREREG.md`),
-  then running `python -m app strategies count` on the real store, which writes
-  `docs/strategies/counts.md`. The command is built; it has run on synthetic stores only.
+- **Stage C code, built 2026-10-30 before approval, not run** (`app/research/strategy_eval.py`,
+  `python -m app research evaluate`; `app/research/post_counts.py`, `python -m app research
+  post-counts`). Both refuse to run until the approval date and the seeds are in `PREREG.md`, and
+  while any file of `EVAL_PATHS` differs from the frozen commit. `EVAL_PATHS` is `RULE_PATHS` plus
+  `app/management`, `app/setups/labels.py` and `app/smc/primitives.py`: the count command's
+  `RULE_PATHS` (frozen) leave out the management engine and the label code it reads, which are
+  rules too (section 15). delta*_S is read from `counts.md`, which must name the frozen commit.
+  Tests on synthetic markets only (`tests/test_strategy_eval.py`). Choices fixed in this code where
+  section 8 is silent (part of what Fadi approves):
+  - Trades: entries from 2018-01-01 under M0's one-active-trade rule, warm-up bars from 2017, the
+    same set as the post-approval counts (tested); sensitivities 1 and 2 use a second book with
+    entries from 2012.
+  - x and E0 both use the decision swap scenario (W1 by the trade's own exit time, at the price of
+    each rollover). The 2x stress keeps the W1 swap.
+  - E0 matches on the New York year and hour of the signal bar's open. Its risk is the trade's risk
+    over the strategy's entry-frame ATR, times the ATR of the random bar. Its TP is the trade's own
+    R multiple (for S2, S6 and S8, whose TP is a price level, the R the level gave). A drawn bar must
+    be a weekday that is not a US holiday, with time left before the session end (scalp and
+    intraday), and with a bar after it. A draw that fails the cost filter or is unresolved is
+    redrawn, up to 50 times.
+  - Trades without any E0 draw are left out of the test and counted. Unresolved trades are left out
+    and counted.
+  - One bootstrap seed for every strategy and sensitivity. The Bonferroni bounds use the same
+    draws. The first-Friday filter drops trades open at 08:30 New York on a month's first Friday.
+  - A passed strategy is reported as "passed", waiting for the holdout check. The holdout is not
+    read by this command.
+- **Incident, 2026-10-30.** After the approval fields were filled in (not yet committed), a test
+  meant to check that `post-counts` refuses an unapproved preregistration patched the guard of
+  `evaluate` only, so `post-counts` ran on the real store twice and wrote `counts_post.md` and
+  `counts_post_by_year.csv`. These are the post-approval counts the approval allows (no R, exit
+  reason, exit price or exit time). The two files were deleted unread and the test fixed (it now
+  patches both commands); the counts are rerun with the command after the approval commit.
+- **Stage C restart, 2026-10-31.** The first run of `evaluate` (started 2026-10-30) printed nothing
+  and spent 84% of its time rebuilding the rollover instants for every E0 draw (about 1 ms each,
+  about 14 million draws). It was stopped before writing anything. `Rollovers` now computes them
+  once per entry frame: about 10 times faster, the same floats (tests compare both paths exactly),
+  with a progress line per E0 replication. Recorded in `PREREG.md` (code changes after approval).
+  The second run showed 7 minutes per replication (about 24 hours in all): the E0 loop rebuilt the
+  New York year and hour arrays of all 74,174 trades for every trade. They are now computed once;
+  the same values. That run was stopped too, before writing anything.
+- **Stage D code, built 2026-10-31 after Stage C, not run** (`app/research/management_eval.py`,
+  `python -m app research management`; tests on synthetic data, `tests/test_management_eval.py`).
+  Same guard as Stage C. It uses the frozen family C functions (`book.fixed_entry_table`,
+  `overlaps`, `entry_set_difference`; `decide.training`, `select_bundle`, `window_trades`,
+  `paired_test`, `holm`). Choices fixed here where section 9 is silent: the entry set is M0's
+  one-active book on bars from 2012 (all candidates after the indicator warm-up); net R of every
+  bundle includes the decision swap (W1 by its own exit time); the 13 windows and the 1-day embargo
+  come from `research.toml`; the 95% interval of the mean delta is the percentile interval of the
+  same bootstrap (reported); the bundle the procedure would serve is the selection at 2024-07-01;
+  trial numbers 19 scalp, 20 intraday, 21 swing; the diagnostics (overlaps, entries added and
+  dropped) cover all years.
+- **Holdout reading code, built 2026-10-31 after Stage E was closed, not run**
+  (`app/research/holdout.py`, `python -m app research holdout`; `tests/test_holdout.py`). It runs
+  once: it is refused when `holdout.md` exists, while `evaluation.md` or `management.md` is not
+  committed unchanged, before the Stage E decision is in `PREREG.md`, and under the Stage C guard.
+  It computes only the registered checks: family C scalp (the bundle selected at 2024-07-01
+  against M0 on the holdout scalp entries) and Addendum 1 (S1 + M8), with Addendum 1's reported
+  details. Bars go to the lockbox start; the lockbox is not read.
+- Stage B: the rules are frozen at `b9ca2a8` (`main` after PR #77, tag `strategies-rules-v1`,
+  recorded in `PREREG.md` on 2026-10-29). The pre-approval counts ran on the real store the same
+  day (`docs/strategies/counts.md`, `counts_by_year.csv`).
 - Production image: `ai-service/Dockerfile` builds from `ai-service/` and cannot see
   `libs/indicators`; serving the strategies needs a build-context change (Yazan), Stage F.
 - Live serving: contract fields, 5m bars (`AI_BARS_5M`), history long enough for S3 (55 + 20 4h

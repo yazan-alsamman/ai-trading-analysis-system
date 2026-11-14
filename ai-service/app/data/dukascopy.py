@@ -34,7 +34,8 @@ from app.data.importer import DEFAULT_OUT as STORE
 
 CACHE = Path(__file__).resolve().parents[2] / "data" / "dukascopy"
 URL = "https://datafeed.dukascopy.com/datafeed/{symbol}/{y}/{m:02d}/{d:02d}/BID_candles_min_1.bi5"
-PRICE_SCALE = {"XAUUSD": 1e3, "USDJPY": 1e3}  # others 1e5
+# others 1e5; the last two are the discovery round's F1 drivers
+PRICE_SCALE = {"XAUUSD": 1e3, "USDJPY": 1e3, "DOLLARIDXUSD": 1e3, "USTBONDTRUSD": 1e3}
 SAMPLE_MONTHS = (2, 5, 8, 11)
 EXTRA_DAYS = (date(2024, 7, 2), date(2025, 7, 2))
 LAST_YEAR = 2025
