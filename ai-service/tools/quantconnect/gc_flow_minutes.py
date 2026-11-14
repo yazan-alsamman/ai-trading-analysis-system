@@ -14,6 +14,7 @@
 # (bidsize - asksize) / (bidsize + asksize) over the quote updates).
 from AlgorithmImports import *  # noqa: F403
 import io
+import os
 
 import numpy as np
 import pandas as pd
@@ -113,12 +114,30 @@ def minutes(d: date) -> pd.DataFrame:  # noqa: F405
     return out
 
 
+def load(key: str) -> pd.DataFrame:
+    """A month already saved: the project's folder (the free plan cannot write the Object
+    Store), else the Object Store when allowed."""
+    if os.path.exists(key):
+        return pd.read_csv(key, parse_dates=["time"])
+    try:
+        if qb.object_store.contains_key(key):
+            return pd.read_csv(io.StringIO(qb.object_store.read(key)), parse_dates=["time"])
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+
+def save(key: str, df: pd.DataFrame) -> None:
+    os.makedirs(os.path.dirname(key), exist_ok=True)
+    df.to_csv(key, index=False)
+
+
 def run(start: date = START, end: date = END) -> None:  # noqa: F405
+    print("saving under", os.path.abspath(os.path.dirname(KEY.format(start))))
     d = start
     while d <= end:
         key = KEY.format(d)
-        old = (pd.read_csv(io.StringIO(qb.object_store.read(key)), parse_dates=["time"])
-               if qb.object_store.contains_key(key) else pd.DataFrame())
+        old = load(key)
         done = set(old["time"].dt.date) if len(old) else set()
         month = [old] if len(old) else []
         while d <= end and f"{d:%Y%m}" == key[8:14]:
@@ -131,7 +150,7 @@ def run(start: date = START, end: date = END) -> None:  # noqa: F405
                 except Exception as e:
                     print(d, "error", e)
                 if month:
-                    qb.object_store.save(key, pd.concat(month).to_csv(index=False))
+                    save(key, pd.concat(month))
             d += timedelta(days=1)  # noqa: F405
 
 
