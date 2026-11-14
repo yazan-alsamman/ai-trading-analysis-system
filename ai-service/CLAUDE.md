@@ -267,6 +267,8 @@ much of its forecast move did better, not worse (+0.090 vs +0.054 R, 2022-2026).
 pass** (59 cells, ~87 candidates a day; Ridge −0.031 R per selected trade on 2022-2026, p 0.73, below random
 selection's 95th percentile; the combination features carry no gain). **The search for an edge in gold's
 intraday trades is closed**; the five stay the only strategies, on the demo under the monitor.
+**Cost-sensitivity map (`docs/discovery/COST_SENSITIVITY.md`, 2026-11-14): cost is not the key** (at half the
+cost only lab copies of the five's levels come alive; at zero cost 4 of 98; the gross-positive cells were noise).
 **P7 started 2026-11-13 (`docs/phase7/PLAN.md`).** Decisions (Fadi): the LLM is **Gemini 3.6 Flash**
 (`google-genai`, as the backend's chart analysis) behind a thin interface; the five (+ ROUND) are
 served by ai-service as a new `gold_levels` profile and explained (F1 serve, F2 template, F3 Gemini +

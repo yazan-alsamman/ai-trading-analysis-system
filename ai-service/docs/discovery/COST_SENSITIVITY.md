@@ -70,3 +70,17 @@ rule above.
 A look at trades already measured: logged in `docs/phase3/TRIALS.md` and counted in N. Code:
 `app/discovery/cost_map.py`, `python -m app discovery cost-map [--export <GOLD M1>]`, committed
 before the run. Report: `docs/discovery/cost_map_result.md`.
+
+## Outcome (2026-11-14): cost is not the key
+
+`cost_map_result.md` (code `4555b70`; 98 cells with trades, 399,963 trades; the cost split
+reproduces every stored net exactly). At half the trading cost **3 cells come alive (rule §4), all
+lab copies of the five's own levels** (LVL4H M8 and M0, PIVOT M8; correlation +0.54 to +0.79 with the
+five), none below +0.3: the rule needs 5 and 2. Even at **zero** trading cost only 4 cells are alive,
+and the counts of positive cells (48 of 98 on 2012-2019, 46 on 2022-2026 at m = 0) are what no edge
+looks like; no cell passes Holm at any m. The gross-positive strategies seen before were mostly
+noise, not signals killed by costs. The six's trading cost is already small (about 0.02 R a trade,
+their stops are wide): a cheaper venue would add about +0.005 to +0.01 R a trade to them. Reported:
+the spread is lowest 08:00-11:00 New York (median $0.08) and highest 16:00-19:00 ($0.14-0.16).
+Nothing follows.
+
