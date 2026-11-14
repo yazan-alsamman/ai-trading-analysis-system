@@ -1,8 +1,8 @@
 # QuantConnect Research notebook: GC minute order flow against FxPro's XAUUSD, inside the cloud.
 #
 # The free plan cannot download files the notebook writes, so FxPro's minutes come up instead:
-# upload data/raw/gc_flow/fxpro_q4.py (the minutes packed into a .py file, since the notebook
-# receives .py files only) into the project, then run.
+# upload data/raw/gc_flow/fxq_load.py and fxq_1.py .. fxq_6.py (the minutes packed into small .py
+# files, since the notebook receives .py files only) into the project, then run.
 # Only a small summary is printed; no QuantConnect data leaves the cloud. Same measures as
 # tools/quantconnect/compare_fxpro.py: one-minute return correlation at lags -5..+5 (positive:
 # GC moves first), the GC - FxPro gap (basis) by contract and day, and the delta's correlation
@@ -14,11 +14,11 @@ import numpy as np
 import pandas as pd
 
 FX_NAME = "fxpro_xauusd_m1_2025q4.csv"
-try:  # the packed .py (QuantConnect's notebooks receive .py files only)
-    import fxpro_q4
+try:  # the packed .py files (QuantConnect's notebooks receive small .py files only)
+    import fxq_load
 
-    fx = fxpro_q4.load()
-    print("FxPro: fxpro_q4.py")
+    fx = fxq_load.load()
+    print("FxPro: fxq_load.py + fxq_1..6.py,", len(fx), "minutes")
 except ImportError:
     fx_path = next(iter(glob.glob(f"**/{FX_NAME}", recursive=True)), None)
     print("FxPro file:", fx_path)
