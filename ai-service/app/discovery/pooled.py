@@ -104,6 +104,7 @@ def lab_trades(cx: gl.Ctx, path: Path = LAB) -> pd.DataFrame:
             "risk": t["risk"],
             "gross": t["gross"],
             "net": net,
+            "exit": t["exit"],
         }
     )
 
@@ -150,6 +151,7 @@ def level_trades(cx: gl.Ctx, fr: dict, start: pd.Timestamp, end: pd.Timestamp) -
             "risk": r["risk"],
             "gross": r["gross"],
             "net": r["net"],
+            "exit": r["exit"],
         }
     )
 
@@ -166,6 +168,7 @@ def six_trades(fr: dict, start: pd.Timestamp) -> pd.DataFrame:
             "risk": every["risk"],
             "gross": every["gross"],
             "net": every["net_slip"],
+            "exit": every["exit"],
         }
     )
 
