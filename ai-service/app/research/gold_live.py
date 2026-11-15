@@ -106,11 +106,49 @@ def fx_lines(export: Path):
                 yield ln
 
 
+def pwrej_trades(cx: gl.Ctx) -> pd.DataFrame:
+    """PWREJ, the previous week's rejection shadow (``GOLD_PWREJ.md``): the level families' PREV-W
+    rejection trades (``docs/levels/SPEC.md`` §3-5, Raw costs), in the columns of the other
+    strategies; ``i`` is the entry bar (the market fill), as the demo check matches on."""
+    from app.levels import events as lev
+    from app.levels import families as fm
+    from app.levels import trades as ltr
+
+    sig = lev.discrete_signals(cx, fm.prev_week(cx))
+    sig = sig[sig["behaviour"] == "rejection"]
+    cols = ["strategy", "i", "j", "dir", "risk", "gross", "net", "net_slip", "exit", "level",
+            "entry", "kind"]  # fmt: skip
+    if sig.empty:
+        return pd.DataFrame(columns=cols)
+    ent = ltr.entries(cx, sig)
+    tr = ltr.simulate(cx, ent)
+    if tr.empty:
+        return pd.DataFrame(columns=cols)
+    tr = tr.merge(ent[["i", "k", "level", "entry"]], on=["i", "k"], how="left")
+    return pd.DataFrame(
+        {
+            "strategy": "PWREJ",
+            "i": tr["k"].astype(int),
+            "j": tr["j"].astype(int),
+            "dir": tr["dir"],
+            "risk": tr["risk"],
+            "gross": tr["gross"],
+            "net": tr["net"],
+            "net_slip": tr["net"],  # the $0.10 stop slip is already in the levels' net
+            "exit": tr["exit"],
+            "level": tr["level"],
+            "entry": tr["entry"],
+            "kind": "PWREJ",
+        }
+    )[cols]
+
+
 def five_trades(fr: dict[str, pd.DataFrame], start: pd.Timestamp = FX_START,
-                with_round: bool = False):  # fmt: skip
+                with_round: bool = False, with_pwrej: bool = False):  # fmt: skip
     """v1 (the exam's code and settings) and the shadow level breaks (``GOLD_SHADOW.md``), as the
     EA trades them, placed on or after ``start``: (v1 trades, all of them, M8 events, context).
-    ``with_round``: also ROUND, the $50 shadow added 2026-11-11 (``GOLD_ROUND.md`` §6)."""
+    ``with_round``: also ROUND, the $50 shadow added 2026-11-11 (``GOLD_ROUND.md`` §6).
+    ``with_pwrej``: also PWREJ, the previous week's rejection shadow (``GOLD_PWREJ.md``)."""
     from app.research import gold_round as gr
     from app.research import gold_shadow as gs
 
@@ -118,6 +156,8 @@ def five_trades(fr: dict[str, pd.DataFrame], start: pd.Timestamp = FX_START,
     shadow = [gs.level_run(cx, k, lv, events) for k, lv in gs.shadow_levels(cx).items()]
     if with_round:
         shadow.append(gs.level_run(cx, "ROUND", gr.round_levels(cx, gr.SHADOW_STEP), events))
+    if with_pwrej:
+        shadow.append(pwrej_trades(cx))
     every = pd.concat([t, *shadow], ignore_index=True)
     placed_at = pd.to_datetime(cx.m["close_utc"].to_numpy()[every["i"]], utc=True)
     every = every[placed_at >= start].sort_values(["i", "strategy"], kind="stable")

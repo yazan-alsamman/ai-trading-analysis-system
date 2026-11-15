@@ -5,6 +5,8 @@
 //| PIVW, ASIA, PWHL (GOLD_SHADOW.md) and ROUND (the $50 multiples     |
 //| around the previous day's close, GOLD_ROUND.md §6) run beside v1   |
 //| with their own magic numbers and ShadowRiskPct; MaxOpenRiskPct caps|
+//| PWREJ (GOLD_PWREJ.md) fades a rejection of the previous week's     |
+//| levels at market, with a fixed target, the 5-hour rule and 13:00.  |
 //| the risk of                                                        |
 //| every open trade and order of the EA together.                     |
 //| Account guards (GOLD_V1.md, stop rules 4): a daily loss of         |
@@ -39,23 +41,35 @@ input bool   TradePIVW   = true;                 // shadow: R1 / S1 with LVL4H's
 input bool   TradeASIA   = true;                 // shadow: the Asian range, 19:00-02:00 New York
 input bool   TradePWHL   = true;                 // shadow: the previous week's high and low
 input bool   TradeROUND  = true;                 // shadow: the $50 multiples around yesterday's close
+input bool   TradePWREJ  = true;                 // shadow: fade the previous week's levels (GOLD_PWREJ.md)
+input double PwrejMaxRiskPct = 1.5;              // PWREJ: the minimum lot when its size rounds below it, up to this % risk
 input double ShadowRiskPct  = 0.25;              // % of equity a shadow trade
 input double MaxOpenRiskPct = 2.0;               // cap on the open risk of the EA (0: none; tests)
 input double DailyLossPct   = 2.0;               // stop for the day at this loss (0: none; tests)
 input double MaxDrawdownPct = 10.0;              // stop at this drawdown from the peak (0: none; tests)
 input bool   ResetGuards    = false;             // true once: clear a drawdown stop, peak = equity now
 input bool   SignalsOnly = false;                // log the signals, place nothing
-input long   MagicBase   = 20261106;             // LVL4H base, PIVOT +1, PIVW +2, ASIA +3, PWHL +4, ROUND +5
+input long   MagicBase   = 20261106;             // LVL4H base, PIVOT +1, PIVW +2, ASIA +3, PWHL +4, ROUND +5, PWREJ +6
 input string LogFile     = "gold_live_log.csv";  // in <Common>/Files
 input int    Bars5m      = 8000;                 // M5 history for the ATRs (about 28 days)
 
-#define NS 6
-#define NK 4
-string   SNAME[NS]   = {"LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL", "ROUND"};
-string   KNAME[NS][NK] = {{"PDH", "PDL", "5DH", "5DL"}, {"R1", "S1", "", ""}, {"R1", "S1", "", ""},
-                          {"ASH", "ASL", "", ""}, {"PWH", "PWL", "", ""}, {"RU", "RD", "", ""}};
-int      NKINDS[NS]  = {4, 2, 2, 2, 2, 2};
-int      HORIZON[NS] = {200, 48, 200, 200, 200, 200};
+#define NS 7
+#define NK 7
+string   SNAME[NS]   = {"LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL", "ROUND", "PWREJ"};
+string   KNAME[NS][NK] = {{"PDH", "PDL", "5DH", "5DL", "", "", ""}, {"R1", "S1", "", "", "", "", ""},
+                          {"R1", "S1", "", "", "", "", ""}, {"ASH", "ASL", "", "", "", "", ""},
+                          {"PWH", "PWL", "", "", "", "", ""}, {"RU", "RD", "", "", "", "", ""},
+                          {"PWH", "PWL", "PWC", "PWH+1", "PWH+2", "PWL-1", "PWL-2"}};
+int      NKINDS[NS]  = {4, 2, 2, 2, 2, 2, 7};
+int      HORIZON[NS] = {200, 48, 200, 200, 200, 200, 100000};
+// PWREJ (GOLD_PWREJ.md, docs/levels/SPEC.md §3-4): its own entries and exits, not M8
+const int    PWREJ          = 6;
+const int    PW_FROM        = 120;    // the signal bar opens 02:00-13:00 New York
+const int    PW_TO          = 780;    // ... and the trade ends by 13:00
+const int    PW_HOLD        = 60;     // the 5-hour rule, in 5m bars from the entry bar
+const double PW_TAU         = 0.05;   // a rejection closes within 0.05 x ATR(5m) of the level
+const double PW_TARGET_COST = 3.0;    // target at least 3 x cost from the entry
+const double PW_STOP_COST   = 1.5;    // stop at least 1.5 x cost
 const double ROUND_STEP = 50.0;   // ROUND: the multiples of $50 around the previous day's close
 const double LVL_MULT   = 0.75;
 const double LVL_CAP    = 0.05;
@@ -278,17 +292,31 @@ bool Levels(const long key, double &lv[][NK])
    // PWHL: the last week (Monday to Sunday, by the trading day's date) before this one with days
    long wk = Week(key), pw = -1;
    lv[4][0] = 0.0; lv[4][1] = 0.0;
+   double pwc = 0.0;
    for(int q = last; q >= 0; q--)
      {
       long w = Week(D1[q].key);
       if(w >= wk)
          continue;
       if(pw < 0)
+        {
          pw = w;
+         pwc = D1[q].c;  // the week's last trading day's close
+        }
       if(w != pw)
          break;
       lv[4][0] = lv[4][0] == 0.0 ? D1[q].h : MathMax(lv[4][0], D1[q].h);
       lv[4][1] = lv[4][1] == 0.0 ? D1[q].l : MathMin(lv[4][1], D1[q].l);
+     }
+   // PWREJ: the previous week's high, low, close and the range's projections (SPEC addendum 1)
+   for(int k = 0; k < NK; k++)
+      lv[PWREJ][k] = 0.0;
+   if(lv[4][0] > 0 && lv[4][1] > 0)
+     {
+      double rg = lv[4][0] - lv[4][1];
+      lv[PWREJ][0] = lv[4][0];      lv[PWREJ][1] = lv[4][1];      lv[PWREJ][2] = pwc;
+      lv[PWREJ][3] = lv[4][0] + rg; lv[PWREJ][4] = lv[4][0] + 2 * rg;
+      lv[PWREJ][5] = lv[4][1] - rg; lv[PWREJ][6] = lv[4][1] - 2 * rg;
      }
    // ROUND: RD = the $50 multiple at or below the previous day's close, RU = the next one up
    lv[5][1] = MathFloor(D1[p].c / ROUND_STEP) * ROUND_STEP;
@@ -312,7 +340,7 @@ bool Enabled(const int s)
   {
    bool on[NS];
    on[0] = TradeLVL4H; on[1] = TradePIVOT; on[2] = TradePIVW; on[3] = TradeASIA; on[4] = TradePWHL;
-   on[5] = TradeROUND;
+   on[5] = TradeROUND; on[6] = TradePWREJ;
    return on[s];
   }
 
@@ -393,7 +421,7 @@ void Touched(const long key, double &lv[][NK], bool &done[][NK], int &last_touch
          continue;
       for(int s = 0; s < NS; s++)
         {
-         if(Dist(s, b_utc[j] + 300) <= 0)
+         if(s == PWREJ || Dist(s, b_utc[j] + 300) <= 0)
             continue;
          for(int k = 0; k < NKINDS[s]; k++)
            {
@@ -507,6 +535,108 @@ void Place(const int s, const int k, const int dir, const double lv, const doubl
    why_dir[s][k] = dir;
   }
 
+// PWREJ: the bar just closed rejected one of the previous week's levels (the nearest to its
+// close): fade it at market now; the target is the next level on the side it came from, the stop
+// the midpoint to the next level beyond (as app/levels/events.py and trades.py).
+void PwRej(const datetime bar, double &lv[][NK])
+  {
+   if(!Enabled(PWREJ))
+      return;
+   int j = NB - 1;
+   if(j < 1 || b_srv[j] != bar - 300)
+      return;  // the signal bar must be the bar right before this one
+   datetime ny_i = b_ny[j], ny_k = UtcToNy(ServerToUtc(bar));
+   int dow = NyDow(ny_i), mi = NyMin(ny_i), mk = NyMin(ny_k);
+   if(dow < 1 || dow > 5 || mi < PW_FROM || mi >= PW_TO || CalDay(ny_k) != CalDay(ny_i) || mk + 5 > PW_TO)
+      return;
+   double tau = PW_TAU * atr5[j], c = b_c[j], pc = b_c[j - 1];
+   int best = -1, dir = 0;
+   double bd = DBL_MAX;
+   for(int k = 0; k < NKINDS[PWREJ]; k++)
+     {
+      double v = lv[PWREJ][k];
+      if(v <= 0 || MathAbs(c - v) > tau)
+         continue;
+      bool rs = pc < v && b_h[j] >= v;  // from below: sell
+      bool rb = pc > v && b_l[j] <= v;  // from above: buy
+      if(!(rs || rb) || MathAbs(c - v) >= bd)
+         continue;
+      bd = MathAbs(c - v); best = k; dir = rs ? -1 : 1;
+     }
+   if(best < 0)
+      return;
+   double L = lv[PWREJ][best], ahead = 0.0, behind = 0.0, da = DBL_MAX, db = DBL_MAX;
+   for(int k = 0; k < NKINDS[PWREJ]; k++)
+     {
+      double v = lv[PWREJ][k];
+      if(v <= 0)
+         continue;
+      double x = dir * (v - L);
+      if(x > 1e-9 && x < da) { da = x; ahead = v; }
+      if(x < -1e-9 && -x < db) { db = -x; behind = v; }
+     }
+   string kind = KNAME[PWREJ][best];
+   if(da == DBL_MAX || db == DBL_MAX)
+     {
+      Log("SKIP", PWREJ, kind, dir, b_srv[j], L, 0.0, 0.0, 0.0, 0.0, 0, 0.0, "no neighbour level");
+      return;
+     }
+   double target = NormalizeDouble(ahead, _Digits), stop = NormalizeDouble((L + behind) / 2.0, _Digits);
+   MqlTick t;
+   SymbolInfoTick(_Symbol, t);
+   double e = t.bid, cost = (t.ask - t.bid) + COMMISSION, risk = dir * (e - stop);
+   if(dir * (target - e) < PW_TARGET_COST * cost || risk < PW_STOP_COST * cost)
+     {
+      Log("SKIP", PWREJ, kind, dir, b_srv[j], L, e, stop, risk, 0.0, 0, target, "cost");
+      return;
+     }
+   if(SignalsOnly)
+     {
+      Log("SIGNAL", PWREJ, kind, dir, b_srv[j], L, e, stop, risk, 0.0, 0, target, "signals only");
+      return;
+     }
+   if(HasPosition(PWREJ))
+     {
+      Log("SKIP", PWREJ, kind, dir, b_srv[j], L, e, stop, risk, 0.0, 0, target, "busy");
+      return;
+     }
+   // PWREJ's stops are wide: when the shadow size rounds below the minimum lot, the minimum lot
+   // trades unless it risks more than PwrejMaxRiskPct of equity (Fadi, 2026-11-16)
+   double lots = Lots(PWREJ, risk), vmin = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+   if(lots < vmin && FixedLots <= 0)
+     {
+      double at_min = risk * vmin * SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+      if(at_min > AccountInfoDouble(ACCOUNT_EQUITY) * PwrejMaxRiskPct / 100.0)
+        {
+         Log("SKIP", PWREJ, kind, dir, b_srv[j], L, e, stop, risk, vmin, 0, target,
+             StringFormat("the minimum lot risks %.2f, over %.2f%% of equity", at_min, PwrejMaxRiskPct));
+         return;
+        }
+      lots = vmin;
+     }
+   double add = risk * lots * SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+   double cap = AccountInfoDouble(ACCOUNT_EQUITY) * MaxOpenRiskPct / 100.0, pend = 0.0;
+   double open = OpenRisk(PWREJ, pend);
+   if(MaxOpenRiskPct > 0 && open + add > cap)
+     {
+      Log("SKIP", PWREJ, kind, dir, b_srv[j], L, e, stop, risk, lots, 0, target,
+          StringFormat("open risk %.2f + %.2f over the cap %.2f", open, add, cap));
+      return;
+     }
+   trade.SetExpertMagicNumber(MagicBase + PWREJ);
+   string cm = SNAME[PWREJ] + " " + kind;
+   bool ok = dir > 0 ? trade.Buy(lots, _Symbol, 0.0, stop, target, cm) : trade.Sell(lots, _Symbol, 0.0, stop, target, cm);
+   uint rc = trade.ResultRetcode();
+   if(!ok || rc != TRADE_RETCODE_DONE)
+     {
+      Log("FAILED", PWREJ, kind, dir, b_srv[j], L, e, stop, risk, lots, 0, target, "retcode " + IntegerToString(rc));
+      return;
+     }
+   ulong id = trade.ResultOrder();
+   Set(id, "e", e); Set(id, "risk", risk); Set(id, "sl", stop); Set(id, "bar", (double)bar);
+   Set(id, "dir", dir); Set(id, "kind", best); Set(id, "lv", L); Set(id, "market", 1); Set(id, "tp", target);
+  }
+
 void Signals(const datetime bar)
   {
    datetime utc = ServerToUtc(bar), ny = UtcToNy(utc);
@@ -522,8 +652,10 @@ void Signals(const datetime bar)
       for(int s = 0; s < NS; s++) for(int k = 0; k < NK; k++) filled_today[s][k] = false;
       Log("DAY", -1, "", 0, bar, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0,
           StringFormat("PDH %.2f; PDL %.2f; 5DH %.2f; 5DL %.2f; R1 %.2f; S1 %.2f; PWH %.2f; PWL %.2f; "
-                       "RU %.2f; RD %.2f", lv[0][0], lv[0][1], lv[0][2], lv[0][3], lv[1][0], lv[1][1],
-                       lv[4][0], lv[4][1], lv[5][0], lv[5][1]));
+                       "RU %.2f; RD %.2f; PWC %.2f; PWH+1 %.2f; PWH+2 %.2f; PWL-1 %.2f; PWL-2 %.2f",
+                       lv[0][0], lv[0][1], lv[0][2], lv[0][3], lv[1][0], lv[1][1], lv[4][0], lv[4][1],
+                       lv[5][0], lv[5][1], lv[PWREJ][2], lv[PWREJ][3], lv[PWREJ][4], lv[PWREJ][5],
+                       lv[PWREJ][6]));
      }
    if(key != asia_day && InWindow(ny))
      {
@@ -533,7 +665,7 @@ void Signals(const datetime bar)
      }
    Touched(key, lv, done, last_touch);
    // the previous bar: a touch that did not fill, and why
-   for(int s = 0; s < NS; s++)
+   for(int s = 0; s < PWREJ; s++)
       for(int k = 0; k < NKINDS[s]; k++)
         {
          if(last_touch[s][k] == NB - 1 && !filled_today[s][k] && b_srv[NB - 1] == bar - 300)
@@ -542,9 +674,10 @@ void Signals(const datetime bar)
          why_dir[s][k] = 0;
          why_not[s][k] = "";
         }
+   PwRej(bar, lv);
    if(!InWindow(ny))
       return;
-   for(int s = 0; s < NS; s++)
+   for(int s = 0; s < PWREJ; s++)
      {
       if(!Enabled(s))
          continue;
@@ -682,6 +815,36 @@ void Manage()
       int i = BarIndex(bar);
       if(i < 0 || j <= i)
          continue;  // the entry bar itself is not managed (as the backtest)
+      if(s == PWREJ)
+        {
+         // the 5-hour rule at the close of the entry bar + 59: at +1 R or more the stop goes to
+         // +1 R and the trade runs to its target or 13:00; otherwise it closes
+         if(Get(id, "lock") == 0 && j - i >= PW_HOLD - 1)
+           {
+            int pd = (int)Get(id, "dir");
+            double pe = Get(id, "e"), pr = Get(id, "risk");
+            if(pd * (b_c[i + PW_HOLD - 1] - pe) >= pr)
+              {
+               double psl = NormalizeDouble(pe + pd * pr, _Digits);
+               Set(id, "lock", 1);
+               Set(id, "sl", psl);
+               if(trade.PositionModify(ticket, psl, PositionGetDouble(POSITION_TP)))
+                 {
+                  Set(id, "watched", 0.0);
+                  Log("SL", s, KNAME[s][(int)Get(id, "kind")], pd, b_srv[j], 0.0, pe, psl, pr, 0.0, id, 0.0, "5h lock");
+                 }
+               else
+                 {
+                  Set(id, "watched", psl);
+                  Log("SL", s, KNAME[s][(int)Get(id, "kind")], pd, b_srv[j], 0.0, pe, psl, pr, 0.0, id, 0.0,
+                      "5h lock watched; retcode " + IntegerToString(trade.ResultRetcode()));
+                 }
+              }
+            else
+               Close(ticket, id, s, "5h");
+           }
+         continue;
+        }
       if(j - i >= HORIZON[s])
         {
          Close(ticket, id, s, "horizon");
@@ -762,8 +925,9 @@ void Watch()
          continue;
         }
       datetime bar_ny = UtcToNy(ServerToUtc((datetime)Get(id, "bar")));
-      if(CalDay(ny) > CalDay(bar_ny) || NyMin(ny) >= END_MIN)
-         Close(ticket, id, s, "16:45");
+      int end_min = s == PWREJ ? PW_TO : END_MIN;
+      if(CalDay(ny) > CalDay(bar_ny) || NyMin(ny) >= end_min)
+         Close(ticket, id, s, s == PWREJ ? "13:00" : "16:45");
      }
   }
 
@@ -777,9 +941,11 @@ void OnTradeTransaction(const MqlTradeTransaction &tx, const MqlTradeRequest &rq
    ulong id = (ulong)HistoryDealGetInteger(tx.deal, DEAL_POSITION_ID);
    if(s < 0 || !GlobalVariableCheck(GV(id, "e")))
       return;
-   if(HistoryDealGetInteger(tx.deal, DEAL_REASON) == DEAL_REASON_SL)
+   long reason = HistoryDealGetInteger(tx.deal, DEAL_REASON);
+   if(reason == DEAL_REASON_SL || reason == DEAL_REASON_TP)
       Log("EXIT", s, KNAME[s][(int)Get(id, "kind")], (int)Get(id, "dir"), (datetime)Get(id, "bar"), Get(id, "lv"),
-          Get(id, "e"), 0.0, Get(id, "risk"), 0.0, id, HistoryDealGetDouble(tx.deal, DEAL_PRICE), "sl");
+          Get(id, "e"), 0.0, Get(id, "risk"), 0.0, id, HistoryDealGetDouble(tx.deal, DEAL_PRICE),
+          reason == DEAL_REASON_SL ? "sl" : "tp");
    Log("DEAL", s, "", 0, 0, 0.0, 0.0, 0.0, 0.0, HistoryDealGetDouble(tx.deal, DEAL_VOLUME), id,
        HistoryDealGetDouble(tx.deal, DEAL_PROFIT) + HistoryDealGetDouble(tx.deal, DEAL_COMMISSION)
        + HistoryDealGetDouble(tx.deal, DEAL_SWAP) + HistoryDealGetDouble(tx.deal, DEAL_FEE), "net money");

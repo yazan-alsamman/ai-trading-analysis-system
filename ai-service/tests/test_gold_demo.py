@@ -341,3 +341,10 @@ def test_the_xlsx_report_takes_the_comment_from_the_order(tmp_path) -> None:
     ]
     assert t["risk"].iloc[0] == pytest.approx(16.05)
     assert t["net"].iloc[0] == pytest.approx((78.93 - 0.22) / (16.05 * 3))
+
+
+def test_the_monitor_reads_the_five_and_round_only() -> None:
+    demo = pd.DataFrame({"strategy": ["LVL4H", "PWREJ", "ROUND"], "net": [0.1, -1.0, 0.2]})
+    out = gd.monitored(demo)
+    assert out["strategy"].tolist() == ["LVL4H", "ROUND"]
+    assert "PWREJ" in gd.STRATEGIES and "PWREJ" in gd.EA_ON

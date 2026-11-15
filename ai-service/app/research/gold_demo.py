@@ -36,7 +36,7 @@ from app.research import gold_lab as gl
 from app.research import gold_live as gv
 
 REPORT = gl.OUT_DIR / "gold_demo_check.md"
-STRATEGIES = ("LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL", "ROUND")
+STRATEGIES = ("LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL", "ROUND", "PWREJ")
 SERVER_TZ = "Europe/Athens"
 STOP_AT, STOP_EVERY, STOP_LINE = 100, 50, -0.10
 WARM = pd.Timedelta(days=21)
@@ -48,6 +48,7 @@ EA_ON = {
     "ASIA": "2026.11.10 20:40:00",
     "PWHL": "2026.11.10 20:40:00",
     "ROUND": "2026.11.12 14:10:00",  # added to the EA (89ff5f2): first order 2026.11.12 14:10:00
+    "PWREJ": "9999.12.31 00:00:00",  # GOLD_PWREJ.md: set to its first order once on the VPS
 }
 
 
@@ -235,7 +236,7 @@ def python_trades(export: Path, start: pd.Timestamp) -> tuple[pd.DataFrame, pd.T
     """The five strategies on the export, placed from ``start``; and the server time up to which
     both sides are complete (the start of the export's last server day)."""
     fr = ge.frames_from_lines(gv.fx_lines(export))
-    _, every, _, cx = gv.five_trades(fr, start=start, with_round=True)
+    _, every, _, cx = gv.five_trades(fr, start=start, with_round=True, with_pwrej=True)
     u = pd.to_datetime(cx.m["ts_utc"].to_numpy()[every["i"]], utc=True)
     every["bar_server"] = u.tz_convert(SERVER_TZ).tz_localize(None).strftime("%Y.%m.%d %H:%M:%S")
     first = pd.Timestamp(cx.m["ts_utc"].iloc[0]).tz_convert(SERVER_TZ).tz_localize(None)
@@ -455,6 +456,16 @@ def balance_of(tables: dict[str, pd.DataFrame]) -> float:
     return float(b.iloc[-1]) if len(b) else np.nan
 
 
+def monitored(demo: pd.DataFrame) -> pd.DataFrame:
+    """The trades the registered monitor (``GOLD_MONITOR.md``) reads: the five and ROUND. PWREJ is
+    judged by the demo's stop rule on its own trades (``GOLD_PWREJ.md``)."""
+    from app.research import gold_monitor as gm
+
+    if demo.empty or "strategy" not in demo:
+        return demo
+    return demo[demo["strategy"].isin(gm.STRATEGIES)].reset_index(drop=True)
+
+
 def check(report: Path, export: Path | None, start: pd.Timestamp) -> str:
     tables = read_report(report)
     demo = demo_trades(tables)
@@ -462,7 +473,7 @@ def check(report: Path, export: Path | None, start: pd.Timestamp) -> str:
 
     if export is None:
         text = demo_only(tables, demo, {"report": report.name, "balance": balance_of(tables)})
-        return text + "\n" + "\n".join(gm.health(demo, None))
+        return text + "\n" + "\n".join(gm.health(monitored(demo), None))
     py, end = python_trades(export, start)
     s0 = start.tz_convert(SERVER_TZ).tz_localize(None)
     if len(demo):
@@ -473,7 +484,7 @@ def check(report: Path, export: Path | None, start: pd.Timestamp) -> str:
             "end": f"{end:%Y-%m-%d %H:%M}"}  # fmt: skip
     m = j["_merge"].value_counts()
     matched = (int(m.get("both", 0)), int(m.get("right_only", 0)), int(m.get("left_only", 0)))
-    return render(j, demo, meta) + "\n" + "\n".join(gm.health(demo, matched))
+    return render(j, demo, meta) + "\n" + "\n".join(gm.health(monitored(demo), matched))
 
 
 def main(argv: list[str] | None = None) -> int:
