@@ -237,6 +237,28 @@ def test_match_and_the_stop_rules() -> None:
     assert "checked at 100" in st["ASIA"] and "stop" in st["ASIA"]
 
 
+def test_python_trades_count_from_when_the_ea_turned_the_strategy_on() -> None:
+    py = pd.DataFrame(
+        {
+            "strategy": ["LVL4H", "ROUND", "ROUND", "ROUND", "ASIA"],
+            "bar_server": [
+                "2026.11.10 11:00:00",  # not listed: from --start
+                "2026.11.12 10:25:00",  # before ROUND was on
+                "2026.11.12 14:10:00",  # the bar it was turned on
+                "2026.11.13 09:00:00",
+                "2026.11.10 20:35:00",  # the bar before
+            ],
+        }
+    )
+    on = {"ROUND": "2026.11.12 14:10:00", "ASIA": "2026.11.10 20:40:00"}
+    out = gd.after_ea_on(py, on)
+    assert out["bar_server"].tolist() == [
+        "2026.11.10 11:00:00",
+        "2026.11.12 14:10:00",
+        "2026.11.13 09:00:00",
+    ]
+
+
 def xlsx(rows: list[list[str]]) -> bytes:
     """A minimal .xlsx with inline strings, as MT5's "Open XML" report lays it out."""
     import io

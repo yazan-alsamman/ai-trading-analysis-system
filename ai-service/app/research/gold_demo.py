@@ -14,6 +14,9 @@ itself records instead:
   least three weeks before ``--start``, so the 5-day levels and the ATRs have filled. Python runs
   the five strategies on it exactly as ``gold-live fxpro`` does.
 
+Each strategy is compared from the time the EA had it turned on (``EA_ON``, server time, from the
+first order of it in the account's report): Python's trades before then are not expected.
+
 Matched on strategy and signal bar (the 5-minute bar of the fill, server time). Reports: matches,
 level and distance D, gross R both sides, the demo's net R from its own money, the entry
 slippage, and where each strategy stands against the demo's stop rules (100 trades, then every
@@ -37,6 +40,15 @@ STRATEGIES = ("LVL4H", "PIVOT", "PIVW", "ASIA", "PWHL", "ROUND")
 SERVER_TZ = "Europe/Athens"
 STOP_AT, STOP_EVERY, STOP_LINE = 100, 50, -0.10
 WARM = pd.Timedelta(days=21)
+# When each strategy was turned on in the demo EA (server time, the 5-minute bar of its first
+# order in the account's report). Not listed: on from ``--start``. Add a line whenever the EA on
+# the VPS gains or changes a strategy.
+EA_ON = {
+    "PIVW": "2026.11.10 20:40:00",  # the shadows: first orders 2026.11.10 20:42:40
+    "ASIA": "2026.11.10 20:40:00",
+    "PWHL": "2026.11.10 20:40:00",
+    "ROUND": "2026.11.12 14:10:00",  # added to the EA (89ff5f2): first order 2026.11.12 14:10:00
+}
 
 
 # --- the account history report (MT5 HTML, UTF-16) -------------------------------------------
@@ -236,6 +248,12 @@ def python_trades(export: Path, start: pd.Timestamp) -> tuple[pd.DataFrame, pd.T
 # --- the check ----------------------------------------------------------------------------------
 
 
+def after_ea_on(py: pd.DataFrame, ea_on: dict[str, str] = EA_ON) -> pd.DataFrame:
+    """Python's trades from the time the EA had their strategy turned on."""
+    on = py["strategy"].map(ea_on).fillna("")
+    return py[py["bar_server"] >= on].reset_index(drop=True)  # same format: text order is time
+
+
 def match(py: pd.DataFrame, demo: pd.DataFrame) -> pd.DataFrame:
     k = ["strategy", "bar_server"]
     keep = ["strategy", "bar_server", "dir", "level", "risk", "gross", "net", "net_slip", "exit"]
@@ -274,6 +292,9 @@ def render(j: pd.DataFrame, demo: pd.DataFrame, meta: dict) -> str:
         f"_`python -m app research gold-demo check`: `{meta['report']}` against the five "
         f"strategies in Python on `{meta['export']}` (FxPro GOLD). Trades placed {meta['start']} "
         f"to {meta['end']} (server time). Matched on strategy and the 5-minute bar of the fill._",
+        "",
+        "Turned on in the EA later than the start (server time; Python's earlier trades are not "
+        "expected): " + ", ".join(f"{k} {v[:16]}" for k, v in EA_ON.items()) + ".",
         "",
         "| Item | Value |",
         "| --- | --- |",
@@ -446,7 +467,7 @@ def check(report: Path, export: Path | None, start: pd.Timestamp) -> str:
     s0 = start.tz_convert(SERVER_TZ).tz_localize(None)
     if len(demo):
         demo = demo[(demo["opened"] >= s0) & (demo["opened"] < end)].reset_index(drop=True)
-    py = py[pd.to_datetime(py["bar_server"], format="%Y.%m.%d %H:%M:%S") < end]
+    py = after_ea_on(py[pd.to_datetime(py["bar_server"], format="%Y.%m.%d %H:%M:%S") < end])
     j = match(py, demo if len(demo) else pd.DataFrame(columns=["strategy", "bar_server"]))
     meta = {"report": report.name, "export": export.name, "start": f"{s0:%Y-%m-%d %H:%M}",
             "end": f"{end:%Y-%m-%d %H:%M}"}  # fmt: skip
