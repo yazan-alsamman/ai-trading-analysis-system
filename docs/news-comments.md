@@ -31,5 +31,5 @@ Logged-in readers comment on news articles and reply to each other. Code:
 | DELETE | `/api/v1/news/comments/{comment_id}` | 204 |
 | POST | `/api/v1/admin/news/comments/{comment_id}/moderate` | admin, `{hidden: bool}` → 204 |
 
-A comment: `id, article_id, parent_id, author {id, display_name, avatar_url, role}, body,
+A comment: `id, article_id, parent_id, author {id, display_name, role}, body,
 status, created_at, edited_at, is_own, can_edit, can_delete`.

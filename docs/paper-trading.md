@@ -65,5 +65,5 @@ push; Telegram and e-mail are off by default). `data.event` is `order_filled`,
 | PATCH | `/positions/{id}` | `{stop_loss, take_profit}` (null removes) |
 | POST | `/positions/{id}/close` | close at the latest price |
 
-A market order answers with the order and the new position; `PAPER_TRADING_ENABLED=false`
+A market order answers with the filled order (its `position_id` is the new position); `PAPER_TRADING_ENABLED=false`
 turns every endpoint into 503.
