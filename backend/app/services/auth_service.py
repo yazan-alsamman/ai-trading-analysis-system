@@ -52,6 +52,13 @@ async def login(
 ) -> TokenPair:
     """``client`` = (IP, user agent): a sign-in from a new one notifies the user (Y15)."""
     user = await authenticate(session, email, password)
+    return await sign_in(session, user, client)
+
+
+async def sign_in(
+    session: AsyncSession, user: User, client: tuple[str, str] | None = None
+) -> TokenPair:
+    """A new login session for an authenticated user (password or WhatsApp code)."""
     pair, _ = await _issue_pair(session, user)
     await session.commit()
     if client is not None:

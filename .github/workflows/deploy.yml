@@ -151,6 +151,20 @@ jobs:
           echo "::add-mask::$GEMINI_API_KEY"
           printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" \
             | ssh vps 'bash /opt/trading/set-env-secrets.sh'
+      - name: LightOTP API key into .env (only when missing or empty; never printed)
+        # docs/otp.md. Same rule as the Gemini key: stdin over SSH, never argv or the log; a
+        # value already on the server (set by hand in /opt/trading/.env) is kept. Not set in
+        # GitHub: skipped (WhatsApp codes answer 503, the rest deploys normally).
+        env:
+          LIGHTOTP_TOKEN: ${{ secrets.LIGHTOTP_TOKEN }}
+        run: |
+          if [ -z "$LIGHTOTP_TOKEN" ]; then
+            echo "LIGHTOTP_TOKEN not set in GitHub: skipped"
+            exit 0
+          fi
+          echo "::add-mask::$LIGHTOTP_TOKEN"
+          printf 'LIGHTOTP_TOKEN=%s\n' "$LIGHTOTP_TOKEN" \
+            | ssh vps 'bash /opt/trading/set-env-secrets.sh'
       - name: Pull images and restart the trading stack
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | ssh vps 'docker login ghcr.io -u ${{ github.actor }} --password-stdin'

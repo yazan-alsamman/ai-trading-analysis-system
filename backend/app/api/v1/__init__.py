@@ -7,6 +7,7 @@ from app.api.v1 import (
     admin_api_keys,
     admin_feeds,
     admin_market,
+    admin_otp,
     admin_realtime,
     admin_system,
     ai,
@@ -46,6 +47,7 @@ limited_router.include_router(admin_realtime.router)
 limited_router.include_router(admin_system.router)
 limited_router.include_router(admin_ai.router)
 limited_router.include_router(admin_feeds.router)
+limited_router.include_router(admin_otp.router)
 limited_router.include_router(ai.router)
 limited_router.include_router(admin_api_keys.router)
 limited_router.include_router(indicators.router)
