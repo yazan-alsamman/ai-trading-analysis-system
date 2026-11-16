@@ -1,12 +1,15 @@
 """Mobile push through FCM HTTP v1.
 
 Credentials: ``FCM_PROJECT_ID`` and ``FCM_CREDENTIALS_JSON`` (the service-account JSON as one
-value, or a path to the file). The OAuth access token (from a signed JWT assertion, RS256) is
-cached in Redis until shortly before it expires, so all worker processes share it.
+value, base64 of it, or a path to the file). The OAuth access token (from a signed JWT
+assertion, RS256) is cached in Redis until shortly before it expires, so all worker processes
+share it.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
 import time
@@ -29,14 +32,24 @@ TOKEN_KEY = "notif:fcm:access-token"
 INVALID_TOKEN_CODES = {"UNREGISTERED", "INVALID_ARGUMENT", "SENDER_ID_MISMATCH"}
 
 
+def _credentials_text(raw: str) -> str:
+    """The JSON itself, a path to the file, or the JSON base64-encoded (one line without quotes:
+    what the deploy writes from the GitHub secret FCM_CREDENTIALS_JSON_B64)."""
+    if raw.startswith("{"):
+        return raw
+    path = Path(raw)
+    if len(raw) < 1024 and path.is_file():
+        return path.read_text(encoding="utf-8")
+    return base64.b64decode(raw, validate=True).decode("utf-8")
+
+
 @lru_cache(maxsize=4)
 def _credentials(raw: str) -> dict[str, Any] | None:
     if not raw:
         return None
     try:
-        text = raw if raw.lstrip().startswith("{") else Path(raw).read_text(encoding="utf-8")
-        data = json.loads(text)
-    except (OSError, ValueError):
+        data = json.loads(_credentials_text(raw.strip()))
+    except (OSError, ValueError, binascii.Error):
         logger.warning("FCM_CREDENTIALS_JSON is not valid JSON or a readable file: push disabled")
         return None
     if not {"client_email", "private_key"} <= set(data):

@@ -50,6 +50,8 @@ class NotificationType(StrEnum):
     new_subscriber = "new_subscriber"
     # B11 (migration 0017): AI setup state changes (ARMED to followers, the rest to takers)
     ai_setup = "ai_setup"
+    # paper trading (migration 0026): a pending order filled or rejected, SL/TP hit
+    paper_trade = "paper_trade"
 
 
 class Severity(StrEnum):

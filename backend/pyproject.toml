@@ -58,3 +58,4 @@ include = ["app*"]
 
 [tool.setuptools.package-data]
 "app.vision" = ["prompts/*.md"]  # the versioned Gemini prompts (Y14)
+"app.assistant" = ["prompts/*.md"]  # the AI chat system prompt

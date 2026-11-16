@@ -35,6 +35,7 @@ celery_app = Celery(
         "app.tasks.ai",
         "app.tasks.feeds",
         "app.tasks.predictions",
+        "app.tasks.paper",
     ],
 )
 celery_app.conf.update(
@@ -115,6 +116,8 @@ celery_app.conf.update(
         },
         # price alerts on the 1m bar that just closed (evaluated ~10 s after the boundary)
         "alerts-tick": {"task": "alerts.tick", "schedule": crontab(minute="*")},
+        # paper trading: pending orders and SL/TP on the closed 1m bars (docs/paper-trading.md)
+        "paper-tick": {"task": "paper.tick", "schedule": crontab(minute="*")},
         # RSS feeds whose interval is due (NEWS_RSS_ENABLED)
         "news-fetch": {"task": "news.fetch", "schedule": crontab(minute="*/5")},
         # news retention (NEWS_RETENTION_DAYS)
