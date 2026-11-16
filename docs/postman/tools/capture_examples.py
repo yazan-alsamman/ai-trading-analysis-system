@@ -58,6 +58,9 @@ AUTHOR_PASSWORD = "Analyst12345"
 EXPERT_EMAIL = "sami@example.com"
 EXPERT_PASSWORD = "Expert12345"
 BACKEND = Path(__file__).resolve().parents[3] / "backend"
+# fake_lightotp.py: run the backend with LIGHTOTP_TOKEN=fake LIGHTOTP_BASE_URL=<this>
+FAKE_LIGHTOTP = "http://localhost:8766"
+CAPTURE_PHONE = "+963944123456"
 
 
 AI_SETUP_ID = "xauusd-intraday-2026-10-19T14:15:00Z-buy"  # new_setups[0] of the example
@@ -211,6 +214,7 @@ class Runner:
             "register_password": "Postman123",
             "admin_email": admin_email,
             "admin_password": admin_password,
+            "user_phone": CAPTURE_PHONE,
         }
         self.examples: dict[str, list[dict[str, Any]]] = {}
 
@@ -314,6 +318,8 @@ class Runner:
             if req.id not in NO_TRIM:
                 body = trim(body)
             text = json.dumps(body, indent=4, ensure_ascii=False)
+            if req.id == "admin_otp_status":  # the fake's address: show LightOTP's real one
+                text = text.replace(FAKE_LIGHTOTP, "https://api.lightotp.com")
         else:
             text = res.text
             if req.id == "backtests_trades_csv":
@@ -349,6 +355,13 @@ class Runner:
             self.vars["chat_client_id"] = str(uuid.uuid4())
         if req.id == "experts_earnings" and self.vars.get("my_plan_id"):
             self.subscribe(AUTHOR_EMAIL, AUTHOR_PASSWORD, self.vars["my_plan_id"])
+        if req.id in ("users_phone_verify", "auth_otp_login", "admin_otp_message"):
+            last = httpx.get(f"{FAKE_LIGHTOTP}/__last", params={"phone": CAPTURE_PHONE})
+            if last.status_code == 200:
+                self.vars["otp_code"] = last.json()["otpCode"]
+                self.vars["otp_message_id"] = last.json()["id"]
+        if req.id == "auth_otp_request":
+            self.clear_otp_wait()
         if req.id == "ws_reorder":
             ids = json.loads(self.vars.get("workspace_ids", "[]"))
             self.vars["workspace_ids_reversed"] = json.dumps(list(reversed(ids)))
@@ -499,6 +512,16 @@ class Runner:
         print(f"   ai setup: {(out.stdout or out.stderr).strip()[-200:]}")
         # the user's AI requests (Risk Management) run before Admin → AI Engine stores the id
         self.vars["ai_setup_id"] = AI_SETUP_ID
+
+    def clear_otp_wait(self) -> None:
+        """The number got a code moments ago (Verify phone): drop its 60 s wait so Send login
+        code shows the normal answer."""
+        code = (
+            "import redis; from app.core.config import get_settings as g; s = g(); "
+            "r = redis.Redis.from_url(s.redis_url); "
+            "[r.delete(k) for k in r.scan_iter(f'{s.rate_limit_key_prefix}:otp:resend:*')]"
+        )
+        subprocess.run([sys.executable, "-c", code], cwd=BACKEND, check=True)
 
     def seed_predictions(self) -> None:
         """Strategy signals for the Predictions examples, two of them resolved."""
@@ -666,6 +689,10 @@ class Runner:
             if item.id == "backtests_get":
                 self.wait_backtest("backtest_id")
             res = self.send(item)
+            if res.status_code == 429 and 429 not in item.expect:
+                # an IP limit used up by earlier requests: wait it out once
+                time.sleep(int(res.headers.get("retry-after", "5")) + 1)
+                res = self.send(item)
             if res.status_code not in item.expect:
                 print(f"!! {item.id}: {res.status_code} {res.text[:300]}")
             else:
