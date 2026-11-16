@@ -50,3 +50,40 @@ correlation condition < +0.2). Nothing else is decided here.
 
 Count: 25 screen cells in `TRIALS.md`. Code: `app/levels/confirm5.py`, `python -m app levels
 confirm5`. Report: `confirm_screen2_result.md`.
+
+## Outcome (2026-11-16): one tiny confirmation, and the new levels that pass are close to the five
+
+`confirm_screen2_result.md`, run once (code `7470294`, unchanged since registration).
+
+**Part A: the confirmations add nothing worth having.**
+- 1 of 15 passes: **B6 second attempt** (the level was touched earlier the same day without a close
+  beyond it). Net **+0.008 R** a trade, t +2.30 against its copies, 13,467 trades.
+- With 15 cells at t >= 1.5, about one pass is expected by chance alone. +0.008 R is about a tenth
+  of one cost unit.
+- The confirmations that wait for the break to prove itself match their shifted copies:
+  - B1 hold: −0.006 R, t −0.14.
+  - B2 retest: −0.021 R, t −0.05.
+  - B3 strong candle: −0.007 R, t +0.46.
+- Every rejection method (R1-R7, the trade against the level) loses: −0.008 to −0.045 R, none
+  above its copies.
+- With the five's engine the gross R rises from screen 1's −0.05 to +0.09 to about 0 to +0.035, and
+  the net to about −0.06 to +0.01. The engine was not what made screen 1 fail.
+
+**Part B: 5 of 10 level sets pass, but they are not new.**
+
+| Set | Trades | Net R | Copies | t | Correlation with the five (max) |
+| --- | --- | --- | --- | --- | --- |
+| PMHL | 34 | +0.333 | +0.003 | +2.15 | +0.15 |
+| HL3 | 246 | +0.154 | −0.027 | +2.50 | +0.71 |
+| HL20 | 100 | +0.380 | +0.082 | +2.76 | +0.50 |
+| R100 | 173 | +0.138 | +0.005 | +1.55 | +0.30 |
+
+- HL3, HL20 and R100 are above the full test's correlation limit (+0.2):
+  - HL3 sits next to LVL4H's day and 5-day levels.
+  - R100 is a subset of ROUND's $50 grid.
+- PMHL is under the limit but has 34 trades in two years: too few for any reading.
+- The two screen years (2024-2025) were gold's strongest rise, a good period for breaks.
+
+**What follows:** under the registration, a passing cell goes to a full test only through a
+separate registration. None is registered here. Fadi decides whether B6 or PMHL is worth one.
+
