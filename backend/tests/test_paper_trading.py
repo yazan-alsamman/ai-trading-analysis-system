@@ -343,7 +343,7 @@ async def test_engine_gap_tie_and_rejection(
     # an open buy whose stop and target are both inside one bar: the stop wins
     tie = PaperPosition(
         user_id=user.id, instrument_id=gold.id, side="buy", lots=0.1, contract_size=100,
-        entry_price=2400, stop_loss=2396, take_profit=2404, margin=240, opened_at=T0,
+        entry_price=2400, stop_loss=2394, take_profit=2404, margin=240, opened_at=T0,
         checked_until=T0,
     )  # fmt: skip
     session.add(tie)
@@ -358,8 +358,8 @@ async def test_engine_gap_tie_and_rejection(
     await session.refresh(tie)
     assert stop.status == "filled" and stop.fill_price == 2395  # the open, beyond 2398
     assert big.status == "rejected" and big.reject_reason == "insufficient_margin"
-    assert tie.close_reason == "stop_loss" and tie.close_price == 2396
-    assert tie.pnl == pytest.approx(-40)
+    assert tie.close_reason == "stop_loss" and tie.close_price == 2394
+    assert tie.pnl == pytest.approx(-60)
     events = sorted(n["event"] for n in await _notes(session))
     assert events == ["order_filled", "order_rejected", "stop_loss"]
 
