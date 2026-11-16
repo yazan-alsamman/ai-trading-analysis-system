@@ -162,6 +162,8 @@ erDiagram
         varchar hashed_password
         varchar full_name
         enum_user_role role
+        varchar phone_e164 UK
+        timestamptz phone_verified_at
         bool is_active
         timestamptz sessions_revoked_at
         timestamptz created_at

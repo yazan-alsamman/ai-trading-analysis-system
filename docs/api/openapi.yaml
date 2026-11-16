@@ -575,6 +575,120 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - BearerJWT: []
+  /api/v1/auth/otp/request:
+    post:
+      tags:
+      - auth
+      summary: Otp Request
+      description: 'Sign in with WhatsApp, step 1: send a code (LightOTP) to a number verified on an account
+
+        (``POST /users/me/phone/verify``). The answer is the same for a number without an account,
+
+        so it does not reveal who is registered. One code per number every ``resend_in`` seconds
+
+        (429 ``otp_resend_wait`` with Retry-After), a few per hour (429 ``otp_too_many``); 503
+
+        ``otp_not_configured`` when LIGHTOTP_TOKEN is not set on the server.'
+      operationId: auth_otp_request
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneRequest'
+        required: true
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpSent'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/otp/login:
+    post:
+      tags:
+      - auth
+      summary: Otp Login
+      description: 'Sign in with WhatsApp, step 2: the code from step 1 gives a token pair, like
+
+        ``/auth/login``. A wrong or expired code is 400 ``invalid_code``; after a few wrong codes
+
+        the code is dropped and a new one must be requested. A code works once.'
+      operationId: auth_otp_login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpLogin'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Bad request (a rule of the endpoint, see the message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/users/me:
     get:
       tags:
@@ -698,6 +812,171 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/users/me/phone:
+    post:
+      tags:
+      - users
+      summary: Request Phone Code
+      description: 'Add or change your WhatsApp number, step 1: a code is sent to it over WhatsApp
+
+        (LightOTP). The number is international with the country code (``+963944123456``; spaces,
+
+        dashes and a leading ``00`` are accepted). 409 ``phone_taken`` if another account has it,
+
+        422 ``invalid_phone`` if WhatsApp cannot reach it, 429 ``otp_resend_wait`` /
+
+        ``otp_too_many`` (Retry-After), 503 ``otp_not_configured`` / ``otp_unavailable``.'
+      operationId: users_request_phone_code
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneRequest'
+        required: true
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpSent'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/HTTPValidationError'
+                - $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with the current state (version, duplicate, already done)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+    delete:
+      tags:
+      - users
+      summary: Remove Phone
+      description: Remove your WhatsApp number (WhatsApp sign-in stops working). Idempotent.
+      operationId: users_remove_phone
+      responses:
+        '204':
+          description: Successful Response
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/users/me/phone/verify:
+    post:
+      tags:
+      - users
+      summary: Verify Phone
+      description: 'Step 2: the code saves the number on your account (``phone_e164``,
+
+        ``phone_verified_at``); you can then sign in with ``/auth/otp/request`` + ``/auth/otp/login``.
+
+        A wrong or expired code is 400 ``invalid_code``; a code works once.'
+      operationId: users_verify_phone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneVerify'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Bad request (a rule of the endpoint, see the message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with the current state (version, duplicate, already done)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
           content:
             application/json:
               schema:
@@ -2070,6 +2349,110 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/otp/status:
+    get:
+      tags:
+      - admin
+      summary: Otp Status
+      description: 'Whether LIGHTOTP_TOKEN is set (``configured``) and the code settings. The key itself
+        is
+
+        never returned.'
+      operationId: admin_otp_status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Otp Status Api V1 Admin Otp Status Get
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - BearerJWT: []
+  /api/v1/admin/otp/messages/{message_id}:
+    get:
+      tags:
+      - admin
+      summary: Otp Message Status
+      description: 'LightOTP''s delivery status of a sent code (``messageStatus``: Pending, Sent, Delivered,
+
+        Read, Failed, Deleted; failure fields when it failed). The message id is in the backend
+
+        log line "WhatsApp code sent". 404 ``message_not_found``.'
+      operationId: admin_otp_message_status
+      parameters:
+      - name: message_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Message Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpMessageStatus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Missing, invalid or expired credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Not allowed: role, API-key scope, or the resource''s rules'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found (or not visible to you)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (Retry-After header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Temporarily unavailable
           content:
             application/json:
               schema:
@@ -16379,6 +16762,94 @@ components:
       - new_subscriber
       - ai_setup
       title: NotificationType
+    OtpLogin:
+      properties:
+        phone:
+          type: string
+          maxLength: 24
+          minLength: 8
+          title: Phone
+        code:
+          type: string
+          maxLength: 8
+          minLength: 4
+          pattern: ^\d+$
+          title: Code
+      type: object
+      required:
+      - phone
+      - code
+      title: OtpLogin
+      examples:
+      - phone: '+963944123456'
+        code: '12345'
+    OtpMessageStatus:
+      properties:
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Id
+        message_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message Status
+        to_phone_e164:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: To Phone E164
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        failure_code:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Failure Code
+        failure_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Title
+        failure_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Reason
+        failed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failed At
+      type: object
+      required:
+      - id
+      - message_status
+      - to_phone_e164
+      - created_at
+      - failure_code
+      - failure_title
+      - failure_reason
+      - failed_at
+      title: OtpMessageStatus
+    OtpSent:
+      properties:
+        expires_in:
+          type: integer
+          title: Expires In
+        resend_in:
+          type: integer
+          title: Resend In
+      type: object
+      required:
+      - expires_in
+      - resend_in
+      title: OtpSent
+      description: The code was sent (or, for OTP login, would have been if the number had an account).
     OutboxRead:
       properties:
         id:
@@ -17141,6 +17612,40 @@ components:
       - display_name
       - role
       title: PersonRef
+    PhoneRequest:
+      properties:
+        phone:
+          type: string
+          maxLength: 24
+          minLength: 8
+          title: Phone
+      type: object
+      required:
+      - phone
+      title: PhoneRequest
+      examples:
+      - phone: '+963944123456'
+    PhoneVerify:
+      properties:
+        phone:
+          type: string
+          maxLength: 24
+          minLength: 8
+          title: Phone
+        code:
+          type: string
+          maxLength: 8
+          minLength: 4
+          pattern: ^\d+$
+          title: Code
+      type: object
+      required:
+      - phone
+      - code
+      title: PhoneVerify
+      examples:
+      - phone: '+963944123456'
+        code: '12345'
     PlanBrief:
       properties:
         id:
@@ -20548,6 +21053,17 @@ components:
         is_active:
           type: boolean
           title: Is Active
+        phone_e164:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone E164
+        phone_verified_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Phone Verified At
         created_at:
           type: string
           format: date-time

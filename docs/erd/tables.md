@@ -15,6 +15,8 @@ An account: login e-mail, Argon2 password hash and one of four roles (trader, an
 | `hashed_password` | varchar(255) | no |  |  |
 | `full_name` | varchar(200) | yes |  |  |
 | `role` | enum user_role (trader, analyst, expert, admin) | no | `trader` |  |
+| `phone_e164` | varchar(16) | yes |  | UK |
+| `phone_verified_at` | timestamp with time zone | yes |  |  |
 | `is_active` | boolean | no | `true` |  |
 | `sessions_revoked_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `now()` |  |
@@ -24,6 +26,8 @@ An account: login e-mail, Argon2 password hash and one of four roles (trader, an
 
 - PK `pk` (id)
 - CHECK `ck_users_email_lowercase`: `email = lower(email)`
+- CHECK `ck_users_phone_e164`: `phone_e164 IS NULL OR phone_e164 ~ '^\+[1-9][0-9]{6,14}$'`
+- UNIQUE `uq_users_phone_e164` (phone_e164)
 - UNIQUE (email)
 
 **Indexes**

@@ -253,6 +253,21 @@ class Settings(BaseSettings):
     chart_analysis_max_concurrent: int = 1
     # development and load tests only: a fake Gemini server; empty: Google's official host
     chart_vision_base_url: str = ""
+    # WhatsApp OTP codes via LightOTP (docs/otp.md, https://lightotp.com/en/docs/otp-messages).
+    # LIGHTOTP_TOKEN is the API key from the LightOTP dashboard, sent as X-Api-Key (server .env
+    # or the GitHub secret of the same name, never in git); empty: phone verification and
+    # OTP login answer 503 and the rest of the platform is unaffected
+    lightotp_token: str = ""
+    lightotp_base_url: str = "https://api.lightotp.com"
+    lightotp_timeout_seconds: float = 15
+    # BCP-47 language of the WhatsApp template; empty: the LightOTP account's default
+    lightotp_language: str = "ar"
+    otp_length: int = 5  # digits (the mobile app's code field has 5 boxes)
+    otp_ttl_seconds: int = 300  # a code expires after this
+    otp_max_attempts: int = 5  # wrong codes before the challenge is dropped
+    otp_resend_seconds: int = 60  # wait before another code to the same phone
+    otp_phone_per_hour: int = 5  # codes sent to one phone per hour (all purposes)
+    auth_otp_ip_per_minute: int = 5  # /auth/otp/request and /users/me/phone per client IP
 
     @field_validator("api_docs_enabled", "ctrader_account_id", mode="before")
     @classmethod

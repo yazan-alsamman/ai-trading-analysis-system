@@ -442,3 +442,9 @@ workflow يدوي فقط (`.github/workflows/prod-smoke.yml`، لا يعمل ت�
 - صورة الـ backend تثبّت الآن `celery[redis]`: kombu 5.7 يستورد `packaging` لنقل redis ولا يعلنه إلا في إضافة `redis`،
   فبناء جديد للصورة بدونها يُسقط `worker` و`beat` عند الإقلاع (`No module named 'packaging'`).
 - `AI_BARS_15M=2500` (طلب فادي لنموذج التذبذب) **ليس جزءاً من هذا النشر**: يُغيَّر لاحقاً بسطر `.env` واحد في برومبت سيرفر.
+
+## رموز واتساب عبر LightOTP (docs/otp.md)
+
+- إعدادات جديدة في `.env.example`: `LIGHTOTP_TOKEN=` (فارغ = الميزة مطفأة، 503، وباقي المنصة يعمل)، `LIGHTOTP_BASE_URL=https://api.lightotp.com`، `LIGHTOTP_TIMEOUT_SECONDS=15`، `LIGHTOTP_LANGUAGE=ar`، `OTP_LENGTH=5`، `OTP_TTL_SECONDS=300`، `OTP_MAX_ATTEMPTS=5`، `OTP_RESEND_SECONDS=60`، `OTP_PHONE_PER_HOUR=5`، `AUTH_OTP_IP_PER_MINUTE=5`.
+- المفتاح: إما سطر `LIGHTOTP_TOKEN=...` يدوياً في `/opt/trading/.env` (بأحرف كبيرة)، أو سر GitHub بنفس الاسم تكتبه خطوة جديدة في `deploy.yml` إلى `.env` **فقط إذا كان غير موجود أو فارغاً** عبر `set-env-secrets.sh` ودون طباعة القيمة.
+- Migration `0025` إضافية وآمنة: عمودان `phone_e164` و`phone_verified_at` (NULL لكل المستخدمين الحاليين) مع قيد unique وفحص E.164.
