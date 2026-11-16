@@ -650,6 +650,7 @@ def read(article: NewsArticle, key: str, name: str, tags: list[dict]) -> dict[st
         "fetched_at": article.fetched_at,
         "sentiment": sentiment,
         "instruments": tags,
+        "comments_count": article.comments_count or 0,
     }
 
 

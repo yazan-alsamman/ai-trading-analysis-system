@@ -1165,6 +1165,7 @@ components:
       - subscription_canceled
       - new_subscriber
       - ai_setup
+      - paper_trade
       title: NotificationType
       type: string
     Severity:

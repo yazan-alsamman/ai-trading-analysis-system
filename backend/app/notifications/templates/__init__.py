@@ -376,6 +376,38 @@ def _ai_setup(data: dict[str, Any], lang: str) -> tuple[str, str]:
     return title, "\n".join(lines)
 
 
+def _paper_trade(data: dict[str, Any], lang: str) -> tuple[str, str]:
+    instrument = data.get("instrument") or {}
+    digits = instrument.get("price_precision")
+    digits = 2 if digits is None else int(digits)
+    event = data.get("event", "order_filled")
+    f = {
+        "side": t(lang, f"side.{data.get('side', 'buy')}"),
+        "lots": num(data.get("lots"), 2),
+        "symbol": instrument.get("symbol", "?"),
+    }
+    title = t(lang, f"paper.{event}.title", **f) if f"paper.{event}.title" in TEXTS["en"] else ""
+    if event == "order_filled":
+        body = t(
+            lang,
+            "paper.order_filled.body",
+            price=num(data.get("entry_price"), digits),
+            sl=num(data.get("stop_loss"), digits),
+            tp=num(data.get("take_profit"), digits),
+        )
+    elif event == "order_rejected":
+        body = t(lang, "paper.order_rejected.body", price=num(data.get("price"), digits))
+    else:
+        body = t(
+            lang,
+            "paper.closed.body",
+            price=num(data.get("close_price"), digits),
+            entry=num(data.get("entry_price"), digits),
+            pnl=_signed(data.get("pnl")),
+        )
+    return title, f"{body}\n{t(lang, 'paper.note')}"
+
+
 SOCIAL_RENDERERS = {
     "new_post": _new_post,
     "comment_reply": _comment_reply,
@@ -383,6 +415,7 @@ SOCIAL_RENDERERS = {
     "content_hidden": _content_hidden,
     "price_alert": _price_alert,
     "ai_setup": _ai_setup,
+    "paper_trade": _paper_trade,
 }
 
 
@@ -515,6 +548,13 @@ def deep_link(event: str, data: dict[str, Any], notification_id: str) -> dict[st
             setup_id=str(data.get("setup_id", "")),
             state=str(data.get("state", "")),
             instrument_id=str((data.get("instrument") or {}).get("id", "")),
+        )
+    elif event == "paper_trade":
+        out.update(
+            screen="paper_trade",
+            paper_event=str(data.get("event", "")),
+            position_id=str(data.get("position_id") or ""),
+            order_id=str(data.get("order_id") or ""),
         )
     elif event == "price_alert":
         out.update(

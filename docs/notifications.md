@@ -32,6 +32,7 @@ the Celery queue `notifications`. Nothing calls a channel directly.
 | `new_subscriber` (Y19) | to the expert | `info` | the same, with `subscriber_name`, `trial_days` |
 | `price_alert` (Y18) | one of your price alerts fired ([price-alerts.md](price-alerts.md)) | `warning` | `alert_id`, `instrument`, `condition`, `value`, `price`, `bar_time`, `note`, ... |
 | `ai_setup` (B11) | an AI setup you follow became ARMED, or one you took changed state (below) | `warning` (ARMED) / `info` | `setup_id`, `state`, `transition`, `instrument`, prices, scores, `size` (ARMED), `explanation`, `pnl` (end) |
+| `paper_trade` | the paper trading engine: a limit / stop order filled or rejected, a stop loss or take profit hit ([paper-trading.md](paper-trading.md)); push and in-app only by default | `info` (filled) / `warning` (rejected, stop loss) / `success` (take profit) | `event` (`order_filled`, `order_rejected`, `stop_loss`, `take_profit`), `instrument`, `order_id`, `position_id`, `side`, `lots`, `price`, `entry_price`, `stop_loss`, `take_profit`, `close_price`, `pnl`, `reject_reason` |
 
 - There is **one notification per (event, user)**: `dedup_key` (unique per user) makes
   producing idempotent. Examples: `signal:<signal_id>` (several activations of the same user on
@@ -451,7 +452,15 @@ editing it, redeploy (Actions → Deploy → Run workflow) so the containers rea
 |---|---|
 | Telegram | `TELEGRAM_BOT_TOKEN` (from @BotFather), optional `TELEGRAM_BOT_USERNAME` (else read with `getMe`), `TELEGRAM_MODE=polling` (default) or `webhook` + `TELEGRAM_WEBHOOK_SECRET` |
 | Email | `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_STARTTLS` (`true`) |
-| Push | `FCM_PROJECT_ID`, `FCM_CREDENTIALS_JSON` (the service-account JSON on one line, or a path inside the container) |
+| Push | `FCM_PROJECT_ID`, `FCM_CREDENTIALS_JSON` (the service-account JSON on one line, its base64, or a path inside the container) |
+
+**Push through the deploy.** Instead of editing `.env`, add two GitHub secrets (Settings →
+Secrets and variables → Actions): `FCM_PROJECT_ID` (the Firebase project id) and
+`FCM_CREDENTIALS_JSON_B64` (the service-account key from Firebase console → Project settings →
+Service accounts → Generate new private key, encoded with `base64 -w0 key.json`). The Deploy
+workflow writes them into `/opt/trading/.env` when the keys there are empty; without the
+secrets the step is skipped. The Flutter app needs `google-services.json` from the **same**
+Firebase project.
 
 Development: `docker compose up` starts **Mailpit**; every email appears at
 http://localhost:8025. Without a bot token, the `telegram-bot` service only logs that it is

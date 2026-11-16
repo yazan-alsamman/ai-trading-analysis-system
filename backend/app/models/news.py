@@ -119,6 +119,8 @@ class NewsArticle(Base):
     sentiment_score: Mapped[float | None] = mapped_column(Double)
     sentiment_model: Mapped[str | None] = mapped_column(String(64))
     sentiment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # published comments (migration 0026), kept by app/news/comments.py
+    comments_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
 
 
 class NewsArticleInstrument(Base):
@@ -137,3 +139,38 @@ class NewsArticleInstrument(Base):
         Uuid, ForeignKey("instruments.id", ondelete="CASCADE"), primary_key=True
     )
     relevance: Mapped[float] = mapped_column(Double, default=1.0, server_default=text("1"))
+
+
+NEWS_COMMENT_MAX = 2_000
+
+
+class NewsComment(Base):
+    """A reader's comment on an article (migration 0026, docs/news-comments.md). Two levels: a
+    reply to a reply is stored under the top-level comment. Deleting is soft (``deleted``)."""
+
+    __tablename__ = "news_comments"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('published', 'hidden', 'deleted')", name="ck_news_comments_status"
+        ),
+        Index("ix_news_comments_article_created", "article_id", text("created_at DESC")),
+        Index("ix_news_comments_parent", "parent_id"),
+        Index("ix_news_comments_author_created", "author_id", text("created_at DESC")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()")
+    )
+    article_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("news_articles.id", ondelete="CASCADE")
+    )
+    author_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("news_comments.id", ondelete="CASCADE")
+    )
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="published", server_default="published")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
