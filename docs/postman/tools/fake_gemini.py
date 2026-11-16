@@ -5,7 +5,8 @@ key or a paid call. Start it, then start the backend with
 
 It answers ``generateContent`` with a fixed analysis of ``samples/chart_sample.png`` in the
 requested language, and ``is_chart: false`` for an image of one colour
-(``samples/not_a_chart.png``). It never sees a real key.
+(``samples/not_a_chart.png``). A request without an image is the AI assistant chat
+(docs/ai-chat.md): it answers a fixed text in the language asked for. It never sees a real key.
 
     python docs/postman/tools/fake_gemini.py [--port 8765]
 """
@@ -38,6 +39,19 @@ TEXTS = {
         "reasoning": ["قيعان صاعدة منذ 2381", "اختراق قمة النطاق عند 2397"],
         "warnings": ["لا يظهر حجم التداول على الشارت"],
     },
+}
+
+
+CHAT = {
+    "en": "Today gold mostly follows the **US dollar** and US yields:\n\n"
+    "- A weaker dollar usually lifts gold; a stronger one weighs on it.\n"
+    "- The **Fed minutes** on Wednesday can move both.\n"
+    "- News sentiment on the platform is slightly positive this week.\n\n"
+    "Watch the levels on the chart before acting, and keep your risk small.",
+    "ar": "البيتكوين يتأثر اليوم بأمرين أساسيين:\n\n"
+    "- **شهية المخاطرة** في الأسواق وحركة الدولار.\n"
+    "- أخبار صناديق الـ ETF، ومزاج الأخبار على المنصة إيجابي قليلاً هذا الأسبوع.\n\n"
+    "راقب مستويات الدعم والمقاومة على الشارت قبل أي قرار، واجعل مخاطرتك صغيرة.",
 }
 
 
@@ -83,21 +97,27 @@ class Handler(BaseHTTPRequestHandler):
             )  # the SDK sends url-safe, unpadded
             pixels = Image.open(io.BytesIO(base64.urlsafe_b64decode(data))).convert("RGB")
             is_chart = any(lo != hi for lo, hi in pixels.getextrema())
+        if image is None:  # the assistant chat: plain text
+            chat_language = "ar" if "Answer language: Arabic" in text else "en"
+            reply, tokens = CHAT[chat_language], (1180, 96)
+        else:
+            reply = json.dumps(analysis(language, is_chart))
+            tokens = (1612, 412 if is_chart else 9)
         answer = {
             "candidates": [
                 {
                     "content": {
                         "role": "model",
-                        "parts": [{"text": json.dumps(analysis(language, is_chart))}],
+                        "parts": [{"text": reply}],
                     },
                     "finishReason": "STOP",
                 }
             ],
             "usageMetadata": {
-                "promptTokenCount": 1612,
-                "candidatesTokenCount": 412 if is_chart else 9,
+                "promptTokenCount": tokens[0],
+                "candidatesTokenCount": tokens[1],
                 "thoughtsTokenCount": 238,
-                "totalTokenCount": 2262 if is_chart else 1859,
+                "totalTokenCount": tokens[0] + tokens[1] + 238,
             },
             "modelVersion": "gemini-3.6-flash",
         }

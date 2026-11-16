@@ -93,7 +93,7 @@ The JSON files are generated; edit `tools/spec.py`, never the collection by hand
 3. Start a local stack with demo data (`seed-instruments`, `seed-demo-candles`, a Celery
    worker for backtests) and run
    `python docs/postman/tools/capture_examples.py --admin-email … --admin-password …`
-   to refresh `tools/examples.json`. For the chart analysis examples, first start
+   to refresh `tools/examples.json`. For the chart analysis and AI assistant chat examples, first start
    `python docs/postman/tools/fake_gemini.py` and run the backend with
    `GEMINI_API_KEY=fake CHART_VISION_BASE_URL=http://localhost:8765` (no key, no paid call).
    For the WhatsApp code (OTP) examples, also start `python docs/postman/tools/fake_lightotp.py`

@@ -368,6 +368,42 @@ OTP_ERRORS = (
     "`otp_not_configured` (no `LIGHTOTP_TOKEN` on the server) / `otp_unavailable`."
 )
 
+# variables that are numbers: the body holds {{name}} without quotes
+NUMERIC_VARS = (
+    "custom_strategy_version",
+    "paper_stop_loss",
+    "paper_take_profit",
+    "paper_limit_price",
+    "paper_bad_price",
+)
+
+SKIP_NO_NEWS_COMMENT = """// No comment created in this run (News → Comment on article not sent): skip.
+if (!pm.variables.get("news_comment_id")) pm.execution.skipRequest();"""
+SKIP_NO_NEWS_REPLY = """// No reply created in this run (News → Reply to comment not sent): skip.
+if (!pm.variables.get("news_reply_id")) pm.execution.skipRequest();"""
+NEWS_COMMENT_ID = ("{{news_comment_id}}", "From Comment on article")
+
+PAPER_PRICES = """// Prices around the fill of Place market order, so they are valid on any instrument.
+const fill = Number(pm.variables.get("paper_fill_price"));
+if (!fill) { pm.execution.skipRequest(); } else {
+  const d = (x) => Number(x.toPrecision(8));
+  pm.variables.set("paper_stop_loss", d(fill * 0.95));
+  pm.variables.set("paper_take_profit", d(fill * 1.05));
+  pm.variables.set("paper_limit_price", d(fill * 0.9));
+  pm.variables.set("paper_bad_price", d(fill * 1.1));
+}"""
+SKIP_NO_PAPER_POSITION = """// No position opened in this run (market closed or Place market order not sent): skip.
+if (!pm.variables.get("paper_position_id")) pm.execution.skipRequest();"""
+SKIP_NO_PAPER_ORDER = """// No pending order placed in this run: skip.
+if (!pm.variables.get("paper_order_id")) pm.execution.skipRequest();"""
+PAPER_ERRORS = (
+    "Errors (`detail.code`): 409 `market_closed` (no 1m candle in the last 15 minutes), "
+    "`no_price`, `too_many_positions`, `too_many_orders`; 422 `invalid_lots`, `invalid_price`, "
+    "`invalid_stop_loss`, `invalid_take_profit`, `insufficient_margin`, `no_contract_spec`, "
+    "`unsupported_currency` (only USD / USDT / USDC quotes), `inactive_instrument`; 503 "
+    "`not_configured` (`PAPER_TRADING_ENABLED=false`)."
+)
+
 SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
 if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
 
@@ -1017,6 +1053,86 @@ FOLDERS: list[Folder] = [
                         expect=[204, 503],
                         pre=SKIP_NO_CHART_ANALYSIS,
                         variants=[Variant("404 Already deleted", 404)],
+                    ),
+                ],
+            ),
+            Folder(
+                "AI Assistant Chat",
+                "A text assistant for questions about the markets (`docs/ai-chat.md`), answered "
+                "by Gemini (the same `GEMINI_API_KEY` as chart analysis). Educational, **not "
+                "financial advice**: every answer carries a `disclaimer` added by the backend.\n\n"
+                "* **Stateless:** send the whole conversation each time (1–20 turns, oldest "
+                "first, the last from the user, each at most 2000 characters). Nothing is "
+                "stored on the server.\n"
+                "* The backend adds the platform's live context before the conversation: the "
+                "instrument's latest price and 24 h change (`instrument_id`, default the gold "
+                "feed), news sentiment and the 5 latest headlines, high-impact USD events in the "
+                "next 48 h.\n"
+                "* JWT only, daily quota per role (UTC day): trader 30, analyst 100, expert 100, "
+                "admin 300. A failed model call gives its unit back.\n"
+                "* Off until `GEMINI_API_KEY` is set: 503 `not_configured` (the tests accept "
+                "it).\n"
+                "* Recorded against `docs/postman/tools/fake_gemini.py` (no key, no paid call).",
+                [
+                    Req(
+                        "ai_chat_ask",
+                        "Ask the assistant",
+                        "POST",
+                        "/ai/chat",
+                        "`{messages, language?, instrument_id?}` → `reply` (plain text, may hold "
+                        "simple Markdown: lists, bold), `language`, `model`, `usage` "
+                        "(`input_tokens`, `output_tokens`, `latency_ms`), `quota` (after this "
+                        "answer) and `disclaimer`. `language`: `ar` or `en` (default: your "
+                        "notification language).\n\n"
+                        "Errors (`detail.code`): 422 `blocked`, `empty_answer`, "
+                        "`could_not_answer` (no usable answer) or an invalid conversation; 429 "
+                        "`quota_exceeded` with `Retry-After` (seconds to 00:00 UTC); 503 "
+                        "`not_configured`, `model_busy`, `model_unavailable`, `timeout` (with "
+                        "`Retry-After`); 404 unknown `instrument_id`.",
+                        body={
+                            "messages": [{"role": "user", "content": "What moves gold today?"}],
+                            "language": "en",
+                        },
+                        expect=[200, 503],
+                        cost=3,
+                        variants=[
+                            Variant(
+                                "200 Follow-up in Arabic, about one instrument",
+                                200,
+                                body={
+                                    "messages": [
+                                        {"role": "user", "content": "What moves gold today?"},
+                                        {
+                                            "role": "assistant",
+                                            "content": "Mainly the US dollar and the Fed "
+                                            "minutes on Wednesday.",
+                                        },
+                                        {"role": "user", "content": "وماذا عن البيتكوين؟"},
+                                    ],
+                                    "language": "ar",
+                                    "instrument_id": "{{instrument_id}}",
+                                },
+                            ),
+                            Variant(
+                                "422 Last message is not the user's",
+                                422,
+                                body={
+                                    "messages": [
+                                        {"role": "user", "content": "What moves gold today?"},
+                                        {"role": "assistant", "content": "The US dollar."},
+                                    ]
+                                },
+                            ),
+                        ],
+                    ),
+                    Req(
+                        "ai_chat_quota",
+                        "Assistant quota",
+                        "GET",
+                        "/ai/chat/quota",
+                        "Questions used and left today for your role: `limit`, `used`, "
+                        "`remaining` and `resets_at` (the next 00:00 UTC).",
+                        expect=[200, 503],
                     ),
                 ],
             ),
@@ -2561,6 +2677,110 @@ FOLDERS: list[Folder] = [
                 ],
             ),
             Req(
+                "news_comment_create",
+                "Comment on article",
+                "POST",
+                "/news/:article_id/comments",
+                "A logged-in reader comments on an article (`docs/news-comments.md`). JWT only: "
+                "API keys get 403. `body`: 1–2000 characters, trimmed. The article's "
+                "`comments_count` (in the list and the detail) goes up at once. At most "
+                "`COMMENTS_PER_HOUR` comments per user per hour (shared with post comments), "
+                "else 429 with `Retry-After`. Stored as `news_comment_id`.\n\n"
+                "A comment: `id`, `article_id`, `parent_id`, `author {id, display_name, role}`, "
+                "`body`, `status` (`published`, `hidden`), `created_at`, `edited_at`, and for "
+                "the reader `is_own`, `can_edit`, `can_delete`. 503 `not_configured` when "
+                "`NEWS_COMMENTS_ENABLED=false`.",
+                path_vars={"article_id": ("{{article_id}}", "Article UUID")},
+                body={"body": "Good summary. Does the ETF news change the weekly outlook?"},
+                expect=[201],
+                captures={"news_comment_id": "id"},
+                variants=[
+                    Variant("422 Empty comment", 422, body={"body": "   "}),
+                    Variant(
+                        "404 Article not found",
+                        404,
+                        path_vars={"article_id": "00000000-0000-0000-0000-000000000000"},
+                    ),
+                ],
+            ),
+            Req(
+                "news_comment_reply",
+                "Reply to comment",
+                "POST",
+                "/news/:article_id/comments",
+                "The same request with `parent_id`: a reply. Two levels only: a reply to a reply "
+                "is stored under the top-level comment (`parent_id` is always a top-level "
+                "comment). Stored as `news_reply_id`.",
+                path_vars={"article_id": ("{{article_id}}", "Article UUID")},
+                body={
+                    "body": "Not by itself: the Fed minutes on Wednesday matter more.",
+                    "parent_id": "{{news_comment_id}}",
+                },
+                expect=[201],
+                captures={"news_reply_id": "id"},
+                pre=SKIP_NO_NEWS_COMMENT,
+            ),
+            Req(
+                "news_comments_list",
+                "List article comments",
+                "GET",
+                "/news/:article_id/comments",
+                "Newest first, top-level comments and replies together (a reply has "
+                "`parent_id`). Deleted comments are left out; a hidden one is shown only to its "
+                "author and to admins. Paginated: `items`, `total`, `limit`, `offset`.",
+                path_vars={"article_id": ("{{article_id}}", "Article UUID")},
+                query=[("limit", "30", "1–100"), ("offset", "0", "")],
+            ),
+            Req(
+                "news_comment_replies",
+                "List replies of a comment",
+                "GET",
+                "/news/:article_id/comments",
+                "With `parent_id`: only the replies of that comment, **oldest first** (for a "
+                "thread view).",
+                path_vars={"article_id": ("{{article_id}}", "Article UUID")},
+                query=[
+                    ("parent_id", "{{news_comment_id}}", "A top-level comment"),
+                    ("limit", "30", "1–100"),
+                    ("offset", "0", ""),
+                ],
+                pre=SKIP_NO_NEWS_COMMENT,
+            ),
+            Req(
+                "news_comment_update",
+                "Edit comment",
+                "PATCH",
+                "/news/comments/:comment_id",
+                "Only the author edits a published comment (404 for anyone else's); "
+                "`edited_at` is set.",
+                path_vars={"comment_id": NEWS_COMMENT_ID},
+                body={
+                    "body": "Good summary. Does the ETF news change the weekly outlook? (edited)"
+                },
+                pre=SKIP_NO_NEWS_COMMENT,
+                variants=[
+                    Variant(
+                        "404 Comment not found",
+                        404,
+                        path_vars={"comment_id": "00000000-0000-0000-0000-000000000000"},
+                    )
+                ],
+            ),
+            Req(
+                "news_comment_delete",
+                "Delete comment",
+                "DELETE",
+                "/news/comments/:comment_id",
+                "The author or an admin. A soft delete: the body is emptied, the comment leaves "
+                "every list and `comments_count`, its replies stay. Here: the reply made "
+                "above (the comment itself stays for **Admin → News & Moderation → Moderate "
+                "news comment**).",
+                path_vars={"comment_id": ("{{news_reply_id}}", "From Reply to comment")},
+                expect=[204],
+                pre=SKIP_NO_NEWS_REPLY,
+                variants=[Variant("404 Already deleted", 404)],
+            ),
+            Req(
                 "news_sentiment",
                 "News sentiment",
                 "GET",
@@ -2946,6 +3166,221 @@ FOLDERS: list[Folder] = [
                 "404 if it is not yours.",
                 path_vars={"alert_id": ("{{price_alert_id}}", "Price alert UUID")},
                 expect=[204],
+            ),
+        ],
+    ),
+    Folder(
+        "Paper Trading",
+        "A simulated account in **virtual USD** (`docs/paper-trading.md`): market, limit and "
+        "stop orders, stop loss and take profit, positions and a portfolio summary. **No broker "
+        "and no real money**: fills use the platform's own 1m candles. JWT only.\n\n"
+        "* The account is created on first use with 10,000 USD and leverage 100.\n"
+        "* A **market order** fills at once at the latest 1m close, which must be at most 15 "
+        "minutes old (else 409 `market_closed`: on a closed market the runner skips the "
+        "position requests).\n"
+        "* **Limit / stop orders** wait; the engine (every minute) fills them on closed 1m bars "
+        "and closes positions at their stop loss or take profit (the stop loss wins when one bar "
+        "reaches both). Each fill, rejection and SL/TP close is a `paper_trade` notification.\n"
+        "* P/L = (exit − entry) × lots × contract size (sell: opposite sign); margin = entry × "
+        "lots × contract size / leverage; only instruments quoted in USD, USDT or USDC.\n"
+        "* Prices of the stop loss, take profit and limit order are set from the market fill "
+        "(±5 %, −10 %) by the requests' pre-request scripts.\n\n"
+        "> The folder ends with **Reset account**: every order and position of the user is "
+        "deleted.",
+        [
+            Req(
+                "paper_account",
+                "Get portfolio",
+                "GET",
+                "/me/paper/account",
+                "The summary, all in `currency` (USD): `initial_balance`, `balance` (cash: "
+                "initial balance + realized P/L), `equity` (balance + open P/L), "
+                "`unrealized_pnl`, `realized_pnl`, `margin_used`, `free_margin`, "
+                "`margin_level_pct` (`null` with nothing open), `leverage`, `return_pct`, "
+                "`today_pnl` and `today_pnl_pct` (closed today UTC + open P/L), "
+                "`open_positions`, `pending_orders`, `created_at`, `reset_at`.",
+            ),
+            Req(
+                "paper_leverage",
+                "Change leverage",
+                "PATCH",
+                "/me/paper/account",
+                "1..`PAPER_MAX_LEVERAGE` (500); applies to new positions. Answers the summary.",
+                body={"leverage": 100},
+                variants=[
+                    Variant("422 Leverage too high", 422, body={"leverage": 900}),
+                ],
+            ),
+            Req(
+                "paper_order_market",
+                "Place market order",
+                "POST",
+                "/me/paper/orders",
+                "`{instrument_id, side: buy|sell, type: market|limit|stop, lots, price?, "
+                "stop_loss?, take_profit?}`. A market order answers 201 with the filled order: "
+                "`status: filled`, `fill_price`, and `position_id` (the new position). "
+                "`lots`: the instrument's min / step / max (default 0.01 / 0.01 / 100). Stores "
+                "`paper_position_id` and `paper_fill_price`.\n\n" + PAPER_ERRORS,
+                body={
+                    "instrument_id": "{{instrument_id}}",
+                    "side": "buy",
+                    "type": "market",
+                    "lots": 0.01,
+                },
+                expect=[201, 409],
+                captures={"paper_position_id": "position_id", "paper_fill_price": "fill_price"},
+                variants=[
+                    Variant(
+                        "422 Lots above the maximum",
+                        422,
+                        body={
+                            "instrument_id": "{{instrument_id}}",
+                            "side": "buy",
+                            "type": "market",
+                            "lots": 1000,
+                        },
+                    ),
+                    Variant(
+                        "422 Market order with a price",
+                        422,
+                        body={
+                            "instrument_id": "{{instrument_id}}",
+                            "side": "buy",
+                            "type": "market",
+                            "lots": 0.01,
+                            "price": 100,
+                        },
+                    ),
+                ],
+            ),
+            Req(
+                "paper_order_limit",
+                "Place limit order",
+                "POST",
+                "/me/paper/orders",
+                "A limit or stop order is `pending` until the engine fills it on a closed 1m bar "
+                "at the order price (or the bar's open on a gap). A limit buy must be below the "
+                "price, a stop buy above (the opposite for sells), else 422 `invalid_price` "
+                "with `current_price`. Here: a buy limit 10 % below the market fill, stored as "
+                "`paper_order_id`.",
+                body={
+                    "instrument_id": "{{instrument_id}}",
+                    "side": "buy",
+                    "type": "limit",
+                    "lots": 0.01,
+                    "price": "{{paper_limit_price}}",
+                },
+                expect=[201],
+                captures={"paper_order_id": "id"},
+                pre=PAPER_PRICES,
+                variants=[
+                    Variant(
+                        "422 Limit buy above the price",
+                        422,
+                        body={
+                            "instrument_id": "{{instrument_id}}",
+                            "side": "buy",
+                            "type": "limit",
+                            "lots": 0.01,
+                            "price": "{{paper_bad_price}}",
+                        },
+                    ),
+                ],
+            ),
+            Req(
+                "paper_orders",
+                "List orders",
+                "GET",
+                "/me/paper/orders",
+                "Newest first; `status` filters (`pending`, `filled`, `cancelled`, `rejected`; "
+                "`reject_reason` tells why). Paginated.",
+                query=[
+                    ("status", "pending", "pending | filled | cancelled | rejected"),
+                    ("limit", "30", "1–100"),
+                    ("offset", "0", ""),
+                ],
+            ),
+            Req(
+                "paper_order_cancel",
+                "Cancel order",
+                "DELETE",
+                "/me/paper/orders/:order_id",
+                "Cancels a pending order and answers it (`status: cancelled`).",
+                path_vars={"order_id": ("{{paper_order_id}}", "From Place limit order")},
+                pre=SKIP_NO_PAPER_ORDER,
+                variants=[Variant("409 Not pending", 409)],
+            ),
+            Req(
+                "paper_positions",
+                "List open positions",
+                "GET",
+                "/me/paper/positions",
+                "Open positions (the default) with `current_price` (latest 1m close) and "
+                "`unrealized_pnl`, plus `contract_size`, `margin` and `cost` (round trip, taken "
+                "at close). Paginated.",
+                query=[
+                    ("status", "open", "open | closed"),
+                    ("limit", "30", "1–100"),
+                    ("offset", "0", ""),
+                ],
+            ),
+            Req(
+                "paper_position_update",
+                "Set stop loss / take profit",
+                "PATCH",
+                "/me/paper/positions/:position_id",
+                "Moves (or removes with `null`) the stop loss and take profit of an open "
+                "position. For a buy the stop loss must be below the price and the take profit "
+                "above (the opposite for a sell), else 422 `invalid_stop_loss` / "
+                "`invalid_take_profit`. Here: −5 % / +5 % of the fill.",
+                path_vars={"position_id": ("{{paper_position_id}}", "From Place market order")},
+                body={"stop_loss": "{{paper_stop_loss}}", "take_profit": "{{paper_take_profit}}"},
+                pre=PAPER_PRICES + "\n" + SKIP_NO_PAPER_POSITION,
+                variants=[
+                    Variant(
+                        "422 Stop loss above the price",
+                        422,
+                        body={"stop_loss": "{{paper_bad_price}}", "take_profit": None},
+                    ),
+                ],
+            ),
+            Req(
+                "paper_position_close",
+                "Close position",
+                "POST",
+                "/me/paper/positions/:position_id/close",
+                "Closes at the latest 1m close: `status: closed`, `close_price`, "
+                "`close_reason: manual` and `pnl` (realized, net of cost). 409 `market_closed` "
+                "without a live price.",
+                path_vars={"position_id": ("{{paper_position_id}}", "From Place market order")},
+                pre=SKIP_NO_PAPER_POSITION,
+                variants=[Variant("409 Already closed", 409)],
+            ),
+            Req(
+                "paper_history",
+                "List closed positions",
+                "GET",
+                "/me/paper/positions",
+                "The history (`status=closed`), newest first, with `close_reason` (`manual`, "
+                "`stop_loss`, `take_profit`, `reset`) and `pnl`.",
+                query=[
+                    ("status", "closed", "open | closed"),
+                    ("limit", "30", "1–100"),
+                    ("offset", "0", ""),
+                ],
+            ),
+            Req(
+                "paper_reset",
+                "Reset account",
+                "POST",
+                "/me/paper/account/reset",
+                "Deletes every order and position and starts again, with `initial_balance` "
+                "(100–10,000,000; default 10,000) or without a body. Answers the summary "
+                "(`reset_at` set).",
+                body={"initial_balance": 10000},
+                variants=[
+                    Variant("422 Balance too small", 422, body={"initial_balance": 50}),
+                ],
             ),
         ],
     ),
@@ -3403,7 +3838,10 @@ FOLDERS: list[Folder] = [
         "| `subscription_started` / `_renewed` / `_payment_failed` / `_canceled` | your subscription to an expert |\n"
         "| `new_subscriber` | someone subscribed to your plan (experts) |\n"
         "| `ai_setup` | an AI setup became ARMED on an instrument you follow, or one you took "
-        "changed state (carries your size) |\n\n"
+        "changed state (carries your size) |\n"
+        "| `paper_trade` | paper trading: a limit / stop order filled or rejected, a stop loss or "
+        "take profit hit (`data.event`: `order_filled`, `order_rejected`, `stop_loss`, "
+        "`take_profit`); push and in-app only by default |\n\n"
         "Every event is stored in the inbox and pushed on the WebSocket as `notification`. "
         "Telegram, email and push follow your preferences: event on for the channel → signal "
         "filters → quiet hours → hourly cap (held deliveries go out later as one digest). A "
@@ -4347,6 +4785,30 @@ FOLDERS: list[Folder] = [
                                 422,
                                 body={"fetch_interval_minutes": 2},
                             )
+                        ],
+                    ),
+                    Req(
+                        "admin_news_comment_moderate",
+                        "Moderate news comment",
+                        "POST",
+                        "/admin/news/comments/:comment_id/moderate",
+                        "`hidden: true` hides a comment on an article: only its author (who sees "
+                        '`status: "hidden"`) and admins still see it, and it leaves '
+                        "`comments_count`. `hidden: false` publishes it again. Here: the comment of "
+                        "**News → Comment on article**, hidden and then (the example below) "
+                        "published again.",
+                        auth="admin",
+                        path_vars={"comment_id": NEWS_COMMENT_ID},
+                        body={"hidden": True},
+                        expect=[204],
+                        pre=SKIP_NO_NEWS_COMMENT,
+                        variants=[
+                            Variant("204 Publish again", 204, body={"hidden": False}),
+                            Variant(
+                                "404 Comment not found",
+                                404,
+                                path_vars={"comment_id": "00000000-0000-0000-0000-000000000000"},
+                            ),
                         ],
                     ),
                     Req(

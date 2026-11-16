@@ -29,7 +29,7 @@ from typing import Any
 import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from spec import FOLDERS, Folder, Req, Variant  # noqa: E402
+from spec import FOLDERS, NUMERIC_VARS, Folder, Req, Variant  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "examples.json"
 POSTMAN = Path(__file__).resolve().parents[1]  # files of multipart requests live here
@@ -242,8 +242,8 @@ class Runner:
         where the raw body text is substituted."""
         text = json.dumps(value)
         text = re.sub(
-            r'"\{\{(custom_strategy_version)\}\}"',
-            lambda m: self.vars[m.group(1)],
+            r'"\{\{(' + "|".join(NUMERIC_VARS) + r')\}\}"',
+            lambda m: self.vars.get(m.group(1)) or "null",
             text,
         )
         return json.loads(self.resolve(text)) if isinstance(value, (dict, list)) else value
@@ -362,6 +362,16 @@ class Runner:
                 self.vars["otp_message_id"] = last.json()["id"]
         if req.id == "auth_otp_request":
             self.clear_otp_wait()
+        if req.id in ("paper_order_limit", "paper_position_update"):
+            fill = float(self.vars.get("paper_fill_price") or 0)
+            if fill:  # as PAPER_PRICES in Postman
+                for name, factor in (
+                    ("paper_stop_loss", 0.95),
+                    ("paper_take_profit", 1.05),
+                    ("paper_limit_price", 0.9),
+                    ("paper_bad_price", 1.1),
+                ):
+                    self.vars[name] = f"{fill * factor:.8g}"
         if req.id == "ws_reorder":
             ids = json.loads(self.vars.get("workspace_ids", "[]"))
             self.vars["workspace_ids_reversed"] = json.dumps(list(reversed(ids)))
