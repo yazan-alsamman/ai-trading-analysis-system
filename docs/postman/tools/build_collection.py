@@ -663,6 +663,8 @@ RUNTIME_VARS = [
             "my_plan_id",
             "notification_id",
             "device_id",
+            "otp_code",
+            "otp_message_id",
         )
     ),
 ]
@@ -688,6 +690,12 @@ def environment(name: str, base_url: str, ws_url: str, creds: dict[str, str]) ->
             "key": "user_new_password",
             "value": creds.get("user_new_password", ""),
             "type": "secret",
+            "enabled": True,
+        },
+        {
+            "key": "user_phone",
+            "value": creds.get("user_phone", ""),
+            "type": "default",
             "enabled": True,
         },
         {

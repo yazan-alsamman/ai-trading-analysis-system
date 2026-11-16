@@ -355,6 +355,19 @@ if (!pm.variables.get("plan_id")) pm.execution.skipRequest();"""
 SKIP_NO_CALENDAR_EVENT = """// No calendar event in the listed range yet (import the sample CSV in Admin): nothing to show.
 if (!pm.variables.get("calendar_event_key")) pm.execution.skipRequest();"""
 
+SKIP_NO_PHONE = """// No WhatsApp number set (fill user_phone, e.g. +963944123456, to receive a real code): skip.
+if (!pm.variables.get("user_phone")) pm.execution.skipRequest();"""
+SKIP_NO_OTP_CODE = """// No code yet: send the code request, then put the code from WhatsApp in otp_code. Skip.
+if (!pm.variables.get("user_phone") || !pm.variables.get("otp_code")) pm.execution.skipRequest();"""
+SKIP_NO_OTP_MESSAGE = """// No LightOTP message id (from the backend log line "WhatsApp code sent"): skip.
+if (!pm.variables.get("otp_message_id")) pm.execution.skipRequest();"""
+OTP_ERRORS = (
+    "Errors (`detail.code`): 400 `invalid_code` (wrong, expired or used code, or too many wrong "
+    "tries), 409 `phone_taken`, 422 `invalid_phone` (WhatsApp cannot reach it), 429 "
+    "`otp_resend_wait` / `otp_too_many` / `otp_busy` (with `Retry-After`), 503 "
+    "`otp_not_configured` (no `LIGHTOTP_TOKEN` on the server) / `otp_unavailable`."
+)
+
 SKIP_NO_AI_SETUP = """// No AI setup id yet (send Admin → AI Engine → List AI setups, or set ai_setup_id): skip.
 if (!pm.variables.get("ai_setup_id")) pm.execution.skipRequest();"""
 
@@ -626,6 +639,116 @@ FOLDERS: list[Folder] = [
                             "new_password": "Another123",
                         },
                     )
+                ],
+            ),
+            Folder(
+                "WhatsApp Number & Sign-in (OTP)",
+                "One-time codes sent over WhatsApp by LightOTP (`docs/otp.md`): verify a phone "
+                "number on your account, then sign in with a code instead of the password.\n\n"
+                "Each send is a real WhatsApp message (and a LightOTP credit): these requests "
+                "are skipped until you set `user_phone` (international, with the country code: "
+                "`+963944123456`). Send **Send phone code**, put the code you receive in "
+                "`otp_code`, then send **Verify phone**; for sign-in, **Send login code** and "
+                "put the new code in `otp_code` before **Sign in with code**.\n\n"
+                "Codes: 5 digits, valid 5 minutes, one use, 5 wrong tries. Per number one code "
+                "every 60 s (`resend_in`) and 5 per hour; per client IP 5 send requests per "
+                "minute. 503 `otp_not_configured` while `LIGHTOTP_TOKEN` is not set on the "
+                "server.",
+                [
+                    Req(
+                        "users_phone_request",
+                        "Send phone code",
+                        "POST",
+                        "/users/me/phone",
+                        "Add or change your WhatsApp number, step 1: a code is sent to it over "
+                        "WhatsApp. Spaces, dashes, dots, brackets and a leading `00` are "
+                        "accepted and normalized to E.164. 202 with `expires_in` and `resend_in` "
+                        "(seconds). " + OTP_ERRORS,
+                        body={"phone": "{{user_phone}}"},
+                        expect=[202],
+                        pre=SKIP_NO_PHONE,
+                        variants=[
+                            Variant("429 Wait before another code", 429),
+                            Variant(
+                                "422 Not an international number",
+                                422,
+                                body={"phone": "0944123456"},
+                            ),
+                        ],
+                    ),
+                    Req(
+                        "users_phone_verify",
+                        "Verify phone",
+                        "POST",
+                        "/users/me/phone/verify",
+                        "Step 2: the code saves the number on your account and returns your "
+                        "profile with `phone_e164` and `phone_verified_at`. You can then sign in "
+                        "with Send login code + Sign in with code. A code works once; it is "
+                        "bound to your account and is never a login code. " + OTP_ERRORS,
+                        body={"phone": "{{user_phone}}", "code": "{{otp_code}}"},
+                        pre=SKIP_NO_OTP_CODE,
+                        variants=[
+                            Variant(
+                                "400 Wrong or used code",
+                                400,
+                                body={"phone": "{{user_phone}}", "code": "00000"},
+                            ),
+                        ],
+                    ),
+                    Req(
+                        "auth_otp_request",
+                        "Send login code",
+                        "POST",
+                        "/auth/otp/request",
+                        "Sign in with WhatsApp, step 1 (no token): a code is sent to a number "
+                        "verified on an account. The answer is the same 202 for a number "
+                        "without an account (nothing is sent), so it does not reveal who is "
+                        "registered. In the Runner it comes less than 60 s after Send phone code: "
+                        "the collection waits out that 429 (`Retry-After`) and sends it again. "
+                        + OTP_ERRORS,
+                        auth="none",
+                        body={"phone": "{{user_phone}}"},
+                        expect=[202],
+                        pre=SKIP_NO_PHONE,
+                        variants=[
+                            Variant(
+                                "202 Number without an account (nothing sent)",
+                                202,
+                                body={"phone": "+963933000000"},
+                            ),
+                        ],
+                    ),
+                    Req(
+                        "auth_otp_login",
+                        "Sign in with code",
+                        "POST",
+                        "/auth/otp/login",
+                        "Step 2: the code gives a token pair, exactly like Login. A wrong or "
+                        "expired code is 400 `invalid_code`; after 5 wrong codes the code is "
+                        "dropped and a new one must be requested. Shares the login per-IP "
+                        "limit. The tokens are not stored by this request: the collection keeps "
+                        "using the password login.",
+                        auth="none",
+                        body={"phone": "{{user_phone}}", "code": "{{otp_code}}"},
+                        pre=SKIP_NO_OTP_CODE,
+                        variants=[
+                            Variant(
+                                "400 Wrong or used code",
+                                400,
+                                body={"phone": "{{user_phone}}", "code": "00000"},
+                            ),
+                        ],
+                    ),
+                    Req(
+                        "users_phone_remove",
+                        "Remove phone",
+                        "DELETE",
+                        "/users/me/phone",
+                        "Remove your WhatsApp number: WhatsApp sign-in stops working until you "
+                        "verify a number again. Idempotent (204).",
+                        expect=[204],
+                        pre=SKIP_NO_PHONE,
+                    ),
                 ],
             ),
         ],
@@ -4394,6 +4517,46 @@ FOLDERS: list[Folder] = [
                         "deliveries held by quiet hours / caps / an open circuit, and the "
                         "length of the `notifications` queue.",
                         auth="admin",
+                    ),
+                ],
+            ),
+            Folder(
+                "WhatsApp Codes (OTP)",
+                "LightOTP, which sends the WhatsApp one-time codes (`docs/otp.md`): the settings "
+                "and the delivery status of a sent code. The key is never returned.",
+                [
+                    Req(
+                        "admin_otp_status",
+                        "OTP status",
+                        "GET",
+                        "/admin/otp/status",
+                        "Whether `LIGHTOTP_TOKEN` is set on the server (`configured`), the "
+                        "LightOTP `base_url` and template `language`, and the code settings: "
+                        "`code_length`, `ttl_seconds`, `max_attempts`, `resend_seconds`, "
+                        "`per_phone_per_hour`. The key itself is never returned.",
+                        auth="admin",
+                    ),
+                    Req(
+                        "admin_otp_message",
+                        "OTP message delivery status",
+                        "GET",
+                        "/admin/otp/messages/:message_id",
+                        "LightOTP's delivery status of a sent code: `message_status` (`Pending`, "
+                        "`Sent`, `Delivered`, `Read`, `Failed`, `Deleted`), `to_phone_e164`, "
+                        "`created_at` and, when it failed, `failure_code`, `failure_title`, "
+                        "`failure_reason`, `failed_at`. The message id is in the backend log "
+                        'line "WhatsApp code sent". 404 `message_not_found`, 503 '
+                        "`otp_not_configured` / `otp_unavailable`.",
+                        auth="admin",
+                        path_vars={"message_id": ("{{otp_message_id}}", "From the backend log")},
+                        pre=SKIP_NO_OTP_MESSAGE,
+                        variants=[
+                            Variant(
+                                "404 Message not found",
+                                404,
+                                path_vars={"message_id": "unknown-message"},
+                            ),
+                        ],
                     ),
                 ],
             ),
