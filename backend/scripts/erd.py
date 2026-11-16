@@ -80,6 +80,11 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
         ],
     ),
     (
+        "paper",
+        "Paper trading (simulated account)",
+        ["paper_accounts", "paper_orders", "paper_positions"],
+    ),
+    (
         "ai",
         "AI engine (ai-service setups and models)",
         [
@@ -115,6 +120,7 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "news_sources",
             "news_articles",
             "news_article_instruments",
+            "news_comments",
             "posts",
             "comments",
             "post_likes",
