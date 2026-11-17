@@ -9,6 +9,7 @@ import 'package:trading_app/core/network/api_providers.dart';
 import 'package:trading_app/core/network/auth_interceptor.dart';
 import 'package:trading_app/core/storage/preferences_provider.dart';
 import 'package:trading_app/features/alerts/data/alerts_repository.dart';
+import 'package:trading_app/features/markets/data/caching_market_data_repository.dart';
 import 'package:trading_app/features/markets/data/market_data_repository.dart';
 import 'package:trading_app/features/markets/data/market_providers.dart';
 
@@ -57,7 +58,11 @@ void main() {
     final c = _container(ApiFeature.values.toSet(), [sharedPreferencesProvider.overrideWithValue(prefs)]);
     // H4a: simulated alerts are stored locally (LocalAlertsRepository extends the in-memory one)
     expect(c.read(alertsRepositoryProvider), isA<LocalAlertsRepository>());
-    expect(c.read(marketDataRepositoryProvider), isA<SimulatedMarketDataRepository>());
+    // H5a: the switch is on the source; the offline cache sits on top of it
+    expect(c.read(marketSourceRepositoryProvider), isA<SimulatedMarketDataRepository>());
+    final market = c.read(marketDataRepositoryProvider);
+    expect(market, isA<CachingMarketDataRepository>());
+    expect((market as CachingMarketDataRepository).source, same(c.read(marketSourceRepositoryProvider)));
   });
 
   test('apiClientProvider: base URL and timeouts from the config, auth interceptor installed', () {

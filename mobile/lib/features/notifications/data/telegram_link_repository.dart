@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../../core/database/user_cache_guard.dart';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -150,8 +151,11 @@ class SimulatedTelegramLinkRepository implements TelegramLinkRepository {
   }
 }
 
-final telegramLinkRepositoryProvider = Provider<TelegramLinkRepository>(
-  (ref) => apiSource(
+final telegramLinkRepositoryProvider = Provider<TelegramLinkRepository>((ref) {
+  // H5d: لكل حساب - نسخة جديدة لما يتغيّر الحساب (التخزين المحلي تبع الحساب
+  // السابق بينمسح بالـ guard، والذاكرة بتروح مع النسخة القديمة)
+  ref.watch(cacheOwnerProvider);
+  return apiSource(
     ref,
     ApiFeature.telegramLink,
     simulated: () => SimulatedTelegramLinkRepository(
@@ -159,5 +163,5 @@ final telegramLinkRepositoryProvider = Provider<TelegramLinkRepository>(
       clock: ref.watch(telegramClockProvider),
       latency: const Duration(milliseconds: 400),
     ),
-  ),
-);
+  );
+});

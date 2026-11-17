@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/data/low_data_mode.dart';
 import '../../../core/data/network_status.dart';
 import '../../markets/data/market_providers.dart';
 import '../../markets/models/market_models.dart';
@@ -191,7 +192,9 @@ class ForecastViewModel extends AutoDisposeFamilyNotifier<ForecastState, String>
 
   void _scheduleRefresh(Timeframe timeframe, DateTime now, {required bool follows}) {
     _refresh?.cancel();
-    _refresh = Timer(forecastRefreshAt(timeframe, now, follows: follows).difference(now), _refreshNow);
+    // H5b: Low data mode = تحديث بس عند سكرة شمعة الرسم نفسه (مش مع إشارات أسرع)
+    final lowData = ref.read(lowDataModeProvider);
+    _refresh = Timer(forecastRefreshAt(timeframe, now, follows: follows && !lowData).difference(now), _refreshNow);
   }
 }
 

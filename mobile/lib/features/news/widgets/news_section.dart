@@ -7,6 +7,10 @@ import '../../../core/widgets/feedback_states.dart';
 import '../../../core/widgets/motion.dart';
 import '../../../core/widgets/source_tag.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/database/cache_support.dart';
+import '../../markets/widgets/saved_data_status.dart';
+import '../data/caching_news_repository.dart';
+import '../data/news_repository.dart';
 import '../models/news_models.dart';
 import '../view_models/news_view_models.dart';
 import 'news_card.dart';
@@ -19,11 +23,15 @@ class NewsSection extends ConsumerWidget {
   Future<void> _refresh(BuildContext context, WidgetRef ref) async {
     try {
       await ref.read(newsViewModelProvider.notifier).refresh();
-    } catch (_) {
+    } catch (error) {
       if (!context.mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.newsLoadError)));
+        // H5b: بدون اتصال الأخبار المحفوظة بتضل، وبتتحدّث لحالها لما يرجع الاتصال
+        ..showSnackBar(SnackBar(
+          content: Text(error is NoSavedDataException ? l10n.newsRefreshOffline : l10n.newsLoadError),
+        ));
     }
   }
 
@@ -32,6 +40,8 @@ class NewsSection extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final gutter = AppSpacing.gutter(context);
     final feed = ref.watch(newsViewModelProvider);
+    final language = Localizations.localeOf(context).languageCode;
+    final savedAt = ref.watch(newsSavedAtProvider(CachingNewsRepository.articlesKey(language)));
 
     Widget scroll(List<Widget> children) => RefreshIndicator(
           color: context.colors.accent,
@@ -52,12 +62,26 @@ class NewsSection extends ConsumerWidget {
           const Skeleton(height: AppSpacing.huge * 3, radius: AppRadii.card),
         ],
       ]),
-      error: (_, __) => scroll([
-        ErrorState(message: l10n.newsLoadError, onRetry: () => ref.invalidate(newsViewModelProvider)),
+      // H5b: بدون اتصال وما في أخبار محفوظة → السبب (بتتحمّل لحالها لما يرجع الاتصال)
+      error: (error, __) => scroll([
+        if (error is NoSavedDataException)
+          EmptyState(
+            illustrated: true,
+            icon: Icons.cloud_off_outlined,
+            title: l10n.offlineBannerTitle,
+            message: l10n.newsOfflineNoCache,
+          )
+        else
+          ErrorState(message: l10n.newsLoadError, onRetry: () => ref.invalidate(newsViewModelProvider)),
       ]),
       data: (data) => data.articles.isEmpty
-          ? scroll([EmptyState(icon: Icons.newspaper_rounded, title: l10n.newsEmpty, message: l10n.newsEmptyBody)])
+          ? scroll([
+              SavedDataStatus(updatedAt: savedAt),
+              EmptyState(icon: Icons.newspaper_rounded, title: l10n.newsEmpty, message: l10n.newsEmptyBody),
+            ])
           : scroll([
+              // H5b: أخبار محفوظة (بدون اتصال / المصدر فشل) → الشارة + "Last updated"
+              SavedDataStatus(updatedAt: savedAt),
               MoodLine(mood: data.mood),
               for (final (i, article) in data.articles.indexed) ...[
                 const SizedBox(height: AppSpacing.md),

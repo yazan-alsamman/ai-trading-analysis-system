@@ -11,7 +11,8 @@ import '../../../utils/validators.dart';
 import '../view_models/auth_view_models.dart';
 import '../widgets/auth_scaffold.dart';
 
-/// Log in: البريد + كلمة المرور بس، بلوح فوق خلفية الـ mesh. الفشل بيطلع
+/// Log in: البريد + كلمة المرور بس، بلوح فوق خلفية الـ mesh. كلمة المرور
+/// بتنفحص بنفس قاعدة Create account قبل ما ينبعت أي طلب. الفشل بيطلع
 /// رسالة تحت الحقول (مش snackbar بيختفي)، والحقول بتضل معبّاية. تحت: سطر
 /// التنبيه القصير (تحليل ودعم قرار، مش نصيحة مالية، مش وسيط).
 class LoginScreen extends ConsumerStatefulWidget {
@@ -90,7 +91,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         obscure: true,
                         textInputAction: TextInputAction.done,
                         autofillHints: const [AutofillHints.password],
-                        validator: (v) => v == null || v.isEmpty ? l10n.passwordRequired : null,
+                        // نفس قاعدة Create account (Validators.password، مصدر واحد):
+                        // رسالة وحدة تحت الحقل بالشرط الناقص، بدون قائمة الشروط
+                        validator: (v) => Validators.password(v, l10n),
                         onChanged: _edited,
                         onSubmitted: (_) => _submit(),
                       ),

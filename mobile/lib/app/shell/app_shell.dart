@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/data/low_data_mode.dart';
 import '../../core/theme/theme_context.dart';
 import '../../core/widgets/offline_banner.dart';
 import '../../l10n/app_localizations.dart';
@@ -16,16 +18,16 @@ import 'shell_tab.dart';
 ///   Home → Home أولًا؛ من جذر Home → بيطلع من التطبيق.
 /// - الشاشات الفرعية (Market، تفاصيل إشارة، Insights...) جوّا تبويبها والشريط
 ///   ظاهر؛ الدخول ومحادثة الخبير وBacktest فوق الـ shell بدون شريط.
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> with SingleTickerProviderStateMixin {
+class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderStateMixin {
   late final AnimationController _fade = AnimationController(
     vsync: this,
     duration: AppMotion.base,
@@ -35,9 +37,27 @@ class _AppShellState extends State<AppShell> with SingleTickerProviderStateMixin
   int get _current => widget.navigationShell.currentIndex;
 
   @override
+  void initState() {
+    super.initState();
+    _publishTab();
+  }
+
+  @override
   void didUpdateWidget(AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.navigationShell.currentIndex != _current) _onTabChanged();
+    if (oldWidget.navigationShell.currentIndex != _current) {
+      _onTabChanged();
+      _publishTab();
+    }
+  }
+
+  /// H5b: التبويب الظاهر (الـ Low data mode ما بيحدّث المخفي) - بعد الإطار،
+  /// لأنو تعديل provider أثناء البناء ممنوع
+  void _publishTab() {
+    final tab = ShellTab.values[_current];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(currentShellTabProvider.notifier).state = tab;
+    });
   }
 
   @override

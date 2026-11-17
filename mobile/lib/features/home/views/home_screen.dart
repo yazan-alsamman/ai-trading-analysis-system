@@ -3,17 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router/app_navigator.dart';
 import '../../../core/data/clock.dart';
+import '../../../core/data/low_data_mode.dart';
+import '../../../core/data/network_status.dart';
 import '../../../core/theme/theme_context.dart';
 import '../../../core/widgets/atmosphere.dart';
 import '../../../core/widgets/brand_mark.dart';
+import '../../../core/widgets/low_data_pill.dart';
+import '../../../core/widgets/low_data_suggestion.dart';
 import '../../../core/widgets/feedback_states.dart';
 import '../../../core/widgets/motion.dart';
 import '../../../core/widgets/not_advice_notice.dart';
 import '../../../core/widgets/source_tag.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../markets/data/caching_market_data_repository.dart';
 import '../../markets/data/market_providers.dart';
 import '../../notifications/view_models/notifications_view_model.dart';
 import '../../markets/models/fx_sessions.dart';
+import '../../markets/widgets/feed_status_pill.dart';
+import '../../markets/widgets/last_updated_line.dart';
 import '../../workspaces/models/workspace.dart';
 import '../../workspaces/view_models/workspaces_view_model.dart';
 import '../../workspaces/widgets/workspace_chip.dart';
@@ -28,6 +35,13 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _refresh(BuildContext context, WidgetRef ref) async {
+    // H5a: بدون اتصال (والكاش شغّال) ما في شي يتحدّث - منقول ليش بدل ما نفشل
+    if (ref.read(marketCacheEnabledProvider) && ref.read(networkStatusProvider) == NetworkStatus.offline) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.marketRefreshOffline)));
+      return;
+    }
     try {
       await ref.read(watchlistViewModelProvider.notifier).refresh();
     } catch (_) {
@@ -87,6 +101,14 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            // H5a: أسعار محفوظة (بدون اتصال / المصدر فشل): الشارة + "Last updated"
+            // H5b: + شارة "Low data mode"، واقتراح الوضع (بيانات جوال / اتصال بطيء)
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: gutter),
+              sliver: const SliverToBoxAdapter(
+                child: Column(children: [LowDataSuggestionBanner(), _SavedDataStatus()]),
+              ),
+            ),
             SliverPadding(
               padding: EdgeInsets.fromLTRB(gutter, 0, gutter, AppSpacing.xs),
               sliver: const SliverToBoxAdapter(
@@ -101,10 +123,19 @@ class HomeScreen extends ConsumerWidget {
                   loading: () => LoadingRegion(
                     child: _RowsCard(children: [for (var i = 0; i < skeletonRows; i++) const _SkeletonRow()]),
                   ),
-                  error: (_, __) => ErrorState(
-                    message: l10n.watchlistError,
-                    onRetry: ref.read(watchlistViewModelProvider.notifier).retry,
-                  ),
+                  // H5a: بدون اتصال وما في أسعار محفوظة لسّا → حالة الـ offline
+                  // (بتتحمّل لحالها لما يرجع الاتصال)
+                  error: (error, __) => error is MarketOfflineException
+                      ? EmptyState(
+                          illustrated: true,
+                          icon: Icons.cloud_off_outlined,
+                          title: l10n.offlineBannerTitle,
+                          message: l10n.marketOfflineNoCache,
+                        )
+                      : ErrorState(
+                          message: l10n.watchlistError,
+                          onRetry: ref.read(watchlistViewModelProvider.notifier).retry,
+                        ),
                   data: (instruments) => instruments.isEmpty
                       ? _emptyState(context, ref)
                       : _RowsCard(children: [
@@ -194,6 +225,46 @@ class _HomeHeader extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// H5a: شارة التدفّق (Offline / Stale) + "Last updated" لما الأسعار محفوظة مش
+/// حيّة. حيّة (أو الكاش مطفي) = ولا شي (الـ Home متل قبل). H5b: + "Low data mode".
+class _SavedDataStatus extends ConsumerWidget {
+  const _SavedDataStatus();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final saved = ref.watch(marketShowingSavedProvider);
+    final updatedAt = ref.watch(latestQuoteTimeProvider);
+    final lowData = ref.watch(lowDataModeProvider);
+    final showSaved = saved && updatedAt != null;
+    final show = showSaved || lowData;
+    final Widget child = !show
+        ? const SizedBox(width: double.infinity)
+        : Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+            child: Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xxs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (showSaved) ...[
+                  FeedStatusPill(status: ref.watch(feedStatusProvider)),
+                  LastUpdatedLine(updatedAt: updatedAt),
+                ],
+                if (lowData) const LowDataPill(),
+              ],
+            ),
+          );
+    // تقليل الحركة: بدون AnimatedSize (بمدة صفر بيعيد تعليم حالو أثناء الـ layout)
+    if (context.reduceMotion) return child;
+    return AnimatedSize(
+      duration: AppMotion.base,
+      curve: AppMotion.out,
+      alignment: AlignmentDirectional.topStart,
+      child: child,
     );
   }
 }

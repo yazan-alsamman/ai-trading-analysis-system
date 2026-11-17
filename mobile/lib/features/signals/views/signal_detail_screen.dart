@@ -16,7 +16,11 @@ import '../../../core/widgets/page_header.dart';
 import '../../../core/widgets/source_tag.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../alerts/widgets/set_alert_sheet.dart';
+import '../../../core/data/low_data_mode.dart';
+import '../../markets/data/caching_market_data_repository.dart';
 import '../../markets/data/market_providers.dart';
+import '../../markets/widgets/saved_data_status.dart';
+import '../data/caching_signals_repository.dart';
 import '../../markets/view_models/market_view_model.dart';
 import '../../markets/widgets/market_hero.dart';
 import '../../markets/widgets/price_chart.dart';
@@ -94,6 +98,14 @@ class SignalDetailScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _Header(signalId: signalId, symbol: symbol),
+            // H5b: إشارة محفوظة (بدون اتصال / المصدر فشل) → الشارة + "Last updated"
+            if (state.valueOrNull != null)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.gutter(context)),
+                child: SavedDataStatus(
+                  updatedAt: ref.watch(signalsSavedAtProvider(CachingSignalsRepository.itemKey(signalId))),
+                ),
+              ),
             Expanded(child: body),
           ],
         ),
@@ -476,9 +488,12 @@ class _PlanChart extends ConsumerWidget {
             height: PriceChart.compactHeight,
             radius: AppRadii.card,
           ),
-          error: (_, __) => box(
+          // H5b: بدون اتصال وهالرسم مش محفوظ → نفس شرح شاشة السوق (بيتحمّل لحالو)
+          error: (error, __) => box(
             'error',
-            ErrorState(message: l10n.chartError, onRetry: () => ref.invalidate(liveCandlesProvider(key))),
+            error is MarketOfflineException
+                ? EmptyState(icon: Icons.cloud_off_outlined, title: l10n.offlineBannerTitle, message: l10n.chartOfflineNoCache)
+                : ErrorState(message: l10n.chartError, onRetry: () => ref.invalidate(liveCandlesProvider(key))),
           ),
           data: (list) => list.isEmpty
               ? box('empty', EmptyState(icon: Icons.candlestick_chart_outlined, title: l10n.chartEmpty))
@@ -491,6 +506,7 @@ class _PlanChart extends ConsumerWidget {
                   indicators: const {},
                   read: detail.signal,
                   height: PriceChart.compactHeight,
+                  animated: !ref.watch(lowDataModeProvider),
                 ),
         ),
       ),

@@ -31,6 +31,7 @@ class PriceChart extends StatefulWidget {
     this.read,
     this.forecast,
     this.height = mainHeight,
+    this.animated = true,
   });
 
   final List<Candle> candles;
@@ -47,6 +48,9 @@ class PriceChart extends StatefulWidget {
 
   /// ارتفاع الرسم الرئيسي ([compactHeight] بتفاصيل الإشارة)
   final double height;
+
+  /// H5b: false = ولا حركة (Low data mode)، متل "إزالة الحركة"
+  final bool animated;
 
   static const double mainHeight = 300;
   static const double compactHeight = 220;
@@ -117,7 +121,7 @@ class _PriceChartState extends State<PriceChart> {
     if (!identical(old.candles, widget.candles)) _byTimeCache = null;
   }
 
-  int get _animationMs => !_animate || context.reduceMotion ? 0 : 350;
+  int get _animationMs => !_animate || !widget.animated || context.reduceMotion ? 0 : 350;
 
   /// اللوحات تحت الرسم بتلحق مدى المحور الأفقي للرسم الرئيسي
   void _syncOscillators(ActualRangeChangedArgs args) {

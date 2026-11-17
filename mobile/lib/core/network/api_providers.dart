@@ -6,6 +6,8 @@ import '../../providers/app_providers.dart';
 import 'api_client.dart';
 import 'api_config.dart';
 import 'auth_interceptor.dart';
+import 'latency_interceptor.dart';
+import '../data/low_data_mode.dart';
 import 'token_store.dart';
 
 // ═══════════════════════════════════════════════════════════
@@ -35,6 +37,8 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     tokens: ref.watch(tokenStoreProvider),
     onSessionExpired: () => ref.read(authControllerProvider).endSession(),
   ));
+  // H5b: مدة كل طلب → اقتراح الـ Low data mode على اتصال بطيء
+  client.dio.interceptors.add(LatencyInterceptor(ref.read(slowConnectionProvider.notifier).record));
   ref.onDispose(client.close);
   return client;
 });

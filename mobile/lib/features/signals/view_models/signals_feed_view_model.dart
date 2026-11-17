@@ -2,7 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/clock.dart';
 import '../../../core/data/network_status.dart';
+import '../../../app/shell/shell_tab.dart';
+import '../../../core/data/low_data_mode.dart';
+import '../../../core/database/cache_support.dart';
+import '../../../core/database/user_cache_guard.dart';
 import '../../markets/data/market_providers.dart';
+import '../data/caching_signals_repository.dart';
 import '../data/signal_profile_repository.dart';
 import '../data/signals_repository.dart';
 import '../models/opportunity.dart';
@@ -20,20 +25,38 @@ final class SignalsOfflineException implements Exception {
 /// - تحديث فاشل بيخلّي القائمة الحالية وبيرمي الخطأ للشاشة (snackbar).
 /// - بدون اتصال: ما في طلب ([SignalsOfflineException])؛ أول تحميل بيطلع حالة
 ///   "offline" وبيرجع يحمّل لحالو لما يرجع الاتصال.
+/// - H5b (فوق الكاش): بدون اتصال آخر قائمة محفوظة للحساب (+ "Last updated")؛
+///   ما في شي محفوظ = نفس حالة الـ offline. السحب للتحديث بدون اتصال بيقول ليش.
 class SignalsFeedViewModel extends AsyncNotifier<List<Opportunity>> {
   var _generation = 0;
 
   @override
-  Future<List<Opportunity>> build() {
+  Future<List<Opportunity>> build() async {
     final profile = ref.watch(signalProfileProvider);
     final repo = ref.watch(signalsRepositoryProvider);
-    ref.listen(networkStatusProvider, (_, status) {
-      if (status == NetworkStatus.online && state.error is SignalsOfflineException) ref.invalidateSelf();
-    });
+    // H5c: حساب تاني (أو خروج): القائمة القديمة بتنمسح من الذاكرة قبل إعادة
+    // البناء (Riverpod بيحمل القيمة السابقة لقدّام، حتى بالخطأ / offline)
+    ref.watch(cacheOwnerProvider);
+    ref.listen<String>(cacheOwnerProvider, (_, __) => state = const AsyncData([]));
+    // رجع الاتصال: حالة الـ offline أو نسخة محفوظة (H5b) → تحميل من جديد
+    // (بالـ Low data mode بيستنّى لحد ما تبويب Signals يبيّن)
+    reloadWhenBackOnline(
+      ref,
+      tab: ShellTab.signals,
+      needed: () =>
+          state.error is SignalsOfflineException ||
+          (repo is CachingSignalsRepository && repo.savedAt[CachingSignalsRepository.feedKey] != null),
+      reload: ref.invalidateSelf,
+    );
     ref.onDispose(() => _generation++);
     _generation++;
-    _requireOnline();
-    return repo.feed(profile);
+    // H5b: فوق الكاش بدون اتصال الـ repository بيرجّع النسخة المحفوظة
+    if (repo is! CachingSignalsRepository) _requireOnline();
+    try {
+      return await repo.feed(profile);
+    } on NoSavedDataException {
+      throw const SignalsOfflineException();
+    }
   }
 
   void _requireOnline() {

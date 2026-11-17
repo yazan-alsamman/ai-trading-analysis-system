@@ -16,6 +16,9 @@ import 'package:trading_app/core/storage/preferences_provider.dart';
 import 'package:trading_app/core/theme/app_theme.dart';
 import 'package:trading_app/core/data/clock.dart';
 import 'package:trading_app/core/data/network_status.dart';
+import 'package:trading_app/core/database/app_database_holder.dart';
+import 'package:trading_app/core/database/database_providers.dart';
+import 'package:trading_app/core/database/user_cache_guard.dart';
 import 'package:trading_app/core/network/connectivity_source.dart';
 import 'package:trading_app/core/theme/theme_mode_provider.dart';
 import 'package:trading_app/features/alerts/data/alerts_repository.dart';
@@ -28,6 +31,7 @@ import 'package:trading_app/features/markets/data/simulated_market_source.dart';
 import 'package:trading_app/features/membership/data/membership_repository.dart';
 import 'package:trading_app/features/membership/models/membership_models.dart';
 import 'package:trading_app/features/news/data/news_repository.dart';
+import 'package:trading_app/features/signals/data/signals_repository.dart';
 import 'package:trading_app/features/notifications/data/notification_permission_service.dart';
 import 'package:trading_app/features/notifications/data/notifications_repository.dart';
 import 'package:trading_app/features/notifications/data/push_device_repository.dart';
@@ -45,8 +49,58 @@ List<Override> simulatedMarketOverrides({DateTime Function()? clock}) {
   return [
     simulatedMarketSourceProvider.overrideWithValue(source),
     marketDataRepositoryProvider.overrideWithValue(SimulatedMarketDataRepository(source: source)),
+    // H5b: الإشارات كمان بدون طبقة الكاش (متل السوق هون)؛ اختبارات الكاش
+    // بتستعمل [cachedFeatureOverrides]
+    signalsRepositoryProvider.overrideWith((ref) => ref.watch(signalsSourceRepositoryProvider)),
   ];
 }
+
+/// H5a: كاش السوق الحقيقي (Drift **بالذاكرة**) فوق السوق المحاكى بدون تأخير،
+/// وساعة كاش وهمية ([clock]: وقت الكتابة + حدّ كتابة النبضات). [db] مشترك =
+/// "نسكّر ونفتح" التطبيق بنفس الكاش. [source] = مصدر بديل (فاشل مثلًا).
+/// [enabled] false = المفتاح مطفي (التطبيق متل قبل H5a).
+List<Override> cachedMarketOverrides({
+  AppDatabaseHolder? db,
+  DateTime Function()? clock,
+  DateTime Function()? marketClock,
+  MarketDataRepository? source,
+  bool enabled = true,
+}) {
+  final simulated = SimulatedMarketSource(clock: marketClock ?? () => kTestNow);
+  final holder = db ?? AppDatabaseHolder.memory();
+  return [
+    simulatedMarketSourceProvider.overrideWithValue(simulated),
+    appDatabaseProvider.overrideWithValue(holder),
+    marketCacheEnabledProvider.overrideWithValue(enabled),
+    marketCacheClockProvider.overrideWithValue(clock ?? () => kTestNow),
+    marketSourceRepositoryProvider.overrideWithValue(source ?? SimulatedMarketDataRepository(source: simulated)),
+    // يرجّع المنطق الحقيقي (testScope بيعمل override للمحاكاة مباشرة)
+    marketDataRepositoryProvider.overrideWith(createMarketDataRepository),
+  ];
+}
+
+/// H5b: طبقة الكاش الحقيقية للإشارات والأخبار والإشعارات فوق مصادر محاكاة
+/// (أو [signals] / [news] / [notifications] بديلة، فاشلة مثلًا). بتنضاف مع
+/// [cachedMarketOverrides] (نفس القاعدة بالذاكرة ونفس الساعة والمفتاح).
+List<Override> cachedFeatureOverrides({
+  SignalsRepository? signals,
+  NewsRepository? news,
+  NotificationsRepository? notifications,
+}) =>
+    [
+      if (signals != null) signalsSourceRepositoryProvider.overrideWithValue(signals),
+      signalsRepositoryProvider.overrideWith(createSignalsRepository),
+      newsSourceRepositoryProvider.overrideWithValue(news ?? SimulatedNewsRepository(clock: () => kTestNow)),
+      newsRepositoryProvider.overrideWith(createNewsRepository),
+      // H5c: متل الحقيقي، المحاكاة (المقروء / المحذوف بالذاكرة) نسخة لكل حساب
+      notifications != null
+          ? notificationsSourceRepositoryProvider.overrideWithValue(notifications)
+          : notificationsSourceRepositoryProvider.overrideWith((ref) {
+              ref.watch(cacheOwnerProvider);
+              return SimulatedNotificationsRepository(clock: () => kTestNow);
+            }),
+      notificationsRepositoryProvider.overrideWith(createNotificationsRepository),
+    ];
 
 /// يجهّز التخزين الوهمي (ومعه اللغة [locale]) ويرجع ProviderScope جاهز فيه [child]
 ///
@@ -83,6 +137,12 @@ Future<ProviderScope> testScope(
       alertsClockProvider.overrideWithValue(() => kTestNow),
       // اتصال وهمي (online) بدل connectivity_plus (ما في plugin بالاختبارات)
       connectivityOverride(),
+      // H5a: ولا اختبار بيفتح ملف SQLite حقيقي (path_provider مش موجود)
+      appDatabaseProvider.overrideWith((ref) {
+        final holder = AppDatabaseHolder.memory();
+        ref.onDispose(holder.close);
+        return holder;
+      }),
       ...simulatedMarketOverrides(),
       // إشعارات وأخبار ومنشورات محاكاة على نفس الوقت الثابت (الأوقات النسبية حتمية)
       notificationsRepositoryProvider.overrideWith((ref) => SimulatedNotificationsRepository(clock: () => kTestNow)),
@@ -127,16 +187,24 @@ final class FakeClock {
   void advance(Duration by) => now = now.add(by);
 }
 
-/// مصدر اتصال وهمي: [emit] بيبدّل الحالة متل ما الجهاز بيبعت تغيير
-final class FakeConnectivitySource implements ConnectivitySource {
-  FakeConnectivitySource([this.status = NetworkStatus.online]);
+/// مصدر اتصال وهمي: [emit] بيبدّل الحالة متل ما الجهاز بيبعت تغيير،
+/// و[emitMobileData] نوع الاتصال (H5b: اقتراح الـ Low data mode)
+final class FakeConnectivitySource implements ConnectivitySource, ConnectionTypeSource {
+  FakeConnectivitySource([this.status = NetworkStatus.online, this.mobileData = false]);
 
   NetworkStatus status;
+  bool mobileData;
   final _changes = StreamController<NetworkStatus>.broadcast();
+  final _mobileChanges = StreamController<bool>.broadcast();
 
   void emit(NetworkStatus next) {
     status = next;
     _changes.add(next);
+  }
+
+  void emitMobileData(bool next) {
+    mobileData = next;
+    _mobileChanges.add(next);
   }
 
   @override
@@ -144,6 +212,12 @@ final class FakeConnectivitySource implements ConnectivitySource {
 
   @override
   Stream<NetworkStatus> changes() => _changes.stream;
+
+  @override
+  Future<bool> isMobileData() async => mobileData;
+
+  @override
+  Stream<bool> mobileDataChanges() => _mobileChanges.stream;
 }
 
 /// override الاتصال الوهمي (لـ ProviderContainer مباشر كمان)

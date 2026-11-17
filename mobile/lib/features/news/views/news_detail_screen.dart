@@ -6,7 +6,6 @@ import '../../../core/theme/theme_context.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/feedback_states.dart';
 import '../../../core/widgets/headings.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/page_header.dart';
 import '../../../core/widgets/source_tag.dart';
 import '../../../l10n/app_localizations.dart';
@@ -124,7 +123,7 @@ class NewsDetailScreen extends ConsumerWidget {
                 ),
               ),
             ),
-          const OfflineBanner(),
+          // H5c: شريط "غير متصل" واحد بس = تبع الـ shell (هالشاشة جوّا فرع)
         ],
       ),
       body: SafeArea(

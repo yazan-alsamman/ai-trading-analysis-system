@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../core/database/user_cache_guard.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -103,10 +104,13 @@ final class LocalWorkspacesRepository implements WorkspacesRepository {
   Future<void> saveActiveId(String id) => prefs.setString(activeKey, id);
 }
 
-final workspacesRepositoryProvider = Provider<WorkspacesRepository>(
-  (ref) => apiSource(
+final workspacesRepositoryProvider = Provider<WorkspacesRepository>((ref) {
+  // H5d: لكل حساب - نسخة جديدة لما يتغيّر الحساب (التخزين المحلي تبع الحساب
+  // السابق بينمسح بالـ guard، والذاكرة بتروح مع النسخة القديمة)
+  ref.watch(cacheOwnerProvider);
+  return apiSource(
     ref,
     ApiFeature.workspaces,
     simulated: () => LocalWorkspacesRepository(ref.watch(sharedPreferencesProvider)),
-  ),
-);
+  );
+});

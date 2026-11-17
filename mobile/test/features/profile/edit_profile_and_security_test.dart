@@ -37,7 +37,7 @@ Future<void> pushOver(WidgetTester tester, Widget screen, {String locale = 'en',
 /// مستخدم داخل بالـ AuthController (الـ login التجريبي فيه تأخير 2 ثانية)
 Future<void> signIn(WidgetTester tester) async {
   final container = ProviderScope.containerOf(tester.element(find.byType(Navigator).first));
-  final login = container.read(authControllerProvider).login(email: 'trader@example.com', password: 'x');
+  final login = container.read(authControllerProvider).login(email: 'trader@example.com', password: 'research42');
   await tester.pump(const Duration(seconds: 3));
   await login;
   await tester.pumpAndSettle();

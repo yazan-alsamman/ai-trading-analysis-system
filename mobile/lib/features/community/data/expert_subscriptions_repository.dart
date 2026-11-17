@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../core/database/user_cache_guard.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -220,13 +221,16 @@ final class LocalExpertSubscriptionsRepository implements ExpertSubscriptionsRep
       );
 }
 
-final expertSubscriptionsRepositoryProvider = Provider<ExpertSubscriptionsRepository>(
-  (ref) => apiSource(
+final expertSubscriptionsRepositoryProvider = Provider<ExpertSubscriptionsRepository>((ref) {
+  // H5d: لكل حساب - نسخة جديدة لما يتغيّر الحساب (التخزين المحلي تبع الحساب
+  // السابق بينمسح بالـ guard، والذاكرة بتروح مع النسخة القديمة)
+  ref.watch(cacheOwnerProvider);
+  return apiSource(
     ref,
     ApiFeature.expertSubscriptions,
     simulated: () => LocalExpertSubscriptionsRepository(
       ref.watch(sharedPreferencesProvider),
       latency: const Duration(milliseconds: 600),
     ),
-  ),
-);
+  );
+});

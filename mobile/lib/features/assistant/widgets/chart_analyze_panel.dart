@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/data/low_data_mode.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/network_status.dart';
@@ -267,7 +268,12 @@ class _DraftCard extends ConsumerWidget {
                 height: previewHeight,
                 width: double.infinity,
                 // فكّ الصورة على حجم العرض بس
-                cacheHeight: (previewHeight * MediaQuery.devicePixelRatioOf(context)).round(),
+                // H5b: أصغر كمان بالـ Low data mode
+                cacheHeight: imageDecodeSize(
+                  previewHeight,
+                  MediaQuery.devicePixelRatioOf(context),
+                  ref.watch(lowDataImageScaleProvider),
+                ),
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
                 errorBuilder: (_, __, ___) => placeholder,

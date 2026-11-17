@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/database/user_cache_guard.dart';
 import '../core/theme/app_motion.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/theme_mode_provider.dart';
@@ -29,6 +30,9 @@ class TradingApp extends ConsumerWidget {
     // الـ router بينبنى مرة وحدة (appRouterProvider): الـ auth guard وانتهاء
     // الجلسة (رجوع لـ Welcome ومسح الشجرة) جوّا الـ redirect تبعه.
     final router = ref.watch(appRouterProvider);
+
+    // H5b: تسجيل الخروج / تبديل الحساب بيمسح الصفوف الخاصة بالمستخدم من الكاش
+    ref.watch(userCacheGuardProvider);
 
     // لغة التطبيق الحالية - أي تغيير عبر localeProvider.setLocale()
     // (من شاشة Profile) بيعيد بناء كامل الشجرة تلقائيًا بما فيها

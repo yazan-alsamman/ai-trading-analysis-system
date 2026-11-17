@@ -1,8 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/user_cache_guard.dart';
+import '../../../core/data/network_status.dart';
+import '../../../core/network/api_config.dart';
+import '../../../core/network/api_providers.dart';
+
 import '../../markets/models/market_models.dart';
 import '../data/alerts_repository.dart';
 import '../models/price_alert.dart';
+
+/// H5b: التنبيهات على الخادم (API حقيقي) والجهاز بدون اتصال: الإنشاء والحذف
+/// والإيقاف بيقولوا إنهن بدهن اتصال، وما في طابور مخفي. التنبيهات المحلية
+/// (`LocalAlertsRepository`، اليوم) بتشتغل بدون اتصال متل قبل.
+final class AlertsOfflineException implements Exception {
+  const AlertsOfflineException();
+}
+
+/// التنبيهات محفوظة على الخادم؟ (`USE_REAL_API=alerts`؛ غير هيك محلية بالجهاز)
+final alertsNeedConnectionProvider = Provider<bool>((ref) => ref.watch(useRealApiProvider(ApiFeature.alerts)));
 
 /// ViewModel التنبيهات (مشترك: شاشة السوق تنشئ، والإشعارات بتعرض الكل).
 ///
@@ -26,11 +41,19 @@ class AlertsViewModel extends AsyncNotifier<List<PriceAlert>> {
   @override
   Future<List<PriceAlert>> build() async {
     final repo = ref.watch(alertsRepositoryProvider);
+    // H5d: حساب تاني / خروج: القائمة القديمة بتنمسح من الذاكرة قبل إعادة البناء
+    ref.listen<String>(cacheOwnerProvider, (_, __) => state = const AsyncData([]));
     await repo.expireDue(ref.read(alertsClockProvider)());
     return repo.list();
   }
 
   bool get isCreating => _creating;
+
+  void _requireOnline() {
+    if (ref.read(alertsNeedConnectionProvider) && ref.read(networkStatusProvider) == NetworkStatus.offline) {
+      throw const AlertsOfflineException();
+    }
+  }
 
   /// بيشغّل [op] بعد يلي قبلها
   Future<T> _serial<T>(Future<T> Function() op) {
@@ -42,6 +65,7 @@ class AlertsViewModel extends AsyncNotifier<List<PriceAlert>> {
   /// null = في طلب إنشاء جاري أصلًا (ضغطة مزدوجة). الخطأ بيوصل للمنادي.
   Future<PriceAlert?> create(AlertDraft draft) async {
     if (_creating) return null;
+    _requireOnline();
     _creating = true;
     try {
       final alert = await _serial(() => _repo.create(draft));
@@ -65,6 +89,7 @@ class AlertsViewModel extends AsyncNotifier<List<PriceAlert>> {
     final current = state.valueOrNull ?? const <PriceAlert>[];
     final index = current.indexWhere((a) => a.id == id);
     if (index < 0) return null;
+    _requireOnline();
     final removed = current[index];
     state = AsyncData([...current]..removeAt(index));
     try {
@@ -84,6 +109,7 @@ class AlertsViewModel extends AsyncNotifier<List<PriceAlert>> {
     final current = state.valueOrNull ?? const <PriceAlert>[];
     final index = current.indexWhere((a) => a.id == id);
     if (index < 0) return;
+    _requireOnline();
     final before = current[index];
     final optimistic = before.moveTo(active ? AlertStatus.active : AlertStatus.paused);
     if (optimistic == null) return;

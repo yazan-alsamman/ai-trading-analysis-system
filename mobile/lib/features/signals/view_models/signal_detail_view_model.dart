@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/network_status.dart';
+import '../../../core/database/cache_support.dart';
 import '../../markets/data/market_providers.dart';
+import '../data/caching_signals_repository.dart';
 import '../data/signals_repository.dart';
 import '../models/opportunity.dart';
 import '../models/signal_detail.dart';
@@ -32,7 +34,10 @@ class SignalDetailViewModel extends AutoDisposeFamilyAsyncNotifier<SignalDetail?
       _expiry?.cancel();
     });
     ref.listen(networkStatusProvider, (_, status) {
-      if (status == NetworkStatus.online && state.error is SignalsOfflineException) ref.invalidateSelf();
+      if (status != NetworkStatus.online) return;
+      // H5b: كمان لما المعروض نسخة محفوظة
+      final saved = repo is CachingSignalsRepository && repo.savedAt[CachingSignalsRepository.itemKey(id)] != null;
+      if (state.error is SignalsOfflineException || saved) ref.invalidateSelf();
     });
 
     final signal = _fromFeed(id) ?? await _fetch(repo, id);
@@ -65,9 +70,16 @@ class SignalDetailViewModel extends AutoDisposeFamilyAsyncNotifier<SignalDetail?
     if (detail != null) state = AsyncData(detail.markExpired());
   }
 
-  Future<Opportunity?> _fetch(SignalsRepository repo, String id) {
-    if (ref.read(networkStatusProvider) == NetworkStatus.offline) throw const SignalsOfflineException();
-    return repo.opportunity(id);
+  Future<Opportunity?> _fetch(SignalsRepository repo, String id) async {
+    // H5b: فوق الكاش بدون اتصال الـ repository بيرجّع الإشارة المحفوظة
+    if (repo is! CachingSignalsRepository && ref.read(networkStatusProvider) == NetworkStatus.offline) {
+      throw const SignalsOfflineException();
+    }
+    try {
+      return await repo.opportunity(id);
+    } on NoSavedDataException {
+      throw const SignalsOfflineException();
+    }
   }
 
   /// باقي أطر الأداة لسبب "كم إطار متّفق" - فشلها ما بيوقّف الشاشة (السبب بيغيب)

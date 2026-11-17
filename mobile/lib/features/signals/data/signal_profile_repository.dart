@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../core/database/user_cache_guard.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -52,13 +53,16 @@ final class LocalSignalProfileRepository implements SignalProfileRepository {
   Future<void> clear() => prefs.remove(storageKey);
 }
 
-final signalProfileRepositoryProvider = Provider<SignalProfileRepository>(
-  (ref) => apiSource(
+final signalProfileRepositoryProvider = Provider<SignalProfileRepository>((ref) {
+  // H5d: لكل حساب - نسخة جديدة لما يتغيّر الحساب (التخزين المحلي تبع الحساب
+  // السابق بينمسح بالـ guard، والذاكرة بتروح مع النسخة القديمة)
+  ref.watch(cacheOwnerProvider);
+  return apiSource(
     ref,
     ApiFeature.signalProfile,
     simulated: () => LocalSignalProfileRepository(ref.watch(sharedPreferencesProvider)),
-  ),
-);
+  );
+});
 
 /// الاستراتيجية المحفوظة - الـ sheet بتعدّل نسخة محلية وبتحفظ هون مرة وحدة.
 ///

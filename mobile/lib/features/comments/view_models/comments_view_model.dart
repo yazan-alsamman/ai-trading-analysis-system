@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/data/network_status.dart';
 import '../../../providers/locale_provider.dart';
 import '../../community/data/posts_repository.dart';
 import '../../community/view_models/posts_view_model.dart';
@@ -8,9 +9,18 @@ import '../../news/view_models/news_view_models.dart';
 import '../data/comments_source.dart';
 import '../models/comment.dart';
 
+/// بدون اتصال: التعليقات بتحتاج الخادم (H5b: مش محفوظة، وما في طابور مخفي)
+final class CommentsOfflineException implements Exception {
+  const CommentsOfflineException();
+}
+
 /// تعليقات سلسلة وحدة (خبر أو منشور) - الـ sheet نفسه للاتنين.
 /// الإضافة والحذف متفائلين، والحذف بيرجع بالـ Undo. العدد بيتحدّث بالقائمة
 /// يلي فاتحة السلسلة (بطاقة الخبر / المنشور) فورًا.
+///
+/// H5b: بدون اتصال ما في طلب: التحميل بيطلع حالة الـ offline (وبيرجع يحمّل
+/// لحالو لما يرجع الاتصال)، والإضافة / الحذف بيقولوا إنهن بدهن اتصال
+/// ([CommentsOfflineException]) والمسودة بتضل بالخانة.
 class CommentsViewModel extends AutoDisposeFamilyAsyncNotifier<List<Comment>, CommentThread> {
   bool _sending = false;
   late CommentsSource _source;
@@ -22,7 +32,15 @@ class CommentsViewModel extends AutoDisposeFamilyAsyncNotifier<List<Comment>, Co
       CommentTarget.article => ref.watch(newsRepositoryProvider),
       CommentTarget.post => ref.watch(postsRepositoryProvider),
     };
+    ref.listen(networkStatusProvider, (_, status) {
+      if (status == NetworkStatus.online && state.error is CommentsOfflineException) ref.invalidateSelf();
+    });
+    _requireOnline();
     return _source.comments(thread.id, languageCode: language);
+  }
+
+  void _requireOnline() {
+    if (ref.read(networkStatusProvider) == NetworkStatus.offline) throw const CommentsOfflineException();
   }
 
   bool get isSending => _sending;
@@ -30,6 +48,7 @@ class CommentsViewModel extends AutoDisposeFamilyAsyncNotifier<List<Comment>, Co
   /// false = فاضي أو في إرسال جاري (ضغطة مزدوجة). الخطأ بيوصل للمنادي.
   Future<bool> add(String body) async {
     if (_sending || body.trim().isEmpty) return false;
+    _requireOnline();
     _sending = true;
     try {
       final comment = await _source.addComment(arg.id, body);
@@ -44,6 +63,7 @@ class CommentsViewModel extends AutoDisposeFamilyAsyncNotifier<List<Comment>, Co
     final current = state.valueOrNull ?? const <Comment>[];
     final index = current.indexWhere((c) => c.id == commentId);
     if (index < 0) return null;
+    _requireOnline();
     final removed = current[index];
     _set([...current]..removeAt(index));
     try {

@@ -1,6 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/shell/shell_tab.dart';
+import '../../../core/data/low_data_mode.dart';
+import '../../../core/data/network_status.dart';
+import '../../../core/database/cache_support.dart';
+import '../../../core/database/user_cache_guard.dart';
 import '../../../providers/locale_provider.dart';
+import '../data/caching_notifications_repository.dart';
 import '../data/notification_preferences_repository.dart';
 import '../data/notifications_repository.dart';
 import '../models/app_notification.dart';
@@ -24,11 +30,31 @@ class NotificationsViewModel extends AsyncNotifier<List<AppNotification>> {
   Future<List<AppNotification>> build() async {
     final language = ref.watch(localeProvider.select((l) => l.languageCode));
     ref.watch(_inAppKindsProvider);
+    final repo = ref.watch(notificationsRepositoryProvider);
+    // H5c: حساب تاني (أو خروج): الصندوق والعدّاد القديمين بينمسحوا من الذاكرة
+    // قبل إعادة البناء (Riverpod بيحمل القيمة السابقة لقدّام، حتى offline)
+    ref.watch(cacheOwnerProvider);
+    ref.listen<String>(cacheOwnerProvider, (_, __) => state = const AsyncData([]));
+    // H5b: رجع الاتصال وإحنا على نسخة محفوظة أو حالة الـ offline → تحميل من
+    // جديد (الجرس بالـ Home: بالـ Low data mode بيستنّى لحد ما الـ Home يبيّن)
+    reloadWhenBackOnline(
+      ref,
+      tab: ShellTab.home,
+      needed: () =>
+          state.error is NoSavedDataException ||
+          (repo is CachingNotificationsRepository &&
+              repo.savedAt[CachingNotificationsRepository.inboxKey(language)] != null),
+      reload: ref.invalidateSelf,
+    );
     _generation++;
-    return _delivered(await ref.watch(notificationsRepositoryProvider).list(languageCode: language));
+    return _delivered(await repo.list(languageCode: language));
   }
 
+  /// بدون اتصال (H5b، فوق الكاش) ما في شي يتحدّث: الشاشة بتقول ليش
   Future<void> refresh() async {
+    if (_repo is CachingNotificationsRepository && ref.read(networkStatusProvider) == NetworkStatus.offline) {
+      throw const NoSavedDataException();
+    }
     final generation = ++_generation;
     final list = await _repo.list(languageCode: _language);
     if (generation == _generation) state = AsyncData(_delivered(list));

@@ -7,6 +7,11 @@ import '../../comments/data/comments_source.dart';
 import '../../comments/models/comment.dart';
 import '../../markets/models/market_models.dart';
 import '../models/news_models.dart';
+import '../../../core/data/network_status.dart';
+import '../../../core/database/cache_support.dart';
+import '../../../core/database/database_providers.dart';
+import '../../markets/data/market_providers.dart';
+import 'caching_news_repository.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/network/api_providers.dart';
 
@@ -228,10 +233,37 @@ final class _Article {
   final int seededComments;
 }
 
-final newsRepositoryProvider = Provider<NewsRepository>(
+/// مصدر الأخبار نفسه (محاكاة أو API) - يلي بيتبدّل بالـ API
+final newsSourceRepositoryProvider = Provider<NewsRepository>(
   (ref) => apiSource(
     ref,
     ApiFeature.news,
     simulated: () => SimulatedNewsRepository(latency: const Duration(milliseconds: 350)),
   ),
 );
+
+/// H5b: كاش الأخبار (نفس قاعدة Drift)
+final newsCacheProvider = Provider<NewsCache>((ref) => NewsCache(ref.watch(appDatabaseProvider)));
+
+/// يلي بتقرأه الشاشات: المصدر، وفوقه طبقة الكاش (H5b، نفس مفتاح `kMarketOfflineCache`)
+final newsRepositoryProvider = Provider<NewsRepository>(createNewsRepository);
+
+/// منطق [newsRepositoryProvider] (الاختبارات بترجّعه)
+NewsRepository createNewsRepository(Ref ref) {
+  final source = ref.watch(newsSourceRepositoryProvider);
+  if (!ref.watch(marketCacheEnabledProvider)) return source;
+  final caching = CachingNewsRepository(
+    source: source,
+    cache: ref.watch(newsCacheProvider),
+    isOffline: () => ref.read(networkStatusProvider) == NetworkStatus.offline,
+    clock: ref.watch(marketCacheClockProvider),
+  );
+  ref.onDispose(caching.savedAt.dispose);
+  return caching;
+}
+
+/// H5b: وقت النسخة المحفوظة المعروضة (`articles:<lang>`، `mood`) - null = حيّة
+final newsSavedAtProvider = Provider.family<DateTime?, String>((ref, key) {
+  final repo = ref.watch(newsRepositoryProvider);
+  return watchSavedAt(ref, repo is CachingNewsRepository ? repo.savedAt : null, key);
+});

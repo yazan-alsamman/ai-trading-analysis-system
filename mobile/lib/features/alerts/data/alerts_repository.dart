@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../core/database/user_cache_guard.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -267,10 +268,13 @@ class LocalAlertsRepository extends InMemoryAlertsRepository {
 /// ساعة التنبيهات (الانتهاء والإنشاء). الاختبارات بتثبّتها.
 final alertsClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
-final alertsRepositoryProvider = Provider<AlertsRepository>(
-  (ref) => apiSource(
+final alertsRepositoryProvider = Provider<AlertsRepository>((ref) {
+  // H5d: لكل حساب - نسخة جديدة لما يتغيّر الحساب (التخزين المحلي تبع الحساب
+  // السابق بينمسح بالـ guard، والذاكرة بتروح مع النسخة القديمة)
+  ref.watch(cacheOwnerProvider);
+  return apiSource(
     ref,
     ApiFeature.alerts,
     simulated: () => LocalAlertsRepository(ref.watch(sharedPreferencesProvider), clock: ref.watch(alertsClockProvider)),
-  ),
-);
+  );
+});

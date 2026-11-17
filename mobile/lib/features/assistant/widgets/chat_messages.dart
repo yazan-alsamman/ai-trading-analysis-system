@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import '../../../core/data/low_data_mode.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/router/app_navigator.dart';
 import '../../../core/format/formatters.dart';
@@ -72,13 +74,20 @@ class UserImageBubble extends StatelessWidget {
         label: l10n.asstChartImage,
         child: ClipRRect(
           borderRadius: AppRadii.heroCard,
-          child: Image.file(
-            File(message.path),
-            height: height,
-            // فكّ الصورة على حجم العرض بس (صورة كاميرا 12MP كانت تنفكّ كاملة بالذاكرة)
-            cacheHeight: (height * MediaQuery.devicePixelRatioOf(context)).round(),
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => placeholder,
+          child: Consumer(
+            builder: (context, ref, _) => Image.file(
+              File(message.path),
+              height: height,
+              // فكّ الصورة على حجم العرض بس (صورة كاميرا 12MP كانت تنفكّ كاملة بالذاكرة)؛
+              // H5b: أصغر كمان بالـ Low data mode
+              cacheHeight: imageDecodeSize(
+                height,
+                MediaQuery.devicePixelRatioOf(context),
+                ref.watch(lowDataImageScaleProvider),
+              ),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => placeholder,
+            ),
           ),
         ),
       ),

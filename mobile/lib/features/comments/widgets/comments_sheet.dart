@@ -52,8 +52,10 @@ class _CommentsSheet extends ConsumerWidget {
           content: Text(l10n.commentDeleted),
           action: SnackBarAction(label: l10n.undo, onPressed: () => vm.undoRemove(removed)),
         ));
-    } catch (_) {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.commentActionFailed)));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(error is CommentsOfflineException ? l10n.commentsOfflineAction : l10n.commentActionFailed),
+      ));
     }
   }
 
@@ -91,8 +93,16 @@ class _CommentsSheet extends ConsumerWidget {
                           child: Column(children: [for (var i = 0; i < 3; i++) const _SkeletonComment()]),
                         ),
                       ],
-                      error: (_, __) => [
-                        ErrorState(onRetry: () => ref.invalidate(commentsViewModelProvider(thread))),
+                      // H5b: بدون اتصال → السبب (بيتحمّل لحالو لما يرجع الاتصال)
+                      error: (error, __) => [
+                        if (error is CommentsOfflineException)
+                          EmptyState(
+                            icon: Icons.cloud_off_outlined,
+                            title: l10n.offlineBannerTitle,
+                            message: l10n.commentsOffline,
+                          )
+                        else
+                          ErrorState(onRetry: () => ref.invalidate(commentsViewModelProvider(thread))),
                       ],
                       data: (list) => list.isEmpty
                           ? [
@@ -215,10 +225,12 @@ class _ComposerState extends ConsumerState<_Composer> {
         AppHaptics.confirm();
         _controller.clear();
       }
-    } catch (_) {
+    } catch (error) {
+      // المسودة بتضل بالخانة (بتنمسح بس لما ينبعت)
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.commentActionFailed)),
+          SnackBar(content: Text(error is CommentsOfflineException ? l10n.commentsOfflineAction : l10n.commentActionFailed)),
         );
       }
     } finally {

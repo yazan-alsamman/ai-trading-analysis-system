@@ -21,12 +21,25 @@ abstract interface class ConnectivitySource {
   Stream<NetworkStatus> changes();
 }
 
+/// H5b: نوع الاتصال (لاقتراح الـ Low data mode) - مصدر الجهاز بيعرفه
+abstract interface class ConnectionTypeSource {
+  Future<bool> isMobileData();
+
+  Stream<bool> mobileDataChanges();
+}
+
+/// بيانات جوال بس (مش wifi ولا ethernet معها)
+@visibleForTesting
+bool mobileDataFrom(List<ConnectivityResult> results) =>
+    results.contains(ConnectivityResult.mobile) &&
+    !results.any((r) => r == ConnectivityResult.wifi || r == ConnectivityResult.ethernet);
+
 /// نتيجة connectivity_plus → حالتنا
 @visibleForTesting
 NetworkStatus networkStatusFrom(List<ConnectivityResult> results) =>
     results.any((r) => r != ConnectivityResult.none) ? NetworkStatus.online : NetworkStatus.offline;
 
-final class DeviceConnectivitySource implements ConnectivitySource {
+final class DeviceConnectivitySource implements ConnectivitySource, ConnectionTypeSource {
   DeviceConnectivitySource([Connectivity? connectivity]) : _connectivity = connectivity ?? Connectivity();
 
   final Connectivity _connectivity;
@@ -36,6 +49,12 @@ final class DeviceConnectivitySource implements ConnectivitySource {
 
   @override
   Stream<NetworkStatus> changes() => _connectivity.onConnectivityChanged.map(networkStatusFrom).distinct();
+
+  @override
+  Future<bool> isMobileData() async => mobileDataFrom(await _connectivity.checkConnectivity());
+
+  @override
+  Stream<bool> mobileDataChanges() => _connectivity.onConnectivityChanged.map(mobileDataFrom).distinct();
 }
 
 final connectivitySourceProvider = Provider<ConnectivitySource>((ref) => DeviceConnectivitySource());

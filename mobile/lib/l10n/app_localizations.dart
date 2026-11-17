@@ -400,6 +400,34 @@ class AppLocalizations {
       'feedMarketClosed': 'Market closed',
       'feedOffline': 'Offline',
       'feedError': 'Feed error',
+      // H5a: offline cache
+      'lastUpdated': 'Last updated {time}',
+      'oldData': 'Old data',
+      'marketOfflineNoCache': 'Prices haven’t been saved on this phone yet. They load by themselves when you’re back online.',
+      'chartOfflineNoCache': 'This chart hasn’t been saved for offline use yet. It loads by itself when you’re back online.',
+      'marketRefreshOffline': 'You’re offline, so prices can’t refresh. They update by themselves when you’re back online.',
+      'clearMarketCache': 'Clear saved market data',
+      'clearMarketCacheSubtitle': 'Prices, charts, signals, news and notifications kept for offline use',
+      'marketCacheCleared': 'Saved market data cleared.',
+      'marketCacheClearFailed': 'Couldn’t clear saved market data. Try again.',
+      // H5b: offline cache part 2 + low data mode
+      'newsOfflineNoCache': 'News hasn’t been saved on this phone yet. It loads by itself when you’re back online.',
+      'newsRefreshOffline': 'You’re offline, so news can’t refresh. It updates by itself when you’re back online.',
+      'notificationsOfflineNoCache': 'Notifications haven’t been saved on this phone yet. They load by themselves when you’re back online.',
+      'notificationsRefreshOffline': 'You’re offline, so notifications can’t refresh. They update by themselves when you’re back online.',
+      'signalsRefreshOffline': 'You’re offline, so signals can’t refresh. They update by themselves when you’re back online.',
+      'commentsOffline': 'Comments need a connection. They load by themselves when you’re back online.',
+      'commentsOfflineAction': 'You’re offline, so your comment wasn’t sent. It’s still here: send it when you’re back online.',
+      'alertsOfflineAction': 'You’re offline. Alerts are saved on the server, so this needs a connection. Nothing was changed.',
+      'lowDataMode': 'Low data mode',
+      'lowDataModeSubtitle': 'Uses less data: prices update every 5 seconds, charts load fewer candles without animation, images load smaller, and tabs you aren’t viewing don’t refresh by themselves.',
+      'lowDataPillLabel': 'Low data mode is on. Prices update every 5 seconds and charts show fewer candles.',
+      'lowDataSuggestTitle': 'Use less data?',
+      'lowDataSuggestMobile': 'You’re on mobile data. Low data mode updates prices less often and loads smaller charts and images.',
+      'lowDataSuggestSlow': 'Your connection looks slow. Low data mode updates prices less often and loads smaller charts and images.',
+      'lowDataTurnOn': 'Turn on',
+      'lowDataNotNow': 'Not now',
+      'lowDataTurnedOn': 'Low data mode is on. You can turn it off in Settings.',
       'feedStatusLabel': 'Price feed: {status}',
       'change24h': '24h',
       'chartCandles': 'Candles',
@@ -1481,6 +1509,34 @@ class AppLocalizations {
       'feedMarketClosed': 'السوق مغلق',
       'feedOffline': 'غير متصل',
       'feedError': 'خطأ في التدفق',
+      // H5a: offline cache
+      'lastUpdated': 'آخر تحديث {time}',
+      'oldData': 'بيانات قديمة',
+      'marketOfflineNoCache': 'لم تُحفظ الأسعار على هذا الهاتف بعد. ستظهر تلقائيًا عندما تعود متصلًا.',
+      'chartOfflineNoCache': 'لم يُحفظ هذا الرسم للاستخدام دون اتصال بعد. سيظهر تلقائيًا عندما تعود متصلًا.',
+      'marketRefreshOffline': 'أنت غير متصل، لذا لا يمكن تحديث الأسعار. ستتحدّث تلقائيًا عندما تعود متصلًا.',
+      'clearMarketCache': 'مسح بيانات السوق المحفوظة',
+      'clearMarketCacheSubtitle': 'الأسعار والرسوم والإشارات والأخبار والإشعارات المحفوظة للاستخدام دون اتصال',
+      'marketCacheCleared': 'مُسحت بيانات السوق المحفوظة.',
+      'marketCacheClearFailed': 'تعذّر مسح بيانات السوق المحفوظة. حاول مجددًا.',
+      // H5b
+      'newsOfflineNoCache': 'لم تُحفظ الأخبار على هذا الهاتف بعد. ستظهر تلقائيًا عندما تعود متصلًا.',
+      'newsRefreshOffline': 'أنت غير متصل، لذا لا يمكن تحديث الأخبار. ستتحدّث تلقائيًا عندما تعود متصلًا.',
+      'notificationsOfflineNoCache': 'لم تُحفظ الإشعارات على هذا الهاتف بعد. ستظهر تلقائيًا عندما تعود متصلًا.',
+      'notificationsRefreshOffline': 'أنت غير متصل، لذا لا يمكن تحديث الإشعارات. ستتحدّث تلقائيًا عندما تعود متصلًا.',
+      'signalsRefreshOffline': 'أنت غير متصل، لذا لا يمكن تحديث الإشارات. ستتحدّث تلقائيًا عندما تعود متصلًا.',
+      'commentsOffline': 'التعليقات تحتاج إلى اتصال. ستظهر تلقائيًا عندما تعود متصلًا.',
+      'commentsOfflineAction': 'أنت غير متصل، لذا لم يُرسل تعليقك. ما زال هنا: أرسله عندما تعود متصلًا.',
+      'alertsOfflineAction': 'أنت غير متصل. التنبيهات محفوظة على الخادم، لذا يحتاج هذا إلى اتصال. لم يتغيّر شيء.',
+      'lowDataMode': 'وضع البيانات المنخفضة',
+      'lowDataModeSubtitle': 'يستهلك بيانات أقل: تتحدّث الأسعار كل 5 ثوانٍ، وتحمّل الرسوم شموعًا أقل بلا حركة، وتُحمَّل الصور بحجم أصغر، ولا تتحدّث التبويبات التي لا تعرضها تلقائيًا.',
+      'lowDataPillLabel': 'وضع البيانات المنخفضة مفعّل. تتحدّث الأسعار كل 5 ثوانٍ وتعرض الرسوم شموعًا أقل.',
+      'lowDataSuggestTitle': 'استهلاك بيانات أقل؟',
+      'lowDataSuggestMobile': 'أنت على بيانات الجوال. وضع البيانات المنخفضة يحدّث الأسعار بوتيرة أقل ويحمّل رسومًا وصورًا أصغر.',
+      'lowDataSuggestSlow': 'يبدو اتصالك بطيئًا. وضع البيانات المنخفضة يحدّث الأسعار بوتيرة أقل ويحمّل رسومًا وصورًا أصغر.',
+      'lowDataTurnOn': 'تفعيل',
+      'lowDataNotNow': 'ليس الآن',
+      'lowDataTurnedOn': 'وضع البيانات المنخفضة مفعّل. يمكنك إيقافه من الإعدادات.',
       'feedStatusLabel': 'تدفق الأسعار: {status}',
       'change24h': '24 س',
       'chartCandles': 'شموع',
@@ -2491,6 +2547,32 @@ class AppLocalizations {
   String get feedMarketClosed => _v('feedMarketClosed');
   String get feedOffline => _v('feedOffline');
   String get feedError => _v('feedError');
+  String lastUpdated(String time) => _f('lastUpdated', {'time': time});
+  String get oldData => _v('oldData');
+  String get marketOfflineNoCache => _v('marketOfflineNoCache');
+  String get chartOfflineNoCache => _v('chartOfflineNoCache');
+  String get marketRefreshOffline => _v('marketRefreshOffline');
+  String get clearMarketCache => _v('clearMarketCache');
+  String get clearMarketCacheSubtitle => _v('clearMarketCacheSubtitle');
+  String get marketCacheCleared => _v('marketCacheCleared');
+  String get marketCacheClearFailed => _v('marketCacheClearFailed');
+  String get newsOfflineNoCache => _v('newsOfflineNoCache');
+  String get newsRefreshOffline => _v('newsRefreshOffline');
+  String get notificationsOfflineNoCache => _v('notificationsOfflineNoCache');
+  String get notificationsRefreshOffline => _v('notificationsRefreshOffline');
+  String get signalsRefreshOffline => _v('signalsRefreshOffline');
+  String get commentsOffline => _v('commentsOffline');
+  String get commentsOfflineAction => _v('commentsOfflineAction');
+  String get alertsOfflineAction => _v('alertsOfflineAction');
+  String get lowDataMode => _v('lowDataMode');
+  String get lowDataModeSubtitle => _v('lowDataModeSubtitle');
+  String get lowDataPillLabel => _v('lowDataPillLabel');
+  String get lowDataSuggestTitle => _v('lowDataSuggestTitle');
+  String get lowDataSuggestMobile => _v('lowDataSuggestMobile');
+  String get lowDataSuggestSlow => _v('lowDataSuggestSlow');
+  String get lowDataTurnOn => _v('lowDataTurnOn');
+  String get lowDataNotNow => _v('lowDataNotNow');
+  String get lowDataTurnedOn => _v('lowDataTurnedOn');
   String feedStatusLabel(String status) => _f('feedStatusLabel', {'status': status});
   String get change24h => _v('change24h');
   String get chartCandles => _v('chartCandles');

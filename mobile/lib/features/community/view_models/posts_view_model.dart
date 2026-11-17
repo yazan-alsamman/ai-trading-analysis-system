@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/shell/shell_tab.dart';
+import '../../../core/data/low_data_mode.dart';
 import '../../../core/data/network_status.dart';
 import '../../../providers/locale_provider.dart';
 import '../data/posts_repository.dart';
@@ -30,9 +32,13 @@ class PostsViewModel extends AsyncNotifier<List<Post>> {
   Future<List<Post>> build() async {
     final language = ref.watch(localeProvider.select((l) => l.languageCode));
     final repo = ref.watch(postsRepositoryProvider);
-    ref.listen(networkStatusProvider, (_, status) {
-      if (status == NetworkStatus.online && state.error is PostsOfflineException) ref.invalidateSelf();
-    });
+    // H5b: بالـ Low data mode بيستنّى لحد ما تبويب Community يبيّن
+    reloadWhenBackOnline(
+      ref,
+      tab: ShellTab.community,
+      needed: () => state.error is PostsOfflineException,
+      reload: ref.invalidateSelf,
+    );
     _generation++;
     _requireOnline();
     return repo.posts(languageCode: language);

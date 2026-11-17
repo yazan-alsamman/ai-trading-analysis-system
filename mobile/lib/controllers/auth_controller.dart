@@ -170,7 +170,9 @@ final class AuthController extends ChangeNotifier {
       
       // محاكاة تسجيل دخول
       _currentUser = UserModel(
-        id: 'uid_mock',
+        // H5c: معرّف لكل حساب (كان `uid_mock` لكل إيميل، فحسابين كانوا "نفس
+        // المستخدم" بالكاش). نفس الإيميل = نفس المعرّف.
+        id: 'uid_${email.trim().toLowerCase()}',
         email: email,
         // تسجيل دخول الـ mock = متداول دايمًا (SessionStore بيحفظ الدور، restoreSession بيرجّعه)
         role: UserRole.trader,

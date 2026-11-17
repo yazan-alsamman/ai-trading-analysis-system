@@ -8,6 +8,12 @@ import '../../../core/data/json.dart';
 import '../../../core/storage/preferences_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/app_notification.dart';
+import '../../../core/data/network_status.dart';
+import '../../../core/database/cache_support.dart';
+import '../../../core/database/database_providers.dart';
+import '../../../core/database/user_cache_guard.dart';
+import '../../markets/data/market_providers.dart';
+import 'caching_notifications_repository.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/network/api_providers.dart';
 
@@ -249,13 +255,46 @@ final class _Row {
       };
 }
 
-final notificationsRepositoryProvider = Provider<NotificationsRepository>(
-  (ref) => apiSource(
+/// مصدر الإشعارات نفسه (محاكاة أو API) - يلي بيتبدّل بالـ API
+final notificationsSourceRepositoryProvider = Provider<NotificationsRepository>((ref) {
+  // H5c: المحاكاة بتحفظ المقروء / المحذوف بالذاكرة → نسخة جديدة لكل حساب
+  ref.watch(cacheOwnerProvider);
+  return apiSource(
     ref,
     ApiFeature.notifications,
     simulated: () => SimulatedNotificationsRepository(
       latency: const Duration(milliseconds: 300),
       prefs: ref.watch(sharedPreferencesProvider),
     ),
-  ),
-);
+  );
+});
+
+/// H5b: كاش الإشعارات (نفس قاعدة Drift)
+final notificationsCacheProvider =
+    Provider<NotificationsCache>((ref) => NotificationsCache(ref.watch(appDatabaseProvider)));
+
+/// يلي بتقرأه الشاشات: المصدر، وفوقه طبقة الكاش (H5b، نفس مفتاح
+/// `kMarketOfflineCache`). خاص بالحساب الداخل.
+final notificationsRepositoryProvider = Provider<NotificationsRepository>(createNotificationsRepository);
+
+/// منطق [notificationsRepositoryProvider] (الاختبارات بترجّعه)
+NotificationsRepository createNotificationsRepository(Ref ref) {
+  final source = ref.watch(notificationsSourceRepositoryProvider);
+  if (!ref.watch(marketCacheEnabledProvider)) return source;
+  final caching = CachingNotificationsRepository(
+    source: source,
+    cache: ref.watch(notificationsCacheProvider),
+    isOffline: () => ref.read(networkStatusProvider) == NetworkStatus.offline,
+    owner: ref.watch(cacheOwnerProvider),
+    ownerStillCurrent: ownerStillCurrent(ref, ref.read(cacheOwnerProvider)),
+    clock: ref.watch(marketCacheClockProvider),
+  );
+  ref.onDispose(caching.savedAt.dispose);
+  return caching;
+}
+
+/// H5b: وقت النسخة المحفوظة المعروضة (`inbox:<lang>`) - null = حيّة
+final notificationsSavedAtProvider = Provider.family<DateTime?, String>((ref, key) {
+  final repo = ref.watch(notificationsRepositoryProvider);
+  return watchSavedAt(ref, repo is CachingNotificationsRepository ? repo.savedAt : null, key);
+});

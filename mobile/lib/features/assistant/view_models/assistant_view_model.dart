@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import '../../../core/database/user_cache_guard.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/network_status.dart';
@@ -109,6 +110,8 @@ class AssistantViewModel extends Notifier<AssistantState> {
 
   @override
   AssistantState build() {
+    // H5d: المحادثة لكل حساب: حساب تاني / خروج = محادثة فاضية
+    ref.watch(cacheOwnerProvider);
     ref.onDispose(() => _chartCancel?.cancel());
     return const AssistantState();
   }

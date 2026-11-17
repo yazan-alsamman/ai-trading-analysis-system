@@ -9,6 +9,8 @@ import '../../../core/widgets/motion.dart';
 import '../../../core/widgets/page_header.dart';
 import '../../../core/widgets/settings_group.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/data/low_data_mode.dart';
+import '../../markets/data/market_providers.dart';
 import '../../risk/models/risk_limits.dart';
 import '../../risk/widgets/risk_limits_sheet.dart';
 import '../view_models/settings_view_model.dart';
@@ -39,6 +41,21 @@ class SettingsScreen extends ConsumerWidget {
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(l10n.couldNotSaveChanges)));
+    }
+  }
+
+  Future<void> _clearMarketCache(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await clearMarketCache(ref);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.marketCacheCleared)));
+    } catch (_) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.marketCacheClearFailed)));
     }
   }
 
@@ -74,6 +91,14 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: l10n.chooseAlerts,
             onTap: context.pushNotificationPreferences,
           ),
+          // H5b: مطفي بالافتراضي، بينحفظ، والإطفاء بيرجّع كل شي فورًا
+          SettingsSwitchTile(
+            icon: Icons.data_saver_on_rounded,
+            title: l10n.lowDataMode,
+            subtitle: l10n.lowDataModeSubtitle,
+            value: ref.watch(lowDataModeProvider),
+            onChanged: (on) => ref.read(lowDataModeProvider.notifier).set(on),
+          ),
         ],
       ),
       SettingsGroup(
@@ -100,6 +125,14 @@ class SettingsScreen extends ConsumerWidget {
               value: state.simulatingOffline,
               onChanged: vm.setSimulatedOffline,
             ),
+            // H5a: بيمسح الأسعار والشموع المحفوظة للاستخدام بدون اتصال
+            if (ref.watch(marketCacheEnabledProvider))
+              SettingsTile(
+                icon: Icons.delete_sweep_outlined,
+                title: l10n.clearMarketCache,
+                subtitle: l10n.clearMarketCacheSubtitle,
+                onTap: () => _clearMarketCache(context, ref),
+              ),
           ],
         ),
     ];

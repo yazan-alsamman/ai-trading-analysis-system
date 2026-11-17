@@ -6,7 +6,6 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/feedback_states.dart';
 import '../../../core/widgets/headings.dart';
 import '../../../core/widgets/motion.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/page_header.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/membership_models.dart';
@@ -29,7 +28,7 @@ class PlansScreen extends ConsumerWidget {
     final membership = ref.watch(membershipViewModelProvider);
 
     return Scaffold(
-      bottomNavigationBar: const OfflineBanner(),
+      // H5c: شريط "غير متصل" واحد بس = تبع الـ shell (هالشاشة جوّا فرع)
       body: SafeArea(
         bottom: false,
         child: Column(

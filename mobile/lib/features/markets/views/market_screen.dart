@@ -17,11 +17,15 @@ import '../../forecast/widgets/forecast_toggle.dart';
 import '../../risk/widgets/size_trade_sheet.dart';
 import '../../signals/models/opportunity.dart';
 import '../../signals/widgets/request_analysis_sheet.dart';
+import '../../../core/data/low_data_mode.dart';
+import '../../../core/widgets/low_data_pill.dart';
+import '../data/caching_market_data_repository.dart';
 import '../data/market_providers.dart';
 import '../models/market_models.dart';
 import '../view_models/market_view_model.dart';
 import '../widgets/feed_status_pill.dart';
 import '../widgets/indicators_sheet.dart';
+import '../widgets/last_updated_line.dart';
 import '../widgets/market_hero.dart';
 import '../widgets/price_chart.dart';
 import '../widgets/signal_summary.dart';
@@ -44,7 +48,17 @@ class MarketScreen extends ConsumerWidget {
     if (instrument == null) {
       body = instruments.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => Center(child: ErrorState(onRetry: () => ref.invalidate(instrumentsProvider))),
+        // H5a: بدون اتصال وما في شي محفوظ → حالة الـ offline (بتتحمّل لحالها)
+        error: (error, __) => Center(
+          child: error is MarketOfflineException
+              ? EmptyState(
+                  illustrated: true,
+                  icon: Icons.cloud_off_outlined,
+                  title: l10n.offlineBannerTitle,
+                  message: l10n.marketOfflineNoCache,
+                )
+              : ErrorState(onRetry: () => ref.invalidate(instrumentsProvider)),
+        ),
         // رمز مش موجود (رابط قديم مثلًا)
         data: (_) => Center(child: EmptyState(icon: Icons.search_off_rounded, title: l10n.chartEmpty)),
       );
@@ -134,6 +148,8 @@ class _PriceBlock extends ConsumerWidget {
     final quote = ref.watch(quoteProvider(instrument.symbol));
     final feed = ref.watch(feedStatusProvider);
     final simulated = ref.watch(marketDataRepositoryProvider).isSimulated;
+    // H5a: سعر محفوظ (بدون اتصال / المصدر فشل) → "Last updated" تحت الشارة
+    final saved = ref.watch(marketShowingSavedProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,8 +193,14 @@ class _PriceBlock extends ConsumerWidget {
           children: [
             FeedStatusPill(status: feed),
             if (simulated) const SourceTag(SourceKind.demo),
+            // H5b: أبطأ تحديث + شموع أقل - منقول
+            if (ref.watch(lowDataModeProvider)) const LowDataPill(),
           ],
         ),
+        if (saved && quote != null) ...[
+          const SizedBox(height: AppSpacing.xxs),
+          LastUpdatedLine(updatedAt: quote.time),
+        ],
       ],
     );
   }
@@ -260,14 +282,21 @@ class _ChartCard extends ConsumerWidget {
                 child: Skeleton(height: PriceChart.mainHeight, radius: AppRadii.card),
               ),
               // ارتفاع أدنى بدل ثابت: بالخط الكبير الرسالة بتطوّل الكرت بدل ما تفيض
-              error: (_, __) => ConstrainedBox(
+              error: (error, __) => ConstrainedBox(
                 key: const ValueKey('error'),
                 constraints: const BoxConstraints(minHeight: PriceChart.mainHeight),
                 child: Center(
-                  child: ErrorState(
-                    message: l10n.chartError,
-                    onRetry: () => ref.invalidate(liveCandlesProvider((symbol, view.timeframe))),
-                  ),
+                  // H5a: بدون اتصال وهالإطار مش محفوظ → شرح (مش رسم فاضي)، وبيتحمّل لحالو
+                  child: error is MarketOfflineException
+                      ? EmptyState(
+                          icon: Icons.cloud_off_outlined,
+                          title: l10n.offlineBannerTitle,
+                          message: l10n.chartOfflineNoCache,
+                        )
+                      : ErrorState(
+                          message: l10n.chartError,
+                          onRetry: () => ref.invalidate(liveCandlesProvider((symbol, view.timeframe))),
+                        ),
                 ),
               ),
               data: (list) => list.isEmpty
@@ -287,6 +316,8 @@ class _ChartCard extends ConsumerWidget {
                       indicators: view.indicators,
                       read: shown,
                       forecast: forecast is ForecastReady ? forecast.path : null,
+                      // H5b: Low data mode = بدون حركة الرسم
+                      animated: !ref.watch(lowDataModeProvider),
                     ),
             ),
           ),

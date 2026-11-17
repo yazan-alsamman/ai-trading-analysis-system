@@ -59,6 +59,9 @@ class _SetAlertSheetState extends ConsumerState<SetAlertSheet> {
   bool _showErrors = false;
   bool _saveFailed = false;
 
+  /// H5b: الإنشاء بدو اتصال (تنبيهات على الخادم) - المسودة بتضل بالـ sheet
+  bool _offline = false;
+
   @override
   void initState() {
     super.initState();
@@ -108,8 +111,13 @@ class _SetAlertSheetState extends ConsumerState<SetAlertSheet> {
           ));
       if (!mounted || alert == null) return;
       Navigator.of(context).pop(alert);
-    } catch (_) {
-      if (mounted) setState(() => _saveFailed = true);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _saveFailed = true;
+          _offline = error is AlertsOfflineException;
+        });
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -243,7 +251,10 @@ class _SetAlertSheetState extends ConsumerState<SetAlertSheet> {
             if (_saveFailed) ...[
               Semantics(
                 liveRegion: true,
-                child: Text(l10n.alertCreateFailed, style: text.bodyMedium!.copyWith(color: c.danger)),
+                child: Text(
+                  _offline ? l10n.alertsOfflineAction : l10n.alertCreateFailed,
+                  style: text.bodyMedium!.copyWith(color: c.danger),
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
             ],

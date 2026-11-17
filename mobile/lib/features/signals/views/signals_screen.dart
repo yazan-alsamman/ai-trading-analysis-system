@@ -8,6 +8,8 @@ import '../../../core/widgets/not_advice_notice.dart';
 import '../../../core/widgets/source_tag.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../markets/data/market_providers.dart';
+import '../../markets/widgets/saved_data_status.dart';
+import '../data/caching_signals_repository.dart';
 import '../view_models/signals_feed_view_model.dart';
 import '../widgets/accuracy_line.dart';
 import '../widgets/request_analysis_sheet.dart';
@@ -30,7 +32,13 @@ class SignalsScreen extends ConsumerWidget {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
-          content: Text(error is SignalsOfflineException ? l10n.signalsOfflineAction : l10n.signalsError),
+          // H5b: فوق الكاش القائمة المحفوظة بتضل، وبتتحدّث لحالها لما يرجع الاتصال
+          content: Text(switch (error) {
+            SignalsOfflineException() when ref.read(signalsRepositoryProvider) is CachingSignalsRepository =>
+              l10n.signalsRefreshOffline,
+            SignalsOfflineException() => l10n.signalsOfflineAction,
+            _ => l10n.signalsError,
+          }),
         ));
     }
   }
@@ -99,6 +107,17 @@ class SignalsScreen extends ConsumerWidget {
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(gutter, 0, gutter, AppSpacing.sm),
                 sliver: const SliverToBoxAdapter(child: NotAdviceNotice()),
+              ),
+              // H5b: قائمة محفوظة (بدون اتصال / المصدر فشل) → الشارة + "Last updated"
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: gutter),
+                sliver: SliverToBoxAdapter(
+                  child: SavedDataStatus(
+                    updatedAt: ref.watch(signalsFeedViewModelProvider).hasValue
+                        ? ref.watch(signalsSavedAtProvider(CachingSignalsRepository.feedKey))
+                        : null,
+                  ),
+                ),
               ),
               const SignalsList(),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),

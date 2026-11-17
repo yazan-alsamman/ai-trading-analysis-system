@@ -154,10 +154,11 @@ class AlertRow extends ConsumerWidget {
   final bool showSymbol;
   final VoidCallback? onTap;
 
-  void _failed(BuildContext context) {
+  void _failed(BuildContext context, [Object? error]) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context)!.alertActionFailed)),
+      SnackBar(content: Text(error is AlertsOfflineException ? l10n.alertsOfflineAction : l10n.alertActionFailed)),
     );
   }
 
@@ -175,8 +176,8 @@ class AlertRow extends ConsumerWidget {
           // بيرجع بحالته المحفوظة (اشتغل / انتهى / موقوف...)، مش Active جديد
           action: SnackBarAction(label: l10n.undo, onPressed: () => vm.undoRemove(removed)),
         ));
-    } catch (_) {
-      if (context.mounted) _failed(context);
+    } catch (error) {
+      if (context.mounted) _failed(context, error);
     }
   }
 
@@ -192,8 +193,8 @@ class AlertRow extends ConsumerWidget {
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(l10n.alertCreated(created.symbol, instrument.format(created.value)))));
-    } catch (_) {
-      if (context.mounted) _failed(context);
+    } catch (error) {
+      if (context.mounted) _failed(context, error);
     }
   }
 
@@ -287,8 +288,8 @@ class AlertRow extends ConsumerWidget {
                             AppHaptics.selection();
                             try {
                               await ref.read(alertsViewModelProvider.notifier).setActive(alert.id, active: !canPause);
-                            } catch (_) {
-                              if (context.mounted) _failed(context);
+                            } catch (error) {
+                              if (context.mounted) _failed(context, error);
                             }
                           },
                         ),

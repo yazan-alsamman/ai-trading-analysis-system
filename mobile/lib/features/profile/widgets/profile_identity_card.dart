@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import '../../../core/data/low_data_mode.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_context.dart';
 import '../../../core/widgets/app_card.dart';
@@ -98,7 +100,7 @@ class RoleBadge extends StatelessWidget {
 }
 
 /// صورة المستخدم، أو أول حرف من اسمه لما ما في صورة
-class ProfileAvatar extends StatelessWidget {
+class ProfileAvatar extends ConsumerWidget {
   const ProfileAvatar({super.key, required this.name, required this.path, this.size = 56});
 
   final String name;
@@ -106,7 +108,7 @@ class ProfileAvatar extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final initial = name.isEmpty ? '?' : name.characters.first.toUpperCase();
     return Container(
@@ -118,9 +120,12 @@ class ProfileAvatar extends StatelessWidget {
         border: Border.all(color: c.accent.withValues(alpha: 0.35)),
         image: path == null
             ? null
-            // فكّ الصورة على حجم الدائرة بس
+            // فكّ الصورة على حجم الدائرة بس (H5b: أصغر كمان بالـ Low data mode)
             : DecorationImage(
-                image: ResizeImage(FileImage(File(path!)), width: (size * MediaQuery.devicePixelRatioOf(context)).round()),
+                image: ResizeImage(
+                  FileImage(File(path!)),
+                  width: imageDecodeSize(size, MediaQuery.devicePixelRatioOf(context), ref.watch(lowDataImageScaleProvider)),
+                ),
                 fit: BoxFit.cover,
               ),
       ),

@@ -7,7 +7,6 @@ import '../../../core/theme/theme_context.dart';
 import '../../../core/widgets/feedback_states.dart';
 import '../../../core/widgets/motion.dart';
 import '../../../core/widgets/not_advice_notice.dart';
-import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/page_header.dart';
 import '../../../core/widgets/segment_label.dart';
 import '../../../l10n/app_localizations.dart';
@@ -17,6 +16,10 @@ import '../../alerts/widgets/alerts_section.dart';
 import '../../markets/data/market_providers.dart';
 import '../models/app_notification.dart';
 import '../view_models/notifications_view_model.dart';
+import '../../../core/database/cache_support.dart';
+import '../../markets/widgets/saved_data_status.dart';
+import '../data/caching_notifications_repository.dart';
+import '../data/notifications_repository.dart';
 import '../widgets/notification_row.dart';
 
 enum NotificationsSection { inbox, alerts }
@@ -63,7 +66,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final alertCount = ref.watch(activeAlertCountProvider);
 
     return Scaffold(
-      bottomNavigationBar: const OfflineBanner(),
+      // H5c: شريط "غير متصل" واحد بس = تبع الـ shell (هالشاشة جوّا فرع)
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -175,6 +178,12 @@ class _Inbox extends ConsumerWidget {
           onRefresh: () async {
             try {
               await ref.read(notificationsViewModelProvider.notifier).refresh();
+            } on NoSavedDataException {
+              // H5b: بدون اتصال القائمة المحفوظة بتضل، وبتتحدّث لحالها لما يرجع الاتصال
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(content: Text(l10n.notificationsRefreshOffline)));
             } catch (_) {
               onFailed();
             }
@@ -187,6 +196,10 @@ class _Inbox extends ConsumerWidget {
         );
 
     final chips = _FilterChips(selected: filter, onSelected: onFilter);
+    final language = Localizations.localeOf(context).languageCode;
+    final status = SavedDataStatus(
+      updatedAt: ref.watch(notificationsSavedAtProvider(CachingNotificationsRepository.inboxKey(language))),
+    );
 
     return notifications.when(
       skipLoadingOnRefresh: true,
@@ -195,15 +208,25 @@ class _Inbox extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sm),
         LoadingRegion(child: _RowsCard(children: [for (var i = 0; i < 5; i++) const _SkeletonRow()])),
       ]),
-      error: (_, __) => scroll([
-        ErrorState(
-          message: l10n.notifLoadError,
-          onRetry: () => ref.invalidate(notificationsViewModelProvider),
-        ),
+      // H5b: بدون اتصال وما في إشعارات محفوظة → السبب (بتتحمّل لحالها لما يرجع الاتصال)
+      error: (error, __) => scroll([
+        if (error is NoSavedDataException)
+          EmptyState(
+            illustrated: true,
+            icon: Icons.cloud_off_outlined,
+            title: l10n.offlineBannerTitle,
+            message: l10n.notificationsOfflineNoCache,
+          )
+        else
+          ErrorState(
+            message: l10n.notifLoadError,
+            onRetry: () => ref.invalidate(notificationsViewModelProvider),
+          ),
       ]),
       data: (all) {
         if (all.isEmpty) {
           return scroll([
+            status,
             EmptyState(
               illustrated: true,
               icon: Icons.notifications_none_rounded,
@@ -219,6 +242,8 @@ class _Inbox extends ConsumerWidget {
                   if (n.kind == filter) n
               ];
         return scroll([
+          // H5b: صندوق محفوظ (بدون اتصال / المصدر فشل) → الشارة + "Last updated"
+          status,
           chips,
           const SizedBox(height: AppSpacing.sm),
           if (shown.isEmpty)

@@ -18,8 +18,10 @@ import 'package:trading_app/features/auth/views/otp_screen.dart';
 import 'package:trading_app/features/auth/views/register_screen.dart';
 import 'package:trading_app/features/auth/views/welcome_screen.dart';
 import 'package:trading_app/features/auth/widgets/auth_scaffold.dart';
+import 'package:trading_app/features/auth/widgets/password_checks.dart';
 import 'package:trading_app/features/auth/view_models/auth_view_models.dart';
 import 'package:trading_app/l10n/app_localizations.dart';
+import 'package:trading_app/providers/app_providers.dart';
 import 'package:trading_app/utils/validators.dart';
 
 import '../../helpers/test_app.dart';
@@ -47,6 +49,19 @@ Future<void> type(WidgetTester tester, String label, String value) async {
   await tester.enterText(find.descendant(of: field(label), matching: find.byType(TextField)), value);
   await tester.pump();
 }
+
+/// الخطأ المعروض تحت حقل كلمة المرور (نفس النص اللي بيقرأه القارئ الصوتي)
+String? passwordError(WidgetTester tester, {String label = 'Password'}) => tester
+    .state<FormFieldState<String>>(find.descendant(of: field(label), matching: find.byType(TextFormField)))
+    .errorText;
+
+/// كلمات مرور ما بتطابق قاعدة الـ backend، مع الرسالة المتوقعة
+List<(String, String, String)> _weakPasswords(AppLocalizations l10n) => [
+      ('too short', 'abc1234', l10n.passwordMinChars),
+      ('no digit', 'abcdefgh', l10n.passwordNeedsNumber),
+      ('no letter', '12345678', l10n.passwordNeedsLetter),
+      ('too long', '${'a1' * 64}x', l10n.passwordMaxChars),
+    ];
 
 void main() {
   final l10n = AppLocalizations(const Locale('en'));
@@ -203,14 +218,126 @@ void main() {
       expect(find.text('Password is required'), findsOneWidget);
     });
 
-    testWidgets('any password with letters only is fine on login (the rule is for new ones)', (tester) async {
+    // كان: "أي كلمة مرور بتمشي عالدخول". هلق نفس قاعدة Create account:
+    // كلمة صالحة بتدخل، والضعيفة ما بتبعت شي (الاختبارات تحت)
+    testWidgets('a valid password (8+, a letter, a digit) signs in', (tester) async {
       await pumpAuth(tester, route: AppRoutes.login, signedIn: null);
       await type(tester, 'Email', 'trader@example.com');
-      await type(tester, 'Password', 'old');
+      await type(tester, 'Password', 'research42');
       await tester.tap(find.widgetWithText(FilledButton, 'Log in'));
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
       expect(find.byType(AppShell), findsOneWidget);
+    });
+
+    for (final (name, password, message) in _weakPasswords(l10n)) {
+      testWidgets('$name: inline error, nothing is sent, no snackbar', (tester) async {
+        await pumpAuth(tester, route: AppRoutes.login, signedIn: null);
+        final auth = ProviderScope.containerOf(tester.element(find.byType(LoginScreen))).read(authControllerProvider);
+        var authCalls = 0;
+        void count() => authCalls++;
+        auth.addListener(count);
+
+        await type(tester, 'Email', 'trader@example.com');
+        await type(tester, 'Password', password);
+        await tester.tap(find.widgetWithText(FilledButton, 'Log in'));
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+
+        expect(passwordError(tester), message);
+        expect(find.text(message), findsOneWidget);
+        expect(authCalls, 0, reason: 'the sign-in was never called');
+        expect(auth.currentUser, isNull);
+        expect(find.byType(SnackBar), findsNothing);
+        expect(find.byType(AuthErrorBanner), findsNothing);
+        expect(find.byType(LoginScreen), findsOneWidget);
+        auth.removeListener(count);
+      });
+    }
+
+    testWidgets('only one message, never the requirements checklist', (tester) async {
+      await pumpAuth(tester, route: AppRoutes.login);
+      await type(tester, 'Email', 'trader@example.com');
+      await type(tester, 'Password', 'abc');
+      await tester.tap(find.widgetWithText(FilledButton, 'Log in'));
+      await tester.pumpAndSettle();
+      expect(find.byType(PasswordChecks), findsNothing);
+      expect(find.text(l10n.passwordMinChars), findsOneWidget);
+      expect(find.text(l10n.passwordNeedsNumber), findsNothing);
+    });
+
+    testWidgets('same timing as Create account: quiet before submit, live after it', (tester) async {
+      await pumpAuth(tester, route: AppRoutes.login);
+      await type(tester, 'Email', 'trader@example.com');
+      await type(tester, 'Password', 'abc');
+      await tester.pumpAndSettle();
+      expect(passwordError(tester), isNull, reason: 'no error before the first submit');
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Log in'));
+      await tester.pumpAndSettle();
+      expect(passwordError(tester), l10n.passwordMinChars);
+
+      await type(tester, 'Password', 'abcdefgh');
+      expect(passwordError(tester), l10n.passwordNeedsNumber, reason: 'live after the first submit');
+      await type(tester, 'Password', 'abcdefg1');
+      expect(passwordError(tester), isNull);
+      expect(find.text(l10n.passwordNeedsNumber), findsNothing);
+    });
+
+    testWidgets('the error is read with the field by a screen reader', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpAuth(tester, route: AppRoutes.login);
+      await type(tester, 'Email', 'trader@example.com');
+      await type(tester, 'Password', '12345678');
+      await tester.tap(find.widgetWithText(FilledButton, 'Log in'));
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel(RegExp(RegExp.escape(l10n.passwordNeedsLetter))), findsWidgets);
+      // الحقل لسّا مسمّى، والـ show/hide لسّا موجود وبحجم 48
+      expect(find.bySemanticsLabel('Password'), findsWidgets);
+      final toggle = find.descendant(of: field('Password'), matching: find.byType(IconButton));
+      expect(toggle, findsOneWidget);
+      expect(tester.getSize(toggle).height, greaterThanOrEqualTo(48));
+      semantics.dispose();
+    });
+
+    testWidgets('Arabic + dark + largest font: Arabic message, no overflow', (tester) async {
+      useLargeText(tester);
+      final ar = AppLocalizations(const Locale('ar'));
+      await pumpAuth(tester, route: AppRoutes.login, locale: 'ar', theme: 'dark');
+      await type(tester, ar.email, 'trader@example.com');
+      await type(tester, ar.password, 'abcdefgh');
+      await scrollTo(tester, find.widgetWithText(FilledButton, ar.logIn));
+      await tester.tap(find.widgetWithText(FilledButton, ar.logIn));
+      await tester.pumpAndSettle();
+      expect(find.text(ar.passwordNeedsNumber), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    group('Log in and Create account share one password rule', () {
+    // لو وحدة من الشاشتين غيّرت الـ validator، هالاختبار بيفشل
+    for (final locale in ['en', 'ar']) {
+      final loc = AppLocalizations(Locale(locale));
+      for (final (name, password, message) in [..._weakPasswords(loc), ('valid', 'research42', null)]) {
+        testWidgets('$name ($locale): same message on both screens', (tester) async {
+          Future<String?> errorOn(String route, String submit) async {
+            await tester.pumpWidget(const SizedBox());
+            await pumpAuth(tester, route: route, locale: locale);
+            await type(tester, loc.password, password);
+            await scrollTo(tester, find.widgetWithText(FilledButton, submit));
+            await tester.tap(find.widgetWithText(FilledButton, submit));
+            await tester.pumpAndSettle();
+            return passwordError(tester, label: loc.password);
+          }
+
+          final onLogin = await errorOn(AppRoutes.login, loc.logIn);
+          final onRegister = await errorOn(AppRoutes.registration, loc.createAccountAction);
+          expect(onLogin, onRegister);
+          expect(onLogin, Validators.password(password, loc));
+          expect(onLogin, message);
+          await tester.pumpWidget(const SizedBox());
+        });
+      }
+    }
     });
 
     testWidgets('offline: nothing is sent, the banner and an inline message explain why', (tester) async {
