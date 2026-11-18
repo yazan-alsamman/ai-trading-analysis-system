@@ -1,0 +1,78 @@
+# Gold-news sentiment: data, splits and gates (docs/sentiment/PREREG_SENTIMENT.md §2-§3).
+#
+#     python -m app research sentiment download [--prices-from PATH]   # fetch the raw files
+#     python -m app research sentiment data                            # verify, clean, split
+#     python -m app research sentiment gates                           # docs/sentiment/gates.md
+#
+# Paths are relative to ai-service/. Nothing under data/sentiment/ is ever committed (licences:
+# gold headlines CC BY-NC-ND 4.0, FinancialPhraseBank CC BY-NC-SA 3.0, Dukascopy terms unclear).
+# Every run checks each raw file against its SHA-256 below and stops on a mismatch. A file with
+# `optional = true` may be missing (its gate is then reported as pending), never different.
+
+[paths]
+root = "data/sentiment"
+raw = "data/sentiment/raw"
+processed = "data/sentiment/processed"
+report = "docs/sentiment/gates.md"
+
+[files.gold_zip]
+path = "raw/gold/sentiment-analysis-in-commodity-market-gold.zip"
+sha256 = "eb78715777d15beef3d9645348056c8f085d8ce5d401d74c8b6eb32b989783c0"
+source = "kaggle datasets download -d ankurzing/sentiment-analysis-in-commodity-market-gold"
+
+[files.gold]
+path = "raw/gold/gold-dataset-sinha-khandait.csv"
+sha256 = "1c2d032de29c0080197c1f6e9720d53af022f28d79b75eded32360748eeb71b2"
+source = "member gold-dataset-sinha-khandait.csv of the Kaggle zip (Sinha and Khandait, arXiv:2009.04202)"
+
+[files.fpb_zip]
+path = "raw/fpb/FinancialPhraseBank-v1.0.zip"
+sha256 = "0e1a06c4900fdae46091d031068601e3773ba067c7cecb5b0da1dcba5ce989a6"
+# the original archive (Malo et al. 2014) as stored in the Hugging Face dataset repo
+# takala/financial_phrasebank at a pinned revision; the `datasets` loader is not used
+source = "https://huggingface.co/datasets/takala/financial_phrasebank/resolve/8d3fe0c36d5feec6b3cc5e455b0fcb4820fb9964/data/FinancialPhraseBank-v1.0.zip"
+
+[files.fpb]
+path = "raw/fpb/Sentences_AllAgree.txt"
+sha256 = "5fb370b3005b9a2759f708849a691ad2e4d2593d4c995c1afde229398a516594"
+source = "member FinancialPhraseBank-v1.0/Sentences_AllAgree.txt of the FPB zip (latin-1, sentence@label)"
+
+[files.dukascopy]
+path = "raw/prices/xauusd-d1-bid-2000-01-01-2026-11-18.csv"
+sha256 = "2e3567e8f6c7b3e1776b214c6b297a2434ed34e98445edb9b0d671bdf5fa7bad"
+source = "npx dukascopy-node -i xauusd -from 2000-01-01 -to 2026-11-18 -t d1 -f csv -p bid -v"
+
+[files.stooq]
+path = "raw/prices/xauusd_d_stooq.csv"
+sha256 = ""  # not obtained (2026-11-18: the URL answered 404); G2 pending (MT5 D1 from Fadi)
+optional = true
+source = "https://stooq.com/q/d/l/?s=xauusd&i=d"
+
+[dedupe]
+near_jaccard = 0.8  # token-set Jaccard of the normalised text, at or above = near-duplicate
+window_days = 3     # compared only with kept headlines dated within this many days
+
+[split]
+# PREREG §2.5: the default boundaries, and the fallback used if the default test split holds fewer
+# than `min_test` headlines after deduplication (decided on the count, in code, before any model)
+min_test = 1500
+default = { train_last = "2012-12-31", val_last = "2015-12-31" }
+fallback = { train_last = "2011-12-31", val_last = "2014-12-31" }
+
+[prices]
+first_date = "2003-01-01"  # 2000-2002: rounded prices, other volume unit, impossible OHLC
+# The repository's lockbox starts 2026-01-10 (CLAUDE.md, D23): the price reader stops at the first
+# bar on or after this date without decoding it, so no lockbox-period price is ever loaded.
+stop_before = "2026-01-10"
+
+[gates]
+g2_min_close_corr = 0.99
+g2_return_diff = 0.005  # |log-return difference| above this is flagged
+g2_list = 20
+
+# Written by `python -m app research sentiment gates` (G4): inverse class frequency on the train
+# split, normalised so that the train-sample-weighted mean weight is 1 (w_c = n / (K * n_c)).
+[class_weights]
+negative = 0.950538
+neutral = 1.705740
+positive = 0.734372

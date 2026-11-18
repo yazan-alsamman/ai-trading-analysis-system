@@ -4,7 +4,8 @@ versions, meta: L1 (P3, P4). post-counts, evaluate, management, holdout: the sig
 levels-confirm: Addendum 2, the level-break reading on the confirmation instruments (once).
 levels-trade: Addendum 2, the level-break trade in the MT5 Strategy Tester (H_L2, once).
 gold-lab, gold-combo: the commercial gold track (exploratory).
-gold-exam: the gold track's lockbox exam (once). gold-live: the v1 live EA against Python."""
+gold-exam: the gold track's lockbox exam (once). gold-live: the v1 live EA against Python.
+sentiment: gold-news sentiment data and gates (docs/sentiment/PREREG_SENTIMENT.md)."""
 
 from __future__ import annotations
 
@@ -12,6 +13,10 @@ import sys
 
 
 def main(argv: list[str]) -> int:
+    if argv and argv[0] == "sentiment":
+        from app.research.sentiment.cli import main as sentiment
+
+        return sentiment(argv[1:])
     if argv and argv[0] == "meta":
         from app.research.meta import main as meta
 

@@ -6,3 +6,6 @@ data/confirm/
 data/dukascopy/
 # Local archives (e.g. a zipped review folder), never committed.
 *.zip
+# Gold-news sentiment data (docs/sentiment/PREREG_SENTIMENT.md): licensed headlines
+# (CC BY-NC-ND 4.0), FinancialPhraseBank (CC BY-NC-SA 3.0) and prices; never committed.
+data/sentiment/
