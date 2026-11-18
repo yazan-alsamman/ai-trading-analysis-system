@@ -91,6 +91,17 @@ def frames_from_lines(lines) -> dict[str, pd.DataFrame]:
     return {tf: aggregate(m1, tf, M1) for tf in F.FRAMES}
 
 
+def index_frames_from_lines(lines) -> dict[str, pd.DataFrame]:
+    """An index CFD's M1 export (US30, US500, NAS100, GER40, UK100, JP225) as research frames:
+    server time to UTC and nothing else. The clock check of ``frames_from_lines`` expects gold's
+    and FX's weekly open; on the index exports it moved whole weeks by 1-3 hours
+    (``docs/data_quality/INDEX_CLOCK.md``). Prices use gold's spec (two decimals, point 0.01), as
+    the index exports do."""
+    s = splits()
+    parsed = parse_export(lines, instruments()[gl.SYM], M1, s.server_tz)
+    return {tf: aggregate(parsed.bars, tf, M1) for tf in F.FRAMES}
+
+
 def joined(store: dict[str, pd.DataFrame], lock: dict[str, pd.DataFrame],
            start: pd.Timestamp | None = None) -> dict[str, pd.DataFrame]:  # fmt: skip
     """The store's frames with the lockbox bars that open on or after ``start`` (by default the

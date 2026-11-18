@@ -89,3 +89,7 @@ Seen with it (decides nothing): the five's gross R is positive in every k bucket
 markets (about +0.03 to +0.10 R a trade), and the net is mostly negative with these costs; pooled
 net R with slip k = 0 −0.044 vs k >= 1 +0.024, a gap that comes from cost per R, not from direction.
 
+
+## Correction (2026-11-18): the index clock
+
+The Nasdaq export was read through the gold importer's clock check, which moved whole weeks of it by an hour in parts of most years (`docs/data_quality/INDEX_CLOCK.md`). Rerun with the server clock only; the report now holds the corrected figures, and **the decision does not change**. Before and after are in `INDEX_CLOCK.md`.

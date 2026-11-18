@@ -76,7 +76,7 @@ def e0(every: pd.DataFrame, cx: gl.Ctx) -> np.ndarray:
 
 
 def build(export: Path) -> str:
-    fr = ge.frames_from_lines(lines(export))
+    fr = ge.index_frames_from_lines(lines(export))
     every, cx = trades(fr)
     null = e0(every, cx)
     p95 = float(np.quantile(null, 0.95))
@@ -145,7 +145,7 @@ def reclaim_e0(cx: gl.Ctx, sig: pd.DataFrame) -> np.ndarray:
 def build_reclaim(export: Path) -> str:
     from app.research import gold_regime as gr_
 
-    cx = gl.context(ge.frames_from_lines(lines(export)))
+    cx = gl.context(ge.index_frames_from_lines(lines(export)))
     t = reclaim_trades(cx)
     sig = t[["strategy", "i", "dir", "risk"]].copy()
     sig["entry"] = cx.c[sig["i"].to_numpy()]

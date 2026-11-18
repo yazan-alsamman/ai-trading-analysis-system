@@ -92,7 +92,7 @@ def boot(markets: dict[str, pd.DataFrame]) -> tuple[np.ndarray, dict[str, np.nda
 
 def load_markets(nas: Path) -> dict[str, pd.DataFrame]:
     out = {}
-    fr = ge.frames_from_lines(fn.lines(nas))
+    fr = ge.index_frames_from_lines(fn.lines(nas))
     out["NAS100"] = market_trades(fr, fn.START, fn.COMMISSION, fn.SL_SLIP)
     for sym in FX:
         fr = gl.load(sym)

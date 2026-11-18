@@ -149,6 +149,13 @@ toward N for the Deflated Sharpe of trial 27 (**N = 60**).
 | 2026-11-16 | Descriptive (Fadi's personal lab, decides nothing; `ai-service/lab/results/corr_map.md`, not committed): every pooled cell's net R by period and daily correlation with the five, from the stored trades | Only 10 cells net > 0 in both periods (the six, lab copies of LVL4H / PIVOT, RND-50 / RND-100 break near +0.01 R). Gross-only ranking: PREV-W rejection +0.071 / +0.139 gross, net −0.005 / +0.095, correlation +0.01, FxPro 2026 +0.475 (82). **Chosen after seeing as the PWREJ demo shadow (`docs/strategies/GOLD_PWREJ.md`)**; it did not beat its shifted copies in the level study (t +1.18) |
 | 2026-11-16 | Screen 2, confirmations and new levels with the five's engine (`docs/levels/CONFIRM_SCREEN2.md`, registered 2026-11-12 before the run; run once on Fadi's request): part A the 15 methods of screen 1 traded with D = 0.75 x ATR(4h), M8, no target; part B 10 new level sets traded like the five; XAUUSD 2024 to 2026-01-09 against 200 shifted copies; pass: net > 0 and t >= 1.5; 25 screen cells | Part A: **1 of 15 passes, B6 second attempt, +0.008 R** (t +2.30, 13,467 trades); waiting confirmations (B1 hold, B2 retest, B3 strong candle) match their copies (t −0.14 to +0.46); every rejection method R1-R7 loses (net −0.008 to −0.045). Part B: 5 of 10 pass: PMHL +0.333 (34 trades), HL3 +0.154 (246, correlation with the five +0.71), HL20 +0.380 (100, +0.50), R100 +0.138 (173, +0.30; a subset of ROUND), all but PMHL above the full test's correlation limit (+0.2). No full test registered |
 
+**Correction (2026-11-18): the index clock.** The Nasdaq rows (the five on the Nasdaq 100, RECLAIM
+there, and the NAS100 part of confluence) were read through the gold importer's clock check, which
+moved whole weeks of the export by an hour (`docs/data_quality/INDEX_CLOCK.md`). Rerun on the
+server clock: the five −0.030 R with slip (was −0.040), RECLAIM −0.032 (was −0.050 in its report),
+confluence D +0.0068 (was +0.0050). No decision changes; the rows above keep the figures as read
+then.
+
 ## Outcome mix of E1 by horizon
 
 | Horizon | TP | SL | Horizon reached | Mean net R |

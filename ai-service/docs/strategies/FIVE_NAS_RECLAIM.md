@@ -67,3 +67,7 @@ its side carries some information, but not enough to pay its cost (0.067 R) afte
 
 **Decision (Fadi, 2026-11-11): stop here.** The PIVOT-level subset is not taken to another index;
 it stays an unconfirmed observation.
+
+## Correction (2026-11-18): the index clock
+
+The Nasdaq export was read through the gold importer's clock check, which moved whole weeks of it by an hour in parts of most years (`docs/data_quality/INDEX_CLOCK.md`). Rerun with the server clock only; the report now holds the corrected figures, and **the decision does not change**. Before and after are in `INDEX_CLOCK.md`.

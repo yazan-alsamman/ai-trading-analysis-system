@@ -79,3 +79,7 @@ PIVW −0.016, ASIA −0.025, PWHL −0.025), gross +0.074 against a cost of 0.1
 percentile −0.056. **The verdict stands (they do not pay on the Nasdaq), but the reading in §5 is
 replaced:** the break's side is better than a coin there, by about gold's gross margin; the cost
 takes it. RECLAIM (`FIVE_NAS_RECLAIM.md`) is −0.050 on the clean data and still does not hold.
+
+## Correction (2026-11-18): the index clock
+
+The Nasdaq export was read through the gold importer's clock check, which moved whole weeks of it by an hour in parts of most years (`docs/data_quality/INDEX_CLOCK.md`). Rerun with the server clock only; the report now holds the corrected figures, and **the decision does not change**. Before and after are in `INDEX_CLOCK.md`.
