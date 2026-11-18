@@ -7,9 +7,11 @@ from app.api.v1 import (
     admin_api_keys,
     admin_feeds,
     admin_market,
+    admin_otp,
     admin_realtime,
     admin_system,
     ai,
+    ai_chat,
     api_keys,
     auth,
     backtests,
@@ -23,6 +25,7 @@ from app.api.v1 import (
     market,
     news,
     notifications,
+    paper,
     posts,
     predictions,
     price_alerts,
@@ -46,6 +49,7 @@ limited_router.include_router(admin_realtime.router)
 limited_router.include_router(admin_system.router)
 limited_router.include_router(admin_ai.router)
 limited_router.include_router(admin_feeds.router)
+limited_router.include_router(admin_otp.router)
 limited_router.include_router(ai.router)
 limited_router.include_router(admin_api_keys.router)
 limited_router.include_router(indicators.router)
@@ -76,6 +80,8 @@ limited_router.include_router(predictions.router)
 limited_router.include_router(predictions.admin_router)
 limited_router.include_router(recommendations.router)
 limited_router.include_router(chart_analysis.router)
+limited_router.include_router(ai_chat.router)
+limited_router.include_router(paper.router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)

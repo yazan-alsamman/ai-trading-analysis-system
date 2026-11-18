@@ -36,6 +36,7 @@ from app.models.instrument import Instrument, MarketType
 from app.models.news import (
     NewsArticle,
     NewsArticleInstrument,
+    NewsComment,
     NewsSource,
     NewsSourceKind,
     SentimentLabel,
@@ -53,6 +54,7 @@ from app.models.notification import (
     TelegramLink,
     UserDevice,
 )
+from app.models.paper import PaperAccount, PaperOrder, PaperPosition
 from app.models.prediction import SignalOutcome
 from app.models.price_alert import AlertCondition, AlertRepeat, PriceAlert
 from app.models.refresh_token import RefreshToken
@@ -154,4 +156,8 @@ __all__ = [
     "UserStrategy",
     "Visibility",
     "Workspace",
+    "NewsComment",
+    "PaperAccount",
+    "PaperOrder",
+    "PaperPosition",
 ]

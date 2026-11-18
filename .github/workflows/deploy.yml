@@ -151,6 +151,37 @@ jobs:
           echo "::add-mask::$GEMINI_API_KEY"
           printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" \
             | ssh vps 'bash /opt/trading/set-env-secrets.sh'
+      - name: LightOTP API key into .env (only when missing or empty; never printed)
+        # docs/otp.md. Same rule as the Gemini key: stdin over SSH, never argv or the log; a
+        # value already on the server (set by hand in /opt/trading/.env) is kept. Not set in
+        # GitHub: skipped (WhatsApp codes answer 503, the rest deploys normally).
+        env:
+          LIGHTOTP_TOKEN: ${{ secrets.LIGHTOTP_TOKEN }}
+        run: |
+          if [ -z "$LIGHTOTP_TOKEN" ]; then
+            echo "LIGHTOTP_TOKEN not set in GitHub: skipped"
+            exit 0
+          fi
+          echo "::add-mask::$LIGHTOTP_TOKEN"
+          printf 'LIGHTOTP_TOKEN=%s\n' "$LIGHTOTP_TOKEN" \
+            | ssh vps 'bash /opt/trading/set-env-secrets.sh'
+      - name: Firebase (FCM push) credentials into .env (only when missing or empty; never printed)
+        # docs/notifications.md "Push". FCM_PROJECT_ID and FCM_CREDENTIALS_JSON_B64 (the Firebase
+        # service-account JSON, base64 on one line: `base64 -w0 key.json`) from GitHub secrets;
+        # written as FCM_PROJECT_ID / FCM_CREDENTIALS_JSON over SSH stdin, never argv or the log.
+        # A value already on the server is kept. Not set in GitHub: skipped (push stays off).
+        env:
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          FCM_CREDENTIALS_JSON_B64: ${{ secrets.FCM_CREDENTIALS_JSON_B64 }}
+        run: |
+          if [ -z "$FCM_PROJECT_ID" ] || [ -z "$FCM_CREDENTIALS_JSON_B64" ]; then
+            echo "FCM secrets are not set in GitHub: skipped"
+            exit 0
+          fi
+          echo "::add-mask::$FCM_CREDENTIALS_JSON_B64"
+          creds="$(printf '%s' "$FCM_CREDENTIALS_JSON_B64" | tr -d '[:space:]')"
+          printf 'FCM_PROJECT_ID=%s\nFCM_CREDENTIALS_JSON=%s\n' "$FCM_PROJECT_ID" "$creds" \
+            | ssh vps 'bash /opt/trading/set-env-secrets.sh'
       - name: Pull images and restart the trading stack
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | ssh vps 'docker login ghcr.io -u ${{ github.actor }} --password-stdin'

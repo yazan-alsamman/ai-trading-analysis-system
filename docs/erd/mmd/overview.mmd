@@ -25,6 +25,12 @@ flowchart LR
         risk_profiles[risk_profiles]
         signal_plans[signal_plans]
     end
+    subgraph domain_paper["Paper trading (simulated account)"]
+        direction TB
+        paper_accounts[paper_accounts]
+        paper_orders[paper_orders]
+        paper_positions[paper_positions]
+    end
     subgraph domain_ai["AI engine (ai-service setups and models)"]
         direction TB
         ai_setups[ai_setups]
@@ -59,6 +65,7 @@ flowchart LR
         news_sources[news_sources]
         news_articles[news_articles]
         news_article_instruments[news_article_instruments]
+        news_comments[news_comments]
         posts[posts]
         comments[comments]
         post_likes[post_likes]
@@ -112,9 +119,17 @@ flowchart LR
     news_article_instruments --> instruments
     news_article_instruments --> news_articles
     news_articles --> news_sources
+    news_comments --> news_articles
+    news_comments -.-> users
     notification_deliveries --> notifications
     notification_preferences -.-> users
     notifications -.-> users
+    paper_accounts -.-> users
+    paper_orders --> instruments
+    paper_orders --> paper_positions
+    paper_orders -.-> users
+    paper_positions --> instruments
+    paper_positions -.-> users
     post_likes --> posts
     post_likes -.-> users
     posts --> instruments

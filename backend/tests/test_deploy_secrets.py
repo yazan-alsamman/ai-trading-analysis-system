@@ -111,3 +111,102 @@ def test_workflow_step(tmp_path: Path) -> None:
     sent = calls.read_text(encoding="utf-8")
     assert "bash /opt/trading/set-env-secrets.sh" in sent and f"GEMINI_API_KEY={KEY}" in sent
     assert out.strip() == f"::add-mask::{KEY}"  # only the mask command (hidden by Actions)
+
+
+def test_lightotp_workflow_step(tmp_path: Path) -> None:
+    """docs/otp.md: LIGHTOTP_TOKEN takes the same path as GEMINI_API_KEY."""
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    steps = [s for job in jobs.values() for s in job.get("steps", [])]
+    names = [s.get("name", "") for s in steps]
+    index = next(i for i, n in enumerate(names) if n.startswith("LightOTP API key"))
+    assert index < names.index("Pull images and restart the trading stack")
+    step = steps[index]
+    assert step["env"] == {"LIGHTOTP_TOKEN": "${{ secrets.LIGHTOTP_TOKEN }}"}
+    script = step["run"]
+    echoed = [line for line in script.splitlines() if "echo" in line and "LIGHTOTP_TOKEN" in line]
+    assert all("::add-mask::" in line or "not set in GitHub" in line for line in echoed)
+
+    calls = tmp_path / "ssh-calls"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_ssh = bin_dir / "ssh"
+    fake_ssh.write_text(
+        f'#!/usr/bin/env bash\necho "$@" >> "{calls.as_posix()}"\ncat >> "{calls.as_posix()}"\n',
+        encoding="utf-8",
+    )
+    fake_ssh.chmod(0o755)
+
+    def run_step(value: str) -> str:
+        result = subprocess.run(
+            [BASH, "-e", "-c", script],
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "LIGHTOTP_TOKEN": value,
+                "PATH": f"{bin_dir.as_posix()}{os.pathsep if os.name != 'nt' else ':'}"
+                + os.environ.get("PATH", ""),
+            },
+            check=True,
+        )
+        return result.stdout
+
+    assert run_step("").strip() == "LIGHTOTP_TOKEN not set in GitHub: skipped"
+    assert not calls.exists()
+    token = "lotp-test-token-0123456789abcdef"
+    out = run_step(token)
+    sent = calls.read_text(encoding="utf-8")
+    assert "bash /opt/trading/set-env-secrets.sh" in sent and f"LIGHTOTP_TOKEN={token}" in sent
+    assert out.strip() == f"::add-mask::{token}"
+
+
+def test_fcm_workflow_step(tmp_path: Path) -> None:
+    """docs/notifications.md: the FCM secrets reach .env (the credentials as base64 on one line)."""
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    steps = [s for job in jobs.values() for s in job.get("steps", [])]
+    names = [s.get("name", "") for s in steps]
+    index = next(i for i, n in enumerate(names) if n.startswith("Firebase (FCM push)"))
+    assert index < names.index("Pull images and restart the trading stack")
+    step = steps[index]
+    assert step["env"] == {
+        "FCM_PROJECT_ID": "${{ secrets.FCM_PROJECT_ID }}",
+        "FCM_CREDENTIALS_JSON_B64": "${{ secrets.FCM_CREDENTIALS_JSON_B64 }}",
+    }
+    script = step["run"]
+    echoed = [line for line in script.splitlines() if "echo" in line and "FCM_CREDENTIALS" in line]
+    assert all("::add-mask::" in line for line in echoed)
+
+    calls = tmp_path / "ssh-calls"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_ssh = bin_dir / "ssh"
+    fake_ssh.write_text(
+        f'#!/usr/bin/env bash\necho "$@" >> "{calls.as_posix()}"\ncat >> "{calls.as_posix()}"\n',
+        encoding="utf-8",
+    )
+    fake_ssh.chmod(0o755)
+
+    def run_step(project: str, creds: str) -> str:
+        result = subprocess.run(
+            [BASH, "-e", "-c", script],
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "FCM_PROJECT_ID": project,
+                "FCM_CREDENTIALS_JSON_B64": creds,
+                "PATH": f"{bin_dir.as_posix()}{os.pathsep if os.name != 'nt' else ':'}"
+                + os.environ.get("PATH", ""),
+            },
+            check=True,
+        )
+        return result.stdout
+
+    assert run_step("demo", "").strip() == "FCM secrets are not set in GitHub: skipped"
+    assert not calls.exists()
+    creds = "eyJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCJ9"
+    out = run_step("demo-project", creds[:20] + "\n" + creds[20:] + "\n")
+    sent = calls.read_text(encoding="utf-8")
+    assert "bash /opt/trading/set-env-secrets.sh" in sent
+    assert "FCM_PROJECT_ID=demo-project" in sent and f"FCM_CREDENTIALS_JSON={creds}" in sent
+    assert creds not in out

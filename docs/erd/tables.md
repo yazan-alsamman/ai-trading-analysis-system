@@ -15,6 +15,8 @@ An account: login e-mail, Argon2 password hash and one of four roles (trader, an
 | `hashed_password` | varchar(255) | no |  |  |
 | `full_name` | varchar(200) | yes |  |  |
 | `role` | enum user_role (trader, analyst, expert, admin) | no | `trader` |  |
+| `phone_e164` | varchar(16) | yes |  | UK |
+| `phone_verified_at` | timestamp with time zone | yes |  |  |
 | `is_active` | boolean | no | `true` |  |
 | `sessions_revoked_at` | timestamp with time zone | yes |  |  |
 | `created_at` | timestamp with time zone | no | `now()` |  |
@@ -24,6 +26,8 @@ An account: login e-mail, Argon2 password hash and one of four roles (trader, an
 
 - PK `pk` (id)
 - CHECK `ck_users_email_lowercase`: `email = lower(email)`
+- CHECK `ck_users_phone_e164`: `phone_e164 IS NULL OR phone_e164 ~ '^\+[1-9][0-9]{6,14}$'`
+- UNIQUE `uq_users_phone_e164` (phone_e164)
 - UNIQUE (email)
 
 **Indexes**
@@ -525,6 +529,109 @@ The trade plan of one signal for one user (and activation): entry, stop, targets
 
 - `ix_signal_plans_user_created` (signal_plans.user_id, created_at DESC)
 
+## Paper trading (simulated account)
+
+### `paper_accounts`
+
+``balance`` is the cash: the initial balance plus every realized P/L (costs included).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `user_id` | uuid | no |  | PK, FK |
+| `currency` | varchar(8) | no | `USD` |  |
+| `initial_balance` | double precision | no |  |  |
+| `balance` | double precision | no |  |  |
+| `leverage` | integer | no |  |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `reset_at` | timestamp with time zone | yes |  |  |
+| `updated_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+
+**Constraints**
+
+- PK `pk` (user_id)
+- FK (user_id) → users (id) ON DELETE CASCADE
+- CHECK `ck_paper_accounts_initial`: `initial_balance > 0`
+- CHECK `ck_paper_accounts_leverage`: `leverage BETWEEN 1 AND 1000`
+
+### `paper_orders`
+
+Base class used for declarative class definitions.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` | PK |
+| `user_id` | uuid | no |  | FK |
+| `instrument_id` | uuid | no |  | FK |
+| `side` | varchar(4) | no |  |  |
+| `type` | varchar(8) | no |  |  |
+| `lots` | double precision | no |  |  |
+| `price` | double precision | yes |  |  |
+| `stop_loss` | double precision | yes |  |  |
+| `take_profit` | double precision | yes |  |  |
+| `status` | varchar(12) | no |  |  |
+| `reject_reason` | varchar(64) | yes |  |  |
+| `fill_price` | double precision | yes |  |  |
+| `position_id` | uuid | yes |  | FK |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `checked_until` | timestamp with time zone | yes |  |  |
+| `filled_at` | timestamp with time zone | yes |  |  |
+| `cancelled_at` | timestamp with time zone | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
+- FK (position_id) → paper_positions (id) ON DELETE SET NULL
+- FK (user_id) → users (id) ON DELETE CASCADE
+- CHECK `ck_paper_orders_lots`: `lots > 0`
+- CHECK `ck_paper_orders_side`: `side IN ('buy', 'sell')`
+- CHECK `ck_paper_orders_status`: `status IN ('pending', 'filled', 'cancelled', 'rejected')`
+- CHECK `ck_paper_orders_type`: `type IN ('market', 'limit', 'stop')`
+
+**Indexes**
+
+- `ix_paper_orders_pending_instrument` (paper_orders.instrument_id) WHERE `status = 'pending'`
+- `ix_paper_orders_user_created` (paper_orders.user_id, created_at DESC)
+
+### `paper_positions`
+
+Base class used for declarative class definitions.
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` | PK |
+| `user_id` | uuid | no |  | FK |
+| `instrument_id` | uuid | no |  | FK |
+| `side` | varchar(4) | no |  |  |
+| `lots` | double precision | no |  |  |
+| `contract_size` | double precision | no |  |  |
+| `entry_price` | double precision | no |  |  |
+| `stop_loss` | double precision | yes |  |  |
+| `take_profit` | double precision | yes |  |  |
+| `margin` | double precision | no |  |  |
+| `cost` | double precision | no | `0` |  |
+| `status` | varchar(8) | no | `open` |  |
+| `opened_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `checked_until` | timestamp with time zone | no |  |  |
+| `closed_at` | timestamp with time zone | yes |  |  |
+| `close_price` | double precision | yes |  |  |
+| `close_reason` | varchar(16) | yes |  |  |
+| `pnl` | double precision | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (instrument_id) → instruments (id) ON DELETE CASCADE
+- FK (user_id) → users (id) ON DELETE CASCADE
+- CHECK `ck_paper_positions_lots`: `lots > 0`
+- CHECK `ck_paper_positions_side`: `side IN ('buy', 'sell')`
+- CHECK `ck_paper_positions_status`: `status IN ('open', 'closed')`
+
+**Indexes**
+
+- `ix_paper_positions_open_instrument` (paper_positions.instrument_id) WHERE `status = 'open'`
+- `ix_paper_positions_user_status` (paper_positions.user_id, paper_positions.status, opened_at DESC)
+
 ## AI engine (ai-service setups and models)
 
 ### `ai_setups`
@@ -891,7 +998,7 @@ One event for one user: the inbox row and the source of every external delivery.
 |---|---|---|---|---|
 | `id` | uuid | no | `gen_random_uuid()` | PK |
 | `user_id` | uuid | no |  | FK |
-| `type` | enum notification_type (signal, backtest_completed, backtest_failed, security, system, new_post, comment_reply, post_liked, content_hidden, price_alert, chat_message, subscription_started, subscription_renewed, subscription_payment_failed, subscription_canceled, new_subscriber, ai_setup) | no |  |  |
+| `type` | enum notification_type (signal, backtest_completed, backtest_failed, security, system, new_post, comment_reply, post_liked, content_hidden, price_alert, chat_message, subscription_started, subscription_renewed, subscription_payment_failed, subscription_canceled, new_subscriber, ai_setup, paper_trade) | no |  |  |
 | `title` | varchar(200) | no |  |  |
 | `body` | text | no |  |  |
 | `data` | jsonb | no |  |  |
@@ -1057,6 +1164,7 @@ Where articles come from: an RSS feed the platform fetches, or an API source tha
 | `sentiment_score` | double precision | yes |  |  |
 | `sentiment_model` | varchar(64) | yes |  |  |
 | `sentiment_at` | timestamp with time zone | yes |  |  |
+| `comments_count` | integer | no | `0` |  |
 
 **Constraints**
 
@@ -1093,6 +1201,35 @@ An instrument tag of an article with its relevance (0..1).
 **Indexes**
 
 - `ix_news_article_instruments_instrument` (news_article_instruments.instrument_id)
+
+### `news_comments`
+
+A reader's comment on an article (migration 0026, docs/news-comments.md). Two levels: a reply to a reply is stored under the top-level comment. Deleting is soft (``deleted``).
+
+| Column | Type | Null | Default | Keys |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` | PK |
+| `article_id` | uuid | no |  | FK |
+| `author_id` | uuid | no |  | FK |
+| `parent_id` | uuid | yes |  | FK |
+| `body` | text | no |  |  |
+| `status` | varchar(16) | no | `published` |  |
+| `created_at` | timestamp with time zone | no | `clock_timestamp()` |  |
+| `edited_at` | timestamp with time zone | yes |  |  |
+
+**Constraints**
+
+- PK `pk` (id)
+- FK (article_id) → news_articles (id) ON DELETE CASCADE
+- FK (author_id) → users (id) ON DELETE CASCADE
+- FK (parent_id) → news_comments (id) ON DELETE CASCADE
+- CHECK `ck_news_comments_status`: `status IN ('published', 'hidden', 'deleted')`
+
+**Indexes**
+
+- `ix_news_comments_article_created` (news_comments.article_id, created_at DESC)
+- `ix_news_comments_author_created` (news_comments.author_id, created_at DESC)
+- `ix_news_comments_parent` (news_comments.parent_id)
 
 ### `posts`
 

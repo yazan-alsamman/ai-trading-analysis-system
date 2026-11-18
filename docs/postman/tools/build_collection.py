@@ -23,7 +23,7 @@ TOOLS = Path(__file__).resolve().parent
 POSTMAN = TOOLS.parent
 REPO = POSTMAN.parent.parent
 sys.path.insert(0, str(TOOLS))
-from spec import FOLDERS, WEBSOCKET_DOC, Folder, Req  # noqa: E402
+from spec import FOLDERS, NUMERIC_VARS, WEBSOCKET_DOC, Folder, Req  # noqa: E402
 
 COLLECTION_FILE = POSTMAN / "AI-Trading-Platform.postman_collection.json"
 ENV_DIR = POSTMAN / "environments"
@@ -297,7 +297,8 @@ def body_object(
     else:
         raw = json.dumps(body, indent=4, ensure_ascii=False)
         # numbers that come from variables: "{{custom_strategy_version}}" -> {{...}}
-        raw = raw.replace('"{{custom_strategy_version}}"', "{{custom_strategy_version}}")
+        for name in NUMERIC_VARS:
+            raw = raw.replace(f'"{{{{{name}}}}}"', f"{{{{{name}}}}}")
     return {"mode": "raw", "raw": raw, "options": {"raw": {"language": "json"}}}
 
 
@@ -628,6 +629,15 @@ RUNTIME_VARS = [
             "prediction_id",
             "ai_instrument_id",
             "chart_analysis_id",
+            "news_comment_id",
+            "news_reply_id",
+            "paper_position_id",
+            "paper_fill_price",
+            "paper_order_id",
+            "paper_stop_loss",
+            "paper_take_profit",
+            "paper_limit_price",
+            "paper_bad_price",
             "custom_strategy_id",
             "custom_strategy_key",
             "custom_strategy_version",
@@ -663,6 +673,8 @@ RUNTIME_VARS = [
             "my_plan_id",
             "notification_id",
             "device_id",
+            "otp_code",
+            "otp_message_id",
         )
     ),
 ]
@@ -688,6 +700,12 @@ def environment(name: str, base_url: str, ws_url: str, creds: dict[str, str]) ->
             "key": "user_new_password",
             "value": creds.get("user_new_password", ""),
             "type": "secret",
+            "enabled": True,
+        },
+        {
+            "key": "user_phone",
+            "value": creds.get("user_phone", ""),
+            "type": "default",
             "enabled": True,
         },
         {

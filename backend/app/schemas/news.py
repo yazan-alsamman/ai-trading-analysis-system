@@ -6,7 +6,9 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.news import NewsSourceKind, SentimentLabel
+from app.models.user import UserRole
 from app.news.text import is_http_url
+from app.schemas.posts import CommentBody
 
 SOURCE_KEY = re.compile(r"^[a-z0-9][a-z0-9_.-]{1,63}$")
 MAX_INGEST_ITEMS = 200
@@ -152,6 +154,7 @@ class ArticleRead(BaseModel):
     fetched_at: datetime
     sentiment: SentimentRead | None
     instruments: list[TagRead]
+    comments_count: int = Field(default=0, description="published reader comments")
 
 
 class SourceRead(BaseModel):
@@ -200,3 +203,41 @@ class SentimentAggregate(BaseModel):
     since: datetime
     overall: SentimentBucket
     instruments: list[InstrumentSentiment]
+
+
+# --- reader comments (docs/news-comments.md) --------------------------------------------------
+
+
+class NewsCommentCreate(_Strict):
+    body: CommentBody
+    parent_id: uuid.UUID | None = Field(
+        default=None, description="a reply; a reply to a reply is stored under the top comment"
+    )
+
+
+class NewsCommentUpdate(_Strict):
+    body: CommentBody
+
+
+class NewsCommentModeration(_Strict):
+    hidden: bool = Field(description="true hides the comment (its author still sees it)")
+
+
+class NewsCommentAuthor(BaseModel):
+    id: uuid.UUID
+    display_name: str
+    role: UserRole
+
+
+class NewsCommentRead(BaseModel):
+    id: uuid.UUID
+    article_id: uuid.UUID
+    parent_id: uuid.UUID | None
+    author: NewsCommentAuthor | None
+    body: str
+    status: Literal["published", "hidden", "deleted"]
+    created_at: datetime
+    edited_at: datetime | None
+    is_own: bool
+    can_edit: bool
+    can_delete: bool

@@ -175,6 +175,10 @@ connections per IP (`app/core/rate_limit.py`).
   (`scripts/check_log_secrets.py`).
 - Never returned: API keys after creation, FCM device tokens (only a suffix), card numbers (the
   demo keeps brand and last 4 only), password hashes, other users' e-mails.
+- `LIGHTOTP_TOKEN` (WhatsApp codes, docs/otp.md) follows the same path from the GitHub secret of
+  the same name, or is set by hand in the server `.env`. It is sent only as LightOTP's
+  `X-Api-Key` header and is never logged or returned (`/admin/otp/status` shows only
+  `configured`). OTP codes are stored as an HMAC keyed with `JWT_SECRET`, never in clear.
 
 ## 8. Transport and server
 

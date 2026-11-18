@@ -9,13 +9,14 @@ automatic login/refresh.
 | `AI-Trading-Platform.postman_collection.json` | The collection (Postman v2.1) |
 | `environments/Production.postman_environment.json` | The VPS: `http://187.127.76.76:8080` |
 | `environments/Local.postman_environment.json` | Docker Compose: `http://localhost` (use `http://localhost:8000` for a bare uvicorn) |
-| `tools/` | Generator: `spec.py` (the requests), `capture_examples.py`, `build_collection.py`, `fake_gemini.py` (a local stand-in for Gemini) |
+| `tools/` | Generator: `spec.py` (the requests), `capture_examples.py`, `build_collection.py`, `fake_gemini.py` and `fake_lightotp.py` (local stand-ins for Gemini and LightOTP) |
 
 ## Use it
 
 1. Postman → **Import** → the collection and both environments.
 2. Select an environment and fill in `user_email` / `user_password` (and `admin_email` /
-   `admin_password` for the Admin folder). Secrets stay in your local Postman: never commit
+   `admin_password` for the Admin folder; `user_phone` only to try the WhatsApp code requests,
+   which send a real message). Secrets stay in your local Postman: never commit
    filled-in environments.
 3. Send any request. The collection's pre-request script logs in, caches the access token
    until it expires and refreshes it with the refresh token; `/admin/*` requests use a separate
@@ -92,8 +93,10 @@ The JSON files are generated; edit `tools/spec.py`, never the collection by hand
 3. Start a local stack with demo data (`seed-instruments`, `seed-demo-candles`, a Celery
    worker for backtests) and run
    `python docs/postman/tools/capture_examples.py --admin-email … --admin-password …`
-   to refresh `tools/examples.json`. For the chart analysis examples, first start
+   to refresh `tools/examples.json`. For the chart analysis and AI assistant chat examples, first start
    `python docs/postman/tools/fake_gemini.py` and run the backend with
    `GEMINI_API_KEY=fake CHART_VISION_BASE_URL=http://localhost:8765` (no key, no paid call).
+   For the WhatsApp code (OTP) examples, also start `python docs/postman/tools/fake_lightotp.py`
+   and set `LIGHTOTP_TOKEN=fake LIGHTOTP_BASE_URL=http://localhost:8766` (no real message).
 4. `python docs/postman/tools/build_collection.py` writes the collection and environments;
    run Newman as above before committing.

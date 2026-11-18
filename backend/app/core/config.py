@@ -253,6 +253,44 @@ class Settings(BaseSettings):
     chart_analysis_max_concurrent: int = 1
     # development and load tests only: a fake Gemini server; empty: Google's official host
     chart_vision_base_url: str = ""
+    # WhatsApp OTP codes via LightOTP (docs/otp.md, https://lightotp.com/en/docs/otp-messages).
+    # LIGHTOTP_TOKEN is the API key from the LightOTP dashboard, sent as X-Api-Key (server .env
+    # or the GitHub secret of the same name, never in git); empty: phone verification and
+    # OTP login answer 503 and the rest of the platform is unaffected
+    lightotp_token: str = ""
+    lightotp_base_url: str = "https://api.lightotp.com"
+    lightotp_timeout_seconds: float = 15
+    # BCP-47 language of the WhatsApp template; empty: the LightOTP account's default
+    lightotp_language: str = "ar"
+    otp_length: int = 5  # digits (the mobile app's code field has 5 boxes)
+    otp_ttl_seconds: int = 300  # a code expires after this
+    otp_max_attempts: int = 5  # wrong codes before the challenge is dropped
+    otp_resend_seconds: int = 60  # wait before another code to the same phone
+    otp_phone_per_hour: int = 5  # codes sent to one phone per hour (all purposes)
+    auth_otp_ip_per_minute: int = 5  # /auth/otp/request and /users/me/phone per client IP
+    # Comments on news articles (docs/news-comments.md); the hourly cap is comments_per_hour
+    news_comments_enabled: bool = True
+    # AI assistant chat (docs/ai-chat.md): Gemini text answers with the platform's market
+    # context. Uses GEMINI_API_KEY; empty key: 503 not_configured
+    ai_chat_enabled: bool = True
+    ai_chat_model: str = ""  # empty: CHART_VISION_MODEL
+    ai_chat_timeout_seconds: float = 40
+    ai_chat_max_output_tokens: int = 1200
+    # questions per user per UTC day, by role
+    ai_chat_daily_limit_trader: int = 30
+    ai_chat_daily_limit_analyst: int = 100
+    ai_chat_daily_limit_expert: int = 100
+    ai_chat_daily_limit_admin: int = 300
+    ai_chat_cost: int = 3  # rate-limit cost of POST /ai/chat
+    # Paper trading (docs/paper-trading.md): simulated orders on live prices, no real money
+    paper_trading_enabled: bool = True
+    paper_initial_balance: float = 10_000.0  # USD, for a new or reset account
+    paper_default_leverage: int = 100
+    paper_max_leverage: int = 500
+    # a market order needs a 1m candle at most this old (the market is closed otherwise)
+    paper_max_price_age_minutes: int = 15
+    paper_max_open_positions: int = 50
+    paper_max_pending_orders: int = 50
 
     @field_validator("api_docs_enabled", "ctrader_account_id", mode="before")
     @classmethod

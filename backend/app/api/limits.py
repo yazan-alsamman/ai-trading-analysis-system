@@ -139,6 +139,7 @@ def limit_ip(
 limit_login_ip = limit_ip("login", "auth_login_ip_per_minute", fail_closed=True)
 limit_register_ip = limit_ip("register", "auth_register_ip_per_minute")
 limit_refresh_ip = limit_ip("refresh", "auth_refresh_ip_per_minute")
+limit_otp_ip = limit_ip("otp", "auth_otp_ip_per_minute")
 
 
 def _email_id(email: str) -> str:

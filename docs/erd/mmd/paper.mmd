@@ -1,0 +1,58 @@
+erDiagram
+    paper_accounts {
+        uuid user_id PK, FK
+        varchar currency
+        double initial_balance
+        double balance
+        int leverage
+        timestamptz created_at
+        timestamptz reset_at
+        timestamptz updated_at
+    }
+    paper_orders {
+        uuid id PK
+        uuid user_id FK
+        uuid instrument_id FK
+        varchar side
+        varchar type
+        double lots
+        double price
+        double stop_loss
+        double take_profit
+        varchar status
+        varchar reject_reason
+        double fill_price
+        uuid position_id FK
+        timestamptz created_at
+        timestamptz checked_until
+        timestamptz filled_at
+        timestamptz cancelled_at
+    }
+    paper_positions {
+        uuid id PK
+        uuid user_id FK
+        uuid instrument_id FK
+        varchar side
+        double lots
+        double contract_size
+        double entry_price
+        double stop_loss
+        double take_profit
+        double margin
+        double cost
+        varchar status
+        timestamptz opened_at
+        timestamptz checked_until
+        timestamptz closed_at
+        double close_price
+        varchar close_reason
+        double pnl
+    }
+    users
+    instruments
+    paper_accounts |o--|| users : "user_id"
+    paper_orders }o--o| paper_positions : "position_id"
+    paper_orders }o--|| instruments : "instrument_id"
+    paper_orders }o--|| users : "user_id"
+    paper_positions }o--|| instruments : "instrument_id"
+    paper_positions }o--|| users : "user_id"

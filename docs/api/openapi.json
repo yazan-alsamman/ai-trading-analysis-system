@@ -886,6 +886,177 @@
         ]
       }
     },
+    "/api/v1/auth/otp/request": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Otp Request",
+        "description": "Sign in with WhatsApp, step 1: send a code (LightOTP) to a number verified on an account\n(``POST /users/me/phone/verify``). The answer is the same for a number without an account,\nso it does not reveal who is registered. One code per number every ``resend_in`` seconds\n(429 ``otp_resend_wait`` with Retry-After), a few per hour (429 ``otp_too_many``); 503\n``otp_not_configured`` when LIGHTOTP_TOKEN is not set on the server.",
+        "operationId": "auth_otp_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpSent"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/otp/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Otp Login",
+        "description": "Sign in with WhatsApp, step 2: the code from step 1 gives a token pair, like\n``/auth/login``. A wrong or expired code is 400 ``invalid_code``; after a few wrong codes\nthe code is dropped and a new one must be requested. A code works once.",
+        "operationId": "auth_otp_login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request (a rule of the endpoint, see the message)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users/me": {
       "get": {
         "tags": [
@@ -1080,6 +1251,265 @@
           },
           "429": {
             "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/phone": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Request Phone Code",
+        "description": "Add or change your WhatsApp number, step 1: a code is sent to it over WhatsApp\n(LightOTP). The number is international with the country code (``+963944123456``; spaces,\ndashes and a leading ``00`` are accepted). 409 ``phone_taken`` if another account has it,\n422 ``invalid_phone`` if WhatsApp cannot reach it, 429 ``otp_resend_wait`` /\n``otp_too_many`` (Retry-After), 503 ``otp_not_configured`` / ``otp_unavailable``.",
+        "operationId": "users_request_phone_code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpSent"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state (version, duplicate, already done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Remove Phone",
+        "description": "Remove your WhatsApp number (WhatsApp sign-in stops working). Idempotent.",
+        "operationId": "users_remove_phone",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/phone/verify": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Verify Phone",
+        "description": "Step 2: the code saves the number on your account (``phone_e164``,\n``phone_verified_at``); you can then sign in with ``/auth/otp/request`` + ``/auth/otp/login``.\nA wrong or expired code is 400 ``invalid_code``; a code works once.",
+        "operationId": "users_verify_phone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request (a rule of the endpoint, see the message)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state (version, duplicate, already done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -3289,6 +3719,165 @@
           },
           "429": {
             "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/otp/status": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Otp Status",
+        "description": "Whether LIGHTOTP_TOKEN is set (``configured``) and the code settings. The key itself is\nnever returned.",
+        "operationId": "admin_otp_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Otp Status Api V1 Admin Otp Status Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/otp/messages/{message_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Otp Message Status",
+        "description": "LightOTP's delivery status of a sent code (``messageStatus``: Pending, Sent, Delivered,\nRead, Failed, Deleted; failure fields when it failed). The message id is in the backend\nlog line \"WhatsApp code sent\". 404 ``message_not_found``.",
+        "operationId": "admin_otp_message_status",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpMessageStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -11002,6 +11591,546 @@
         ]
       }
     },
+    "/api/v1/news/{article_id}/comments": {
+      "get": {
+        "tags": [
+          "news"
+        ],
+        "summary": "List Article Comments",
+        "description": "Comments of an article, newest first (top-level comments and replies; a reply has\n``parent_id``). Deleted comments are left out.",
+        "operationId": "news_list_article_comments",
+        "parameters": [
+          {
+            "name": "article_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Article Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "only the replies of this comment, oldest first",
+              "title": "Parent Id"
+            },
+            "description": "only the replies of this comment, oldest first"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_NewsCommentRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "news"
+        ],
+        "summary": "Create Article Comment",
+        "description": "Comment on an article (or reply with ``parent_id``). The article's ``comments_count``\ngoes up at once. 429 + Retry-After over ``COMMENTS_PER_HOUR``.",
+        "operationId": "news_create_article_comment",
+        "parameters": [
+          {
+            "name": "article_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Article Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsCommentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsCommentRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state (version, duplicate, already done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-cost": 2,
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/news/comments/{comment_id}": {
+      "patch": {
+        "tags": [
+          "news"
+        ],
+        "summary": "Update Article Comment",
+        "description": "Only the author edits a published comment.",
+        "operationId": "news_update_article_comment",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Comment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsCommentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsCommentRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state (version, duplicate, already done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "news"
+        ],
+        "summary": "Delete Article Comment",
+        "description": "The author or an admin. Soft delete: replies stay.",
+        "operationId": "news_delete_article_comment",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Comment Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/news/comments/{comment_id}/moderate": {
+      "post": {
+        "tags": [
+          "news"
+        ],
+        "summary": "Moderate Article Comment",
+        "description": "Hide a comment (only its author still sees it) or publish it again.",
+        "operationId": "news_moderate_article_comment",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Comment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsCommentModeration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/news/sources/{source_id}": {
       "patch": {
         "tags": [
@@ -18211,10 +19340,1108 @@
           }
         ]
       }
+    },
+    "/api/v1/ai/chat": {
+      "post": {
+        "tags": [
+          "ai-chat"
+        ],
+        "summary": "Ask",
+        "description": "Ask the AI assistant. Send the whole conversation (at most 20 turns) each time; nothing\nis stored. The answer uses the platform's live context (price, news sentiment and headlines,\nupcoming high-impact USD events) and is educational, not investment advice. One unit of the\ndaily quota per answer (`GET /ai/chat/quota`); a failed model call does not count.",
+        "operationId": "ai_chat_ask",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid conversation, or `blocked` / `empty_answer`"
+          },
+          "429": {
+            "description": "`quota_exceeded` (daily) with Retry-After, or the rate limit"
+          },
+          "503": {
+            "description": "`not_configured`, `model_busy`, `model_unavailable`, `timeout` (Retry-After)"
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-rate-limit-cost": 3,
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/chat/quota": {
+      "get": {
+        "tags": [
+          "ai-chat"
+        ],
+        "summary": "Ask Quota",
+        "description": "Questions left today (UTC day).",
+        "operationId": "ai_chat_ask_quota",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIChatQuota"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/paper/account": {
+      "get": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "Get Account",
+        "description": "The portfolio (created on first use with PAPER_INITIAL_BALANCE USD and the default\nleverage): balance, equity, open and realized P/L, margin, today's P/L.",
+        "operationId": "paper_trading_get_account",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperAccountRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "Update Account",
+        "description": "Change the leverage (applies to new positions).",
+        "operationId": "paper_trading_update_account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperLeverageUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperAccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/paper/account/reset": {
+      "post": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "Reset Account",
+        "description": "Delete every order and position and start again (optionally with another balance).",
+        "operationId": "paper_trading_reset_account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PaperReset"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Data"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperAccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/paper/orders": {
+      "post": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "Place Order",
+        "description": "A market order fills at once at the latest 1m close (status `filled`, `position_id`\nset). A limit / stop order is `pending` until the engine fills it on a closed 1m bar.\nOptional stop loss and take profit are copied to the position.",
+        "operationId": "paper_trading_place_order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperOrderCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperOrderRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`market_closed`, `no_price`, `too_many_positions`, `too_many_orders`"
+          },
+          "422": {
+            "description": "`invalid_lots`, `invalid_price`, `invalid_stop_loss`, `invalid_take_profit`, `insufficient_margin`, `no_contract_spec`, `unsupported_currency`, `inactive_instrument`"
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "List Orders",
+        "operationId": "paper_trading_list_orders",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "filled",
+                    "cancelled",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_PaperOrderRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/paper/orders/{order_id}": {
+      "delete": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "Cancel Order",
+        "description": "Cancel a pending order (409 `not_pending` otherwise).",
+        "operationId": "paper_trading_cancel_order",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperOrderRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/paper/positions": {
+      "get": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "List Positions",
+        "description": "Open positions (default) with the current price and open P/L, or the closed ones\n(history, newest first).",
+        "operationId": "paper_trading_list_positions",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_PaperPositionRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/paper/positions/{position_id}": {
+      "patch": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "Update Position",
+        "description": "Move (or remove with null) the stop loss and take profit of an open position.",
+        "operationId": "paper_trading_update_position",
+        "parameters": [
+          {
+            "name": "position_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Position Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperLevelsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperPositionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/paper/positions/{position_id}/close": {
+      "post": {
+        "tags": [
+          "paper-trading"
+        ],
+        "summary": "Close Position",
+        "description": "Close at the latest 1m close (409 `market_closed` when there is no live price).",
+        "operationId": "paper_trading_close_position",
+        "parameters": [
+          {
+            "name": "position_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Position Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperPositionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed: role, API-key scope, or the resource's rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not visible to you)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (Retry-After header)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerJWT": []
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "AIChatQuota": {
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "used": {
+            "type": "integer",
+            "title": "Used"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Resets At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "limit",
+          "used",
+          "remaining",
+          "resets_at"
+        ],
+        "title": "AIChatQuota"
+      },
+      "AIChatRequest": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatTurn"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Messages",
+            "description": "the conversation so far, oldest first; the last one is the new question",
+            "examples": [
+              [
+                {
+                  "content": "What moves gold today?",
+                  "role": "user"
+                }
+              ]
+            ]
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ar",
+                  "en"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language",
+            "description": "answer language; default: the user's notification language"
+          },
+          "instrument_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrument Id",
+            "description": "the instrument the question is about (price context); default XAU/USD"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "AIChatRequest"
+      },
+      "AIChatResponse": {
+        "properties": {
+          "reply": {
+            "type": "string",
+            "title": "Reply",
+            "description": "plain text (may contain simple Markdown: lists, bold)"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ar",
+              "en"
+            ],
+            "title": "Language"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AIChatUsage"
+          },
+          "quota": {
+            "$ref": "#/components/schemas/AIChatQuota"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reply",
+          "language",
+          "model",
+          "usage",
+          "quota",
+          "disclaimer"
+        ],
+        "title": "AIChatResponse"
+      },
+      "AIChatUsage": {
+        "properties": {
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "latency_ms"
+        ],
+        "title": "AIChatUsage"
+      },
       "AIExplanationRead": {
         "properties": {
           "setup_id": {
@@ -20428,6 +22655,12 @@
             },
             "type": "array",
             "title": "Instruments"
+          },
+          "comments_count": {
+            "type": "integer",
+            "title": "Comments Count",
+            "description": "published reader comments",
+            "default": 0
           }
         },
         "type": "object",
@@ -22015,6 +24248,31 @@
           "latency_ms"
         ],
         "title": "ChartUsage"
+      },
+      "ChatTurn": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatTurn"
       },
       "CheckoutRead": {
         "properties": {
@@ -25975,6 +28233,182 @@
         ],
         "title": "MonthRevenue"
       },
+      "NewsCommentAuthor": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "role"
+        ],
+        "title": "NewsCommentAuthor"
+      },
+      "NewsCommentCreate": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id",
+            "description": "a reply; a reply to a reply is stored under the top comment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "NewsCommentCreate"
+      },
+      "NewsCommentModeration": {
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden",
+            "description": "true hides the comment (its author still sees it)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "hidden"
+        ],
+        "title": "NewsCommentModeration"
+      },
+      "NewsCommentRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "article_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Article Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NewsCommentAuthor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "published",
+              "hidden",
+              "deleted"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "is_own": {
+            "type": "boolean",
+            "title": "Is Own"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "can_delete": {
+            "type": "boolean",
+            "title": "Can Delete"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "article_id",
+          "parent_id",
+          "author",
+          "body",
+          "status",
+          "created_at",
+          "edited_at",
+          "is_own",
+          "can_edit",
+          "can_delete"
+        ],
+        "title": "NewsCommentRead"
+      },
+      "NewsCommentUpdate": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Body"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "NewsCommentUpdate"
+      },
       "NewsSourceKind": {
         "type": "string",
         "enum": [
@@ -26060,9 +28494,162 @@
           "subscription_payment_failed",
           "subscription_canceled",
           "new_subscriber",
-          "ai_setup"
+          "ai_setup",
+          "paper_trade"
         ],
         "title": "NotificationType"
+      },
+      "OtpLogin": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 24,
+            "minLength": 8,
+            "title": "Phone"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "pattern": "^\\d+$",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "code"
+        ],
+        "title": "OtpLogin",
+        "examples": [
+          {
+            "phone": "+963944123456",
+            "code": "12345"
+          }
+        ]
+      },
+      "OtpMessageStatus": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "message_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Status"
+          },
+          "to_phone_e164": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Phone E164"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "failure_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Title"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "failed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "message_status",
+          "to_phone_e164",
+          "created_at",
+          "failure_code",
+          "failure_title",
+          "failure_reason",
+          "failed_at"
+        ],
+        "title": "OtpMessageStatus"
+      },
+      "OtpSent": {
+        "properties": {
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "resend_in": {
+            "type": "integer",
+            "title": "Resend In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expires_in",
+          "resend_in"
+        ],
+        "title": "OtpSent",
+        "description": "The code was sent (or, for OTP login, would have been if the number had an account)."
       },
       "OutboxRead": {
         "properties": {
@@ -26535,6 +29122,37 @@
         ],
         "title": "Page[InstrumentRead]"
       },
+      "Page_NewsCommentRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NewsCommentRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[NewsCommentRead]"
+      },
       "Page_NotificationRead_": {
         "properties": {
           "items": {
@@ -26596,6 +29214,68 @@
           "offset"
         ],
         "title": "Page[OutboxRead]"
+      },
+      "Page_PaperOrderRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PaperOrderRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[PaperOrderRead]"
+      },
+      "Page_PaperPositionRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PaperPositionRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[PaperPositionRead]"
       },
       "Page_PostRead_": {
         "properties": {
@@ -27029,6 +29709,657 @@
         ],
         "title": "Panel"
       },
+      "PaperAccountRead": {
+        "properties": {
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "initial_balance": {
+            "type": "number",
+            "title": "Initial Balance"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance",
+            "description": "cash: initial balance + realized P/L"
+          },
+          "equity": {
+            "type": "number",
+            "title": "Equity",
+            "description": "balance + unrealized P/L"
+          },
+          "unrealized_pnl": {
+            "type": "number",
+            "title": "Unrealized Pnl"
+          },
+          "realized_pnl": {
+            "type": "number",
+            "title": "Realized Pnl"
+          },
+          "margin_used": {
+            "type": "number",
+            "title": "Margin Used"
+          },
+          "free_margin": {
+            "type": "number",
+            "title": "Free Margin"
+          },
+          "margin_level_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Level Pct"
+          },
+          "leverage": {
+            "type": "integer",
+            "title": "Leverage"
+          },
+          "return_pct": {
+            "type": "number",
+            "title": "Return Pct",
+            "description": "(equity - initial balance) / initial balance"
+          },
+          "today_pnl": {
+            "type": "number",
+            "title": "Today Pnl",
+            "description": "P/L of positions closed today (UTC) + open P/L"
+          },
+          "today_pnl_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today Pnl Pct"
+          },
+          "open_positions": {
+            "type": "integer",
+            "title": "Open Positions"
+          },
+          "pending_orders": {
+            "type": "integer",
+            "title": "Pending Orders"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "reset_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reset At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "currency",
+          "initial_balance",
+          "balance",
+          "equity",
+          "unrealized_pnl",
+          "realized_pnl",
+          "margin_used",
+          "free_margin",
+          "margin_level_pct",
+          "leverage",
+          "return_pct",
+          "today_pnl",
+          "today_pnl_pct",
+          "open_positions",
+          "pending_orders",
+          "created_at",
+          "reset_at"
+        ],
+        "title": "PaperAccountRead",
+        "description": "The portfolio: cash, open P/L, equity and margin, all in ``currency``."
+      },
+      "PaperInstrumentRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "price_precision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Precision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "symbol",
+          "price_precision"
+        ],
+        "title": "PaperInstrumentRef"
+      },
+      "PaperLevelsUpdate": {
+        "properties": {
+          "stop_loss": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Loss",
+            "description": "null removes it"
+          },
+          "take_profit": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Take Profit",
+            "description": "null removes it"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PaperLevelsUpdate"
+      },
+      "PaperLeverageUpdate": {
+        "properties": {
+          "leverage": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Leverage",
+            "examples": [
+              100
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "leverage"
+        ],
+        "title": "PaperLeverageUpdate"
+      },
+      "PaperOrderCreate": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Instrument Id"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "market",
+              "limit",
+              "stop"
+            ],
+            "title": "Type",
+            "default": "market"
+          },
+          "lots": {
+            "type": "number",
+            "maximum": 1000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Lots",
+            "examples": [
+              0.1
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price",
+            "description": "limit / stop price (required for them, none for market)"
+          },
+          "stop_loss": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Loss"
+          },
+          "take_profit": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Take Profit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "side",
+          "lots"
+        ],
+        "title": "PaperOrderCreate"
+      },
+      "PaperOrderRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaperInstrumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "market",
+              "limit",
+              "stop"
+            ],
+            "title": "Type"
+          },
+          "lots": {
+            "type": "number",
+            "title": "Lots"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "stop_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Loss"
+          },
+          "take_profit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Take Profit"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "filled",
+              "cancelled",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "reject_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reject Reason"
+          },
+          "fill_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fill Price"
+          },
+          "position_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "filled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filled At"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "instrument",
+          "side",
+          "type",
+          "lots",
+          "price",
+          "stop_loss",
+          "take_profit",
+          "status",
+          "reject_reason",
+          "fill_price",
+          "position_id",
+          "created_at",
+          "filled_at",
+          "cancelled_at"
+        ],
+        "title": "PaperOrderRead"
+      },
+      "PaperPositionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaperInstrumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side"
+          },
+          "lots": {
+            "type": "number",
+            "title": "Lots"
+          },
+          "contract_size": {
+            "type": "number",
+            "title": "Contract Size"
+          },
+          "entry_price": {
+            "type": "number",
+            "title": "Entry Price"
+          },
+          "stop_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Loss"
+          },
+          "take_profit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Take Profit"
+          },
+          "margin": {
+            "type": "number",
+            "title": "Margin"
+          },
+          "cost": {
+            "type": "number",
+            "title": "Cost",
+            "description": "round-trip trading cost, taken at close"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "opened_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Opened At"
+          },
+          "current_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Price",
+            "description": "open positions: latest 1m close"
+          },
+          "unrealized_pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Pnl"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "close_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Price"
+          },
+          "close_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "stop_loss",
+                  "take_profit",
+                  "reset"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Reason"
+          },
+          "pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl",
+            "description": "realized, net of cost"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "instrument",
+          "side",
+          "lots",
+          "contract_size",
+          "entry_price",
+          "stop_loss",
+          "take_profit",
+          "margin",
+          "cost",
+          "status",
+          "opened_at",
+          "current_price",
+          "unrealized_pnl",
+          "closed_at",
+          "close_price",
+          "close_reason",
+          "pnl"
+        ],
+        "title": "PaperPositionRead"
+      },
+      "PaperReset": {
+        "properties": {
+          "initial_balance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000000.0,
+                "minimum": 100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Balance",
+            "description": "default PAPER_INITIAL_BALANCE"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PaperReset"
+      },
       "PasswordChange": {
         "properties": {
           "current_password": {
@@ -27118,6 +30449,55 @@
           "role"
         ],
         "title": "PersonRef"
+      },
+      "PhoneRequest": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 24,
+            "minLength": 8,
+            "title": "Phone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone"
+        ],
+        "title": "PhoneRequest",
+        "examples": [
+          {
+            "phone": "+963944123456"
+          }
+        ]
+      },
+      "PhoneVerify": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 24,
+            "minLength": 8,
+            "title": "Phone"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "pattern": "^\\d+$",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "code"
+        ],
+        "title": "PhoneVerify",
+        "examples": [
+          {
+            "phone": "+963944123456",
+            "code": "12345"
+          }
+        ]
       },
       "PlanBrief": {
         "properties": {
@@ -32283,6 +35663,29 @@
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
+          },
+          "phone_e164": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone E164"
+          },
+          "phone_verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Verified At"
           },
           "created_at": {
             "type": "string",
