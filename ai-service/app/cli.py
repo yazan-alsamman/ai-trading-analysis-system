@@ -15,6 +15,7 @@
     python -m app features e0                      # P4 matched random entries, context features
     python -m app live replay                      # P6 live = backtest, walk-forward period
     python -m app strategies count                 # signal strategies: pre-approval counts
+    python -m app levels count                     # level families: counts and power (L0)
 
 Each command is a module with ``main(argv) -> int``; it is imported only when called, so the
 service itself never loads research code."""
@@ -36,6 +37,8 @@ COMMANDS = {
     "features": "app.features.setup_features",
     "live": "app.live.replay",
     "strategies": "app.strategies.cli",
+    "discovery": "app.discovery.cli",
+    "levels": "app.levels.cli",
 }
 
 

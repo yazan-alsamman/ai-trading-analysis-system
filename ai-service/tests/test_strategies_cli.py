@@ -93,8 +93,12 @@ def test_an_end_past_the_lockbox_start_is_refused(store, tmp_path, frozen) -> No
     assert not (tmp_path / "counts.md").exists()
 
 
-def test_count_is_refused_while_the_rules_are_not_frozen(store, tmp_path, capsys) -> None:
-    """The real preregistration: the field is still empty."""
+def test_count_is_refused_while_the_rules_are_not_frozen(
+    store, tmp_path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unfrozen = prereg(tmp_path / "PREREG.md", "_(commit; before any count)_")
+    real = cli.frozen_commit
+    monkeypatch.setattr(cli, "frozen_commit", lambda: real(unfrozen))
     assert cli.main(["count", "--store", str(store), "--out", str(tmp_path)]) == 2
     assert "not frozen" in capsys.readouterr().err
     assert not (tmp_path / "counts.md").exists()
