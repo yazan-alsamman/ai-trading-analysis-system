@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_JWT_SECRETS = {"change-me", ""}
@@ -159,6 +159,8 @@ class Settings(BaseSettings):
     notification_test_cost: int = 5  # rate-limit cost of POST /me/notifications/test
     # News (Y18). The RSS task only fetches the seeded public feeds an admin left active.
     news_rss_enabled: bool = True
+    news_finnhub_enabled: bool = False
+    finnhub_api_key: SecretStr = SecretStr("")
     news_fetch_timeout_seconds: float = 10.0  # per feed, whole request
     news_fetch_max_bytes: int = 2 * 1024 * 1024  # larger feeds are refused
     news_retention_days: int = 180

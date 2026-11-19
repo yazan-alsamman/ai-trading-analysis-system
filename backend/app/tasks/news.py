@@ -1,8 +1,7 @@
 """News tasks on the default queue (the ``worker`` service).
 
-- ``news.fetch`` (beat, every 5 minutes): the RSS feeds whose interval is due, fetched
-  concurrently; every feed has a 10 s deadline and a 2 MB cap, and the task a 60 s hard limit,
-  so it never holds a worker slot the signal engine needs for long.
+- ``news.fetch`` (beat, every 5 minutes): due RSS feeds and optional Finnhub gold headlines.
+  Requests have a 10 s deadline and a 2 MB cap by default. The task has a 60 s hard limit.
 - ``news.cleanup`` (beat, daily): retention (``NEWS_RETENTION_DAYS``).
 """
 
@@ -18,9 +17,10 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(name="news.fetch", soft_time_limit=45, time_limit=60, ignore_result=True)
 def fetch() -> dict:
-    if not get_settings().news_rss_enabled:
+    settings = get_settings()
+    if not (settings.news_rss_enabled or settings.news_finnhub_enabled):
         return {"disabled": True}
-    report = run_async(lambda factory, redis: service.fetch_due(factory, redis))
+    report = run_async(service.fetch_scheduled)
     if report:
         logger.info("news.fetch %s", report)
     return report
