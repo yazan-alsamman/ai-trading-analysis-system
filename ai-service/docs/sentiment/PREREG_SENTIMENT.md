@@ -38,6 +38,11 @@ reported whatever they show.
   publication **date** (no time), and labels: Price Sentiment (positive / negative / neutral /
   none), Price Direction Up / Constant / Down, Past Information, Future Information, Asset
   Comparison. Licence **CC BY-NC-ND 4.0**.
+- **Dates (decided 2026-11-19):** the file's dates are DD-MM-YYYY (checked: 6,275 rows have a day
+  above 12; the article URL's date equals the file date in 5,338 of 5,400 rows that carry one).
+  165 rows have a truncated year (e.g. `0201-04-27`). Their date is **recovered from the URL**
+  when the URL carries a date whose month and day equal the raw value's; otherwise the row is
+  dropped and counted.
 - **FinancialPhraseBank** (Malo et al. 2014), subset `Sentences_AllAgree`, used only for stage-1
   training (S3). Licence **CC BY-NC-SA 3.0**.
 - **Licence rules (decided 2026-11-18):** the project is non-commercial. Neither dataset is
@@ -65,8 +70,9 @@ reported whatever they show.
   or low above): those years are not used for any volatility figure. From 2003 there is a short
   **Sunday bar** (the Sunday evening open; median range 0.3% vs 1.2-1.4% on weekdays): it is
   **merged into Monday** (open = Sunday open, high/low = max/min of both, close = Monday close).
-- **Cross-check only:** FxPro MT5 XAUUSD D1 export (requested from Fadi on 2026-11-18), else a
-  free daily series (Stooq). Used for gate G2; never fills missing years. Years Dukascopy does not
+- **Cross-check only (decided 2026-11-19):** FxPro MT5 XAUUSD D1 export (requested from Fadi on
+  2026-11-18); if it has not arrived when the gates are rerun, Yahoo Finance gold futures `GC=F`
+  daily (a different instrument; Stooq answered 404). Used for gate G2; never fills missing years. Years Dukascopy does not
   cover are dropped from the study.
 - None of these years touch the lockbox (from 2026-01-10).
 
@@ -94,9 +100,9 @@ train ≤ 2011 / validation 2012-2014 / test 2015+ (decided on the count, before
 
 | Gate | Check | Pass rule |
 | --- | --- | --- |
-| G1 duplicates | Normalise headlines (lower case, strip punctuation and numbers); drop exact duplicates; near-duplicates (token Jaccard ≥ 0.8 within ±3 days) keep the first | counts per year reported; no headline text appears in two splits |
-| G2 prices | Dukascopy D1 vs the cross-check series: daily close correlation and share of days with \|log return difference\| > 0.5% | correlation ≥ 0.99; flagged days listed and investigated |
-| G3 day alignment | Broker day close (Europe/Athens) vs headline date: count headlines whose date falls on a weekend or holiday | reported; such headlines move to the next trading day |
+| G1 duplicates | Two sets (decided 2026-11-19). **Classifier set:** normalise (lower case, strip punctuation and digits); drop exact duplicates at any distance in time (so recurring price-report templates cannot sit in two splits); near-duplicates (token Jaccard ≥ 0.8 within ±3 days) keep the first. **Index set (§5):** the same normalisation, but exact and near duplicates are dropped only within ±3 days (the same story on several sites); a template headline on another day is that day's news and stays | counts per year for both sets; no normalised text of the classifier set appears in two splits |
+| G2 prices | Dukascopy D1 vs the cross-check series on common dates from 2003: correlation of daily log returns, close correlation, share of days with \|log return difference\| > 0.5% | MT5: close correlation ≥ 0.99; `GC=F` (futures): return correlation ≥ 0.95; flagged days listed and investigated |
+| G3 day alignment | Price days are Dukascopy's 00:00-24:00 UTC days (Sunday merged into Monday). Count headlines whose date has no price day (weekend or holiday) | reported; such headlines move to the next price day (`trade_date`) |
 | G4 label balance | Class shares per split | reported; class weights set from train only |
 | G5 coverage | Trading days with zero headlines, per year | reported |
 
@@ -138,7 +144,8 @@ on validation only. Each final configuration trained with **5 seeds** (20261118 
 
 ## 5. Daily index (part 2)
 
-For trading day t (broker day, §3 G3), over the test-split headlines of day t scored by the
+For price day t (00:00 UTC day, §3 G3), over the **index set** (§3 G1) headlines of the test
+years whose `trade_date` is t, scored by the
 **chosen model** (frozen, never trained on these years):
 
 - `sent_mean` = mean of P(positive) − P(negative) over headlines (excluding "none"-type headlines
@@ -223,7 +230,7 @@ simulates no trade and adds nothing to N for any strategy's Deflated Sharpe.
 
 ## 12. Open before approval
 
-1. Dukascopy daily XAUUSD file obtained (first date, day boundary); Fadi's MT5 D1 export as cross-check (asked 2026-11-18).
+1. G2: Fadi's MT5 D1 export (asked 2026-11-18), else Yahoo `GC=F`. Dukascopy file obtained and gated (2026-11-19, `docs/sentiment/gates.md`).
 2. Confirm the Kaggle file's exact row count and date range; set the split boundaries by §2.5.
 3. Pin Hugging Face model revisions (ProsusAI/finbert, microsoft/deberta-v3-base) in an addendum
    before training.

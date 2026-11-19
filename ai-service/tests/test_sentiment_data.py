@@ -64,6 +64,7 @@ stop_before = "{stop}"
 
 [gates]
 g2_min_close_corr = 0.99
+g2_min_return_corr = 0.95
 g2_return_diff = 0.005
 g2_list = 20
 
@@ -148,18 +149,23 @@ def test_load_gold_maps_columns_labels_and_reports_bad_dates(tmp_path):
         '28-01-2016,http://x/2016-01-28/a,"gold up, $5",1,0,0,0,1,0,positive',
         "0201-04-27,http://x/2015-04-27/b,gold flat,0,1,0,0,1,0,none",
         "13-09-2017,http://x/c,gold down,0,0,1,1,0,1,Negative",
+        "0201-04-28,http://x/2015-04-27/d,gold flat,0,1,0,0,1,0,neutral",
     ]
     path = tmp_path / "gold.csv"
     path.write_bytes(("﻿" + "\n".join(lines) + "\n").encode("utf-8"))
     rows, bad = sd.load_gold(path)
-    assert rows["row_id"].tolist() == [0, 2]
-    assert rows["date"].tolist() == [pd.Timestamp("2016-01-28"), pd.Timestamp("2017-09-13")]
-    assert rows["label"].tolist() == ["positive", "negative"]
+    # row 1 has a truncated year whose month-day matches its URL: recovered; row 3 does not
+    assert rows["row_id"].tolist() == [0, 1, 2]
+    assert rows["date"].tolist() == [pd.Timestamp("2016-01-28"), pd.Timestamp("2015-04-27"),
+                                     pd.Timestamp("2017-09-13")]  # fmt: skip
+    assert rows["date_recovered"].tolist() == [False, True, False]
+    assert rows["label"].tolist() == ["positive", "neutral", "negative"]
     assert rows["url_date"].iloc[0] == pd.Timestamp("2016-01-28")
-    assert pd.isna(rows["url_date"].iloc[1])
-    assert rows["future_info"].tolist() == [0, 1]
-    assert bad["row_id"].tolist() == [1]
-    assert bad["shape"].tolist() == ["9999-99-99"]
+    assert pd.isna(rows["url_date"].iloc[2])
+    assert rows["future_info"].tolist() == [0, 0, 1]
+    assert bad["row_id"].tolist() == [1, 3]
+    assert bad["shape"].tolist() == ["9999-99-99", "9999-99-99"]
+    assert bad["recovered"].tolist() == [True, False]
     assert bad["url_date"].iloc[0] == pd.Timestamp("2015-04-27")
 
 
@@ -219,15 +225,15 @@ def test_exact_duplicate_keeps_the_earliest_date_not_the_first_row():
         ("2016-03-02", "silver falls"),
     ])  # fmt: skip
     out = sd.dedupe(df, 0.8, 3).set_index("row_id")
-    assert out.loc[1, "keep"] and not out.loc[0, "keep"]
+    assert out.loc[1, "in_classifier_set"] and not out.loc[0, "in_classifier_set"]
     assert out.loc[0, "dup_exact"] and out.loc[0, "dup_of"] == 1
-    assert out.loc[2, "keep"] and out.loc[2, "dup_of"] == -1
+    assert out.loc[2, "in_classifier_set"] and out.loc[2, "dup_of"] == -1
 
 
 def test_exact_duplicate_on_the_same_day_keeps_file_order():
     df = headlines([("2016-03-01", "Gold up"), ("2016-03-01", "gold up!")])
     out = sd.dedupe(df, 0.8, 3).set_index("row_id")
-    assert out.loc[0, "keep"] and out.loc[1, "dup_exact"]
+    assert out.loc[0, "in_classifier_set"] and out.loc[1, "dup_exact"]
 
 
 NEAR_A = "gold futures settle higher on weak dollar data"  # 8 tokens
@@ -242,7 +248,7 @@ def test_near_duplicate_window_edge(later, dropped):
     # the window is +-3 days inclusive: 0 and 3 days apart are compared, 4 days apart are not
     df = headlines([("2016-03-01", NEAR_A), (later, NEAR_B)])
     out = sd.dedupe(df, 0.8, 3).set_index("row_id")
-    assert out.loc[0, "keep"]
+    assert out.loc[0, "in_classifier_set"]
     assert bool(out.loc[1, "dup_near"]) is dropped
     if dropped:
         assert out.loc[1, "dup_of"] == 0 and out.loc[1, "dup_jaccard"] == pytest.approx(8 / 9)
@@ -251,7 +257,7 @@ def test_near_duplicate_window_edge(later, dropped):
 def test_near_duplicate_earlier_by_date_is_kept_even_if_later_in_file():
     df = headlines([("2016-03-03", NEAR_A), ("2016-03-01", NEAR_B)])
     out = sd.dedupe(df, 0.8, 3).set_index("row_id")
-    assert out.loc[1, "keep"] and out.loc[0, "dup_near"]
+    assert out.loc[1, "in_classifier_set"] and out.loc[0, "dup_near"]
 
 
 def test_near_duplicate_below_threshold_is_kept():
@@ -260,7 +266,7 @@ def test_near_duplicate_below_threshold_is_kept():
         [("2016-03-01", NEAR_A), ("2016-03-02", "gold futures settle lower on strong euro data")]
     )
     out = sd.dedupe(df, 0.8, 3)  # fmt: skip
-    assert out["keep"].all()
+    assert out["in_classifier_set"].all()
 
 
 def test_near_duplicates_compare_with_kept_headlines_only():
@@ -269,7 +275,7 @@ def test_near_duplicates_compare_with_kept_headlines_only():
     c = "a b c d e f g h l k"  # Jaccard(b, c) = 0.82, Jaccard(a, c) = 8/12 = 0.67
     df = headlines([("2016-03-01", a), ("2016-03-02", b), ("2016-03-03", c)])
     out = sd.dedupe(df, 0.8, 3).set_index("row_id")
-    assert out["keep"].tolist() == [True, False, True]
+    assert out["in_classifier_set"].tolist() == [True, False, True]
 
 
 # -------------------------------------------------------------------------------------- split
@@ -311,7 +317,7 @@ def test_dedupe_then_split_leaves_no_text_in_two_splits():
     df = headlines([("2012-12-30", "gold rallies 2%"), ("2016-01-04", "Gold rallies 3%"),
                     ("2015-12-31", NEAR_A), ("2016-01-02", NEAR_B)])  # fmt: skip
     out = sd.dedupe(df, 0.8, 3)
-    kept = out.loc[out["keep"]]
+    kept = out.loc[out["in_classifier_set"]]
     split = sd.assign_split(kept["date"], date(2012, 12, 31), date(2015, 12, 31))
     sd.assert_disjoint(kept["norm"], split)
     assert split.tolist() == ["train", "validation"]
@@ -435,20 +441,42 @@ def test_class_weights_inverse_frequency_from_train():
 def test_g2_identical_series_pass_and_a_bad_day_is_flagged():
     d = pd.to_datetime(["2016-01-04", "2016-01-05", "2016-01-06", "2016-01-07"])
     a = pd.DataFrame({"date": d, "close": [100.0, 101.0, 102.0, 101.5]})
-    assert sg.g2_crosscheck(a, a, date(2003, 1, 1), 0.99, 0.005, 20)["status"] == "pass"
+    first = date(2003, 1, 1)
+    assert sg.g2_crosscheck(a, a, first, "close_corr", 0.99, 0.005, 20)["status"] == "pass"
     b = a.assign(close=[100.0, 101.0, 103.0, 101.5])  # +1% on the 6th, back on the 7th
-    r = sg.g2_crosscheck(a, b, date(2003, 1, 1), 0.99, 0.005, 20)
+    r = sg.g2_crosscheck(a, b, first, "close_corr", 0.99, 0.005, 20)
     assert r["flagged_first"] == ["2016-01-06", "2016-01-07"]
     assert r["share_flagged"] == pytest.approx(2 / 3)
-    assert sg.g2_crosscheck(a, None, date(2003, 1, 1), 0.99, 0.005, 20) == {"status": "pending"}
+    pending = sg.g2_crosscheck(a, None, first, "return_corr", 0.95, 0.005, 20)
+    assert pending["status"] == "pending"
 
 
-def test_read_stooq_stops_before_the_stop_date(tmp_path):
+def test_g2_return_rule_for_futures():
+    d = pd.to_datetime(["2016-01-04", "2016-01-05", "2016-01-06", "2016-01-07", "2016-01-08"])
+    a = pd.DataFrame({"date": d, "close": [100.0, 102.0, 101.0, 103.0, 102.0]})
+    b = a.assign(close=a["close"] * 1.02)  # a constant premium: identical returns
+    r = sg.g2_crosscheck(a, b, date(2003, 1, 1), "return_corr", 0.95, 0.005, 20)
+    assert r["status"] == "pass" and r["return_corr"] == pytest.approx(1.0)
+    c = a.assign(close=[100.0, 100.5, 102.0, 101.0, 103.0])  # returns unlike a's
+    r = sg.g2_crosscheck(a, c, date(2003, 1, 1), "return_corr", 0.95, 0.005, 20)
+    assert r["status"] == "fail" and r["rule"] == "return_corr"
+
+
+def test_g2_rule_and_source_order(tmp_path):
+    cfg = make_config(tmp_path)
+    assert sg.g2_rule(cfg, "mt5") == ("close_corr", 0.99)
+    assert sg.g2_rule(cfg, "gcf") == ("return_corr", 0.95)
+    assert sg.g2_rule(cfg, None) == ("return_corr", 0.95)
+    assert sg.g2_source(cfg, {"a": "ok", "mt5": "missing", "gcf": "missing"}) == (None, None)
+
+
+def test_read_gcf_stops_before_the_stop_date(tmp_path):
     path = tmp_path / "s.csv"
-    path.write_text("Date,Open,High,Low,Close,Volume\n2026-01-08,1,2,0.5,1.5,0\n"
+    path.write_text("date,open,high,low,close,volume\n2026-01-08,1,2,0.5,1.5,0\n"
                     "2026-01-10,x\ngarbage\n", encoding="utf-8")  # fmt: skip
-    df = sg.read_stooq(path, date(2026, 1, 10))
-    assert df.to_dict("list") == {"date": [pd.Timestamp("2026-01-08")], "close": [1.5]}
+    df = sg.read_gcf(path, date(2026, 1, 10))
+    assert df.to_dict("list") == {"date": [pd.Timestamp("2026-01-08")], "open": [1.0],
+                                  "high": [2.0], "low": [0.5], "close": [1.5]}  # fmt: skip
 
 
 def test_g5_counts_price_days_without_headlines():
@@ -485,3 +513,148 @@ def test_url_date_and_date_shape():
     assert pd.isna(sd.url_date("http://m.com/story/gold-12016-01-28x"))
     assert pd.isna(sd.url_date("http://m.com/story/gold-2016-13-40"))
     assert sd.date_shape(" 0201-04-27") == "9999-99-99"
+
+
+# ------------------------------------------------------------- Fix 1: dates recovered from the URL
+
+
+def test_recover_date_month_day_match_takes_the_url_date():
+    assert sd.recover_date("0201-04-27", "http://m.com/2015-04-27/gold-up") == date(2015, 4, 27)
+
+
+def test_recover_date_month_day_mismatch_drops_the_row():
+    assert sd.recover_date("0201-04-27", "http://m.com/2015-04-28/gold-up") is None
+    assert sd.recover_date("0201-04-27", "http://m.com/2015-05-27/gold-up") is None
+
+
+def test_recover_date_url_without_a_date_drops_the_row():
+    assert sd.recover_date("0201-04-27", "http://m.com/story/gold-up") is None
+    assert sd.recover_date("garbage", "http://m.com/2015-04-27/gold-up") is None
+
+
+def test_recover_date_leaves_a_normal_row_untouched():
+    # a DD-MM-YYYY value is taken as is, even when the URL carries another date
+    assert sd.recover_date(" 28-01-2016", "http://m.com/2016-01-29/x") == date(2016, 1, 28)
+    assert sd.recover_date("13-09-2017", "http://m.com/story") == date(2017, 9, 13)
+
+
+def test_date_checks_count_recovered_rows_per_year(tmp_path):
+    header = ",".join(sd.GOLD_COLUMNS)
+    lines = [
+        header,
+        "28-01-2016,http://x/2016-01-28/a,a,0,0,0,0,1,0,positive",
+        "0201-04-27,http://x/2015-04-27/b,b,0,0,0,0,1,0,none",
+        "0201-06-01,http://x/2016-06-01/c,c,0,0,0,0,1,0,none",
+        "0200-06-02,http://x/2016-06-02/d,d,0,0,0,0,1,0,none",  # month-day match, other decade
+        "0201-06-03,http://x/e,e,0,0,0,0,1,0,none",  # no URL date: dropped
+    ]
+    path = tmp_path / "gold.csv"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    rows, bad = sd.load_gold(path)
+    c = sd.date_checks(rows, bad)
+    assert c["recovered"] == 3 and c["date_dropped"] == 1
+    assert c["recovered_per_year"] == {"2015": 1, "2016": 2}
+    assert c["recovered_year_prefix_consistent"] == 2
+    assert c["url_date_rows"] == 1 and c["url_date_equal"] == 1  # recovered rows not counted
+
+
+# ----------------------------------------------------------------- Fix 2: two dedupe sets
+
+
+def test_template_40_days_apart_leaves_the_classifier_set_but_stays_in_the_index_set():
+    df = headlines([("2016-03-01", "Gold closes at $1,250.10"),
+                    ("2016-04-10", "Gold closes at $1,240.70")])  # fmt: skip
+    out = sd.dedupe(df, 0.8, 3).set_index("row_id")
+    assert out["in_classifier_set"].tolist() == [True, False]
+    assert out.loc[1, "dup_exact"]
+    assert out["in_index_set"].tolist() == [True, True]
+    assert not out.loc[1, "idx_dup_exact"] and out.loc[1, "idx_dup_of"] == -1
+
+
+def test_repeat_2_days_apart_leaves_both_sets():
+    df = headlines([("2016-03-01", "Gold closes at $1,250.10"),
+                    ("2016-03-03", "Gold closes at $1,251.00")])  # fmt: skip
+    out = sd.dedupe(df, 0.8, 3).set_index("row_id")
+    assert out["in_classifier_set"].tolist() == [True, False]
+    assert out["in_index_set"].tolist() == [True, False]
+    assert out.loc[1, "idx_dup_exact"] and out.loc[1, "idx_dup_of"] == 0
+
+
+def test_index_set_window_edge_and_near_duplicates():
+    df = headlines([
+        ("2016-03-01", "gold up"),
+        ("2016-03-05", "gold up"),  # 4 days: stays in the index set
+        ("2016-03-07", "gold up"),  # 2 days after the kept 03-05 copy: dropped
+        ("2016-03-01", NEAR_A),
+        ("2016-03-04", NEAR_B),  # near, 3 days: dropped from both
+    ])  # fmt: skip
+    out = sd.dedupe(df, 0.8, 3).set_index("row_id").sort_index()
+    assert out["in_index_set"].tolist() == [True, True, False, True, False]
+    assert out.loc[2, "idx_dup_of"] == 1
+    assert out.loc[4, "idx_dup_near"] and out.loc[4, "dup_near"]
+    assert out["in_classifier_set"].tolist() == [True, False, False, True, False]
+
+
+def test_g1_table_per_set_and_g5_on_both_sets():
+    df = headlines([("2016-01-04", "gold up"), ("2016-02-15", "Gold up!"),
+                    ("2016-02-16", "silver down")])  # fmt: skip
+    out = sd.dedupe(df, 0.8, 3)
+    assert sg.g1_table(out, "classifier").set_index("year").loc[2016].tolist() == [3, 1, 0, 2]
+    assert sg.g1_table(out, "index").set_index("year").loc[2016].tolist() == [3, 0, 0, 3]
+    cal = pd.Series(pd.to_datetime(["2016-01-04", "2016-02-15", "2016-02-16", "2016-02-17"]))
+    out["trade_date"] = sd.align_trade_dates(out["date"], cal)
+    t, shares = sg.g5_both(out, cal, date(2003, 1, 1))
+    row = t.set_index("year").loc[2016]
+    assert row["price days"] == 3  # to the last trade date of either set
+    assert row["zero, classifier set"] == 1 and row["zero, index set"] == 0
+    assert shares == pytest.approx({"classifier": 1 / 3, "index": 0.0})
+
+
+# -------------------------------------------------------------- Fix 3: G2 cross-check files
+
+
+def test_read_mt5_d1_goes_through_history_export_and_stops_at_the_lockbox(tmp_path):
+    path = tmp_path / "mt5_xauusd_d1.csv"
+    path.write_bytes(
+        b"<DATE>\t<OPEN>\t<HIGH>\t<LOW>\t<CLOSE>\t<TICKVOL>\t<VOL>\t<SPREAD>\r\n"
+        b"2026.01.08\t1\t2\t0.5\t1.5\t10\t0\t5\r\n"
+        b"2026.01.09\t1.5\t2\t1\t1.8\t11\t0\t5\r\n"
+        b"2026.01.12\tnot a number\r\n"
+        b"garbage\r\n"
+    )
+    df = sg.read_mt5_d1(path, date(2026, 1, 10))
+    assert df.to_dict("list") == {
+        "date": [pd.Timestamp("2026-01-08"), pd.Timestamp("2026-01-09")],
+        "close": [1.5, 1.8],
+    }
+    f = sd.DataFile("mt5", path, "", True, "", mt5_export=True)
+    head = path.read_bytes().split(b"2026.01.12")[0]
+    assert sd.file_sha256(f, date(2026, 1, 10)) == hashlib.sha256(head).hexdigest()
+
+
+def test_record_sha256_fills_an_empty_value_once(tmp_path):
+    cfg = make_config(tmp_path)
+    sd.record_sha256(cfg.path, "b", "ab" * 32)
+    again = sd.load_config(cfg.path, base=tmp_path)
+    assert again.files["b"].sha256 == "ab" * 32 and again.files["a"].sha256 == cfg.files["a"].sha256
+    sd.record_sha256(cfg.path, "b", "ab" * 32)  # same value: nothing changes
+    with pytest.raises(sd.ChecksumError):
+        sd.record_sha256(cfg.path, "b", "cd" * 32)
+
+
+def test_g2_diagnostics_lead_lag_horizons_and_flat_bars():
+    # the other series closes "late": its day-t return is Dukascopy's day t-1 return
+    rng = np.random.default_rng(7)
+    r = rng.normal(0, 0.01, 60)
+    d = pd.bdate_range("2016-01-04", periods=61)
+    a = pd.DataFrame({"date": d, "close": 100 * np.exp(np.r_[0, np.cumsum(r)])})
+    lagged = 100 * np.exp(np.r_[0, 0, np.cumsum(r[:-1])])
+    b = pd.DataFrame({"date": d, "open": lagged, "high": lagged + 1, "low": lagged - 1,
+                      "close": lagged})  # fmt: skip
+    b.loc[3, ["open", "high", "low"]] = b.loc[3, "close"]  # one flat bar
+    dg = sg.g2_diagnostics(a, b, date(2003, 1, 1))
+    assert dg["duka_leads"] == pytest.approx(1.0)
+    assert dg["horizons"][1] < 0.5 < dg["horizons"][10]
+    assert dg["flat"] == 1 and dg["flat_before_2008"] == 0
+    assert dg["per_year"]["common days"].tolist() == [61]
+    assert sg.g2_diagnostics(a, None, date(2003, 1, 1)) == {}

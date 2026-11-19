@@ -42,11 +42,23 @@ path = "raw/prices/xauusd-d1-bid-2000-01-01-2026-11-18.csv"
 sha256 = "2e3567e8f6c7b3e1776b214c6b297a2434ed34e98445edb9b0d671bdf5fa7bad"
 source = "npx dukascopy-node -i xauusd -from 2000-01-01 -to 2026-11-18 -t d1 -f csv -p bid -v"
 
-[files.stooq]
-path = "raw/prices/xauusd_d_stooq.csv"
-sha256 = ""  # not obtained (2026-11-18: the URL answered 404); G2 pending (MT5 D1 from Fadi)
+# G2 cross-check (PREREG §2.3, decided 2026-11-19), in this order: (a) the FxPro MT5 XAUUSD D1
+# export, placed here by hand when it arrives; (b) otherwise Yahoo Finance gold futures GC=F daily.
+# Each SHA-256 is recorded by `download` on first sight, then verified like the others. Stooq's
+# daily XAUUSD answered 404 (2026-11-18) and is no longer tried.
+[files.mt5]
+path = "raw/prices/mt5_xauusd_d1.csv"
+sha256 = ""
 optional = true
-source = "https://stooq.com/q/d/l/?s=xauusd&i=d"
+# read and hashed only through app.data.raw.HistoryExport (stops before the lockbox, server date)
+mt5_export = true
+source = "FxPro MT5 XAUUSD D1 'Export bars' (requested from Fadi 2026-11-18)"
+
+[files.gcf]
+path = "raw/prices/gcf_yahoo_d1.csv"
+sha256 = "216ddc0ff86b42dfe773cc21d759116353767aed0f78d6856f666a370e1f4475"
+optional = true
+source = "yfinance: yf.download('GC=F', start='2000-01-01', end=prices.stop_before, interval='1d', auto_adjust=False)"
 
 [dedupe]
 near_jaccard = 0.8  # token-set Jaccard of the normalised text, at or above = near-duplicate
@@ -66,13 +78,14 @@ first_date = "2003-01-01"  # 2000-2002: rounded prices, other volume unit, impos
 stop_before = "2026-01-10"
 
 [gates]
-g2_min_close_corr = 0.99
+g2_min_close_corr = 0.99   # pass rule against the MT5 D1 export (same instrument)
+g2_min_return_corr = 0.95  # pass rule against GC=F (futures: carry and settlement time differ)
 g2_return_diff = 0.005  # |log-return difference| above this is flagged
 g2_list = 20
 
 # Written by `python -m app research sentiment gates` (G4): inverse class frequency on the train
 # split, normalised so that the train-sample-weighted mean weight is 1 (w_c = n / (K * n_c)).
 [class_weights]
-negative = 0.950538
-neutral = 1.705740
-positive = 0.734372
+negative = 0.956556
+neutral = 1.708039
+positive = 0.730398

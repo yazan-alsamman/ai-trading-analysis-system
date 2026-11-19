@@ -25,7 +25,7 @@ import tomllib
 import urllib.request
 import zipfile
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -58,6 +58,7 @@ FLAG_COLUMNS = (
 )  # fmt: skip
 GOLD_DATE_FORMAT = "%d-%m-%Y"
 _URL_DATE = re.compile(r"(?<!\d)((?:19|20)\d\d)-(\d\d)-(\d\d)(?!\d)")
+_TRUNCATED = re.compile(r"^(\d{4})-(\d\d)-(\d\d)$")  # e.g. 0201-04-27: year cut, YYYY-MM-DD order
 PRICE_COLUMNS = ("open", "high", "low", "close", "volume")
 
 
@@ -75,6 +76,9 @@ class DataFile:
     sha256: str
     optional: bool
     source: str
+    # an FxPro MT5 export: read and hashed only through app.data.raw.HistoryExport, which stops at
+    # the lockbox start (CLAUDE.md data rules); its SHA-256 covers the bytes before the cut
+    mt5_export: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,10 +96,12 @@ class Config:
     fallback_split: tuple[date, date]
     price_first: date
     price_stop: date
-    g2_min_close_corr: float
+    g2_min_close_corr: float  # pass rule against the MT5 D1 export
+    g2_min_return_corr: float  # pass rule against Yahoo GC=F (futures: another instrument)
     g2_return_diff: float
     g2_list: int
     class_weights: dict[str, float] = field(default_factory=dict)
+    base: Path = ROOT  # ai-service/, what the paths above are resolved against
 
 
 def _date(value) -> date:
@@ -115,6 +121,7 @@ def load_config(path: Path = CONFIG, base: Path = ROOT) -> Config:
             sha256=spec.get("sha256", ""),
             optional=bool(spec.get("optional", False)),
             source=spec.get("source", ""),
+            mt5_export=bool(spec.get("mt5_export", False)),
         )
         for key, spec in raw["files"].items()
     }
@@ -137,10 +144,46 @@ def load_config(path: Path = CONFIG, base: Path = ROOT) -> Config:
         price_first=_date(pr["first_date"]),
         price_stop=stop,
         g2_min_close_corr=float(g["g2_min_close_corr"]),
+        g2_min_return_corr=float(g["g2_min_return_corr"]),
         g2_return_diff=float(g["g2_return_diff"]),
         g2_list=int(g["g2_list"]),
         class_weights={k: float(v) for k, v in raw.get("class_weights", {}).items()},
+        base=base,
     )
+
+
+def file_sha256(f: DataFile, stop_before: date) -> str:
+    """SHA-256 of a raw file. An MT5 export is read only through ``HistoryExport`` (CLAUDE.md data
+    rules): the hash covers the header and the lines before the first bar dated on or after
+    ``stop_before`` (server date); nothing after the cut is read."""
+    if not f.mt5_export:
+        return sha256_file(f.path)
+    from app.data.raw import HistoryExport
+
+    h = HistoryExport(f.path, cutoff=stop_before)
+    for _ in h.raw_lines():
+        pass
+    return h.sha256
+
+
+def record_sha256(config_path: Path, key: str, sha: str) -> None:
+    """Write ``sha`` into the empty ``sha256 = ""`` line of ``[files.<key>]`` in ``sentiment.toml``
+    (first acquisition of an optional file). A recorded value is never overwritten."""
+    text = config_path.read_text(encoding="utf-8")
+    head, sep, rest = text.partition(f"\n[files.{key}]\n")
+    if not sep:
+        raise ValueError(f"{config_path} has no [files.{key}] table")
+    end = rest.find("\n[")
+    table, tail = (rest, "") if end < 0 else (rest[:end], rest[end:])
+    m = re.search(r'^sha256 = "([0-9a-f]*)"', table, flags=re.M)
+    if not m:
+        raise ValueError(f"[files.{key}] has no sha256 line")
+    if m[1]:
+        if m[1] != sha:
+            raise ChecksumError(f"{key}: SHA-256 {sha} != recorded {m[1]}")
+        return
+    table = table[: m.start()] + f'sha256 = "{sha}"' + table[m.end() :]
+    config_path.write_text(head + sep + table + tail, encoding="utf-8", newline="\n")
 
 
 def verify_files(cfg: Config) -> dict[str, str]:
@@ -159,7 +202,7 @@ def verify_files(cfg: Config) -> dict[str, str]:
                 f"{key}: {f.path} is present but no SHA-256 is recorded in {cfg.path.name}; "
                 "record it before using the file"
             )
-        got = sha256_file(f.path)
+        got = file_sha256(f, cfg.price_stop)
         if got != f.sha256:
             raise ChecksumError(f"{key}: SHA-256 {got} != recorded {f.sha256} ({f.path})")
         status[key] = "ok"
@@ -199,7 +242,9 @@ def download(cfg: Config, prices_from: Path | None = None) -> dict[str, str]:
     """Fetch the raw files into ``data/sentiment/raw/`` (skipping files already present), then
     ``verify_files``. Kaggle needs a token (``KAGGLE_API_TOKEN`` or ``kaggle.json``); the
     Dukascopy file is copied from ``prices_from`` (made with the command in ``sentiment.toml``);
-    Stooq is optional and a failure is reported, not raised."""
+    the G2 cross-check is the MT5 D1 export if present (placed by hand), else Yahoo ``GC=F``; both
+    are optional, a failure is reported, not raised, and a new file's SHA-256 is recorded in
+    ``sentiment.toml`` on first sight (verified like the others after that)."""
     f = cfg.files
     for d in {x.path.parent for x in f.values()}:
         d.mkdir(parents=True, exist_ok=True)
@@ -219,13 +264,39 @@ def download(cfg: Config, prices_from: Path | None = None) -> dict[str, str]:
             src = f["dukascopy"].source
             raise ChecksumError(f"dukascopy: pass --prices-from (made with: {src})")
         shutil.copyfile(prices_from, f["dukascopy"].path)
-    if not f["stooq"].path.is_file():
+    # G2 cross-check (PREREG §2.3): the MT5 D1 export if it has been placed in raw/prices/ (its
+    # SHA-256 is recorded on first sight), otherwise Yahoo GC=F (downloaded once, then pinned)
+    if f["mt5"].path.is_file():
+        if not f["mt5"].sha256:
+            record_sha256(cfg.path, "mt5", file_sha256(f["mt5"], cfg.price_stop))
+    elif not f["gcf"].path.is_file():
         try:
-            _fetch(f["stooq"].source, f["stooq"].path)
-        except OSError as e:  # urllib's HTTPError is an OSError
-            f["stooq"].path.unlink(missing_ok=True)
-            print(f"stooq: not downloaded ({e}); G2 stays pending", file=sys.stderr)
-    return verify_files(cfg)
+            fetch_gcf(f["gcf"].path, date(2000, 1, 1), cfg.price_stop)
+        except Exception as e:  # noqa: BLE001 - any failure leaves G2 pending, never half a file
+            f["gcf"].path.unlink(missing_ok=True)
+            print(f"gcf: not downloaded ({e!r}); G2 stays pending", file=sys.stderr)
+    if f["gcf"].path.is_file() and not f["gcf"].sha256:
+        record_sha256(cfg.path, "gcf", sha256_file(f["gcf"].path))
+    return verify_files(load_config(cfg.path, cfg.base))  # reread: a SHA-256 may be new
+
+
+def fetch_gcf(target: Path, start: date, stop_before: date) -> None:
+    """Yahoo Finance gold futures ``GC=F`` daily bars from ``start`` to the day before
+    ``stop_before`` (yfinance's ``end`` is exclusive, so no lockbox-period bar is requested), as
+    ``date,open,high,low,close,volume``. Bars are dated by the exchange's day (not 00:00 UTC)."""
+    import yfinance as yf
+
+    df = yf.download(
+        "GC=F", start=start.isoformat(), end=stop_before.isoformat(), interval="1d",
+        auto_adjust=False, actions=False, progress=False, multi_level_index=False,
+    )  # fmt: skip
+    if df is None or df.empty:
+        raise OSError("GC=F: no data returned")
+    df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]]
+    d = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
+    df = df.set_axis(d.rename("date")).loc[lambda x: x.index < pd.Timestamp(stop_before)]
+    df = df.dropna(subset=["close"])
+    df.reset_index().to_csv(target, index=False, date_format="%Y-%m-%d", lineterminator="\n")
 
 
 # ------------------------------------------------------------------------------------ headlines
@@ -237,8 +308,8 @@ def parse_gold_dates(values: pd.Series) -> pd.Series:
 
 
 def url_date(url: str) -> pd.Timestamp:
-    """The first ``YYYY-MM-DD`` in a URL (many article URLs carry one), else NaT. Used only to
-    describe the file's dates, never to replace one."""
+    """The first ``YYYY-MM-DD`` in a URL (many article URLs carry one), else NaT. It replaces a
+    file date only through ``recover_date`` (truncated years, PREREG §2.1)."""
     m = _URL_DATE.search(url)
     if not m:
         return pd.NaT
@@ -248,6 +319,25 @@ def url_date(url: str) -> pd.Timestamp:
         return pd.NaT
 
 
+def recover_date(raw: str, url: str) -> date | None:
+    """The date of a headline row (PREREG §2.1, decided 2026-11-19). A raw ``DD-MM-YYYY`` value is
+    taken as is (the URL is not consulted). A truncated-year value ``YYYY-MM-DD`` such as
+    ``0201-04-27`` takes the URL's date when the URL carries one whose month and day equal the raw
+    value's. Anything else: None (the row is dropped and counted)."""
+    raw = raw.strip()
+    try:
+        return datetime.strptime(raw, GOLD_DATE_FORMAT).date()
+    except ValueError:
+        pass
+    m = _TRUNCATED.match(raw)
+    if not m:
+        return None
+    u = url_date(url)
+    if pd.isna(u) or (u.month, u.day) != (int(m[2]), int(m[3])):
+        return None
+    return u.date()
+
+
 def date_shape(text: str) -> str:
     """A raw date with every digit replaced by 9 (``28-01-2016`` -> ``99-99-9999``)."""
     return re.sub(r"\d", "9", text.strip())
@@ -255,9 +345,11 @@ def date_shape(text: str) -> str:
 
 def load_gold(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """The gold headlines with tidy columns, ``label`` (none -> neutral), ``is_none``, ``row_id``
-    (0-based row in the file) and ``url_date`` (descriptive only). Returns ``(rows,
-    unparsable)``: rows whose date does not parse are left out of the first and listed in the
-    second (row id, raw date, its shape, URL date; no headline)."""
+    (0-based row in the file), ``url_date`` and ``date_recovered``. Returns ``(rows,
+    unparsable)``. ``unparsable`` lists every row whose raw date is not ``DD-MM-YYYY`` (row id, raw
+    date, its shape, URL date, ``recovered``; no headline). Of those, rows whose date
+    ``recover_date`` sets from the URL are in ``rows`` with ``date_recovered``; the others are
+    dropped."""
     df = pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
     missing = set(GOLD_COLUMNS) - set(df.columns)
     if missing:
@@ -277,9 +369,23 @@ def load_gold(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     df["is_none"] = df["price_sentiment"].eq("none")
     df["label"] = df["price_sentiment"].where(~df["is_none"], "neutral")
     df["url_date"] = pd.to_datetime(df["url"].map(url_date))
+    na = df["date"].isna()
+    found = [recover_date(r, u) for r, u in zip(df.loc[na, "date_raw"], df.loc[na, "url"],
+                                                strict=True)]  # fmt: skip
+    rec = pd.Series(
+        np.array([np.datetime64(d, "ns") if d else np.datetime64("NaT", "ns") for d in found],
+                 dtype="datetime64[ns]"),
+        index=df.index[na],
+    )  # fmt: skip
+    df["date_recovered"] = False
+    df.loc[rec.index, "date_recovered"] = rec.notna()
+    # one resolution whatever the environment (the parquet round trip must give the same frame)
+    df["date"] = df["date"].astype("datetime64[ns]").where(~na, rec)
     cols = ["row_id", "date_raw", "url_date"]
-    unparsable = df.loc[df["date"].isna(), cols].reset_index(drop=True)
+    unparsable = df.loc[na, cols].reset_index(drop=True)
     unparsable["shape"] = unparsable["date_raw"].map(date_shape)
+    unparsable["recovered"] = df.loc[na, "date_recovered"].to_numpy()
+    unparsable["date"] = df.loc[na, "date"].to_numpy()
     rows = df.loc[df["date"].notna()].drop(columns="date_raw").reset_index(drop=True)
     return rows, unparsable
 
@@ -316,46 +422,79 @@ def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
     return len(a & b) / union if union else 0.0
 
 
-def dedupe(df: pd.DataFrame, near_jaccard: float, window_days: int) -> pd.DataFrame:
-    """G1 before any split. Rows are taken in (date, row_id) order. Exact: a row whose normalised
-    text was already seen is ``dup_exact``. Near: an exact-unique row whose token set has Jaccard
-    >= ``near_jaccard`` with a kept row dated at most ``window_days`` earlier (same day included)
-    is ``dup_near``. A dropped row's ``dup_of`` is the ``row_id`` of the kept row it matched (the
-    earliest), else -1; ``dup_jaccard`` is that match's Jaccard. Returns a copy in that order."""
-    out = df.sort_values(["date", "row_id"], kind="mergesort").reset_index(drop=True)
-    out["norm"] = out["headline"].map(normalise)
-    n = len(out)
+def _dup_flags(
+    norm: list[str],
+    days: np.ndarray,
+    row_ids: np.ndarray,
+    near_jaccard: float,
+    window_days: int,
+    exact_any_distance: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """``(dup_exact, dup_near, dup_of, dup_jaccard)`` for rows already in (date, row_id) order.
+
+    ``exact_any_distance`` True (classifier set): a row whose normalised text was seen before, at
+    any date, is an exact duplicate. False (index set): only a kept row with the same text dated
+    at most ``window_days`` earlier (same day included) makes it one. Then, either way, a row whose
+    token set has Jaccard >= ``near_jaccard`` with a kept row in that window is a near duplicate
+    (the window is searched oldest day first, the first match counts)."""
+    n = len(norm)
     dup_exact = np.zeros(n, dtype=bool)
     dup_near = np.zeros(n, dtype=bool)
     dup_of = np.full(n, -1, dtype=np.int64)
     dup_j = np.full(n, np.nan)
     first_seen: dict[str, int] = {}
-    kept_by_day: dict[date, list[tuple[int, frozenset[str]]]] = {}
-    days = out["date"].dt.date.to_numpy()
-    row_ids = out["row_id"].to_numpy()
+    kept_by_day: dict[date, list[tuple[int, str, frozenset[str]]]] = {}
     window = [timedelta(days=k) for k in range(window_days, -1, -1)]  # oldest day first
-    for i, (norm, day) in enumerate(zip(out["norm"], days, strict=True)):
-        if norm in first_seen:
-            dup_exact[i], dup_of[i], dup_j[i] = True, first_seen[norm], 1.0
-            continue
-        first_seen[norm] = row_ids[i]
-        tokens = frozenset(norm.split())
+    for i, (text, day) in enumerate(zip(norm, days, strict=True)):
+        if exact_any_distance:
+            if text in first_seen:
+                dup_exact[i], dup_of[i], dup_j[i] = True, first_seen[text], 1.0
+                continue
+            first_seen[text] = row_ids[i]
+        candidates = [c for back in window for c in kept_by_day.get(day - back, ())]
+        if not exact_any_distance:
+            same = next((rid for rid, other, _ in candidates if other == text), None)
+            if same is not None:
+                dup_exact[i], dup_of[i], dup_j[i] = True, same, 1.0
+                continue
+        tokens = frozenset(text.split())
         match = None
-        for back in window:
-            for rid, other in kept_by_day.get(day - back, ()):
-                j = jaccard(tokens, other)
-                if j >= near_jaccard:
-                    match = (rid, j)
-                    break
-            if match:
+        for rid, _, other in candidates:
+            j = jaccard(tokens, other)
+            if j >= near_jaccard:
+                match = (rid, j)
                 break
         if match:
             dup_near[i], dup_of[i], dup_j[i] = True, match[0], match[1]
         else:
-            kept_by_day.setdefault(day, []).append((row_ids[i], tokens))
-    out["dup_exact"], out["dup_near"] = dup_exact, dup_near
-    out["dup_of"], out["dup_jaccard"] = dup_of, dup_j
-    out["keep"] = ~(dup_exact | dup_near)
+            kept_by_day.setdefault(day, []).append((row_ids[i], text, tokens))
+    return dup_exact, dup_near, dup_of, dup_j
+
+
+def dedupe(df: pd.DataFrame, near_jaccard: float, window_days: int) -> pd.DataFrame:
+    """G1 before any split, two sets (PREREG §3, decided 2026-11-19). Rows are taken in (date,
+    row_id) order and normalised (``norm``).
+
+    Classifier set (train / validation / test of the classifier): exact duplicates of the
+    normalised text at any distance in time, then near duplicates (Jaccard >= ``near_jaccard``
+    with a kept row at most ``window_days`` earlier). Columns ``dup_exact``, ``dup_near``,
+    ``dup_of`` (``row_id`` of the matched row, else -1), ``dup_jaccard``, ``in_classifier_set``.
+
+    Index set (the daily index, PREREG §5): exact and near duplicates dropped only within
+    ``window_days`` of a kept row (the same story on several sites); a template headline on
+    another day stays. Columns ``idx_dup_exact``, ``idx_dup_near``, ``idx_dup_of``,
+    ``in_index_set``. Returns a copy in that order."""
+    out = df.sort_values(["date", "row_id"], kind="mergesort").reset_index(drop=True)
+    out["norm"] = out["headline"].map(normalise)
+    norm = out["norm"].tolist()
+    days = out["date"].dt.date.to_numpy()
+    row_ids = out["row_id"].to_numpy()
+    ex, ne, of, j = _dup_flags(norm, days, row_ids, near_jaccard, window_days, True)
+    out["dup_exact"], out["dup_near"], out["dup_of"], out["dup_jaccard"] = ex, ne, of, j
+    out["in_classifier_set"] = ~(ex | ne)
+    ex, ne, of, _ = _dup_flags(norm, days, row_ids, near_jaccard, window_days, False)
+    out["idx_dup_exact"], out["idx_dup_near"], out["idx_dup_of"] = ex, ne, of
+    out["in_index_set"] = ~(ex | ne)
     return out
 
 
@@ -541,10 +680,14 @@ def build(cfg: Config) -> Built:
     gold, unparsable = load_gold(cfg.files["gold"].path)
     gold = dedupe(gold, cfg.near_jaccard, cfg.window_days)
     choice = choose_split(
-        gold.loc[gold["keep"], "date"], cfg.default_split, cfg.fallback_split, cfg.min_test
+        gold.loc[gold["in_classifier_set"], "date"],
+        cfg.default_split,
+        cfg.fallback_split,
+        cfg.min_test,
     )
     gold["split"] = assign_split(gold["date"], choice.train_last, choice.val_last)
-    assert_disjoint(gold.loc[gold["keep"], "norm"], gold.loc[gold["keep"], "split"])
+    clf = gold["in_classifier_set"]
+    assert_disjoint(gold.loc[clf, "norm"], gold.loc[clf, "split"])
     calendar, prices, stats, violations = build_prices(cfg)
     gold["trade_date"] = align_trade_dates(gold["date"], calendar)
     gold["moved"] = gold["trade_date"].ne(gold["date"])
@@ -555,16 +698,25 @@ def build(cfg: Config) -> Built:
 
 
 def date_checks(gold: pd.DataFrame, unparsable: pd.DataFrame) -> dict:
-    """Evidence on the file's date column (descriptive). Parsed rows: how many have a day above
-    12 (so the order is day-month) and how many carry a URL date equal to theirs. Unparsable
-    rows: their shapes, and how many have a URL date whose month-day equals the raw value's
-    last five characters (``YYYY-MM-DD`` shape)."""
+    """Evidence on the file's date column (descriptive). Rows whose raw date parsed as
+    ``DD-MM-YYYY``: how many have a day above 12 (so the order is day-month) and how many carry a
+    URL date equal to theirs. Unparsable rows: their shapes, how many have a URL date whose
+    month-day equals the raw value's last five characters (``YYYY-MM-DD`` shape), how many were
+    recovered (``recover_date``), recovered rows per year, and how many recovered years begin
+    with the raw year's digits (``0201`` -> 201x; descriptive, not part of the rule)."""
+    gold = gold.loc[~gold["date_recovered"]]
     has = gold["url_date"].notna()
     u = unparsable
     u_has = u["url_date"].notna()
     mmdd = u.loc[u_has, "date_raw"].str.strip().str[-5:] == u.loc[u_has, "url_date"].dt.strftime(
         "%m-%d"
     )
+    rec = u["recovered"].astype(bool)
+    years = u.loc[rec, "date"].dt.year.value_counts()
+    prefix_ok = pd.Series(
+        [str(d.year).startswith(r.strip()[:4].lstrip("0") or "-")
+         for r, d in zip(u.loc[rec, "date_raw"], u.loc[rec, "date"], strict=True)], dtype=bool
+    )  # fmt: skip
     return {
         "day_field_gt12": int((gold["date"].dt.day > 12).sum()),
         "url_date_rows": int(has.sum()),
@@ -572,6 +724,10 @@ def date_checks(gold: pd.DataFrame, unparsable: pd.DataFrame) -> dict:
         "unparsable_shapes": {k: int(v) for k, v in u["shape"].value_counts().sort_index().items()},
         "unparsable_url_date": int(u_has.sum()),
         "unparsable_url_mmdd_match": int(mmdd.sum()),
+        "recovered": int(rec.sum()),
+        "recovered_per_year": {str(k): int(v) for k, v in years.sort_index().items()},
+        "recovered_year_prefix_consistent": int(prefix_ok.sum()),
+        "date_dropped": int((~u["recovered"]).sum()),
     }
 
 
@@ -581,14 +737,26 @@ def manifest(cfg: Config, b: Built) -> dict:
     return {
         "files": {k: {"sha256": cfg.files[k].sha256, "status": s} for k, s in b.files.items()},
         "gold": {
-            "rows_raw": int(len(g) + len(b.unparsable)),
+            "rows_raw": int(len(g) + (~b.unparsable["recovered"]).sum()),
             "unparsable_dates": int(len(b.unparsable)),
             "unparsable_row_ids": b.unparsable["row_id"].astype(int).tolist(),
+            "recovered_row_ids": b.unparsable.loc[b.unparsable["recovered"], "row_id"]
+            .astype(int)
+            .tolist(),
+            "date_dropped_row_ids": b.unparsable.loc[~b.unparsable["recovered"], "row_id"]
+            .astype(int)
+            .tolist(),
             **date_checks(g, b.unparsable),
             "rows_dated": int(len(g)),
             "dup_exact": int(g["dup_exact"].sum()),
             "dup_near": int(g["dup_near"].sum()),
-            "kept": int(g["keep"].sum()),
+            "kept": int(g["in_classifier_set"].sum()),
+            "index_set": {
+                "dup_exact": int(g["idx_dup_exact"].sum()),
+                "dup_near": int(g["idx_dup_near"].sum()),
+                "kept": int(g["in_index_set"].sum()),
+                "kept_test_years": int((g["in_index_set"] & g["split"].eq("test")).sum()),
+            },
             "first_date": str(g["date"].min().date()),
             "last_date": str(g["date"].max().date()),
         },

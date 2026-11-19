@@ -42,9 +42,18 @@ def main(argv: list[str]) -> int:
             built = sd.build(cfg)
             sd.save(cfg, built)
             g, sp, pr = built.manifest["gold"], built.manifest["split"], built.manifest["prices"]
+            gi = g["index_set"]
             print(
-                f"gold: {g['rows_raw']} rows, {g['unparsable_dates']} unparsable dates, "
-                f"{g['dup_exact']} exact + {g['dup_near']} near duplicates, {g['kept']} kept"
+                f"gold: {g['rows_raw']} rows, {g['unparsable_dates']} unparsable dates "
+                f"({g['recovered']} recovered from the URL, {g['date_dropped']} dropped)"
+            )
+            print(
+                f"classifier set: {g['dup_exact']} exact + {g['dup_near']} near duplicates, "
+                f"{g['kept']} kept"
+            )
+            print(
+                f"index set: {gi['dup_exact']} exact + {gi['dup_near']} near duplicates, "
+                f"{gi['kept']} kept ({gi['kept_test_years']} in the test years)"
             )
             print(f"split: {sp['chosen']} {sp['counts']}")
             print(
