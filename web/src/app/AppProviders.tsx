@@ -87,31 +87,77 @@ function PreferencesProvider({ children }: { children: ReactNode }) {
  * Creates the service layer once and wires authentication into it.
  * `services` can be injected (tests).
  */
+const readSession = () => readStored(SESSION_KEY, SessionSchema.nullable(), null);
+
 function DataAndAuthProvider({ children, services: injected }: { children: ReactNode; services?: Services }) {
-  const [session, setSession] = useState<Session | null>(() => readStored(SESSION_KEY, SessionSchema.nullable(), null));
+  const [session, setSessionState] = useState<Session | null>(readSession);
   const sessionRef = useRef(session);
-  useEffect(() => {
-    sessionRef.current = session;
-    if (session) writeStored(SESSION_KEY, session);
+
+  /**
+   * Persist synchronously: rotated refresh tokens must be visible to other tabs
+   * immediately (the backend revokes every session when an old one is reused).
+   */
+  const setSession = useCallback((next: Session | null) => {
+    sessionRef.current = next;
+    if (next) writeStored(SESSION_KEY, next);
     else removeStored(SESSION_KEY);
-  }, [session]);
+    setSessionState(next);
+  }, []);
 
   const [services] = useState<Services>(
-    () => injected ?? createServices(config, () => sessionRef.current, () => setSession(null)),
+    () =>
+      injected ??
+      createServices(config, { get: () => sessionRef.current, set: setSession, readPersisted: readSession }, () => setSession(null)),
   );
+
+  // Another tab signed in, refreshed its token or signed out.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== SESSION_KEY) return;
+      const next = readSession();
+      sessionRef.current = next;
+      setSessionState(next);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // A stored backend session is validated once on start-up (refreshing the token if needed).
+  const [status, setStatus] = useState<AuthApi['status']>(() => (services.source === 'api' && sessionRef.current && !sessionRef.current.isDemo ? 'restoring' : 'ready'));
+  useEffect(() => {
+    if (status !== 'restoring') return;
+    const ctrl = new AbortController();
+    services.account
+      .getProfile({ signal: ctrl.signal })
+      .then((user) => {
+        const current = sessionRef.current;
+        if (current) setSession({ ...current, user });
+      })
+      // 401 (after a failed refresh) has already ended the session; offline keeps it until the server can decide.
+      .catch(() => undefined)
+      .finally(() => !ctrl.signal.aborted && setStatus('ready'));
+    return () => ctrl.abort();
+  }, [services, status, setSession]);
 
   const auth = useMemo<AuthApi>(
     () => ({
       session,
+      status,
       login: async (input) => setSession(await services.auth.login(input)),
       register: async (input) => setSession(await services.auth.register(input)),
       logout: async () => {
         const current = sessionRef.current;
         setSession(null);
+        // Account-specific data must not be shown to the next person on this browser.
+        if (services.source === 'api') removeStored('ata.assistant.thread.v1');
         if (current) await services.auth.logout(current).catch(() => undefined);
       },
+      updateUser: (user) => {
+        const current = sessionRef.current;
+        if (current) setSession({ ...current, user });
+      },
     }),
-    [services, session],
+    [services, session, status, setSession],
   );
 
   return (

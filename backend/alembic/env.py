@@ -17,8 +17,13 @@ if config.config_file_name is not None and not config.attributes.get("keep_loggi
 target_metadata = Base.metadata
 
 
+def database_url() -> str:
+    # a test can migrate another database in-process (tests/test_migration_0013.py)
+    return config.attributes.get("database_url") or get_settings().database_url
+
+
 def run_migrations_offline() -> None:
-    context.configure(url=get_settings().database_url, target_metadata=target_metadata)
+    context.configure(url=database_url(), target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
@@ -30,7 +35,7 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    engine = create_async_engine(get_settings().database_url)
+    engine = create_async_engine(database_url())
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await engine.dispose()

@@ -3,13 +3,20 @@ from fastapi import APIRouter, Depends
 from app.api.limits import limit_identity
 from app.api.v1 import (
     admin,
+    admin_ai,
     admin_api_keys,
+    admin_feeds,
     admin_market,
+    admin_otp,
     admin_realtime,
     admin_system,
+    ai,
+    ai_chat,
     api_keys,
     auth,
     backtests,
+    calendar,
+    chart_analysis,
     chat,
     custom_strategies,
     experts,
@@ -18,8 +25,11 @@ from app.api.v1 import (
     market,
     news,
     notifications,
+    paper,
     posts,
+    predictions,
     price_alerts,
+    recommendations,
     risk,
     strategies,
     subscriptions,
@@ -37,6 +47,10 @@ limited_router.include_router(market.router)
 limited_router.include_router(admin_market.router)
 limited_router.include_router(admin_realtime.router)
 limited_router.include_router(admin_system.router)
+limited_router.include_router(admin_ai.router)
+limited_router.include_router(admin_feeds.router)
+limited_router.include_router(admin_otp.router)
+limited_router.include_router(ai.router)
 limited_router.include_router(admin_api_keys.router)
 limited_router.include_router(indicators.router)
 limited_router.include_router(strategies.router)
@@ -60,9 +74,19 @@ limited_router.include_router(subscriptions.router)
 limited_router.include_router(subscriptions.admin_router)
 limited_router.include_router(chat.router)
 limited_router.include_router(chat.admin_router)
+limited_router.include_router(calendar.router)
+limited_router.include_router(calendar.admin_router)
+limited_router.include_router(predictions.router)
+limited_router.include_router(predictions.admin_router)
+limited_router.include_router(recommendations.router)
+limited_router.include_router(chart_analysis.router)
+limited_router.include_router(ai_chat.router)
+limited_router.include_router(paper.router)
 
 api_router = APIRouter()
 api_router.include_router(health.router)
+# cTrader's OAuth redirect (B1): authorised by its one-time state, not by a JWT
+api_router.include_router(admin_feeds.callback_router)
 api_router.include_router(notifications.webhook_router)  # Telegram calls it: no identity limit
 # the demo payment page, its form and the payment webhook: no login, so no identity limit
 api_router.include_router(subscriptions.public_router)

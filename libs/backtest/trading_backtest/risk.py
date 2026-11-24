@@ -28,6 +28,7 @@ Formulas and the order of operations are in docs/risk-management.md.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -45,6 +46,8 @@ from pydantic import (
     ValidationError,
     model_validator,
 )
+
+from trading_backtest.sizing import ContractSpec, round_lots
 
 if TYPE_CHECKING:
     from trading_backtest.config import BacktestConfig
@@ -576,6 +579,18 @@ class TradePlan:
     open). ``targets`` = ``[{"price", "r", "close_pct"}]``. ``rr`` = reward:risk of the first
     target. ``invalid_reason`` is set when the trade should not be taken (see
     ``INVALID_REASONS``); the other fields are filled as far as they could be computed.
+
+    With contract specs (``plan_trade(..., spec=...)``): ``lots`` = ``quantity`` /
+    contract size rounded down to the lot step (0 and ``lots_feasible`` false when it is below
+    the minimum or the account currency cannot be converted), ``conversion_rate`` = account
+    currency per unit of the quote currency, ``sizing_warnings`` = what was adjusted or missing.
+    ``risk_amount`` is then in the account currency (the equity's), ``notional`` stays in the
+    quote currency. Without specs these fields are null/empty and nothing else changes.
+
+    With a fixed ``cost_per_unit`` (the config's, per instrument): the risk per unit is
+    ``|entry - stop| + cost_per_unit`` (instead of the bps fees), ``risk_amount`` and
+    ``lots_risk_amount`` include it, ``sizing_warnings`` says so and ``to_dict`` has a
+    ``cost_per_unit`` key (only then).
     """
 
     side: str  # "long" | "short"
@@ -591,6 +606,12 @@ class TradePlan:
     equity: float = 0.0
     atr: float | None = None
     trailing: dict[str, Any] | None = None
+    lots: float | None = None
+    lots_feasible: bool | None = None
+    lots_risk_amount: float | None = None  # risk of ``lots`` (+ fixed cost), account currency
+    conversion_rate: float | None = None
+    sizing_warnings: list[str] = field(default_factory=list)
+    cost_per_unit: float | None = None  # the fixed round-trip cost counted in the risk
 
     @property
     def valid(self) -> bool:
@@ -600,7 +621,7 @@ class TradePlan:
         def num(x: float | None, digits: int = 8) -> float | None:
             return None if x is None or not math.isfinite(x) else round(float(x), digits)
 
-        return {
+        out = {
             "side": self.side,
             "entry_ref": num(self.entry_ref),
             "stop": num(self.stop),
@@ -617,12 +638,25 @@ class TradePlan:
             "equity": num(self.equity, 4),
             "atr": num(self.atr),
             "trailing": self.trailing,
+            "lots": num(self.lots),
+            "lots_feasible": self.lots_feasible,
+            "lots_risk_amount": num(self.lots_risk_amount, 4),
+            "conversion_rate": num(self.conversion_rate, 10),
+            "sizing_warnings": list(self.sizing_warnings),
         }
+        if self.cost_per_unit is not None:  # only then: other plans stay as they were
+            out["cost_per_unit"] = num(self.cost_per_unit)
+        return out
 
 
-def breakeven_level(side: int, entry: float, fee: float, slip: float) -> float:
+def breakeven_level(
+    side: int, entry: float, fee: float, slip: float, cost_per_unit: float | None = None
+) -> float:
     """The stop price at which an exit covers the entry and the round-trip costs: a long
-    exits at ``level * (1 - slip)`` and pays the fee on both fills."""
+    exits at ``level * (1 - slip)`` and pays the fee on both fills. With a fixed
+    ``cost_per_unit`` (no fee, no slippage): ``entry + side * cost``."""
+    if cost_per_unit is not None:
+        return entry + side * cost_per_unit
     if side == LONG:
         return entry * (1 + fee) / ((1 - fee) * (1 - slip))
     return entry * (1 - fee) / ((1 + fee) * (1 + slip))
@@ -680,12 +714,18 @@ class RiskContext:
         equity: float,
         entry: float | None = None,
         stop_price: float | None = None,
+        spec: ContractSpec | None = None,
+        conversion_rate: float | None = None,
     ) -> TradePlan:
         """The plan for the signal of bar ``i``: ``entry`` defaults to that bar's close (the
-        engine passes the real fill); ``stop_price`` overrides the stop rule."""
+        engine passes the real fill); ``stop_price`` overrides the stop rule. With ``spec`` and
+        ``conversion_rate`` (account currency per quote unit), ``equity`` is in the account
+        currency and the plan also has ``lots`` (see :class:`TradePlan`). A ``conversion_rate``
+        without ``spec`` converts the equity too (no lots)."""
         config = self.config
         entry = float(self.close[i]) if entry is None else float(entry)
         fee = config.fee_rate
+        cost = config.cost_per_unit
         if stop_price is not None:
             stop: float | None = float(stop_price)
             reason = "stop_wrong_side" if side * (entry - stop) <= 0 else None
@@ -700,7 +740,13 @@ class RiskContext:
             equity=equity,
             atr=atr_sizing if atr_sizing is not None and atr_sizing == atr_sizing else None,
             trailing=config.exits.trailing.to_dict() if config.exits.trailing else None,
+            cost_per_unit=cost,
         )
+        if cost is not None:
+            plan.sizing_warnings.append(
+                f"fixed trading cost of {cost:g} per unit (round trip) included in the risk "
+                "per unit, instead of fees and slippage"
+            )
         per_unit = abs(entry - stop) if stop is not None and reason is None else None
         target = config.exits.take_profit
         if target is not None and reason is None:
@@ -712,17 +758,41 @@ class RiskContext:
                     price = entry + side * distance * per_unit  # stop validated present
                     r = distance
                 plan.targets.append({"price": price, "r": r, "close_pct": fraction * 100})
+        rate = conversion_rate  # also without specs: the equity is converted, no lots
+        if spec is not None:
+            plan.lots, plan.lots_feasible, plan.conversion_rate = 0.0, False, rate
+            if rate is None:
+                plan.sizing_warnings.append(
+                    f"no conversion rate from {spec.quote_currency} to the account currency: "
+                    "lots not computed, quantity assumes equity in the quote currency"
+                )
         if reason is not None:
             plan.invalid_reason = reason
             return plan
-        qty, size_reason = sizer.size(equity, entry, fee, stop, atr_sizing)
+        # the sizer works in the quote currency: convert the equity when the rate is known
+        qty, size_reason = sizer.size(
+            equity / rate if rate else equity, entry, fee, stop, atr_sizing, cost
+        )
         plan.quantity, plan.notional = qty, qty * entry
         if per_unit is not None and qty > 0:
-            plan.risk_amount = per_unit * qty + (entry + stop) * qty * fee
+            if cost is None:
+                plan.risk_amount = (per_unit * qty + (entry + stop) * qty * fee) * (rate or 1.0)
+            else:
+                plan.risk_amount = (per_unit + cost) * qty * (rate or 1.0)
             plan.risk_pct = plan.risk_amount / equity * 100 if equity > 0 else None
             if plan.targets:
                 plan.rr = abs(plan.targets[0]["price"] - entry) / per_unit
         plan.invalid_reason = size_reason
+        if spec is not None and rate is not None:
+            lots, feasible, warnings = round_lots(qty / spec.contract_size, spec)
+            plan.lots, plan.lots_feasible = lots, feasible
+            plan.sizing_warnings.extend(warnings)
+            if per_unit is not None:
+                plan.lots_risk_amount = (
+                    lots * spec.contract_size * (per_unit + cost) * rate
+                    if cost is not None
+                    else lots * spec.contract_size * per_unit * rate
+                )
         return plan
 
 
@@ -735,11 +805,19 @@ def plan_trade(
     *,
     entry: float | None = None,
     stop: float | None = None,
+    spec: ContractSpec | None = None,
+    conversion_rate: float | None = None,
+    cost_per_unit: float | None = None,
 ) -> TradePlan:
     """The trade plan for a signal on ``df``'s bar ``signal_bar_index`` (bars after it are
     never read). ``side`` = 1/-1 or "buy"/"sell"/"long"/"short". ``risk_config`` is a risk
     config (``RiskConfigIn`` JSON) or a :class:`BacktestConfig`. The backtest engine computes
-    every entry with the same code (:meth:`RiskContext.plan`)."""
+    every entry with the same code (:meth:`RiskContext.plan`). ``cost_per_unit`` (the
+    instrument's fixed round-trip cost) replaces the config's fees in the risk per unit.
+
+    ``spec`` + ``conversion_rate`` (account currency per unit of the quote currency, see
+    :mod:`trading_backtest.sizing`): ``equity`` is in the account currency, the size is
+    computed on it converted to the quote currency, and the plan gets ``lots``."""
     from trading_backtest.config import BacktestConfig  # noqa: PLC0415 - import cycle
 
     if isinstance(side, str):
@@ -750,8 +828,18 @@ def plan_trade(
         raise ValueError("signal_bar_index is outside the frame")
     if not isinstance(risk_config, BacktestConfig):
         risk_config = BacktestConfig.from_risk(risk_config)
+    if cost_per_unit is not None:
+        risk_config = dataclasses.replace(risk_config, cost_per_unit=float(cost_per_unit))
     ctx = RiskContext(df.iloc[: signal_bar_index + 1], risk_config)
-    return ctx.plan(signal_bar_index, side, float(equity), entry=entry, stop_price=stop)
+    return ctx.plan(
+        signal_bar_index,
+        side,
+        float(equity),
+        entry=entry,
+        stop_price=stop,
+        spec=spec,
+        conversion_rate=conversion_rate,
+    )
 
 
 def history(risk_config: BacktestConfig) -> int:

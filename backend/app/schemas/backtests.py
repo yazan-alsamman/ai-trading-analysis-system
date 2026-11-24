@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -33,7 +33,8 @@ class BacktestCreate(BaseModel):
         description="initial_capital, fee_bps, slippage_bps, direction, sizing, stop, trailing, "
         "take_profit, guards, check_entry_bar, exits {max_bars_held, exit_on_opposite_signal, "
         "stop_loss_pct, take_profit_pct} (docs/risk-management.md); risk_profile: true uses "
-        "your risk profile",
+        "your risk profile. An instrument with a fixed cost per unit (XAU/USD: 0.25) gets "
+        "config.cost_per_unit from the server, and fee_bps / slippage_bps are then ignored",
     )
 
     @model_validator(mode="after")
@@ -79,6 +80,14 @@ class Point(BaseModel):
 class BacktestRead(BacktestSummary):
     params_hash: str
     config: dict[str, Any]
+    cost_model: Literal["bps", "fixed_per_unit"] = Field(
+        description="bps: fee_bps + slippage_bps of notional; fixed_per_unit: the instrument's "
+        "cost_per_unit x quantity per round trip, charged at the entry (fees and slippage "
+        "ignored)"
+    )
+    cost_per_unit: float | None = Field(
+        description="price units per unit, round trip (fixed_per_unit only)"
+    )
     first_bar: datetime | None
     last_bar: datetime | None
     metrics: dict[str, Any] | None

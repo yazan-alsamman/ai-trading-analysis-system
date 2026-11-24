@@ -7,6 +7,7 @@ import { useAuth, useServices } from '@/app/contexts';
 import { Button } from '@/components/ui/Button';
 import { Field, FormError, Input } from '@/components/ui/Form';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { safeRedirect } from '@/services/api/session';
 import { userMessage } from '@/services/errors';
 import { JourneySteps, PlanSummary } from '@/marketing/membership/Journey';
 import { useJourneyPlan } from '@/marketing/membership/useJourneyPlan';
@@ -21,7 +22,8 @@ export function LoginPage() {
   const { source } = useServices();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/overview';
+  // Only in-app paths are accepted as a destination after sign-in (no open redirects).
+  const from = safeRedirect((location.state as { from?: unknown } | null)?.from);
   const [error, setError] = useState<string | null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
   const plan = useJourneyPlan();

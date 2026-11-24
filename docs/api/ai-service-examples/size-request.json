@@ -1,0 +1,33 @@
+{
+  "setup": {
+    "setup_id": "xauusd-intraday-2026-10-19T14:15:00Z-buy",
+    "state": "ARMED",
+    "direction": "buy",
+    "entry": 2400.00,
+    "sl": 2395.00,
+    "tp": 2410.00,
+    "r_multiple": 2.0,
+    "probability": 0.58,
+    "ev_r": 0.74,
+    "ev_r_lower": 0.31,
+    "grade": null,
+    "valid_until": "2026-10-19T15:15:00Z",
+    "horizon_until": "2026-10-19T20:15:00Z",
+    "created_at": "2026-10-19T14:15:00Z",
+    "evidence": {"trend_4h": "up", "breakout": "range_high_1h", "news_clear_minutes": 165},
+    "features": {"atr_15m": 2.4, "rsi_15m": 58.2, "spread_pts": 26}
+  },
+  "instrument_spec": {
+    "contract_size": 100,
+    "tick_size": 0.01,
+    "lot_step": 0.01,
+    "min_lot": 0.01,
+    "max_lot": 100,
+    "price_basis": "bid",
+    "session_calendar": null,
+    "quote_currency": "USD",
+    "margin_rate": null
+  },
+  "account": {"balance": 2000.0, "currency": "USD", "leverage": 100},
+  "risk": {"risk_per_trade_pct": 1.0, "daily_loss_limit_pct": 3.0, "max_drawdown_pct": 10.0}
+}

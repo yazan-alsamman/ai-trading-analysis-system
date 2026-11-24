@@ -65,8 +65,9 @@ async def test_only_1m_without_subscribers(
     assert msg["type"] == "candle" and msg["timeframe"] == "1m"
     assert msg["topic"] == candles_topic(instrument.id, Timeframe.m1)
     assert msg["instrument_id"] == str(instrument.id)
-    assert msg["candle"] == CandleOut.from_candle(newest).model_dump()
-    assert set(msg["candle"]) == set(CandleOut.model_fields)  # exactly the CandleOut shape
+    assert msg["candle"] == CandleOut.from_candle(newest).model_dump(exclude_none=True)
+    # exactly the CandleOut shape; spread only when the candle has one
+    assert set(msg["candle"]) == set(CandleOut.model_fields) - {"spread"}
     assert abs(msg["sent_at"] - datetime.now(UTC).timestamp() * 1000) < 5000
 
 
@@ -84,7 +85,9 @@ async def test_higher_timeframes_only_with_subscribers(
     assert set(by_tf) == {"1m", "1h", "1d"}
     for tf in (Timeframe.h1, Timeframe.d1):
         latest = await market_service.get_latest_candle(session, instrument.id, tf)
-        assert by_tf[tf.value]["candle"] == CandleOut.from_candle(latest).model_dump()
+        assert by_tf[tf.value]["candle"] == CandleOut.from_candle(latest).model_dump(
+            exclude_none=True
+        )
 
 
 async def test_one_message_per_timeframe_per_call(
@@ -166,7 +169,7 @@ async def test_simulate_live_writes_and_publishes(
     messages = await _messages(listener)
     assert len(messages) == 3
     latest = await market_service.get_latest_candle(session, instrument.id, Timeframe.m1)
-    assert messages[-1]["candle"] == CandleOut.from_candle(latest).model_dump()
+    assert messages[-1]["candle"] == CandleOut.from_candle(latest).model_dump(exclude_none=True)
     for m in messages:
         c = m["candle"]
         assert c["high"] >= max(c["open"], c["close"]) >= min(c["open"], c["close"]) >= c["low"]

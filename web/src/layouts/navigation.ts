@@ -1,13 +1,18 @@
 import {
   BellRing,
   Bot,
+  CalendarDays,
+  Crosshair,
   CandlestickChart,
+  FlaskConical,
+  Workflow,
   Compass,
   Gauge,
   MessagesSquare,
   Radar,
   Scale,
   Settings,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import type { DataSource } from '@/services/config';
@@ -19,6 +24,10 @@ export interface NavItem {
   description: string;
   /** Two-key shortcut, e.g. "g w". */
   shortcut: string;
+  /** Needs the backend (hidden in demo mode, where it could only say "not available"). */
+  backendOnly?: boolean;
+  /** Shown to admins only (the server enforces it; this only keeps the menu honest). */
+  adminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -41,14 +50,37 @@ const RISK: NavItem = { to: '/risk', label: 'Capital & risk', icon: Scale, descr
 const ALERTS: NavItem = { to: '/alerts', label: 'Alerts', icon: BellRing, description: 'Price alerts and opportunity notifications', shortcut: 'g a' };
 const INSIGHTS: NavItem = { to: '/insights', label: 'Insights', icon: Gauge, description: 'Model accuracy, calibration and history', shortcut: 'g i' };
 const COMMUNITY: NavItem = { to: '/community', label: 'Community', icon: MessagesSquare, description: 'Market news, posts and experts', shortcut: 'g c' };
+const STRATEGIES: NavItem = {
+  to: '/strategies',
+  label: 'Strategies',
+  icon: Workflow,
+  description: 'Rule-based strategies: activate, build your own, preview on a chart',
+  shortcut: 'g t',
+  backendOnly: true,
+};
+const AI_SETUPS: NavItem = {
+  to: '/ai-setups',
+  label: 'AI setups',
+  icon: Crosshair,
+  description: 'Follow instruments, see setups the AI engine armed, size and record them',
+  shortcut: 'g e',
+  backendOnly: true,
+};
+const CALENDAR: NavItem = { to: '/calendar', label: 'Economic calendar', icon: CalendarDays, description: 'Scheduled macro events by currency and impact', shortcut: 'g n', backendOnly: true };
+const BACKTESTS: NavItem = { to: '/backtests', label: 'Backtests', icon: FlaskConical, description: 'Replay a strategy on historical candles', shortcut: 'g b', backendOnly: true };
 
 /** Primary navigation, grouped by the research workflow. */
 export const NAV_GROUPS: readonly NavGroup[] = [
-  { label: 'Research', items: [WORKSPACE, SIGNALS, ASSISTANT] },
+  { label: 'Research', items: [WORKSPACE, SIGNALS, AI_SETUPS, STRATEGIES, ASSISTANT] },
   { label: 'Risk & monitoring', items: [RISK, ALERTS] },
-  { label: 'Review', items: [INSIGHTS] },
-  { label: 'Market intelligence', items: [COMMUNITY] },
+  { label: 'Review', items: [BACKTESTS, INSIGHTS] },
+  { label: 'Market intelligence', items: [CALENDAR, COMMUNITY] },
 ];
+
+/** The groups shown for a data source (backend-only pages are hidden in demo mode). */
+export function navGroupsFor(source: DataSource): NavGroup[] {
+  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => source === 'api' || !i.backendOnly) })).filter((g) => g.items.length > 0);
+}
 
 export const SETTINGS_NAV: NavItem = {
   to: '/settings',
@@ -58,26 +90,54 @@ export const SETTINGS_NAV: NavItem = {
   shortcut: 'g ,',
 };
 
-export const ALL_NAV: readonly NavItem[] = [OVERVIEW_NAV, ...NAV_GROUPS.flatMap((g) => g.items), SETTINGS_NAV];
+export const ADMIN_NAV: NavItem = {
+  to: '/admin',
+  label: 'Admin',
+  icon: ShieldCheck,
+  description: 'Users, moderation, content, market data, AI engine, payments and system status',
+  shortcut: 'g m',
+  backendOnly: true,
+  adminOnly: true,
+};
+
+export const ALL_NAV: readonly NavItem[] = [OVERVIEW_NAV, ...NAV_GROUPS.flatMap((g) => g.items), SETTINGS_NAV, ADMIN_NAV];
+
+/** What a viewer may open: backend-only pages need api mode, admin pages the admin role. */
+export function allNavFor(source: DataSource, role?: string | null): NavItem[] {
+  return ALL_NAV.filter((n) => (source === 'api' || !n.backendOnly) && (!n.adminOnly || role === 'admin'));
+}
 
 const SUB_PAGES: Record<string, string> = {
   '/community/news': 'News',
   '/community/posts': 'Posts',
   '/community/experts': 'Experts',
+  '/community/people': 'People',
+  '/admin/users': 'Users',
+  '/admin/moderation': 'Moderation',
+  '/admin/content': 'Content',
+  '/admin/market-data': 'Market data',
+  '/admin/ai': 'AI engine',
+  '/admin/payments': 'Payments',
+  '/admin/access': 'API access',
 };
 
 /** Breadcrumb for the top bar: group › page (› sub-page). */
 export function breadcrumbFor(pathname: string): string[] {
+  if (/^\/workspaces\/shared\/[^/]+$/.test(pathname)) return ['Shared workspace'];
   const item = ALL_NAV.find((n) => pathname === n.to || pathname.startsWith(`${n.to}/`));
   if (!item) return ['Not found'];
   const group = NAV_GROUPS.find((g) => g.items.includes(item))?.label;
   const crumbs = [...(group ? [group] : []), item.label];
-  const sub = SUB_PAGES[pathname];
+  const sub = SUB_PAGES[pathname] ?? (/^\/backtests\/[^/]+$/.test(pathname) ? 'Result' : /^\/community\/(experts|people)\/[^/]+$/.test(pathname) ? 'Profile' : /^\/community\/news\/[^/]+$/.test(pathname) ? 'Article' : undefined);
   return sub ? [...crumbs, sub] : crumbs;
 }
 
 /** Shortcut-key → path, for the global hotkey handler. */
 export const NAV_SHORTCUTS: Record<string, string> = Object.fromEntries(ALL_NAV.map((n) => [n.shortcut, n.to]));
+
+export function navShortcutsFor(source: DataSource, role?: string | null): Record<string, string> {
+  return Object.fromEntries(allNavFor(source, role).map((n) => [n.shortcut, n.to]));
+}
 
 /* ------------------------------------------------------------ modules */
 
@@ -106,7 +166,7 @@ export const MODULES: readonly ProductModule[] = [
     summary: 'Sessions, prices across the watchlist and market news with impact tags.',
     to: '/community/news',
     icon: MessagesSquare,
-    status: (s) => (s === 'demo' ? { state: 'simulated', label: 'Sample content' } : { state: 'pending', label: 'News endpoint pending' }),
+    status: (s) => (s === 'demo' ? { state: 'simulated', label: 'Sample content' } : { state: 'working', label: 'Backend news' }),
   },
   {
     n: '02',
@@ -115,7 +175,7 @@ export const MODULES: readonly ProductModule[] = [
     summary: 'Candles on 15m, 1h and 4h with indicators, a NOW boundary and the model’s levels drawn apart from observed prices.',
     to: '/workspace',
     icon: CandlestickChart,
-    status: (s) => (s === 'demo' ? { state: 'simulated', label: 'Simulated prices' } : { state: 'pending', label: 'Market endpoint pending' }),
+    status: (s) => (s === 'demo' ? { state: 'simulated', label: 'Simulated prices' } : { state: 'working', label: 'Backend feed' }),
   },
   {
     n: '03',
@@ -142,7 +202,7 @@ export const MODULES: readonly ProductModule[] = [
     summary: 'Model outputs filtered by your saved profile, with each preference and risk check shown.',
     to: '/signals?view=for-you',
     icon: Radar,
-    status: (s) => (s === 'demo' ? { state: 'simulated', label: 'Works on simulated outputs' } : { state: 'pending', label: 'Model endpoint pending' }),
+    status: (s) => (s === 'demo' ? { state: 'simulated', label: 'Works on simulated outputs' } : { state: 'rules', label: 'Strategy-engine signals; model pending' }),
   },
   {
     n: '06',
@@ -160,6 +220,6 @@ export const MODULES: readonly ProductModule[] = [
     summary: 'Ask about the analysis, its invalidation and your risk — answered only from the data you can see.',
     to: '/assistant',
     icon: Bot,
-    status: (s) => (s === 'demo' ? { state: 'rules', label: 'Rule-based demo' } : { state: 'pending', label: 'Assistant endpoint pending' }),
+    status: (s) => (s === 'demo' ? { state: 'rules', label: 'Rule-based demo' } : { state: 'rules', label: 'Rule-based; no AI provider yet' }),
   },
 ];

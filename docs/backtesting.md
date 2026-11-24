@@ -13,7 +13,11 @@ execution model and every metric formula; the essentials are repeated here.
   `strategy.history(params)`, like the preview endpoint). Trading happens only on bars in
   `[start, end]`.
 - **Costs:** fee `fee_bps` (default 10 = 0.10 %) per side, and slippage `slippage_bps`
-  (default 5) against you on every fill.
+  (default 5) against you on every fill. **Except** on an instrument with a fixed
+  `cost_per_unit` (XAU/USD: 0.25 per oz per round trip, Fadi): the server puts it in the
+  config, `fee_bps` and `slippage_bps` are ignored, fills are at the chart prices and the whole
+  round trip (`cost_per_unit × quantity`) is charged at the entry as the trade's fee
+  ([risk-management.md](risk-management.md#fixed-cost-per-unit-per-instrument)).
 - **Direction:** `long_only` (default: sells only close longs) or `long_short` (a sell opens a
   short; an opposite signal reverses).
 - **Sizing:** `fraction` of current equity (default 1.0, compounding), a `fixed` quote amount,
@@ -100,6 +104,7 @@ after the strategy is edited or deleted ([custom-strategies.md](custom-strategie
   "instrument": { "id": "…", "symbol": "BTC/USDT", "source": "binance" },
   "timeframe": "1h", "strategy_key": "ma_crossover", "params": { "fast": 9, "slow": 21, "adx_min": 0.0 },
   "params_hash": "…", "config": { "…": "resolved" },
+  "cost_model": "bps", "cost_per_unit": null,
   "start": "…", "end": "…", "first_bar": "…", "last_bar": "…", "bars": 5480,
   "metrics": { "total_return_pct": 12.3, "cagr_pct": 19.8, "max_drawdown_pct": -8.1,
                "max_drawdown_start": "…", "max_drawdown_end": "…", "max_drawdown_recovered": "…",
@@ -121,6 +126,10 @@ after the strategy is edited or deleted ([custom-strategies.md](custom-strategie
 }
 ```
 
+- `cost_model` is `bps` (`fee_bps` + `slippage_bps`) or `fixed_per_unit` (the instrument's
+  `cost_per_unit`, also in `config.cost_per_unit`; an XAU/USD run says `"cost_model":
+  "fixed_per_unit", "cost_per_unit": 0.25`). `config.cost_per_unit` is set by the server only:
+  a request that sets it gets a 422.
 - `equity` and `drawdown` are Lightweight Charts line data (unix seconds). There are at most
   2,000 points: per bucket the equity min/max and the deepest drawdown are kept, so peaks,
   troughs and the worst drawdown are always visible.

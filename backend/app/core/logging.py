@@ -7,7 +7,8 @@ import re
 from contextvars import ContextVar
 from datetime import UTC, datetime
 
-_TOKEN_IN_URL = re.compile(r"((?:token|api_key)=)[^&\s\"']+")
+# token / api_key (WebSocket credentials), and the cTrader OAuth callback's code and state
+_TOKEN_IN_URL = re.compile(r"((?:token|api_key|code|state|client_secret)=)[^&\s\"']+")
 _TELEGRAM_TOKEN = re.compile(r"bot\d+:[A-Za-z0-9_-]+")  # in Telegram API URLs
 _WEBHOOK_SECRET = re.compile(r"(/telegram/webhook/)[^/\s?\"']+")
 
@@ -40,8 +41,9 @@ def install_token_redaction() -> None:
 
 def quiet_http_clients() -> None:
     """httpx logs every request URL at INFO, and Telegram's URLs contain the bot token: keep
-    those loggers at WARNING everywhere (API, workers, telegram-bot)."""
-    for name in ("httpx", "httpcore"):
+    those loggers at WARNING everywhere (API, workers, telegram-bot). The Gemini SDK too: it
+    logs every call at INFO, and its debug output may carry the request (Y14)."""
+    for name in ("httpx", "httpcore", "google_genai", "google.genai"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
 

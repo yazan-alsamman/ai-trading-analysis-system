@@ -23,7 +23,7 @@ TOOLS = Path(__file__).resolve().parent
 POSTMAN = TOOLS.parent
 REPO = POSTMAN.parent.parent
 sys.path.insert(0, str(TOOLS))
-from spec import FOLDERS, WEBSOCKET_DOC, Folder, Req  # noqa: E402
+from spec import FOLDERS, NUMERIC_VARS, WEBSOCKET_DOC, Folder, Req  # noqa: E402
 
 COLLECTION_FILE = POSTMAN / "AI-Trading-Platform.postman_collection.json"
 ENV_DIR = POSTMAN / "environments"
@@ -49,7 +49,7 @@ PRE_REQUEST = r"""/**
  * Skipped for /health, the public /auth/* endpoints and requests sent with an X-API-Key.
  */
 const path = pm.request.url.getPath();
-const publicPath = /\/health(\/ready)?$|\/auth\/(register|login|token|refresh)$/.test(path);
+const publicPath = /\/health(\/(ready|live|data))?$|\/auth\/(register|login|token|refresh)$|\/admin\/feeds\/ctrader\/callback$/.test(path);
 const withApiKey = pm.request.headers.has("X-API-Key");
 const store = pm.environment.name ? pm.environment : pm.collectionVariables;
 
@@ -267,7 +267,21 @@ def url_object(
     return out
 
 
-def body_object(req: Req, body: Any = None) -> dict[str, Any] | None:
+def body_object(
+    req: Req, body: Any = None, files: dict[str, str] | None = None
+) -> dict[str, Any] | None:
+    if req.files is not None:
+        return {
+            "mode": "formdata",
+            "formdata": [
+                {"key": k, "type": "file", "src": (files or {}).get(k, src), "description": d}
+                for k, src, d in req.files
+            ]
+            + [
+                {"key": k, "value": v, "description": d, "type": "text"}
+                for k, v, d in req.form or []
+            ],
+        }
     if req.form is not None:
         return {
             "mode": "urlencoded",
@@ -283,7 +297,8 @@ def body_object(req: Req, body: Any = None) -> dict[str, Any] | None:
     else:
         raw = json.dumps(body, indent=4, ensure_ascii=False)
         # numbers that come from variables: "{{custom_strategy_version}}" -> {{...}}
-        raw = raw.replace('"{{custom_strategy_version}}"', "{{custom_strategy_version}}")
+        for name in NUMERIC_VARS:
+            raw = raw.replace(f'"{{{{{name}}}}}"', f"{{{{{name}}}}}")
     return {"mode": "raw", "raw": raw, "options": {"raw": {"language": "json"}}}
 
 
@@ -371,7 +386,11 @@ def example_objects(req: Req, examples: list[dict[str, Any]]) -> list[dict[str, 
     for i, ex in enumerate(examples):
         variant = by_name.get(ex["variant"]) if ex["variant"] else None
         if variant is not None:
-            body = body_object(req, variant.body) if req.body is not None or variant.body else None
+            body = (
+                body_object(req, variant.body, variant.files)
+                if req.body is not None or req.files is not None or variant.body
+                else None
+            )
             url = url_object(
                 req,
                 path=variant.path,
@@ -607,6 +626,18 @@ RUNTIME_VARS = [
             "instrument_id",
             "admin_instrument_id",
             "user_strategy_id",
+            "prediction_id",
+            "ai_instrument_id",
+            "chart_analysis_id",
+            "news_comment_id",
+            "news_reply_id",
+            "paper_position_id",
+            "paper_fill_price",
+            "paper_order_id",
+            "paper_stop_loss",
+            "paper_take_profit",
+            "paper_limit_price",
+            "paper_bad_price",
             "custom_strategy_id",
             "custom_strategy_key",
             "custom_strategy_version",
@@ -642,6 +673,8 @@ RUNTIME_VARS = [
             "my_plan_id",
             "notification_id",
             "device_id",
+            "otp_code",
+            "otp_message_id",
         )
     ),
 ]
@@ -667,6 +700,12 @@ def environment(name: str, base_url: str, ws_url: str, creds: dict[str, str]) ->
             "key": "user_new_password",
             "value": creds.get("user_new_password", ""),
             "type": "secret",
+            "enabled": True,
+        },
+        {
+            "key": "user_phone",
+            "value": creds.get("user_phone", ""),
+            "type": "default",
             "enabled": True,
         },
         {

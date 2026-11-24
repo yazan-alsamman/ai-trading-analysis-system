@@ -64,12 +64,15 @@ fi
 dc up -d --remove-orphans --wait --wait-timeout 180 || deploy_failed=1
 
 # Our nginx keeps its config until reloaded, and `up` does not recreate it when only the
-# bind-mounted nginx/default.conf changed. Reload OUR nginx container (never the host's) when the
-# file differs from the last one applied; recreate it if the container sees a stale copy.
+# bind-mounted nginx/ files changed (default.conf + trading-site.inc). Reload OUR nginx container
+# (never the host's) when they differ from the last ones applied; recreate it if the container
+# sees a stale copy.
+NGINX_FILES="default.conf trading-site.inc"
 if [ -z "${deploy_failed:-}" ]; then
-  conf_sum="$(sha256sum nginx/default.conf | cut -d' ' -f1)"
+  conf_sum="$(cd nginx && cat $NGINX_FILES | sha256sum | cut -d' ' -f1)"
   if [ "$(cat .nginx.sha256 2>/dev/null || true)" != "$conf_sum" ]; then
-    seen="$(dc exec -T nginx sha256sum /etc/nginx/conf.d/default.conf 2>/dev/null | cut -d' ' -f1 || true)"
+    seen="$(dc exec -T nginx sh -c "cd /etc/nginx/conf.d && cat $NGINX_FILES" 2>/dev/null \
+      | sha256sum | cut -d' ' -f1 || true)"
     if [ "$seen" != "$conf_sum" ]; then
       echo "Nginx sees an old copy of its config: recreating our nginx service"
       dc up -d --no-deps --force-recreate nginx && echo "$conf_sum" > .nginx.sha256
@@ -96,6 +99,14 @@ health() {
 
 if [ -z "${deploy_failed:-}" ] && health; then
   echo "Deploy OK: ${TAG}"
+  # The host's HTTPS proxy enters through 127.0.0.1:8090 (docs/https.md). Checked from inside our
+  # nginx container, log only: a broken 8090 block is visible without rolling back a deploy.
+  if body="$(dc exec -T nginx wget -qO- -T 3 http://127.0.0.1:8090/api/v1/health/ready \
+       2>/dev/null)" && grep -q '"status":"ok"' <<<"$body"; then
+    echo "Port 8090 (HTTPS proxy entry): ok"
+  else
+    echo "!!! WARNING: port 8090 (HTTPS proxy entry) is not answering; the deploy stays (non-fatal)"
+  fi
 else
   echo "!!! Deploy of ${TAG} failed health check"
   dc ps

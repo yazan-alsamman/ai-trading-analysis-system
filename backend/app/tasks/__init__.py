@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import (
@@ -27,6 +29,13 @@ celery_app = Celery(
         "app.tasks.news",
         "app.tasks.subscriptions",
         "app.tasks.ops",
+        "app.tasks.data_quality",
+        "app.tasks.calendar",
+        "app.tasks.ai_alerts",
+        "app.tasks.ai",
+        "app.tasks.feeds",
+        "app.tasks.predictions",
+        "app.tasks.paper",
     ],
 )
 celery_app.conf.update(
@@ -48,10 +57,14 @@ celery_app.conf.update(
         "notifications.cleanup": {"queue": "maintenance"},
         "backtests.*": {"queue": "backtests"},
         "notifications.*": {"queue": "notifications"},
+        "ai_alerts.*": {"queue": "notifications"},
+        "ai.explain": {"queue": "notifications"},  # up to 30 s per call: off the live queue
         "news.*": {"queue": "maintenance"},
         "housekeeping.*": {"queue": "maintenance"},
         "subscriptions.*": {"queue": "maintenance"},
         "ops.*": {"queue": "maintenance"},
+        "feeds.*": {"queue": "maintenance"},  # long backfills (worker-backtest)
+        "predictions.*": {"queue": "maintenance"},  # off the live worker (Y16)
     },
     task_ignore_result=True,
     beat_schedule={
@@ -66,13 +79,45 @@ celery_app.conf.update(
         },
         # digests of held notifications (quiet hours, hourly cap) and circuit-held retries
         "notifications-digests": {"task": "notifications.digests", "schedule": crontab(minute="*")},
+        # pending deliveries whose send task was lost (B11)
+        "notifications-sweep": {"task": "notifications.sweep", "schedule": crontab(minute="*")},
+        # AI evaluations (B9, B13): at each 5m boundary, one ai.evaluate per instrument and
+        # profile whose bar closes there (intraday every 15m, gold_levels every 5m),
+        # AI_EVALUATE_DELAY_SECONDS later; nothing while AI_EVALUATE_ENABLED is false
+        "ai-evaluate-tick": {
+            "task": "ai.evaluate_tick",
+            "schedule": crontab(minute="*/5"),
+            "options": {"expires": 240},
+        },
+        # AI setup alerts from the outbox (B11), every 30 s
+        "ai-alerts-dispatch": {
+            "task": "ai_alerts.dispatch",
+            "schedule": timedelta(seconds=30),
+            "options": {"expires": 25},
+        },
         # inbox retention: read > 90 days, unread > 180 days
         "notifications-cleanup": {
             "task": "notifications.cleanup",
             "schedule": crontab(hour=3, minute=30),
         },
+        # data-quality reports (B5), ~15 s after the boundary when the 1m bar has arrived;
+        # a run that has not started within the minute is dropped (the next one replaces it)
+        "data-quality-check": {
+            "task": "data_quality.check",
+            "schedule": crontab(minute="*"),
+            "options": {"countdown": 15, "expires": 55},
+        },
+        # economic calendar (B6): checked every 15 minutes, one ForexFactory request per
+        # CALENDAR_FETCH_INTERVAL_MINUTES at most (the task skips the runs that are not due)
+        "calendar-refresh": {
+            "task": "calendar.refresh",
+            "schedule": crontab(minute="7,22,37,52"),
+            "options": {"expires": 600},
+        },
         # price alerts on the 1m bar that just closed (evaluated ~10 s after the boundary)
         "alerts-tick": {"task": "alerts.tick", "schedule": crontab(minute="*")},
+        # paper trading: pending orders and SL/TP on the closed 1m bars (docs/paper-trading.md)
+        "paper-tick": {"task": "paper.tick", "schedule": crontab(minute="*")},
         # RSS feeds whose interval is due (NEWS_RSS_ENABLED)
         "news-fetch": {"task": "news.fetch", "schedule": crontab(minute="*/5")},
         # news retention (NEWS_RETENTION_DAYS)
@@ -80,6 +125,12 @@ celery_app.conf.update(
         # renewals, trial ends, grace periods and expired checkouts (Y19), every 10 minutes
         # one log line a day: signals, notifications, users, subscriptions (maintenance queue)
         "ops-daily-summary": {"task": "ops.daily_summary", "schedule": crontab(hour=0, minute=5)},
+        # strategy signals resolved into signal_outcomes (Y16), a light batch per run
+        "predictions-resolve-signals": {
+            "task": "predictions.resolve_signals",
+            "schedule": timedelta(seconds=settings.prediction_resolve_interval_seconds),
+            "options": {"expires": max(30, settings.prediction_resolve_interval_seconds - 10)},
+        },
         "subscriptions-renew": {
             "task": "subscriptions.renew",
             "schedule": crontab(minute="*/10"),

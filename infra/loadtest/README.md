@@ -48,7 +48,8 @@ with C2 run 2 below (1 worker, 1 CPU each):
   messages, 0 error frames, fan-out delay p50 41 ms, p95 161 ms, p99 290 ms, max 350 ms.
 - Peaks: backend 400 MiB / 153% CPU (cap 1.5), db 399 MiB / 163% (cap 1.5), worker 228 MiB / 32%,
   worker-backtest 236 MiB / 16%, beat 118 MiB / 25%, nginx 22 MiB, redis 4 MiB. No OOM kill, no
-  429. Production `mem_limit` for the backend is set to 544m (36% above the 400 MiB peak).
+  429. Production `mem_limit` for the backend was set to 544m (36% above the 400 MiB peak); Y14
+  raised it to 640m for chart image analysis (measured in docs/chart-analysis.md).
 - A repeat run (with the readiness wait) was stopped by the host running low on memory before it
   measured anything, so these are the numbers of one run.
 

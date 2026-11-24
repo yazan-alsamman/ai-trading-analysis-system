@@ -19,6 +19,7 @@ def test_scanner_finds_secrets() -> None:
         "password": "login Passw0rd123",
         "Authorization header": "headers {'authorization': 'Bearer " + "y" * 30 + "'}",
         "private key": "-----BEGIN PRIVATE KEY-----",
+        "Google API key": "x-goog-api-key: AIza" + "Q" * 35,  # Y14: GEMINI_API_KEY
     }
     for name, line in lines.items():
         assert name in checker.scan(line), name

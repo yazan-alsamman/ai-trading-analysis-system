@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_JWT_SECRETS = {"change-me", ""}
@@ -20,6 +20,78 @@ class Settings(BaseSettings):
     first_admin_email: str | None = None
     first_admin_password: str | None = None
     ai_service_url: str = "http://localhost:8001"
+    # ai-service client (B7, docs/ai-contract.md): per-attempt timeouts, retries on timeouts,
+    # connection errors and 5xx (same body and request_id), bars sent per timeframe
+    ai_evaluate_timeout_seconds: float = 10.0
+    ai_size_timeout_seconds: float = 5.0
+    ai_explain_timeout_seconds: float = 30.0
+    ai_max_retries: int = 2
+    # bars per timeframe of an evaluate request (Fadi, point 5: ~20 trading days of 15m and a
+    # year of New York trading days; final counts come with his P6). Shorter history: sent as
+    # it is, and the coverage is reported
+    ai_bars_15m: int = 2000
+    ai_bars_1h: int = 500
+    ai_bars_4h: int = 300
+    ai_bars_1d: int = 260
+    # gzip the request bodies (Content-Encoding: gzip); only once ai-service decompresses them
+    ai_request_gzip: bool = False
+    # The periodic evaluation (B9, docs/ai-contract.md#8-the-evaluate-task): off until enabled
+    # on the server. A beat tick at each 15m boundary schedules one ai.evaluate per instrument
+    # and profile, AI_EVALUATE_DELAY_SECONDS after the boundary (the bar is closed and stored)
+    ai_evaluate_enabled: bool = False
+    ai_evaluate_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
+    ai_profiles: str = "intraday"  # comma list; intraday only in v1 (Fadi)
+    ai_evaluate_delay_seconds: int = 20
+    # The gold_levels profile (B13, contract 0.3.0): evaluated every 5m (its smallest timeframe)
+    # on its own instruments and bar counts, only once "gold_levels" is in AI_PROFILES. Every
+    # other profile keeps AI_EVALUATE_INSTRUMENTS and AI_BARS_* (15m)
+    ai_gold_levels_bars: str = "5m:3000,1h:500,4h:300,1d:260"  # timeframe:count comma list
+    ai_gold_levels_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
+    # a stop move (sl_moved) is notified to the users who took the setup (never to followers)
+    ai_notify_sl_moved: bool = True
+    # AI setup sizing (B10, docs/risk-management.md#ai-setups): auto = ai-service /v1/size, then
+    # the local B4 lot sizing if it is unavailable; remote = no fallback (503); local = never call
+    ai_size_mode: str = "auto"
+    # a 404 from /v1/size (ai-service has no /v1/size yet) falls back to the local sizing;
+    # turned off once Fadi's P6 ships it: then a 404 is a 503, never a silent local size
+    ai_size_local_fallback_on_404: bool = True
+    ai_size_concurrency: int = 4  # ai-service calls at once when one setup is sized for many users
+    # used when the risk config does not give the value (sizing mode not "risk", guard unset)
+    ai_default_risk_pct: float = 1.0
+    ai_default_daily_loss_pct: float = 3.0
+    ai_default_max_drawdown_pct: float = 10.0
+    # AI setup alerts (B11, docs/notifications.md#ai-setup-alerts): the outbox dispatcher
+    ai_alerts_enabled: bool = True
+    ai_alerts_batch: int = 50  # outbox rows per dispatcher run
+    ai_alerts_max_attempts: int = 8  # then the row is failed (admin retry)
+    ai_alerts_max_age_seconds: int = 900  # an older ARMED alert is skipped (stale)
+    ai_explain_langs: str = "ar,en"  # explanations asked of ai-service on ARMED
+    # a follow's min_grade is applied to ARMED alerts only when this is on. v1 (contract 0.2.1)
+    # has no model and every grade is null, so it is off: every follower gets the alert. Turn
+    # it on only when ai-service returns grades
+    ai_grades_enabled: bool = False
+    # Prediction tracking (Y16, docs/predictions.md): each buy/sell signal is resolved after
+    # PREDICTION_HORIZON_BARS closed bars of its timeframe (the value is stored on each row); the
+    # predictions.resolve_signals task runs every PREDICTION_RESOLVE_INTERVAL_SECONDS and
+    # resolves at most PREDICTION_RESOLVE_BATCH signals per run (old ones too, gradually)
+    prediction_horizon_bars: int = 10
+    prediction_resolve_interval_seconds: int = 300
+    prediction_resolve_batch: int = 500
+    # Recommendations (Y17, docs/recommendations.md): a signal older than this many bars of its
+    # timeframe is not actionable any more; below RECOMMENDATION_MIN_SAMPLES decided predictions
+    # a track record is "not enough history" (neutral 0.5 prior); the per-(instrument,
+    # timeframe) track records are cached in Redis (never anything user specific);
+    # RECOMMENDATIONS_NOTIFY adds the track record line to signal notifications (off: unchanged)
+    recommendation_max_age_bars: int = 3
+    recommendation_min_samples: int = 20
+    recommendation_cache_seconds: int = 300
+    recommendations_notify: bool = False
+    # Deliveries a lost send task left pending are sent again after this (notifications.sweep)
+    notification_sweep_after_seconds: int = 120
+    notification_sweep_batch: int = 500
+    # older unsent deliveries are not sent any more (skipped, "expired"): a day-old signal or
+    # price alert is worse than none
+    notification_sweep_max_age_seconds: int = 86400
     # WebSocket hub (/ws/market)
     ws_heartbeat_seconds: float = 25
     ws_idle_timeout_seconds: float = 75
@@ -87,6 +159,8 @@ class Settings(BaseSettings):
     notification_test_cost: int = 5  # rate-limit cost of POST /me/notifications/test
     # News (Y18). The RSS task only fetches the seeded public feeds an admin left active.
     news_rss_enabled: bool = True
+    news_finnhub_enabled: bool = False
+    finnhub_api_key: SecretStr = SecretStr("")
     news_fetch_timeout_seconds: float = 10.0  # per feed, whole request
     news_fetch_max_bytes: int = 2 * 1024 * 1024  # larger feeds are refused
     news_retention_days: int = 180
@@ -108,6 +182,8 @@ class Settings(BaseSettings):
     payment_demo_tools: bool = False  # admin fast-forward in production (always on elsewhere)
     payment_return_url: str = ""  # where the demo page sends the browser after paying
     public_base_url: str = ""  # e.g. http://187.127.76.76:8080; empty: from the request (Host)
+    # the public HTTPS name (docs/https.md); for docs and links only, nothing depends on it
+    public_hostname: str = ""
     platform_fee_pct: float = 20.0  # kept from every paid invoice (expert earnings view)
     subscription_grace_days: int = 3  # past_due keeps access this long, then expired
     checkout_ttl_minutes: int = 30
@@ -129,8 +205,96 @@ class Settings(BaseSettings):
     db_pool_timeout: float = 10
     # API keys
     api_key_last_used_interval_seconds: int = 60  # last_used_at is written at most this often
+    # Data-quality gate (B5, docs/data-quality.md): checked every minute for these instruments
+    data_quality_enabled: bool = True
+    data_quality_instruments: str = "fxpro:XAU/USD"  # comma list of source:symbol
+    data_quality_max_lag_seconds: int = 120  # watermark lag allowed while the market is open
+    data_quality_max_missing_pct: float = 1.0  # missing 1m bars over the lookback window
+    data_quality_spike_pct: float = 2.0  # largest 1m close-to-close move on the evaluated bar
+    # an instrument flapping between ok and degraded alerts the admins at most once per this
+    # (the state in /health/data still changes at once)
+    data_quality_alert_cooldown_seconds: int = 1800
+    # Economic calendar (B6, docs/economic-calendar.md): the ForexFactory weekly JSON, fetched
+    # at most once per interval (one request), with a back-off after a 429/403
+    calendar_enabled: bool = True
+    calendar_ff_url: str = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+    calendar_fetch_interval_minutes: int = 240
+    calendar_fetch_timeout_seconds: float = 15.0  # whole request
+    calendar_fetch_max_bytes: int = 2 * 1024 * 1024
+    calendar_backoff_hours: float = 6.0  # no request at all for this long after a 429/403
+    calendar_currencies: str = "USD"  # default filter of reads and of for_evaluate (comma list)
+    # cTrader Open API live feed (B1, docs/ctrader-feed.md): the feed-ctrader service idles
+    # until enabled AND an account is linked (GET /admin/feeds/ctrader/connect)
+    ctrader_enabled: bool = False
+    ctrader_env: str = "demo"  # demo | live: the host the account belongs to
+    ctrader_account_id: int | None = None  # empty: the account chosen when linking
+    ctrader_symbol: str = "XAUUSD"  # the broker's symbol name
+    ctrader_instrument: str = "fxpro:XAU/USD"  # source:symbol of the instrument the bars go to
+    ctrader_close_grace_seconds: float = 3.0  # a bar without a next tick closes this late
+    ctrader_backfill_max_days: int = 7  # gap filled on start and after a reconnect
+    # the Open API application (written by the deploy from GitHub secrets; never in git)
+    ctrader_client_id: str = ""
+    ctrader_client_secret: str = ""
+    # development and CI only: the mock server (tools/fake_ctrader); empty: the official host
+    ctrader_ws_url: str = ""
+    # Chart image analysis (Y14, docs/chart-analysis.md) with Gemini. GEMINI_API_KEY is written
+    # by the deploy from the GitHub secret (never in git); empty: the feature is off (503) and
+    # the rest of the platform is unaffected
+    gemini_api_key: str = ""
+    chart_analysis_enabled: bool = True
+    chart_vision_model: str = "gemini-3.6-flash"
+    chart_vision_timeout_seconds: float = 45
+    chart_image_max_bytes: int = 5_242_880  # 5 MB (Nginx allows 6m on this route)
+    # analyses per user per UTC day, by role (a duplicate within 24 h is free)
+    chart_analysis_daily_limit_trader: int = 5
+    chart_analysis_daily_limit_analyst: int = 20
+    chart_analysis_daily_limit_expert: int = 20
+    chart_analysis_daily_limit_admin: int = 100
+    # analyses in flight per API worker (memory: measured in docs/chart-analysis.md); more wait
+    # up to 10 s for a slot, then 503 busy
+    chart_analysis_max_concurrent: int = 1
+    # development and load tests only: a fake Gemini server; empty: Google's official host
+    chart_vision_base_url: str = ""
+    # WhatsApp OTP codes via LightOTP (docs/otp.md, https://lightotp.com/en/docs/otp-messages).
+    # LIGHTOTP_TOKEN is the API key from the LightOTP dashboard, sent as X-Api-Key (server .env
+    # or the GitHub secret of the same name, never in git); empty: phone verification and
+    # OTP login answer 503 and the rest of the platform is unaffected
+    lightotp_token: str = ""
+    lightotp_base_url: str = "https://api.lightotp.com"
+    lightotp_timeout_seconds: float = 15
+    # BCP-47 language of the WhatsApp template; empty: the LightOTP account's default
+    lightotp_language: str = "ar"
+    otp_length: int = 5  # digits (the mobile app's code field has 5 boxes)
+    otp_ttl_seconds: int = 300  # a code expires after this
+    otp_max_attempts: int = 5  # wrong codes before the challenge is dropped
+    otp_resend_seconds: int = 60  # wait before another code to the same phone
+    otp_phone_per_hour: int = 5  # codes sent to one phone per hour (all purposes)
+    auth_otp_ip_per_minute: int = 5  # /auth/otp/request and /users/me/phone per client IP
+    # Comments on news articles (docs/news-comments.md); the hourly cap is comments_per_hour
+    news_comments_enabled: bool = True
+    # AI assistant chat (docs/ai-chat.md): Gemini text answers with the platform's market
+    # context. Uses GEMINI_API_KEY; empty key: 503 not_configured
+    ai_chat_enabled: bool = True
+    ai_chat_model: str = ""  # empty: CHART_VISION_MODEL
+    ai_chat_timeout_seconds: float = 40
+    ai_chat_max_output_tokens: int = 1200
+    # questions per user per UTC day, by role
+    ai_chat_daily_limit_trader: int = 30
+    ai_chat_daily_limit_analyst: int = 100
+    ai_chat_daily_limit_expert: int = 100
+    ai_chat_daily_limit_admin: int = 300
+    ai_chat_cost: int = 3  # rate-limit cost of POST /ai/chat
+    # Paper trading (docs/paper-trading.md): simulated orders on live prices, no real money
+    paper_trading_enabled: bool = True
+    paper_initial_balance: float = 10_000.0  # USD, for a new or reset account
+    paper_default_leverage: int = 100
+    paper_max_leverage: int = 500
+    # a market order needs a 1m candle at most this old (the market is closed otherwise)
+    paper_max_price_age_minutes: int = 15
+    paper_max_open_positions: int = 50
+    paper_max_pending_orders: int = 50
 
-    @field_validator("api_docs_enabled", mode="before")
+    @field_validator("api_docs_enabled", "ctrader_account_id", mode="before")
     @classmethod
     def _empty_is_auto(cls, value: object) -> object:
         # the deploy appends new keys to the server .env as `KEY=` (empty): that means automatic
@@ -182,12 +346,110 @@ class Settings(BaseSettings):
         return getattr(self, f"price_alert_limit_{role}")
 
     @property
+    def data_quality_instrument_list(self) -> list[tuple[str, str]]:
+        """``(source, symbol)`` of DATA_QUALITY_INSTRUMENTS (entries without ``:`` are
+        ignored), normalised like stored instruments."""
+        return _pairs(self.data_quality_instruments)
+
+    @property
+    def ai_explain_lang_list(self) -> list[str]:
+        return [x.strip() for x in self.ai_explain_langs.split(",") if x.strip() in ("ar", "en")]
+
+    @property
+    def ai_bar_counts(self) -> dict[str, int]:
+        """Bars per timeframe in an evaluate request, oldest first (0 leaves it out)."""
+        counts = {
+            "15m": self.ai_bars_15m,
+            "1h": self.ai_bars_1h,
+            "4h": self.ai_bars_4h,
+            "1d": self.ai_bars_1d,
+        }
+        return {tf: n for tf, n in counts.items() if n > 0}
+
+    @property
+    def ai_evaluate_instrument_list(self) -> list[tuple[str, str]]:
+        """``(source, symbol)`` of AI_EVALUATE_INSTRUMENTS, normalised like stored ones."""
+        return _pairs(self.ai_evaluate_instruments)
+
+    def ai_profile_bar_counts(self, profile: str) -> dict[str, int]:
+        """Bars per timeframe of a profile's requests: ``gold_levels`` from
+        AI_GOLD_LEVELS_BARS, every other profile from AI_BARS_* (0 leaves a timeframe out)."""
+        if profile == GOLD_LEVELS:
+            return _counts(self.ai_gold_levels_bars)
+        return self.ai_bar_counts
+
+    def ai_profile_instrument_list(self, profile: str) -> list[tuple[str, str]]:
+        """``(source, symbol)`` a profile is evaluated on."""
+        if profile == GOLD_LEVELS:
+            return _pairs(self.ai_gold_levels_instruments)
+        return self.ai_evaluate_instrument_list
+
+    @property
+    def ai_profile_list(self) -> list[str]:
+        out = []
+        for item in self.ai_profiles.split(","):
+            name = item.strip().lower()
+            if name and name not in out:
+                out.append(name)
+        return out
+
+    @property
+    def ctrader_instrument_key(self) -> tuple[str, str] | None:
+        """``(source, SYMBOL)`` of CTRADER_INSTRUMENT (None when malformed)."""
+        pairs = _pairs(self.ctrader_instrument)
+        return pairs[0] if pairs else None
+
+    @property
+    def calendar_currency_list(self) -> list[str]:
+        out = []
+        for item in self.calendar_currencies.split(","):
+            code = item.strip().upper()
+            if code and code not in out:
+                out.append(code)
+        return out
+
+    @property
     def post_role_set(self) -> frozenset[str]:
         return frozenset(r.strip() for r in self.post_roles.split(",") if r.strip())
 
     def backtest_quota(self, role: str) -> tuple[int, int]:
         """(concurrent queued + running, per UTC day; 0 = unlimited)."""
         return getattr(self, f"backtest_concurrent_{role}"), getattr(self, f"backtest_daily_{role}")
+
+
+GOLD_LEVELS = "gold_levels"
+_KNOWN_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "4h", "1d")
+
+
+def _counts(value: str) -> dict[str, int]:
+    """``5m:3000,1h:500`` -> ``{"5m": 3000, "1h": 500}`` (unknown timeframes, malformed and
+    non-positive counts are ignored), smallest timeframe first."""
+    out: dict[str, int] = {}
+    for item in value.split(","):
+        tf, sep, count = item.strip().partition(":")
+        tf = tf.strip().lower()
+        if not sep or tf not in _KNOWN_TIMEFRAMES:
+            continue
+        try:
+            n = int(count.strip())
+        except ValueError:
+            continue
+        if n > 0:
+            out[tf] = n
+    return {tf: out[tf] for tf in _KNOWN_TIMEFRAMES if tf in out}
+
+
+def _pairs(value: str) -> list[tuple[str, str]]:
+    """``source:symbol`` comma list -> ``(source, SYMBOL)`` pairs (entries without ``:`` are
+    ignored, duplicates dropped)."""
+    out = []
+    for item in value.split(","):
+        source, sep, symbol = item.strip().partition(":")
+        if sep and source.strip() and symbol.strip():
+            pair = (source.strip().lower(), symbol.strip().upper())
+            if pair not in out:
+                out.append(pair)
+    return out
 
 
 @lru_cache

@@ -5,7 +5,7 @@ written at DEBUG (``pytest --log-file=... --log-file-level=DEBUG``) and scans th
 
 Secrets looked for: JWTs (access and refresh tokens), full API keys, Telegram bot tokens, the
 test suite's password and JWT secret, Authorization headers, PEM private keys (the FCM service
-account), the demo webhook signature secret.
+account), the demo webhook signature secret, the test LightOTP key.
 """
 
 from __future__ import annotations
@@ -23,6 +23,8 @@ PATTERNS = {
     "JWT secret": re.compile(r"test-secret-that-is-at-least-32-characters-long"),
     "Authorization header": re.compile(r"(?i)authorization['\"]?\s*[:=]\s*['\"]?bearer\s+\S{20,}"),
     "private key": re.compile(r"-----BEGIN (?:RSA )?PRIVATE KEY-----"),
+    "Google API key": re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
+    "LightOTP key": re.compile(r"lotp-test-token-0123456789abcdef"),  # tests/test_otp.py
 }
 
 

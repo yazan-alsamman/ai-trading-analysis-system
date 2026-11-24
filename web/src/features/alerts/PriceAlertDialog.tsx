@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
+import { useServices } from '@/app/contexts';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Checkbox, Field, FormError, Input, Select } from '@/components/ui/Form';
-import { CHANNEL_LABELS, CONDITION_LABELS, type NotificationChannel, type PriceAlert, type PriceAlertDraft } from '@/domain/alerts';
+import { CHANNEL_LABELS, CONDITION_LABELS, type CreatableAlertCondition, type NotificationChannel, type PriceAlert, type PriceAlertDraft } from '@/domain/alerts';
 import { getInstrument, INSTRUMENTS, type InstrumentSymbol } from '@/domain/instruments';
 import { formatPrice } from '@/lib/format';
 import { isApiError, userMessage } from '@/services/errors';
@@ -21,14 +22,17 @@ interface Props {
 }
 
 const CHANNELS: NotificationChannel[] = ['app', 'email', 'telegram'];
+const CREATABLE: CreatableAlertCondition[] = ['crosses_above', 'crosses_below'];
+const isCreatable = (c: PriceAlert['condition']): c is CreatableAlertCondition => (CREATABLE as string[]).includes(c);
 
 function initialValues(alert: PriceAlert | null): PriceAlertFormValues {
   return alert
-    ? { symbol: alert.symbol, condition: alert.condition, price: alert.price, channels: alert.channels, note: alert.note ?? '' }
+    ? { symbol: alert.symbol, condition: isCreatable(alert.condition) ? alert.condition : 'crosses_above', price: alert.price, channels: alert.channels, note: alert.note ?? '' }
     : { symbol: 'EURUSD', condition: 'crosses_above', price: Number.NaN, channels: ['app'], note: '' };
 }
 
 export function PriceAlertDialog({ open, onClose, alert, currentPrice, onSubmit, provenanceLabel }: Props) {
+  const { source } = useServices();
   const schema = useMemo(() => priceAlertSchema(currentPrice), [currentPrice]);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -101,7 +105,7 @@ export function PriceAlertDialog({ open, onClose, alert, currentPrice, onSubmit,
           <Field label="Condition" error={formState.errors.condition?.message}>
             {({ id, describedBy, invalid }) => (
               <Select id={id} aria-describedby={describedBy} invalid={invalid} {...register('condition')}>
-                {Object.entries(CONDITION_LABELS).map(([value, label]) => (
+                {CREATABLE.map((value) => [value, CONDITION_LABELS[value]] as const).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
@@ -135,6 +139,12 @@ export function PriceAlertDialog({ open, onClose, alert, currentPrice, onSubmit,
           )}
         </Field>
 
+        {source === 'api' ? (
+          <p className="rounded-lg border border-line bg-inset px-3 py-2 text-xs text-fg-2">
+            <span className="font-medium text-fg">Delivery:</span> the server fires this alert even when the app is closed, and delivers it through your
+            notification preferences (in-app, and email or Telegram when you have set them up).
+          </p>
+        ) : (
         <fieldset>
           <legend className="mb-2 text-sm font-medium text-fg">Deliver via</legend>
           <Controller
@@ -155,6 +165,7 @@ export function PriceAlertDialog({ open, onClose, alert, currentPrice, onSubmit,
           />
           {formState.errors.channels?.message && <p className="mt-1.5 text-xs text-danger">{formState.errors.channels.message}</p>}
         </fieldset>
+        )}
 
         <Field label="Note" optional error={formState.errors.note?.message}>
           {({ id, describedBy, invalid }) => <Input id={id} aria-describedby={describedBy} invalid={invalid} maxLength={140} {...register('note')} />}

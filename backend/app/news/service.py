@@ -50,7 +50,7 @@ from app.models.news import (
     NewsSourceKind,
     SentimentLabel,
 )
-from app.news import rss
+from app.news import finnhub, rss
 from app.news.tagger import Tagger
 from app.news.text import clip, strip_html
 from app.realtime import publisher
@@ -524,6 +524,52 @@ async def fetch_due(
     return report
 
 
+async def fetch_scheduled(
+    factory: async_sessionmaker[AsyncSession], redis: Redis | None
+) -> dict[str, Any]:
+    settings = get_settings()
+    report = await fetch_due(factory, redis) if settings.news_rss_enabled else {}
+    if not settings.news_finnhub_enabled:
+        return report
+    api_key = settings.finnhub_api_key.get_secret_value().strip()
+    if not api_key:
+        report["finnhub"] = {"status": "missing_api_key"}
+        return report
+
+    now = datetime.now(UTC)
+    async with httpx.AsyncClient(transport=transport, follow_redirects=False) as client:
+        results = await asyncio.gather(
+            *(
+                finnhub.fetch_category(client, category, api_key, now)
+                for category in finnhub.CATEGORIES
+            ),
+            return_exceptions=True,
+        )
+    seen: set[str] = set()
+    report["finnhub"] = categories = {}
+    for category, result in zip(finnhub.CATEGORIES, results, strict=True):
+        if isinstance(result, rss.FeedError):
+            categories[category] = {"status": "error", "error": str(result)}
+            continue
+        if isinstance(result, BaseException):
+            raise result
+        unique = {row["external_id"]: row for row in result if row["external_id"] not in seen}
+        seen.update(unique)
+        async with factory() as session:
+            outcome = await ingest(session, list(unique.values()))
+            published = await publish_new(session, redis, outcome.live)
+        categories[category] = {
+            "status": "ok",
+            "inserted": outcome.inserted,
+            "updated": outcome.updated,
+            "skipped": outcome.skipped,
+            "errors": len(outcome.errors),
+            "warnings": len(outcome.warnings),
+            "published": published,
+        }
+    return report
+
+
 async def _store_feed(session, redis, source: NewsSource, result: rss.FeedResult, tagger, now):
     values: dict[str, Any] = {"last_fetched_at": now}
     summary: dict[str, Any] = {"status": result.status}
@@ -535,8 +581,30 @@ async def _store_feed(session, redis, source: NewsSource, result: rss.FeedResult
     else:
         values.update(last_error=None, etag=result.etag, last_modified=result.last_modified)
         try:
+            tags = {}
+            if source.key == "investinglive_rss" and get_settings().news_finnhub_enabled:
+                gold_ids = await session.scalars(
+                    select(Instrument.id).where(
+                        Instrument.symbol == finnhub.GOLD_SYMBOL, Instrument.is_active.is_(True)
+                    )
+                )
+                gold_tags = dict.fromkeys(gold_ids, 1.0)
+                if gold_tags:
+                    for row in result.items:
+                        title, summary_text = row["title"], row["summary"]
+                        if finnhub.matches_gold(title, summary_text):
+                            tags[row["external_id"]] = {
+                                **tagger.tag(title, summary_text),
+                                **gold_tags,
+                            }
             upserted = await upsert(
-                session, source.id, result.items, tagger=tagger, now=now, keep_published=True
+                session,
+                source.id,
+                result.items,
+                tags=tags,
+                tagger=tagger,
+                now=now,
+                keep_published=True,
             )
         except Exception as exc:  # noqa: BLE001
             await session.rollback()
@@ -650,6 +718,7 @@ def read(article: NewsArticle, key: str, name: str, tags: list[dict]) -> dict[st
         "fetched_at": article.fetched_at,
         "sentiment": sentiment,
         "instruments": tags,
+        "comments_count": article.comments_count or 0,
     }
 
 

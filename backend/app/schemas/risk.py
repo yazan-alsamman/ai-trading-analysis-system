@@ -12,6 +12,7 @@ from app.schemas.strategies import SignalRead
 
 AccountSize = Annotated[float, Field(gt=0, le=1e12, allow_inf_nan=False)]
 Currency = Annotated[str, Field(min_length=1, max_length=10, pattern=r"^[A-Z0-9]+$")]
+Leverage = Annotated[float, Field(gt=0, le=10_000, allow_inf_nan=False)]
 Template = Literal["conservative", "balanced", "aggressive"]
 
 
@@ -19,12 +20,32 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class AIRiskRead(BaseModel):
+    """The risk values AI setups are sized with (read-only; docs/risk-management.md)."""
+
+    balance: float | None = None
+    currency: str | None = None
+    leverage: float | None = None
+    risk_per_trade_pct: float | None = None
+    daily_loss_limit_pct: float | None = None
+    max_drawdown_pct: float | None = None
+    sources: dict[str, str] = Field(
+        default_factory=dict,
+        description="per field: profile (a profile column), config (the risk config) or "
+        "default (a server setting)",
+    )
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = Field(default=None, description="why the profile cannot be used")
+
+
 class RiskProfileRead(BaseModel):
     account_size: float
     quote_currency: str
+    leverage: float = Field(description="account leverage, for the margin of AI setups")
     config: dict[str, Any] = Field(description="normalised risk config")
     template: str | None = Field(description="the template it was made from, if unchanged")
     updated_at: datetime
+    ai_risk: AIRiskRead
 
 
 class RiskProfileUpdate(_Strict):
@@ -32,6 +53,7 @@ class RiskProfileUpdate(_Strict):
 
     account_size: AccountSize | None = None
     quote_currency: Currency | None = None
+    leverage: Leverage | None = None
     config: dict[str, Any] | None = None
     template: Template | None = None
 

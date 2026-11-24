@@ -26,6 +26,7 @@ import { useFeatureAccess } from '@/features/membership/useFeatureAccess';
 import { SignalDetail } from './SignalDetail';
 import { SignalProfileDialog } from './SignalProfileDialog';
 import { SignalSummary } from './SignalSummary';
+import { StrategySignalsPanel } from './StrategySignalsPanel';
 
 type SortKey = 'symbol' | 'probability' | 'ev' | 'generated';
 type View = 'for-you' | 'all';
@@ -210,6 +211,9 @@ export function SignalsPage() {
           </>
         }
       />
+
+      {/* Backend mode: the strategy engine's real signals (the AI model's output is not exposed by the backend yet). */}
+      {services.source === 'api' && <StrategySignalsPanel />}
 
       {res.data && res.data.length > 0 && <SignalSummary items={res.data} />}
 

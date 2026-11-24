@@ -1,10 +1,11 @@
 import { CornerDownLeft, Search } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { usePreferences } from '@/app/contexts';
+import { useAuth, usePreferences } from '@/app/contexts';
 import { INSTRUMENTS, matchesInstrument } from '@/domain/instruments';
 import { cn } from '@/lib/cn';
-import { ALL_NAV } from './navigation';
+import { useServices } from '@/app/contexts';
+import { allNavFor } from './navigation';
 
 interface Item {
   id: string;
@@ -21,6 +22,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [active, setActive] = useState(0);
   const navigate = useNavigate();
   const { updateWorkspace } = usePreferences();
+  const { source } = useServices();
+  const role = useAuth().session?.user.role;
   const listId = useId();
 
   useEffect(() => {
@@ -45,11 +48,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         navigate('/workspace');
       },
     }));
-    const pages: Item[] = ALL_NAV
+    const pages: Item[] = allNavFor(source, role)
       .filter((p) => !q || p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q))
       .map((p) => ({ id: `p-${p.to}`, group: 'Pages', label: p.label, hint: p.description, run: () => navigate(p.to) }));
     return [...instruments, ...pages];
-  }, [query, navigate, updateWorkspace]);
+  }, [query, navigate, updateWorkspace, source, role]);
 
   const choose = (item: Item | undefined) => {
     if (!item) return;

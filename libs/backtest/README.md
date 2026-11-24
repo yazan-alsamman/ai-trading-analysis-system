@@ -43,9 +43,11 @@ Give `backtest()` enough bars before `start` for the strategy's warm-up
 
 | Field | Default | |
 |---|---|---|
-| `initial_capital` | 10,000 | quote currency |
+| `initial_capital` | 10,000 | quote currency (account currency with `conversion`) |
+| `conversion` | none | the account currency is not the quote currency: `{"type": "inverse_price"}` (account = base, e.g. USD on USD/JPY) or `{"type": "fixed", "rate": r}`; money results are then in the account currency |
 | `fee_bps` | 10 | per side, of the fill's notional (0.10 %, Binance spot) |
 | `slippage_bps` | 5 | against you on every fill |
+| `cost_per_unit` | null | fixed round-trip cost per unit of quantity, price units (XAU/USD 0.25). When set, `fee_bps` and `slippage_bps` are ignored (see below) |
 | `direction` | `long_only` | `long_only`: sells only close longs. `long_short`: a sell opens a short, a buy closes it; an opposite signal reverses |
 | `sizing` | `{"mode": "fraction", "value": 1.0}` | `fraction`, `fixed`, `risk` (`risk_pct` lost at the stop) or `volatility` (`target_pct` per ATR); `max_position_pct` (100), `min_notional` (10) |
 | `stop` | none | `percent`, `atr` (signal bar ATR) or `swing` |
@@ -75,6 +77,11 @@ plan.stop, plan.quantity, plan.risk_amount, plan.targets, plan.invalid_reason
   (`start`…`end`) are taken. A signal on the last bar is not filled.
 - **Costs.** Every fill pays slippage against you (a buy at `price × (1 + s)`, a sell at
   `price × (1 − s)`) and a fee of `fill × quantity × fee_bps / 10,000`, on entry and on exit.
+  With `cost_per_unit` instead: no slippage, no bps fee; every fill is at the chart price and
+  the whole round trip, `cost_per_unit × quantity`, is charged at the entry as the trade's fee
+  (partial exits pay nothing more). Sizing uses a risk per unit of `|entry − stop| +
+  cost_per_unit`, the breakeven stop is `entry ± cost_per_unit`; `plan_trade(...,
+  cost_per_unit=)` and `lots_for_risk(..., cost_per_unit=)` take it too.
 - **One position at a time.** A new entry in the same direction while in a position is ignored.
 - **Order inside each bar `i`:**
   1. stop-loss or take-profit already beyond the open (a gap) → filled at the open;

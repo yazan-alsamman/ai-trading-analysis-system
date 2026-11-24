@@ -16,15 +16,16 @@ import sys
 from pathlib import Path
 
 PROD_MEM_MIB = {
-    "backend": 544,
+    "backend": 640,
     "worker": 384,
     "worker-backtest": 512,
     "beat": 192,
     "telegram-bot": 128,
+    "feed-ctrader": 128,
     "redis": 192,
     "db": 768,
     "nginx": 64,
-    "ai-service": 256,
+    "ai-service": 512,
 }
 PROD_CPUS = {
     "backend": 1.5,
@@ -32,13 +33,24 @@ PROD_CPUS = {
     "worker-backtest": 1.0,
     "beat": 0.25,
     "telegram-bot": 0.25,
+    "feed-ctrader": 0.25,
     "redis": 0.5,
     "db": 1.5,
     "nginx": 0.25,
     "ai-service": 0.5,
 }
 UNITS = {"B": 1 / 2**20, "KiB": 1 / 1024, "MiB": 1, "GiB": 1024}
-ENDPOINTS = ["candles", "indicators", "signals", "news", "posts"]
+ENDPOINTS = [
+    "candles",
+    "indicators",
+    "signals",
+    "news",
+    "posts",
+    "prediction_stats",
+    "recommendations",
+    "reco_strategies",
+    "calendar",
+]
 
 
 def mib(text: str) -> float:

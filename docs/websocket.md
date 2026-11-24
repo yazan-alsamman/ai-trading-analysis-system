@@ -16,11 +16,25 @@ ws://<host>/ws/market?api_key=<tk_... key>      (external programs, key needs th
 - External programs can use an API key with the `stream` scope instead (`?api_key=`, see
   [api-keys.md](api-keys.md)). The connection belongs to the key's owner: the topic rules are the
   same, including the owner's own `user:` topic. A `token` wins if both are given.
-- If the token or key is missing, invalid, expired or revoked, the key lacks `stream`, or the
-  user is inactive, the server accepts and then closes with code **4401**.
+- If the token or key is missing, invalid, expired or revoked, the key lacks `stream`, the
+  user is inactive, or the token's login session has ended (logout, password change), the
+  server accepts and then closes with code **4401**.
 - When the access token expires during the connection, the server sends
   `{"type":"error","code":"token_expired",...}` and closes with **4401**. Refresh the token and
   reconnect.
+- The identity is **re-checked while the socket is open**: on every heartbeat (25 s) and at
+  once when an API key is revoked or its scopes change, a user is deactivated, deleted or
+  changes role, the user **logs out** (that session's sockets only) or **changes the password**
+  or a stolen refresh token is detected (every login socket of the user; API-key sockets stay).
+  If the user is gone or inactive, the key is revoked, expired or no longer has `stream`, or the
+  login session ended, the server sends
+  `{"type":"error","code":"auth_revoked","message":"<reason>"}` and closes with **4401** and the
+  reason (`API key revoked`, `API key expired`, `API key lacks the 'stream' scope`,
+  `user deactivated`, `user not found`, `session ended`). Do not reconnect with the same
+  credentials; after `session ended`, log in again. A role or
+  scope change that only removes a topic (a demoted admin's chats of other users, `news`
+  without `news:read`) keeps the socket and sends
+  `{"type":"unsubscribed","topic":"<topic>","reason":"forbidden"}` for each topic dropped.
 
 ## Client → server
 
@@ -79,6 +93,7 @@ forwarded at most once per 3 s per user. See [chat.md](chat.md).
             "reason": "rsi_cross_up_oversold",
             "details": {"rsi_prev": 28.4, "rsi": 31.2, "level": 30.0, "extreme": 22.1}}}
 {"type": "unsubscribed", "topic": "candles:<uuid>:1m"}
+{"type": "unsubscribed", "topic": "news", "reason": "forbidden"}
 {"type": "pong"}
 {"type": "heartbeat"}
 {"type": "error", "code": "unknown_instrument", "message": "instrument not found"}
@@ -98,9 +113,11 @@ forwarded at most once per 3 s per user. See [chat.md](chat.md).
   - `forbidden`
   - `too_many_subscriptions`
   - `token_expired`
+  - `auth_revoked`: the key was revoked/expired/lost `stream`, the user was deactivated or
+    deleted, or the login session ended (logout, password change, stolen refresh token)
   - `unavailable`: the live feed is temporarily down
 
-  Only `token_expired` closes the socket.
+  Only `token_expired` and `auth_revoked` close the socket (with **4401**).
 - `signal` messages are published once per new signal, on the closed bar `time` (unix seconds,
   bar start). The signal is actionable at the open of the next bar. To draw a marker, use
   `{time, position: side == "buy" ? "belowBar" : "aboveBar", shape: side == "buy" ? "arrowUp" : "arrowDown"}`.
@@ -117,6 +134,14 @@ forwarded at most once per 3 s per user. See [chat.md](chat.md).
   definition hash as `params_hash`, `reason` `builder_buy`/`builder_sell` or
   `composite_buy`/`composite_sell`, and `details` explaining the rules or the members' votes
   ([custom-strategies.md](custom-strategies.md)).
+- **Private custom strategies** are not broadcast. A global or public strategy's signal is
+  published once on `signals:<uuid>` for every subscriber. A private one is published instead
+  on `signals:<uuid>:user:<owner>` and `signals:<uuid>:admins`. Subscribing to
+  `signals:<uuid>` also subscribes the connection to its own private topic (admins: to the
+  admins' one), and the frame is the same, with `"topic": "signals:<uuid>"`. So a client sees
+  one `signals:<uuid>` stream that contains exactly the signals its user may see
+  ([security.md](security.md#2-authorization)). The private topics do not count towards the
+  50 subscriptions and cannot be subscribed to by name.
 - Every notification stored for the user (signals, backtests, security events, admin
   messages, posts and comments, price alerts; [notifications.md](notifications.md)) also
   arrives as
@@ -148,6 +173,7 @@ forwarded at most once per 3 s per user. See [chat.md](chat.md).
 | Idle timeout | 75 s without any client frame → close **1001** |
 | Slow consumer | more than 256 undelivered messages → close **1013** |
 | Bad or expired token / API key | close **4401** |
+| Key revoked or lost `stream`, user deactivated or deleted, logout of that session, password change or stolen refresh token (while open) | `auth_revoked` error, close **4401**: at once, at the latest on the next heartbeat |
 | Concurrent connections | 5 per identity (user for a JWT, key for an API key) → close **4429** |
 | New connections | 20 per minute per IP → close **4429** |
 
@@ -159,7 +185,7 @@ protocol-level pings.
 - Reconnect with exponential backoff: 1 s, 2 s, 4 s … capped at 30 s, plus a little jitter. Reset
   the delay after a successful connection.
 - On **4401**, refresh the access token (`POST /api/v1/auth/refresh`) before reconnecting. If the
-  refresh fails, send the user to log in.
+  refresh fails (always after `session ended`), send the user to log in.
 - On **4429**, you have too many open connections or open them too fast: close unused ones (one
   connection can carry 50 subscriptions) and wait at least 3 s before retrying, backing off as
   above.

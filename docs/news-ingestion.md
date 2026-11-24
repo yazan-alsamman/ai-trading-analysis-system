@@ -150,6 +150,26 @@ print(requests.get(f"{BASE}/news/sentiment", params={"window": "24h"}, headers=H
 `score` convention: −1 (very negative) … +1 (very positive). The aggregate
 (`GET /news/sentiment`) averages it per instrument; see [news-posts.md](news-posts.md).
 
+## Finnhub gold headlines
+
+The existing five-minute `news.fetch` task polls Finnhub Market News for the `forex` and
+`general` categories when `NEWS_FINNHUB_ENABLED=true` and `FINNHUB_API_KEY` is set. The worker
+sends the key in the `X-Finnhub-Token` header. Each cycle makes one request per category, and a
+failed category can be retried on the next cycle. The existing ingestion service deduplicates by
+Finnhub article ID and stores matching items tagged `XAU/USD` with sentiment fields empty.
+
+The gold filter follows Appendix A of the sentiment registration. The same filter adds gold tags
+to matching investingLive RSS items on successful feed reads when Finnhub ingestion is enabled.
+The rest of the RSS feed remains available. The adapter polls recent news and has no backfill.
+
+Finnhub's [terms](https://finnhub.io/terms-of-service) restrict redistribution of source data and
+derived results. Confirm written permission covering storage and platform display before enabling
+this feature on a shared or public deployment. The default is disabled.
+
+After an authorized deployment, check `docker compose logs --since 15m worker` for the
+`news.fetch` counters for both categories. Confirm ingested rows using the existing
+`GET /api/v1/news?source=finnhub` endpoint.
+
 ## The built-in RSS fetcher
 
 - Task `news.fetch` on the existing `worker` (beat every 5 minutes; `NEWS_RSS_ENABLED`,

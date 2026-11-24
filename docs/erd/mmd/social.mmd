@@ -30,11 +30,22 @@ erDiagram
         double sentiment_score
         varchar sentiment_model
         timestamptz sentiment_at
+        int comments_count
     }
     news_article_instruments {
         uuid article_id PK, FK
         uuid instrument_id PK, FK
         double relevance
+    }
+    news_comments {
+        uuid id PK
+        uuid article_id FK
+        uuid author_id FK
+        uuid parent_id FK
+        text body
+        varchar status
+        timestamptz created_at
+        timestamptz edited_at
     }
     posts {
         uuid id PK
@@ -96,6 +107,9 @@ erDiagram
     news_article_instruments }o--|| instruments : "instrument_id"
     news_article_instruments }o--|| news_articles : "article_id"
     news_articles }o--|| news_sources : "source_id"
+    news_comments }o--o| news_comments : "parent_id"
+    news_comments }o--|| news_articles : "article_id"
+    news_comments }o--|| users : "author_id"
     post_likes }o--|| posts : "post_id"
     post_likes }o--|| users : "user_id"
     posts }o--o| instruments : "instrument_id"

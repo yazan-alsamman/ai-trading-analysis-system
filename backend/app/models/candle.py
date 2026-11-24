@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Double, ForeignKey, Integer, Uuid
+from sqlalchemy import CheckConstraint, DateTime, Double, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -62,7 +62,12 @@ AGGREGATE_TIMEFRAMES: tuple[Timeframe, ...] = (
 
 
 class Candle(Base):
-    """A 1-minute candle (TimescaleDB hypertable). ``ts`` is the UTC start of the minute."""
+    """A 1-minute candle (TimescaleDB hypertable). ``ts`` is the UTC start of the minute.
+
+    ``spread`` (price units), ``source`` and ``received_at`` exist on 1m only; the continuous
+    aggregates do not carry them. ``spread >= 0`` is enforced by the API schema: TimescaleDB
+    refuses new constraints on a hypertable with compression enabled (migration 0013).
+    """
 
     __tablename__ = "candles_1m"
     __table_args__ = (
@@ -83,3 +88,7 @@ class Candle(Base):
     close: Mapped[float] = mapped_column(Double)
     volume: Mapped[float] = mapped_column(Double)
     trades: Mapped[int | None] = mapped_column(Integer)
+    spread: Mapped[float | None] = mapped_column(Double)
+    source: Mapped[str | None] = mapped_column(String(32))  # fxpro_ctrader, binance, seed, ...
+    # when the backend first received the bar (kept on re-sends, for the feed lag)
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

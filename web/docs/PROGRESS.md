@@ -12,6 +12,17 @@ _Last updated: 16 October 2026 (round 4: cinematic public website, motion system
 
 The round-2 brief was received **truncated** (it ends inside §3B). The rest of the brief (further sections and feature expansion) has not yet been received.
 
+## Backend integration (18 October 2026)
+
+| Area | Delivered |
+| --- | --- |
+| Sync | `main` fast-forwarded to `07b3d11`; branch `e/backend-integration` |
+| API layer | Verified endpoints (29 REST + WebSocket), backend schemas and mappers, token manager (rotation-safe refresh), shared WebSocket, same-origin config + dev proxy |
+| Connected | Auth and session restore, profile and password, candles and streaming, strategy signals, risk profile sync and server cross-check, price alerts, notification inbox, news, posts, comments, experts, chat |
+| Not available (backend) | AI model output, prediction history, assistant provider, platform membership, password reset (gap analysis) |
+| Docs | `BACKEND_INTEGRATION_REPORT.md`, `BACKEND_INTEGRATION_SETUP.md`, `BACKEND_INTEGRATION_GAP_ANALYSIS.md` |
+| Tests | 198 unit/contract · 98 Playwright (89 demo + 9 backend-mode vs contract mock) · **live**: 29 API checks + 12 browser tests against the running backend; backend suite 655/655 |
+
 ## Round 6 — About, public content, assistant, footer (17 October 2026)
 
 | Area | Delivered |

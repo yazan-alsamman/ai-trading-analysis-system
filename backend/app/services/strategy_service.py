@@ -249,7 +249,9 @@ async def list_signals(
     since: datetime | None = None,
     mine: bool = False,
 ) -> tuple[Sequence[Signal], int]:
-    filters = []
+    """Signals ``user`` may see (``strategy_resolver.visible_signal``), filtered in SQL so the
+    page and ``total`` only count those."""
+    filters = [strategy_resolver.visible_signal(Signal.strategy_key, user)]
     if instrument_id is not None:
         filters.append(Signal.instrument_id == instrument_id)
     if timeframe is not None:
@@ -274,11 +276,13 @@ async def list_signals(
                 Signal.instrument_id, Signal.timeframe, Signal.strategy_key, Signal.params_hash
             ).in_(select(setups))
         )
-    where = and_(*filters) if filters else None
-    count_q = select(func.count()).select_from(Signal)
-    rows_q = select(Signal).order_by(Signal.bar_time.desc(), Signal.created_at.desc(), Signal.id)
-    if where is not None:
-        count_q, rows_q = count_q.where(where), rows_q.where(where)
-    total = await session.scalar(count_q)
-    rows = await session.scalars(rows_q.limit(limit).offset(offset))
+    where = and_(*filters)
+    total = await session.scalar(select(func.count()).select_from(Signal).where(where))
+    rows = await session.scalars(
+        select(Signal)
+        .where(where)
+        .order_by(Signal.bar_time.desc(), Signal.created_at.desc(), Signal.id)
+        .limit(limit)
+        .offset(offset)
+    )
     return rows.all(), total or 0

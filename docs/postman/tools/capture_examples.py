@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import mimetypes
 import re
 import subprocess
 import sys
@@ -28,9 +29,10 @@ from typing import Any
 import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from spec import FOLDERS, Folder, Req, Variant  # noqa: E402
+from spec import FOLDERS, NUMERIC_VARS, Folder, Req, Variant  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "examples.json"
+POSTMAN = Path(__file__).resolve().parents[1]  # files of multipart requests live here
 KEEP_HEADERS = {
     "content-type",
     "etag",
@@ -56,6 +58,125 @@ AUTHOR_PASSWORD = "Analyst12345"
 EXPERT_EMAIL = "sami@example.com"
 EXPERT_PASSWORD = "Expert12345"
 BACKEND = Path(__file__).resolve().parents[3] / "backend"
+# fake_lightotp.py: run the backend with LIGHTOTP_TOKEN=fake LIGHTOTP_BASE_URL=<this>
+FAKE_LIGHTOTP = "http://localhost:8766"
+CAPTURE_PHONE = "+963944123456"
+
+
+AI_SETUP_ID = "xauusd-intraday-2026-10-19T14:15:00Z-buy"  # new_setups[0] of the example
+SEED_AI_SETUP = """
+import asyncio, json
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from sqlalchemy import select, text
+from app.ai import contract as c, explain, store, volatility
+from app.db.session import SessionLocal
+from app.models.instrument import Instrument
+
+EXAMPLES = Path("../docs/api/ai-service-examples")
+
+
+def load(name):
+    return json.loads((EXAMPLES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+async def main():
+    async with SessionLocal() as session:
+        gold = await session.scalar(
+            select(Instrument).order_by((Instrument.symbol == "XAU/USD").desc(), Instrument.symbol)
+        )
+        req = c.EvaluateRequest.model_validate(load("evaluate-request"))
+        resp = load("evaluate-response-ok")
+        resp["transitions"] = []
+        first = await store.apply_evaluation(
+            session, gold, req, c.EvaluateResponse.model_validate(resp)
+        )
+        close = req.bar_close_ts + timedelta(minutes=15)
+        nxt = req.model_copy(
+            update={"request_id": c.make_request_id("XAUUSD", "intraday", close),
+                    "bar_close_ts": close}
+        )
+        setup_id = resp["new_setups"][0]["setup_id"]
+        move = {"setup_id": setup_id, "from": "ARMED", "to": "ACTIVE",
+                "at": c.iso_z(close - timedelta(minutes=6)), "reason": "entry_filled"}
+        second = await store.apply_evaluation(
+            session, gold, nxt, c.EvaluateResponse.model_validate(
+                {**resp, "request_id": nxt.request_id, "new_setups": [], "transitions": [move]}
+            )
+        )
+        # one failed alert for Admin -> AI Engine -> Retry outbox alert (no dispatch ran)
+        await session.execute(
+            text(
+                "UPDATE ai_setup_outbox SET status = 'failed', attempts = 8, "
+                "last_error = 'telegram: 502 Bad Gateway' "
+                "WHERE setup_id = :id AND to_state = 'ACTIVE' AND status = 'pending'"
+            ),
+            {"id": setup_id},
+        )
+        await session.commit()
+        # its Arabic explanation (the contract's example, verified) for AI setup explanation
+        await explain.store_answer(
+            session, setup_id, "ar", c.ExplainResponse.model_validate(load("explain-response"))
+        )
+        # contract 0.3.0: gold_levels setups without a target (one CLOSED by its trailing stop
+        # after two sl_moved) and the day's volatility, stored for today's New York trading day
+        req = c.EvaluateRequest.model_validate(load("evaluate-request-gold-levels"))
+        resp = load("evaluate-response-gold-levels")
+        resp["volatility"]["day"] = volatility.trading_day(datetime.now(UTC)).isoformat()
+        parsed = c.EvaluateResponse.model_validate(resp)
+        gold_levels = await store.apply_evaluation(session, gold, req, parsed)
+        await store.store_volatility(session, gold, req.request_id, parsed.volatility)
+        print(first.inserted, second.transitions_applied, gold_levels.sl_moves)
+
+
+asyncio.run(main())
+"""
+
+
+# Three ma_crossover signals on BTC/USDT 1h (the demo candles): two whose 10-bar horizon has
+# closed, resolved in-process like the beat task (Predictions examples and the admin resolver
+# status), and one still open. Fixed params_hash: a re-run inserts nothing twice.
+SEED_PREDICTIONS = """
+import asyncio
+from datetime import UTC, datetime, timedelta
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from app.core.redis import get_redis
+from app.db.session import SessionLocal
+from app.models.instrument import Instrument
+from app.models.strategy import Signal, SignalSide
+from app.models.candle import Timeframe
+from app.services import market_service, prediction_resolver
+
+
+async def main():
+    async with SessionLocal() as session:
+        btc = await session.scalar(select(Instrument).where(Instrument.symbol == "BTC/USDT"))
+        now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+        bars = await market_service.candle_range(
+            session, btc.id, Timeframe.h1, now - timedelta(hours=72), now
+        )
+        picks = [(bars[0], "buy", 0.62), (bars[24], "sell", 0.48), (bars[-3], "buy", 0.71)]
+        for i, (bar, side, strength) in enumerate(picks):
+            await session.execute(
+                insert(Signal)
+                .values(
+                    instrument_id=btc.id, timeframe=Timeframe.h1, strategy_key="ma_crossover",
+                    params={"fast": 9, "slow": 21}, params_hash=f"postman-capture-{i}",
+                    bar_time=bar[0], side=SignalSide(side), strength=strength, price=float(bar[4]),
+                    reason="ema_cross_up" if side == "buy" else "ema_cross_down",
+                    details={"fast": 9, "slow": 21},
+                    created_at=bar[0] + timedelta(hours=1, seconds=4),
+                )
+                .on_conflict_do_nothing(constraint="uq_signals_bar")
+            )
+        await session.commit()
+    result = await prediction_resolver.run(SessionLocal, get_redis())
+    print(result.resolved, result.gaps)
+
+
+asyncio.run(main())
+"""
 
 
 def get_path(data: Any, path: str) -> Any:
@@ -93,6 +214,7 @@ class Runner:
             "register_password": "Postman123",
             "admin_email": admin_email,
             "admin_password": admin_password,
+            "user_phone": CAPTURE_PHONE,
         }
         self.examples: dict[str, list[dict[str, Any]]] = {}
 
@@ -120,8 +242,8 @@ class Runner:
         where the raw body text is substituted."""
         text = json.dumps(value)
         text = re.sub(
-            r'"\{\{(custom_strategy_version)\}\}"',
-            lambda m: self.vars[m.group(1)],
+            r'"\{\{(' + "|".join(NUMERIC_VARS) + r')\}\}"',
+            lambda m: self.vars.get(m.group(1)) or "null",
             text,
         )
         return json.loads(self.resolve(text)) if isinstance(value, (dict, list)) else value
@@ -155,7 +277,7 @@ class Runner:
             path = path.replace(f":{name}", self.resolve(value))
         query = {k: self.resolve(v) for k, v, _ in req.query}
         if variant and variant.query is not None:
-            query.update(variant.query)
+            query.update({k: self.resolve(v) for k, v in variant.query.items()})
         headers = self.auth_headers(variant.auth if variant and variant.auth else req.auth)
         for k, v, _ in req.headers:
             headers[k] = self.resolve(v)
@@ -167,7 +289,20 @@ class Runner:
                     headers[k] = v
         body = variant.body if variant and variant.body is not None else req.body
         kwargs: dict[str, Any] = {"params": query, "headers": headers}
-        if req.form is not None:
+        if req.files is not None:
+            files = {k: src for k, src, _ in req.files}
+            files.update(variant.files if variant and variant.files else {})
+            kwargs["files"] = {
+                k: (
+                    Path(src).name,
+                    (POSTMAN / src).read_bytes(),
+                    mimetypes.guess_type(src)[0] or "application/octet-stream",
+                )
+                for k, src in files.items()
+            }
+            if req.form is not None:
+                kwargs["data"] = {k: self.resolve(v) for k, v, _ in req.form}
+        elif req.form is not None:
             kwargs["data"] = {k: self.resolve(v) for k, v, _ in req.form}
         elif isinstance(body, str):
             kwargs["content"] = self.resolve(body)
@@ -183,6 +318,8 @@ class Runner:
             if req.id not in NO_TRIM:
                 body = trim(body)
             text = json.dumps(body, indent=4, ensure_ascii=False)
+            if req.id == "admin_otp_status":  # the fake's address: show LightOTP's real one
+                text = text.replace(FAKE_LIGHTOTP, "https://api.lightotp.com")
         else:
             text = res.text
             if req.id == "backtests_trades_csv":
@@ -218,6 +355,23 @@ class Runner:
             self.vars["chat_client_id"] = str(uuid.uuid4())
         if req.id == "experts_earnings" and self.vars.get("my_plan_id"):
             self.subscribe(AUTHOR_EMAIL, AUTHOR_PASSWORD, self.vars["my_plan_id"])
+        if req.id in ("users_phone_verify", "auth_otp_login", "admin_otp_message"):
+            last = httpx.get(f"{FAKE_LIGHTOTP}/__last", params={"phone": CAPTURE_PHONE})
+            if last.status_code == 200:
+                self.vars["otp_code"] = last.json()["otpCode"]
+                self.vars["otp_message_id"] = last.json()["id"]
+        if req.id == "auth_otp_request":
+            self.clear_otp_wait()
+        if req.id in ("paper_order_limit", "paper_position_update"):
+            fill = float(self.vars.get("paper_fill_price") or 0)
+            if fill:  # as PAPER_PRICES in Postman
+                for name, factor in (
+                    ("paper_stop_loss", 0.95),
+                    ("paper_take_profit", 1.05),
+                    ("paper_limit_price", 0.9),
+                    ("paper_bad_price", 1.1),
+                ):
+                    self.vars[name] = f"{fill * factor:.8g}"
         if req.id == "ws_reorder":
             ids = json.loads(self.vars.get("workspace_ids", "[]"))
             self.vars["workspace_ids_reversed"] = json.dumps(list(reversed(ids)))
@@ -234,6 +388,10 @@ class Runner:
             self.vars["refresh_token"] = data["refresh_token"]
         if req.id == "auth_logout":
             self.vars.pop("refresh_token", None)
+        if req.id == "admin_ai_setups":
+            # the newest is a gold_levels setup (its own variant); Get AI setup shows the
+            # intraday one, which has sizes, a take and alerts
+            self.vars["ai_setup_id"] = AI_SETUP_ID
         if req.id == "users_me_password" and res.status_code == 204:
             self.vars["user_password"], self.vars["user_new_password"] = (
                 self.vars["user_new_password"],
@@ -353,6 +511,35 @@ class Runner:
         )
         print(f"   alert engine: {(out.stdout or out.stderr).strip()[-200:]}")
 
+    def seed_ai_setup(self) -> None:
+        """An AI setup with two events for the Admin → AI examples: the contract's example
+        evaluate response, then the setup going ARMED → ACTIVE (in-process, like the worker),
+        its ACTIVE alert marked failed so the outbox retry has a row to retry, and its
+        Arabic explanation."""
+        out = subprocess.run(
+            [sys.executable, "-c", SEED_AI_SETUP], cwd=BACKEND, capture_output=True, text=True
+        )
+        print(f"   ai setup: {(out.stdout or out.stderr).strip()[-200:]}")
+        # the user's AI requests (Risk Management) run before Admin → AI Engine stores the id
+        self.vars["ai_setup_id"] = AI_SETUP_ID
+
+    def clear_otp_wait(self) -> None:
+        """The number got a code moments ago (Verify phone): drop its 60 s wait so Send login
+        code shows the normal answer."""
+        code = (
+            "import redis; from app.core.config import get_settings as g; s = g(); "
+            "r = redis.Redis.from_url(s.redis_url); "
+            "[r.delete(k) for k in r.scan_iter(f'{s.rate_limit_key_prefix}:otp:resend:*')]"
+        )
+        subprocess.run([sys.executable, "-c", code], cwd=BACKEND, check=True)
+
+    def seed_predictions(self) -> None:
+        """Strategy signals for the Predictions examples, two of them resolved."""
+        out = subprocess.run(
+            [sys.executable, "-c", SEED_PREDICTIONS], cwd=BACKEND, capture_output=True, text=True
+        )
+        print(f"   predictions: {(out.stdout or out.stderr).strip()[-200:]}")
+
     def wait_backtest(self, var: str) -> None:
         for _ in range(60):
             res = self.http.get(
@@ -378,6 +565,22 @@ class Runner:
         if res.status_code not in (201, 409):
             res.raise_for_status()
         admin = self.auth_headers("admin")
+        # Calendar history (the sample CSV the admin import request also sends), so the events
+        # list and an event's history have something to show
+        self.http.post(
+            "/api/v1/admin/calendar/import",
+            params={"tz": "America/New_York"},
+            files={
+                "file": (
+                    "sample.csv",
+                    (POSTMAN / "samples/calendar_history_sample.csv").read_bytes(),
+                    "text/csv",
+                )
+            },
+            headers=admin,
+        ).raise_for_status()
+        self.seed_ai_setup()
+        self.seed_predictions()
         users = self.http.get(
             "/api/v1/admin/users", params={"q": CAPTURE_EMAIL}, headers=admin
         ).json()
@@ -496,6 +699,10 @@ class Runner:
             if item.id == "backtests_get":
                 self.wait_backtest("backtest_id")
             res = self.send(item)
+            if res.status_code == 429 and 429 not in item.expect:
+                # an IP limit used up by earlier requests: wait it out once
+                time.sleep(int(res.headers.get("retry-after", "5")) + 1)
+                res = self.send(item)
             if res.status_code not in item.expect:
                 print(f"!! {item.id}: {res.status_code} {res.text[:300]}")
             else:
@@ -504,6 +711,10 @@ class Runner:
             self.after(item, res)
             for variant in item.variants:
                 vres = self.send(item, variant)
+                if vres.status_code == 429 and variant.status != 429:
+                    # an IP limit (e.g. register) used up by the setup: wait it out once
+                    time.sleep(int(vres.headers.get("retry-after", "5")) + 1)
+                    vres = self.send(item, variant)
                 flag = "ok" if vres.status_code == variant.status else "!!"
                 print(f"{flag}   variant {variant.name!r}: {vres.status_code} {vres.text[:200]}")
                 self.record(item, variant.name, vres, variant)

@@ -5,12 +5,14 @@ the news WebSocket topics."""
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from httpx import AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.models.instrument import MarketType
 from app.models.news import NewsArticle, NewsArticleInstrument, NewsSource
@@ -474,3 +476,62 @@ async def test_new_articles_are_published_on_news_topics(
     assert msg["article"]["title"] == "Bitcoin rallies live"
     assert msg["article"]["instruments"][0]["symbol"] == "BTC/USDT"
     assert msg["article"]["source"] == {"key": "finnhub", "name": "finnhub"}
+
+
+async def test_finnhub_schedule_persists_and_publishes_once(
+    session_factory, session, redis_client, monkeypatch
+) -> None:
+    gold = await make_instrument(session, "XAU/USD", source="fxpro", market=MarketType.forex)
+    settings = get_settings()
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: settings.model_copy(
+            update={
+                "news_rss_enabled": False,
+                "news_finnhub_enabled": True,
+                "finnhub_api_key": type(settings.finnhub_api_key)("test-key"),
+            }
+        ),
+    )
+
+    def respond(request):
+        assert request.headers["X-Finnhub-Token"] == "test-key"
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 123,
+                    "datetime": int(datetime.now(UTC).timestamp()) - 1,
+                    "headline": "Treasury yields rise as Powell speaks",
+                    "url": "https://example.com/news",
+                }
+            ],
+        )
+
+    monkeypatch.setattr(service, "transport", httpx.MockTransport(respond))
+    async with Listener(redis_client) as listener:
+        await listener.listen(news_topic(), news_topic(gold.id))
+        first = await service.fetch_scheduled(session_factory, redis_client)
+        second = await service.fetch_scheduled(session_factory, redis_client)
+        messages = await listener.messages()
+
+    assert first["finnhub"]["forex"]["inserted"] == 1
+    assert first["finnhub"]["general"]["inserted"] == 0
+    assert second["finnhub"]["forex"]["skipped"] == 1
+    assert sorted(topic for topic, _ in messages) == sorted([news_topic(), news_topic(gold.id)])
+    stored = (
+        await session.scalars(
+            select(NewsArticle).join(NewsSource).where(NewsSource.key == "finnhub")
+        )
+    ).one()
+    assert stored.external_id == "123"
+    assert stored.sentiment_model is None
+    assert (
+        await session.scalar(
+            select(NewsArticleInstrument.instrument_id).where(
+                NewsArticleInstrument.article_id == stored.id
+            )
+        )
+        == gold.id
+    )

@@ -21,7 +21,7 @@ from app.models.candle import Timeframe
 from app.models.custom_strategy import Visibility
 from app.models.strategy import Signal, UserStrategy
 from app.models.user import UserRole
-from app.realtime.topics import signals_topic, user_topic
+from app.realtime.topics import private_signals_topic, signals_topic, user_topic
 from app.schemas.custom_strategies import CustomStrategyReplace, CustomStrategyUpdate
 from app.services import (
     backtest_service,
@@ -381,8 +381,9 @@ async def test_custom_activation_produces_a_signal_end_to_end(
     activation = await activate_custom(session, user, btc, custom)
     await add_closes(session, btc.id, T0, CLOSES[:4])
 
+    own, admins = private_signals_topic(btc.id, user.id), private_signals_topic(btc.id, None)
     async with Listener(redis_client) as listener:
-        await listener.listen(signals_topic(btc.id), user_topic(user.id))
+        await listener.listen(signals_topic(btc.id), user_topic(user.id), own, admins)
         result = await signal_engine.evaluate(
             session_factory, redis_client, Job(btc.id, Timeframe.m1, BAR3)
         )
@@ -400,7 +401,12 @@ async def test_custom_activation_produces_a_signal_end_to_end(
     assert row.details["true"] == 2 and row.details["conditions"][0]["left"] == 0.0
     by_topic = dict(messages)
     assert by_topic[user_topic(user.id)]["user_strategy_ids"] == [str(activation.id)]
-    assert by_topic[signals_topic(btc.id)]["signal"]["strategy_key"] == custom.key
+    # a private strategy: never on the instrument topic, only the owner's and the admins'
+    # private topics, with the frame naming the instrument topic
+    assert signals_topic(btc.id) not in by_topic
+    for private in (own, admins):
+        assert by_topic[private]["signal"]["strategy_key"] == custom.key
+        assert by_topic[private]["topic"] == signals_topic(btc.id)
 
 
 async def test_global_and_custom_share_one_candle_load(

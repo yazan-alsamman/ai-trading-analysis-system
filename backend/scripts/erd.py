@@ -57,7 +57,15 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
     (
         "market",
         "Market data, signals and price alerts",
-        ["instruments", "candles_1m", "signals", "price_alerts"],
+        [
+            "instruments",
+            "candles_1m",
+            "signals",
+            "signal_outcomes",
+            "price_alerts",
+            "economic_events",
+            "feed_credentials",
+        ],
     ),
     (
         "strategies",
@@ -71,6 +79,28 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "signal_plans",
         ],
     ),
+    (
+        "paper",
+        "Paper trading (simulated account)",
+        ["paper_accounts", "paper_orders", "paper_positions"],
+    ),
+    (
+        "ai",
+        "AI engine (ai-service setups and models)",
+        [
+            "ai_setups",
+            "ai_setup_events",
+            "ai_model_versions",
+            "ai_setup_sizes",
+            "ai_setup_takes",
+            "ai_setup_explanations",
+            "ai_setup_outbox",
+            "ai_volatility_daily",
+            "ai_alert_follows",
+            "ai_evaluation_runs",
+        ],
+    ),
+    ("vision", "Chart image analysis (Gemini)", ["chart_analyses"]),
     ("workspaces", "Workspaces", ["workspaces"]),
     (
         "notifications",
@@ -90,6 +120,7 @@ DOMAINS: list[tuple[str, str, list[str]]] = [
             "news_sources",
             "news_articles",
             "news_article_instruments",
+            "news_comments",
             "posts",
             "comments",
             "post_likes",

@@ -1,7 +1,7 @@
-import { CloudOff, Inbox, OctagonAlert, RotateCw, type LucideIcon } from 'lucide-react';
+import { CloudOff, Inbox, OctagonAlert, PlugZap, RotateCw, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { userMessage } from '@/services/errors';
+import { isApiError, userMessage } from '@/services/errors';
 import { Button } from './Button';
 
 interface StateProps {
@@ -32,6 +32,13 @@ export function EmptyState(props: StateProps) {
 
 /** Failure with plain-language reason and retry. Never an infinite spinner. */
 export function ErrorState({ error, onRetry, title = 'Could not load data', compact, className }: { error: unknown; onRetry?: () => void; title?: string; compact?: boolean; className?: string }) {
+  // A capability the backend does not offer is a deliberate state, not a failure: no alarm, no pointless retry.
+  if (isApiError(error) && error.kind === 'not_available')
+    return (
+      <div role="status">
+        <StateView icon={PlugZap} title="Not available yet" description={userMessage(error)} compact={compact ?? false} {...(className ? { className } : {})} />
+      </div>
+    );
   return (
     <div role="alert">
       <StateView

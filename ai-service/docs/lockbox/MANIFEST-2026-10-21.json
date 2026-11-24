@@ -1,0 +1,65 @@
+{
+  "manifest_version": 1,
+  "sealed_at_utc": "2026-10-21T06:29:03Z",
+  "export_date": "2026-10-21",
+  "rule": "Primary lockbox (D23): 2026-01-10 to the export date. Never opened, plotted, loaded or summarised before P9; opened once, with --open-lockbox and the frozen versions logged.",
+  "note": "FxPro MT5 M1 exports, six instruments, exported 2026-10-21 by Fadi. Hashed only; no file was opened or parsed.",
+  "hash": "sha256 of the raw file bytes; no content was parsed",
+  "files_digest": "e8efcbaadbd97e607983a382db2d440393e511098f1ab480bc2b74aa0dece9d8",
+  "files": [
+    {
+      "path": "AUDUSD_M1_202601120002_202610210000.csv",
+      "bytes": 17709507,
+      "sha256": "229ed3d0af7ebd7370bacb3c9c1c62a58ab173c033e61ad95c56bc69ff8d3fd6",
+      "symbol": "AUDUSD",
+      "timeframe": "M1",
+      "name_first_server": "2026-01-12 00:02",
+      "name_last_server": "2026-10-21 00:00"
+    },
+    {
+      "path": "EURUSD_M1_202601120002_202610210000.csv",
+      "bytes": 17437290,
+      "sha256": "859887a5217443711ce780680f2b1876607fd296034dece1b0657ac0589db9b6",
+      "symbol": "EURUSD",
+      "timeframe": "M1",
+      "name_first_server": "2026-01-12 00:02",
+      "name_last_server": "2026-10-21 00:00"
+    },
+    {
+      "path": "GBPUSD_M1_202601120002_202610210000.csv",
+      "bytes": 17742299,
+      "sha256": "5ac79b660d3ed0e5b6bbf71a01be0e151b8dee99013e02fc12414567a28cc189",
+      "symbol": "GBPUSD",
+      "timeframe": "M1",
+      "name_first_server": "2026-01-12 00:02",
+      "name_last_server": "2026-10-21 00:00"
+    },
+    {
+      "path": "USDCAD_M1_202601120002_202610210000.csv",
+      "bytes": 17703827,
+      "sha256": "6009a1424d1ab4617f24320d4b21de10878cb98679ee6dfd240fbc71142cbc29",
+      "symbol": "USDCAD",
+      "timeframe": "M1",
+      "name_first_server": "2026-01-12 00:02",
+      "name_last_server": "2026-10-21 00:00"
+    },
+    {
+      "path": "USDJPY_M1_202601120002_202610210000.csv",
+      "bytes": 17726213,
+      "sha256": "425cf25350a8559f1f726acab03cf23a7c063ed26f4012f1768e81505584e17d",
+      "symbol": "USDJPY",
+      "timeframe": "M1",
+      "name_first_server": "2026-01-12 00:02",
+      "name_last_server": "2026-10-21 00:00"
+    },
+    {
+      "path": "XAUUSD_M1_202601120101_202610202356.csv",
+      "bytes": 17049942,
+      "sha256": "d95fca94160e513b1e5a28cc26de42f6ca3c0f776355f0f6ba18f590195499b9",
+      "symbol": "XAUUSD",
+      "timeframe": "M1",
+      "name_first_server": "2026-01-12 01:01",
+      "name_last_server": "2026-10-20 23:56"
+    }
+  ]
+}

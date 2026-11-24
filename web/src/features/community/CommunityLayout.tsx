@@ -21,7 +21,9 @@ export function CommunityLayout() {
         tabs={[
           { to: '/community/news', label: 'News' },
           { to: '/community/posts', label: 'Posts' },
-          { to: '/community/experts', label: 'Experts' },
+          // Expert detail pages keep the Experts tab active; People (follows, profiles) is backend only.
+          { to: '/community/experts', label: 'Experts', end: false },
+          ...(source === 'api' ? [{ to: '/community/people', label: 'People', end: false }] : []),
         ]}
       />
       <Outlet />

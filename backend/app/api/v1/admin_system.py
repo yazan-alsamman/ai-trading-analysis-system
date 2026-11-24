@@ -13,7 +13,9 @@ router = APIRouter(prefix="/admin/system", tags=["admin"])
 async def system_status_view(_: AdminUser, session: SessionDep, request: Request) -> dict:
     """Version, uptime, database (size, connections, migration, slowest queries when
     pg_stat_statements is installed), Redis, Celery (queue lengths, live workers, last run of the
-    scheduled tasks), market data freshness per active instrument, WebSocket clients of every API
-    process, notification channels, unhandled errors in the last hour, the last daily summary."""
+    scheduled tasks), market data freshness per active instrument, the data-quality report of
+    every monitored instrument, the economic-calendar refresh (last success, last error,
+    back-off, stored rows), WebSocket clients of every API process, notification channels,
+    unhandled errors in the last hour, the last daily summary."""
     hub = getattr(request.app.state, "hub", None)
     return await system_status.collect(session, get_redis(), hub)

@@ -1,0 +1,18 @@
+# Live evaluation (P6, docs/phase6/PLAN.md). One profile per contract `profile`; each runs a frozen
+# rule set of strategy.toml with the same code as the research pipeline.
+
+[profiles.intraday]
+rules = "L1"
+# The 15m bars must cover at least this many complete trading days (17:00-17:00 New York) before
+# the trading day of the evaluated bar. Levels live 5 trading days, a 4h swing needs the 12 h
+# before it, and setups decided up to a horizon ago are re-derived: 7 days. Wilder's ATR forgets
+# its start after a few hundred bars, so 7 days (about 650 bars) also covers its warm-up.
+# Verified by the replay of P6 task 5.
+history_trading_days = 7
+# The longest run of missing 15m bars inside trading hours (US market holidays excluded) allowed
+# in the last gap_window_hours before the evaluated bar; longer means a broken feed:
+# data_quality_failed. Older gaps are left to the rules, as in research (a bar after a gap is
+# never a sweep or a swing). In 2012-2024 the store has 17 longer runs on gold, most of them on
+# holiday evenings.
+max_gap_minutes = 240
+gap_window_hours = 24

@@ -1,0 +1,23 @@
+erDiagram
+    chart_analyses {
+        uuid id PK
+        uuid user_id FK
+        timestamptz created_at
+        varchar image_sha256
+        int image_bytes
+        int width
+        int height
+        varchar mime
+        varchar language
+        varchar symbol_hint
+        varchar timeframe_hint
+        varchar model
+        varchar prompt_version
+        varchar status
+        jsonb result
+        int input_tokens
+        int output_tokens
+        int latency_ms
+    }
+    users
+    chart_analyses }o--|| users : "user_id"

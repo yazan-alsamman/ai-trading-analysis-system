@@ -9,7 +9,10 @@
 | API | `http://187.127.76.76:8080/api/v1/...` |
 | التوثيق (Swagger) | http://187.127.76.76:8080/docs (مطفأ افتراضياً، انظر «تشغيل /docs يوم العرض») |
 | الجاهزية | http://187.127.76.76:8080/api/v1/health/ready |
+| جودة البيانات | http://187.127.76.76:8080/api/v1/health/data (503 إذا كانت أداة `degraded` أو `no_data`؛ لا يؤثر على النشر، انظر [data-quality.md](data-quality.md)) |
+| التقويم الاقتصادي | `GET /api/v1/calendar/events` (بتسجيل دخول)، والاستيراد التاريخي `POST /api/v1/admin/calendar/import`، انظر [economic-calendar.md](economic-calendar.md) |
 | WebSocket | `ws://187.127.76.76:8080/ws/market` |
+| HTTPS (بعد خطوات [https.md](https.md)) | `https://trading.yazanalsamman.com` و `wss://trading.yazanalsamman.com/ws/market` عبر nginx السيرفر إلى `127.0.0.1:8090` |
 
 لا يوجد دومين حالياً، ولذلك لا يوجد HTTPS. عند إضافة دومين نضع أمامه موقع nginx للسيرفر مع certbot.
 
@@ -30,7 +33,7 @@
 - المنفذ العام الوحيد لمشروعنا هو `8080` (حاوية nginx). قاعدة البيانات مربوطة على `127.0.0.1:5435` فقط، وRedis والـ backend بلا منافذ على المضيف.
 - الشبكة المستخدمة `172.30.57.0/24`: العناوين الديناميكية من `172.30.57.128/25` فقط (`DOCKER_IP_RANGE`)، وعنوان Nginx
   الثابت `172.30.57.10` خارجها. منافذ المشاريع الأخرى المحجوزة هي 80، 443، 3000-3005، 5000، 5432-5434، 6380، 9000، 9001، 27017.
-- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3040MiB (≈2.97GiB)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
+- لكل حاوية حد للذاكرة والمعالج، ومجموع حدود الذاكرة 3520MiB (≈3.44GiB، نحو 45% من 7.8GB على السيرفر المشترك بلا swap) بعد إضافة `feed-ctrader` (128m، 0.25 CPU، B1) ورفع الـ backend إلى 640m لتحليل صور الشارت (Y14)، وسجلات Docker محدودة بـ 30MB لكل حاوية.
 - `cpus:` سقف وليس حجزاً (مجموع سقوفنا 6.5 على سيرفر بـ 2 vCPU)، لذلك لكل خدماتنا `cpu_shares: 512` (الافتراضي 1024):
   عند انشغال السيرفر تأخذ المشاريع الأخرى ضعف وزننا من المعالج، وعندما يكون هادئاً نستطيع استخدام سقوفنا.
 
@@ -126,9 +129,82 @@ ssh -i ~/.ssh/trading_deploy -L 5435:127.0.0.1:5435 deploy-trading@187.127.76.76
   curl -s "http://187.127.76.76:8080/api/v1/pay/demo/<checkout_id>" | grep -o '<title>[^<]*'
   ```
 
+## التقويم الاقتصادي (B6)
+- لا خدمات جديدة ولا أسرار. الـ `worker` ينفّذ `calendar.refresh` (يفحصه الـ `beat` كل 15 دقيقة،
+  ويرسل طلباً واحداً فقط إلى ForexFactory كل 4 ساعات على الأكثر، ولا شيء لمدة 6 ساعات بعد 429/403).
+- Migration `0014` تنشئ جدول `economic_events` وفهارسه فقط، ولا تلمس أي جدول آخر.
+- متغيرات جديدة بقيم افتراضية آمنة: `CALENDAR_ENABLED=true`، `CALENDAR_FF_URL`،
+  `CALENDAR_FETCH_INTERVAL_MINUTES=240`، `CALENDAR_FETCH_TIMEOUT_SECONDS=15`،
+  `CALENDAR_FETCH_MAX_BYTES=2097152`، `CALENDAR_BACKOFF_HOURS=6`، `CALENDAR_CURRENCIES=USD`.
+- Nginx يقبل حتى 51MB على مسار الاستيراد وحده (`/api/v1/admin/calendar/import`).
+- البيانات التاريخية (Kaggle) لا تُرفع إلى المستودع أبداً: يرفعها المدير بنفسه عبر
+  `POST /api/v1/admin/calendar/import` (الخطوات في [economic-calendar.md](economic-calendar.md)).
+- فحص بعد النشر:
+  ```bash
+  curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/calendar/refresh
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/system/status | python3 -c 'import sys,json;print(json.load(sys.stdin)["calendar"])'
+  curl -s -H "Authorization: Bearer $TOKEN" "http://187.127.76.76:8080/api/v1/calendar/events?min_impact=medium"
+  ```
+
+## عقد ai-service وجداول الذكاء الاصطناعي (B7 + B8)
+- لا خدمات جديدة ولا أسرار، ولا شيء يستدعي ai-service بشكل مجدول بعد (هذا B9). العقد مسودة حتى يوافق فادي:
+  [ai-contract.md](ai-contract.md).
+- Migration `0015` تنشئ خمسة جداول جديدة فقط (`ai_setups`، `ai_setup_events`، `ai_model_versions`،
+  `ai_setup_sizes`، `ai_setup_explanations`) ولا تلمس أي جدول آخر.
+- متغيرات جديدة بقيم افتراضية آمنة: `AI_EVALUATE_TIMEOUT_SECONDS=10`، `AI_SIZE_TIMEOUT_SECONDS=5`،
+  `AI_EXPLAIN_TIMEOUT_SECONDS=30`، `AI_MAX_RETRIES=2`، `AI_BARS_15M=500`، `AI_BARS_1H=500`، `AI_BARS_4H=300`.
+- حد ذاكرة `ai-service` من 256m إلى **512m** (بموافقة يزن)، والمعالج كما هو (0.5). مجموع حدود ذاكرة مشروعنا
+  من 3040MiB إلى **3296MiB** (≈3.22GiB)، أي نحو 41% من 7.8GB على سيرفر مشترك بلا swap: db 768،
+  redis 192، backend 544، worker 384، worker-backtest 512، beat 192، telegram-bot 128، ai-service 512،
+  nginx 64. هذه سقوف وليست استهلاكاً فعلياً.
+- فحص بعد النشر (حساب مدير):
+  ```bash
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/ai/models
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" "http://187.127.76.76:8080/api/v1/admin/ai/setups?limit=5"
+  ```
+
+## إعدادات مخاطرة AI والصفقات المأخوذة (B10)
+- لا خدمات جديدة ولا أسرار. Migration `0016` إضافية: `risk_profiles.leverage` (افتراضي 100 لكل الملفات الموجودة)
+  و`risk_profiles.balance_set_at` (فارغ)، و`source` و`computed_at` في `ai_setup_sizes`، وجدول جديد `ai_setup_takes`.
+- متغيرات جديدة بقيم افتراضية آمنة: `AI_SIZE_MODE=auto`، `AI_SIZE_CONCURRENCY=4`، `AI_DEFAULT_RISK_PCT=1.0`،
+  `AI_DEFAULT_DAILY_LOSS_PCT=3.0`، `AI_DEFAULT_MAX_DRAWDOWN_PCT=10.0`. التفاصيل في
+  [risk-management.md](risk-management.md#ai-setups-b10).
+- لا توجد إعدادات AI في الإنتاج بعد، لذلك `/ai/setups/{id}/size` و`/take` تعيد 404 وهذا متوقع.
+- فحص بعد النشر:
+  ```bash
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/risk-profile   # leverage 100 و ai_risk
+  curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/ai/setups/x/size  # 404
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/ai/trades   # {"items":[],"total":0,...}
+  ```
+
+## تنبيهات إعدادات AI والإشعارات العالقة (B11)
+- لا خدمات جديدة ولا أسرار. Migration `0017` إضافية: قيمة `ai_setup` لنوع الإشعار، وجدولا `ai_setup_outbox` و`ai_alert_follows`،
+  وعمود `next_attempt_at` (فارغ للصفوف الموجودة) وفهرس جزئي على `notification_deliveries`.
+- مهمتان جديدتان على طابور `notifications` (خدمة `worker`): `ai_alerts.dispatch` كل 30 ثانية (استعلام مفهرس واحد حين لا يوجد شيء)،
+  و`notifications.sweep` كل دقيقة (يعيد إرسال الإشعارات التي ضاعت مهمة إرسالها، ويعلّم ما هو أقدم من يوم `skipped` بدل
+  إرساله، ويكتب سطراً واحداً `requeued=N expired=M`).
+- متغيرات جديدة بقيم افتراضية آمنة: `AI_ALERTS_ENABLED=true`، `AI_ALERTS_BATCH=50`، `AI_ALERTS_MAX_ATTEMPTS=8`،
+  `AI_ALERTS_MAX_AGE_SECONDS=900`، `AI_EXPLAIN_LANGS=ar,en`، `NOTIFICATION_SWEEP_AFTER_SECONDS=120`، `NOTIFICATION_SWEEP_BATCH=500`، `NOTIFICATION_SWEEP_MAX_AGE_SECONDS=86400`.
+  التفاصيل في [notifications.md](notifications.md#ai-setup-alerts-b11).
+- فحص بعد النشر (حساب مدير):
+  ```bash
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" "http://187.127.76.76:8080/api/v1/admin/ai/outbox"   # total 0
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://187.127.76.76:8080/api/v1/admin/system/status | python3 -c 'import sys,json;print(json.load(sys.stdin)["ai_alerts"])'
+  curl -s -H "Authorization: Bearer $TOKEN" http://187.127.76.76:8080/api/v1/me/ai/follows   # []
+  ```
+
+## HTTPS على trading.yazanalsamman.com
+- حاوية nginx الخاصة بنا تستمع أيضاً على المنفذ 8090، منشوراً على `127.0.0.1:8090` فقط، و8080 لم يتغير. موقع واحد
+  جديد في nginx السيرفر يمرّر `https://trading.yazanalsamman.com` إليه.
+- القالب في `infra/host-nginx/`. النشر ينسخه إلى `/opt/trading/host-nginx/` ولا يطبّقه: الخطوات يدوية (root) في
+  [https.md](https.md).
+- النشر يفحص 8090 فحصاً إضافياً لا يُفشل النشر، فيكتب `Port 8090 (HTTPS proxy entry): ok` أو تحذيراً.
+- `CORS_ORIGINS` و`PUBLIC_BASE_URL` تُضبط يدوياً بعد نجاح HTTPS (https.md، الخطوة 8)، ولا يغيّرها النشر.
+
 ## توزيع المهام على الـ workers (T05/T07 + hardening)
 - `worker` (`-Q celery,notifications`): المسار الحي فقط: محرك الإشارات (`signals.*`)، تنبيهات الأسعار
-  (`alerts.*`)، وإرسال الإشعارات والملخصات.
+  (`alerts.*`)، وإرسال الإشعارات والملخصات، وفحص جودة البيانات (`data_quality.check`)، وجلب التقويم
+  الاقتصادي (`calendar.refresh`: طلب واحد كل 4 ساعات، 15 ثانية كحد أقصى).
 - `worker-backtest` (`-Q backtests,maintenance`): الاختبارات التاريخية، والمهام غير العاجلة على طابور
   `maintenance`: جلب RSS وتنظيف الأخبار (`news.*`)، تنظيف التوكنات والمفاتيح (`housekeeping.*`)،
   احتفاظ صندوق الإشعارات (`notifications.cleanup`)، التجديدات (`subscriptions.renew`)، والملخص اليومي (`ops.*`).
@@ -264,3 +340,111 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/docs   # 404
 - أي إعداد جديد يُضاف إلى `.env.example` بقيمة افتراضية صالحة للإنتاج، فيصل إلى السيرفر تلقائياً في النشر التالي.
 - أي خدمة جديدة تُضاف إلى `docker-compose.yml` (للتطوير) **وإلى** `infra/deploy/docker-compose.prod.yml` (للإنتاج) مع `mem_limit` و`cpus` و`cpu_shares: 512` و`restart: unless-stopped`، ومن دون أي منفذ عام.
 - الـ migrations تُطبَّق تلقائياً عند النشر، لذلك يجب أن تكون آمنة على بيانات موجودة.
+
+## بث cTrader الحي (B1)
+- خدمة جديدة **`feed-ctrader`** (نفس صورة الـ backend، `python -m app.feeds.ctrader`، 128m و0.25 CPU و`restart: unless-stopped`، بلا منفذ: اتصال WebSocket صادر فقط). مجموع حدود الذاكرة من 3296MiB إلى **3424MiB**، ومجموع سقوف المعالج من 6.5 إلى 6.75.
+- خاملة افتراضياً (`CTRADER_ENABLED=false`): تفحص كل دقيقة وتكتب سطراً واحداً في الساعة، ولا تتصل بـ cTrader حتى يُربط الحساب ويُفعَّل الإعداد.
+- النشر يكتب `CTRADER_CLIENT_ID` و`CTRADER_CLIENT_SECRET` من أسرار GitHub في `/opt/trading/.env` **فقط إذا كان المفتاح غير موجود أو فارغاً**، عبر `set-env-secrets.sh` على stdin ودون طباعة القيم. خطوات التفعيل في docs/ctrader-feed.md.
+
+## فلتر الدرجة في تنبيهات AI (B11b)
+- إعداد جديد `AI_GRADES_ENABLED=false` (في `.env.example`، يصل في النشر التالي). في v1 لا يُرجع ai-service درجات (`grade` دائماً null)، فلا يُطبَّق `min_grade` ويصل تنبيه ARMED لكل متابع. `min_grade` يبقى محفوظاً كما هو.
+- يُفعَّل (`true`) فقط حين يُرجع ai-service درجات، ثم إعادة تشغيل `worker` و`backend`. بلا migration وبلا خدمة جديدة.
+
+## تتبع دقة التوقعات (Y16)
+- Migration **0022** إضافية فقط: جدول جديد `signal_outcomes` مع فهرس على `resolved_at`، ولا تغيّر أي جدول موجود.
+- إعدادات جديدة في `.env.example`: `PREDICTION_HORIZON_BARS=10`، `PREDICTION_RESOLVE_INTERVAL_SECONDS=300`، `PREDICTION_RESOLVE_BATCH=500`.
+- مهمة beat جديدة `predictions.resolve_signals` على طابور `maintenance` (أي `worker-backtest`، وليس `worker` الحي). بلا خدمة جديدة. كل تشغيل يحسم 500 إشارة كحد أقصى ويقرأ شموع أفقها فقط، فتُحسم الإشارات القديمة تدريجياً.
+- فحص بعد النشر: `GET /api/v1/admin/predictions/resolver` (آخر تشغيل والمتبقي `backlog`) و`GET /api/v1/predictions/stats`. التفاصيل في docs/predictions.md.
+
+## التوصيات (Y17)
+- بلا migration وبلا خدمة أو مهمة Celery جديدة: نقطتا قراءة فقط في الـ backend، `GET /api/v1/me/recommendations` و`GET /api/v1/recommendations/strategies`.
+- إعدادات جديدة في `.env.example`: `RECOMMENDATION_MAX_AGE_BARS=3`، `RECOMMENDATION_MIN_SAMPLES=20`، `RECOMMENDATION_CACHE_SECONDS=300`، `RECOMMENDATIONS_NOTIFY=false`. القيمة الأخيرة مطفأة، فلا يتغير إشعار الإشارة.
+- سجل كل (أداة، فريم) يُخزَّن في Redis تحت `reco:track:*` لمدة 300 ثانية، ولا يُخزَّن أي شيء خاص بمستخدم. التفاصيل في docs/recommendations.md.
+
+## تحليل صورة الشارت عبر Gemini (Y14)
+- Migration **0023** إضافية فقط: جدول جديد `chart_analyses` (الصورة نفسها لا تُخزَّن، فقط بصمتها SHA-256).
+- إعدادات جديدة في `.env.example` بقيم آمنة: `GEMINI_API_KEY=` (فارغ = الميزة مطفأة، 503، وباقي المنصة يعمل)، `CHART_ANALYSIS_ENABLED=true`، `CHART_VISION_MODEL=gemini-3.6-flash`، `CHART_VISION_TIMEOUT_SECONDS=45`، `CHART_IMAGE_MAX_BYTES=5242880`، الحدود اليومية `CHART_ANALYSIS_DAILY_LIMIT_{TRADER,ANALYST,EXPERT,ADMIN}=5/20/20/100`، و`CHART_ANALYSIS_MAX_CONCURRENT=1`.
+- السر: خطوة جديدة في `deploy.yml` تكتب `GEMINI_API_KEY` من سر GitHub بنفس الاسم إلى `/opt/trading/.env` **فقط إذا كان المفتاح غير موجود أو فارغاً**، عبر `set-env-secrets.sh` على stdin ودون طباعة القيمة. إذا لم يُضبط السر في GitHub تطبع "GEMINI_API_KEY not set in GitHub: skipped" ويستمر النشر. خطوة `up -d` التالية تعيد إنشاء الـ backend (وسم صورة جديد) فيقرأ المفتاح.
+- Nginx: موقع خاص بـ `/api/v1/analysis/chart-image` فقط، مع `client_max_body_size 6m` و`proxy_read_timeout 60s`. باقي المسارات بلا تغيير.
+- الذاكرة: حد الـ backend من 544m إلى **640m (+96m)** بعد القياس (4 تحليلات متوازية بأسوأ صور 4.5MB، القمة 508MiB؛ التفاصيل في docs/chart-analysis.md §7). مجموع حدود الذاكرة من 3424MiB إلى **3520MiB** (≈45% من 7.8GB).
+- بلا خدمة جديدة وبلا منفذ عام. التفعيل: أضف سر GitHub `GEMINI_API_KEY`، ثم ادمج أو أعد تشغيل Deploy، وتحقق أن `/admin/system/status` يعرض `chart_analysis.enabled: true`.
+
+
+## الفحص بعد النشر: Prod smoke (Y20)
+workflow يدوي فقط (`.github/workflows/prod-smoke.yml`، لا يعمل تلقائياً أبداً): Actions ← Prod smoke ← Run workflow. يشغّله يزن
+**بعد كل نشر، ويوم العرض** (انظر [demo-day.md](demo-day.md)).
+- يعمل من runner الخاص بـ GitHub على `http://<VPS_HOST>:8080` (نفس سر `VPS_HOST` الذي يستخدمه النشر). **لا SSH** ولا يلمس السيرفر.
+- **قراءة فقط**: كل الطلبات GET، والطلب الوحيد غير GET هو تسجيل الدخول. لا DELETE، ولا `POST /analysis/chart-image` أبداً
+  (يستهلك حصة Gemini). السكربت `infra/smoke/prod_smoke.py` يرفض أي طلب آخر.
+- التوكن مُقنَّع (`::add-mask::`) ولا يُطبع، ولا يُطبع أي جسم استجابة: أعداد وحالات وأعلام فقط، وسطر واحد لكل فحص
+  (`ok` / `warn` / `fail`).
+- **بلا حساب**: `/api/v1/health` و`/health/ready` و`/health/data` (حالة `degraded` تُطبع `warn` ولا تُفشل)، وصفحة الويب
+  (`<div id="root">`)، و`/api/v1/market/instruments` و`/calendar/events` لآخر 7 أيام (بلا حساب يجب أن تعيدا 401).
+- **مع حساب** (فقط إذا وُجد السرّان `SMOKE_EMAIL` و`SMOKE_PASSWORD`): تسجيل الدخول ثم GET فقط:
+  `/admin/system/status` (تطبع الأعلام: AI evaluate، الدرجات `ai_alerts.grades_enabled`، تحليل الشارت، حالة بث cTrader وانتهاء
+  التوكن، تحديث التقويم)، `/predictions?source=ai&limit=1` (إعدادات AI المنشورة؛ لا توجد قائمة `/ai/setups` للمستخدمين)،
+  `/predictions/stats`، `/admin/predictions/resolver`، `/analysis/chart-image/quota`، `/me/recommendations?limit=1`، وعدد
+  الأدوات وأحداث التقويم.
+- **يفشل فقط عند عطل حقيقي**: 5xx (غير 503 المقصود مثل `not_configured` أو بيانات `degraded`)، أو فحص الصحة/الجاهزية لا
+  يجيب، أو صفحة الويب غير موجودة، أو رُفض تسجيل الدخول. ميزة مطفأة أو حساب ليس مديراً = `warn`.
+- **إضافة السرّين (مرة واحدة)**: أنشئ حساباً خاصاً للفحص (يفضَّل مديراً لترى الأعلام؛ بلا مدير تبقى الفحوص العامة)، ثم
+  Settings ← Secrets and variables ← Actions ← New repository secret: `SMOKE_EMAIL` و`SMOKE_PASSWORD`. لا تضع كلمة السر
+  في الريبو أبداً. بدونهما يعمل الفحص العام فقط ويطبع `warn login: SMOKE_EMAIL / SMOKE_PASSWORD not set`.
+- مثال حقيقي (2026-10-27، على السيرفر بلا حساب: `VPS_HOST=<VPS_HOST> python infra/smoke/prod_smoke.py`):
+  ```
+  ok   health: 200
+  ok   ready: database, redis and migrations ok
+  ok   data: ok (fxpro:XAU/USD ok)
+  ok   web: index.html with <div id="root">
+  ok   instruments: 401 without a login (auth enforced)
+  ok   calendar: 401 without a login (auth enforced)
+  warn login: SMOKE_EMAIL / SMOKE_PASSWORD not set: public checks only
+  summary: 6 ok, 1 warn, 0 fail
+  ```
+
+## اختبارات التكامل النهائية (Y20)
+- مهمة `e2e` في CI تشغّل الآن أيضاً `fake-ai` و`fake-gemini` (ملفّا profile للتطوير/CI فقط، غير موجودين في
+  `infra/deploy/docker-compose.prod.yml`، بلا منفذ منشور)، وتضبط في `.env` الخاص بها فقط: `AI_SERVICE_URL=http://fake-ai:8001`،
+  `AI_EVALUATE_ENABLED=true`، `CHART_VISION_BASE_URL=http://fake-gemini:8002`، ومفتاح `GEMINI_API_KEY` وهمي. CI لا يستدعي
+  Gemini ولا ai-service حقيقياً أبداً.
+- ملفات جديدة في `backend/tests_e2e/`: `test_09_ai_evaluate.py` (B9-B11)، `test_10_predictions_recommendations.py`
+  (Y16، Y17)، `test_11_chart_analysis.py` (Y14، ومنها إطفاء الميزة بإعداد واحد وإعادة إنشاء الـ backend: 503).
+- إعداد جديد في `.env.example`: `CHART_VISION_BASE_URL=` (فارغ في الإنتاج دائماً). و`/admin/system/status` يعرض الآن
+  `ai_alerts.grades_enabled`. بلا migration وبلا خدمة إنتاج جديدة ولا منفذ عام.
+- مدة مهمة `e2e` في CI: نحو 4:05 دقائق (كانت 2:19 إلى 3:08 على main)؛ خطوة الاختبارات 139 ث بدل 65 ث، معظم الزيادة من
+  `test_11` (نحو 36 ث: إعادة إنشاء الـ backend مرتين).
+
+## تشغيل gold_levels على السيرفر
+(B13، العقد 0.3.0، التفاصيل في [ai-contract.md القسم 14](ai-contract.md#14-contract-030-gold_levels-and-daily-volatility-b13))
+- النشر نفسه لا يغيّر شيئاً على السيرفر: Migration **0024** إضافية (أعمدة فارغة `exit_type` و`exit_reason` في `ai_setups`،
+  و`sl` في `ai_setup_events` و`ai_setup_outbox`، وجدول جديد `ai_volatility_daily`)، و`AI_PROFILES` يبقى `intraday`،
+  و`AI_BARS_15M` على السيرفر يبقى كما هو. تُضاف تلقائياً من `.env.example`: `AI_GOLD_LEVELS_BARS=5m:3000,1h:500,4h:300,1d:260`،
+  `AI_GOLD_LEVELS_INSTRUMENTS=fxpro:XAU/USD`، `AI_NOTIFY_SL_MOVED=true`.
+- مهمة beat `ai.evaluate_tick` تعمل الآن كل 5 دقائق (كانت كل 15)، وتجدول `intraday` عند حدود الـ 15 دقيقة فقط كما كان.
+  بلا خدمة جديدة ولا منفذ عام.
+- **بعد أن ينشر فادي جهته فقط** (ai-service يفهم `gold_levels`)، سطر واحد في `.env` ثم إعادة إنشاء `worker` و`beat` فقط:
+  ```bash
+  cd /opt/trading
+  sed -i 's/^AI_PROFILES=.*/AI_PROFILES=intraday,gold_levels/' .env
+  grep -E '^AI_(PROFILES|GOLD_LEVELS_|NOTIFY_SL_MOVED)' .env
+  docker compose -p trading -f docker-compose.yml --env-file .env --env-file image.env \
+    up -d --no-deps --force-recreate worker beat
+  # بعد حد الـ 5 دقائق التالي + 20 ث: آخر تشغيل لكل ملف تداول، وآخر يوم تذبذب مخزّن
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://127.0.0.1:8080/api/v1/admin/system/status \
+    | python3 -c 'import json,sys; s=json.load(sys.stdin)["ai_evaluate"]; print(json.dumps({k: s.get(k) for k in ("profiles","profile_settings","volatility","last_runs")}, indent=1))'
+  ```
+  للإيقاف: نفس السطر بـ `AI_PROFILES=intraday` ونفس إعادة الإنشاء. تنبيه تحريك الستوب يطفأ بـ `AI_NOTIFY_SL_MOVED=false`
+  (ثم `worker` فقط).
+- الذاكرة: قيس محلياً عامل بإعدادات الإنتاج (`--concurrency 2`، حد 384m بلا swap) والملفّان على نفس حد الـ 15 دقيقة
+  وبالعدد الكامل من الشموع (intraday 2000 ثم 2500 من 15m، وgold_levels 3000 من 5m، وسنة من 1m في القاعدة): الذروة
+  **272MiB من 384MiB** (نحو 71%)، وكل عملية فرعية تزيد نحو 13 إلى 15MiB أثناء التقييم. حجم الطلب نحو 450KB لـ intraday
+  و590KB لـ gold_levels. لذلك لا تغيير في `mem_limit`.
+- صورة الـ backend تثبّت الآن `celery[redis]`: kombu 5.7 يستورد `packaging` لنقل redis ولا يعلنه إلا في إضافة `redis`،
+  فبناء جديد للصورة بدونها يُسقط `worker` و`beat` عند الإقلاع (`No module named 'packaging'`).
+- `AI_BARS_15M=2500` (طلب فادي لنموذج التذبذب) **ليس جزءاً من هذا النشر**: يُغيَّر لاحقاً بسطر `.env` واحد في برومبت سيرفر.
+
+## رموز واتساب عبر LightOTP (docs/otp.md)
+
+- إعدادات جديدة في `.env.example`: `LIGHTOTP_TOKEN=` (فارغ = الميزة مطفأة، 503، وباقي المنصة يعمل)، `LIGHTOTP_BASE_URL=https://api.lightotp.com`، `LIGHTOTP_TIMEOUT_SECONDS=15`، `LIGHTOTP_LANGUAGE=ar`، `OTP_LENGTH=5`، `OTP_TTL_SECONDS=300`، `OTP_MAX_ATTEMPTS=5`، `OTP_RESEND_SECONDS=60`، `OTP_PHONE_PER_HOUR=5`، `AUTH_OTP_IP_PER_MINUTE=5`.
+- المفتاح: إما سطر `LIGHTOTP_TOKEN=...` يدوياً في `/opt/trading/.env` (بأحرف كبيرة)، أو سر GitHub بنفس الاسم تكتبه خطوة جديدة في `deploy.yml` إلى `.env` **فقط إذا كان غير موجود أو فارغاً** عبر `set-env-secrets.sh` ودون طباعة القيمة.
+- Migration `0025` إضافية وآمنة: عمودان `phone_e164` و`phone_verified_at` (NULL لكل المستخدمين الحاليين) مع قيد unique وفحص E.164.

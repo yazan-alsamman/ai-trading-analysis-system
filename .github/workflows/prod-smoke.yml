@@ -1,0 +1,34 @@
+name: Prod smoke
+
+# Read-only check of the live server (Y20): run it by hand after each deploy and on demo day
+# (docs/deployment.md, docs/demo-day.md). From the GitHub runner over HTTP to the public port
+# 8080 of VPS_HOST (the deploy's host secret). No SSH, nothing written: GET only, plus the login
+# when SMOKE_EMAIL and SMOKE_PASSWORD exist; never the chart-image POST (Gemini quota). The token
+# is masked and response bodies are never printed (infra/smoke/prod_smoke.py).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: infra/smoke
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Smoke checks (ok / warn / fail; fails only on a real failure)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: python infra/smoke/prod_smoke.py

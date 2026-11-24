@@ -9,6 +9,9 @@ EXPERT = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
 EXAMPLES: dict[str, dict] = {
     "UserCreate": {"email": "trader@example.com", "password": "Passw0rd123", "full_name": "Omar"},
     "LoginRequest": {"email": "trader@example.com", "password": "Passw0rd123"},
+    "PhoneRequest": {"phone": "+963944123456"},
+    "PhoneVerify": {"phone": "+963944123456", "code": "12345"},
+    "OtpLogin": {"phone": "+963944123456", "code": "12345"},
     "ApiKeyCreate": {
         "name": "my bot",
         "scopes": ["market:read", "indicators:read", "signals:read", "news:read", "stream"],

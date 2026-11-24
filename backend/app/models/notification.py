@@ -48,6 +48,10 @@ class NotificationType(StrEnum):
     subscription_payment_failed = "subscription_payment_failed"
     subscription_canceled = "subscription_canceled"
     new_subscriber = "new_subscriber"
+    # B11 (migration 0017): AI setup state changes (ARMED to followers, the rest to takers)
+    ai_setup = "ai_setup"
+    # paper trading (migration 0026): a pending order filled or rejected, SL/TP hit
+    paper_trade = "paper_trade"
 
 
 class Severity(StrEnum):
@@ -128,6 +132,12 @@ class NotificationDelivery(Base):
             postgresql_where=text("status = 'pending' AND hold IS NOT NULL"),
         ),
         Index("ix_notification_deliveries_created", "created_at"),
+        # the sweeper (B11): unsent deliveries without a hold, by when they were due
+        Index(
+            "ix_notification_deliveries_unsent",
+            text("coalesce(next_attempt_at, created_at)"),
+            postgresql_where=text("status = 'pending' AND hold IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -152,6 +162,8 @@ class NotificationDelivery(Base):
         DateTime(timezone=True), server_default=func.clock_timestamp()
     )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # when the scheduled retry is due (set with each retry; null before the first attempt)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class NotificationPreference(Base):

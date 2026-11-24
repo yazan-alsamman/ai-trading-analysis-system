@@ -1,4 +1,5 @@
 import { DemoBadge } from '@/components/ui/Badge';
+import { SourceTag } from '@/components/ui/SourceTag';
 import type { IndicatorId } from '@/domain/indicators';
 import type { Instrument } from '@/domain/instruments';
 import type { Candle, Provenance, Timeframe, VolumeKind } from '@/domain/market';
@@ -66,6 +67,7 @@ export function ChartLegend({ instrument, timeframe, candles, hover, indicatorDa
         <span className="font-semibold text-fg">{instrument.display}</span>
         <span className="text-fg-3">{timeframe}</span>
         {provenance === 'demo' && <DemoBadge />}
+        {provenance === 'live' && <SourceTag kind="live" />}
         {hover && <span className="num text-fg-3">{formatDateTime(hover.time * 1000, timeZone)} {timeZoneLabel(timeZone)}</span>}
       </div>
 

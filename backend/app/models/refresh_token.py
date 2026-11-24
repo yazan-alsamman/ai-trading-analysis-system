@@ -8,7 +8,11 @@ from app.db.base import Base
 
 
 class RefreshToken(Base):
-    """One row per issued refresh token; ``id`` is the token's ``jti`` claim."""
+    """One row per issued refresh token; ``id`` is the token's ``jti`` claim.
+
+    ``family_id`` is the login session: a login starts a family (its own id), a rotation keeps
+    it. Access tokens carry it as ``sid``; a family with no unrevoked row has ended, and the
+    WebSockets of its access tokens close (B12 part 2)."""
 
     __tablename__ = "refresh_tokens"
 
@@ -20,3 +24,4 @@ class RefreshToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     replaced_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    family_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)

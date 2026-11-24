@@ -1,0 +1,6 @@
+# The image needs only pyproject.toml and app/ (Dockerfile); keep the research store, the venv
+# and the docs out of the build context.
+*
+!pyproject.toml
+!app/
+**/__pycache__

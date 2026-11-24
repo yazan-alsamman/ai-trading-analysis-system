@@ -43,7 +43,7 @@ async def publish_candle_updates(
     await publisher.publish(
         candles_topic(instrument_id, Timeframe.m1),
         protocol.candle_event(
-            instrument_id, Timeframe.m1, CandleOut.from_candle(newest).model_dump()
+            instrument_id, Timeframe.m1, CandleOut.from_candle(newest).model_dump(exclude_none=True)
         ),
         redis,
     )
@@ -58,7 +58,9 @@ async def publish_candle_updates(
             continue
         await publisher.publish(
             candles_topic(instrument_id, tf),
-            protocol.candle_event(instrument_id, tf, CandleOut.from_candle(latest).model_dump()),
+            protocol.candle_event(
+                instrument_id, tf, CandleOut.from_candle(latest).model_dump(exclude_none=True)
+            ),
             redis,
         )
         published.append(tf)

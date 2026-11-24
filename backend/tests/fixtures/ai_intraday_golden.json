@@ -1,0 +1,600 @@
+{
+ "alerts": [
+  {
+   "data": {
+    "direction": "buy",
+    "entry": 2398.92,
+    "ev_r": 0.74,
+    "grade": null,
+    "instrument": {
+     "id": "<instrument>",
+     "price_precision": null,
+     "quantity_precision": null,
+     "source": "fxpro",
+     "symbol": "XAU/USD"
+    },
+    "late": false,
+    "probability": 0.58,
+    "profile": "intraday",
+    "r_multiple": 2.0,
+    "realized_r": null,
+    "reason": "trigger",
+    "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+    "sl": 2393.92,
+    "state": "ARMED",
+    "tp": 2408.92,
+    "transition": {
+     "at": "2026-10-19T14:30:00Z",
+     "from": "DEVELOPING",
+     "realized_r": null,
+     "reason": "trigger",
+     "to": "ARMED"
+    },
+    "valid_until": null
+   },
+   "frame": {
+    "setup": {
+     "created_at": "2026-10-19T14:15:00Z",
+     "direction": "buy",
+     "entry": 2398.92,
+     "ev_r": 0.74,
+     "ev_r_lower": 0.31,
+     "evidence": {
+      "fake": true
+     },
+     "features": {
+      "step": 2
+     },
+     "grade": null,
+     "horizon_until": null,
+     "probability": 0.58,
+     "r_multiple": 2.0,
+     "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+     "sl": 2393.92,
+     "state": "CLOSED",
+     "tp": 2408.92,
+     "valid_until": null
+    },
+    "transition": {
+     "at": "2026-10-19T14:30:00Z",
+     "from": "DEVELOPING",
+     "realized_r": null,
+     "reason": "trigger",
+     "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+     "to": "ARMED"
+    },
+    "type": "ai_setup"
+   },
+   "texts": {
+    "ar": [
+     "إعداد شراء على XAU/USD: الدخول 2,398.92",
+     "الدخول 2,398.92 · الوقف 2,393.92 · الهدف 2,408.92\nالاحتمال 58% · 2.0R"
+    ],
+    "en": [
+     "BUY setup XAU/USD: entry 2,398.92",
+     "Entry 2,398.92 · Stop 2,393.92 · Target 2,408.92\nProbability 58% · 2.0R"
+    ]
+   }
+  },
+  {
+   "data": {
+    "direction": "buy",
+    "entry": 2398.92,
+    "ev_r": 0.74,
+    "grade": null,
+    "instrument": {
+     "id": "<instrument>",
+     "price_precision": null,
+     "quantity_precision": null,
+     "source": "fxpro",
+     "symbol": "XAU/USD"
+    },
+    "late": false,
+    "probability": 0.58,
+    "profile": "intraday",
+    "r_multiple": 2.0,
+    "realized_r": null,
+    "reason": "entry_filled",
+    "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+    "sl": 2393.92,
+    "state": "ACTIVE",
+    "tp": 2408.92,
+    "transition": {
+     "at": "2026-10-19T14:45:00Z",
+     "from": "ARMED",
+     "realized_r": null,
+     "reason": "entry_filled",
+     "to": "ACTIVE"
+    },
+    "valid_until": null
+   },
+   "frame": {
+    "setup": {
+     "created_at": "2026-10-19T14:15:00Z",
+     "direction": "buy",
+     "entry": 2398.92,
+     "ev_r": 0.74,
+     "ev_r_lower": 0.31,
+     "evidence": {
+      "fake": true
+     },
+     "features": {
+      "step": 2
+     },
+     "grade": null,
+     "horizon_until": null,
+     "probability": 0.58,
+     "r_multiple": 2.0,
+     "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+     "sl": 2393.92,
+     "state": "CLOSED",
+     "tp": 2408.92,
+     "valid_until": null
+    },
+    "transition": {
+     "at": "2026-10-19T14:45:00Z",
+     "from": "ARMED",
+     "realized_r": null,
+     "reason": "entry_filled",
+     "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+     "to": "ACTIVE"
+    },
+    "type": "ai_setup"
+   },
+   "texts": {
+    "ar": [
+     "الإعداد مفعّل: شراء XAU/USD",
+     "الدخول 2,398.92 · الوقف 2,393.92 · الهدف 2,408.92\nالسبب: entry_filled"
+    ],
+    "en": [
+     "Setup active: BUY XAU/USD",
+     "Entry 2,398.92 · Stop 2,393.92 · Target 2,408.92\nReason: entry_filled"
+    ]
+   }
+  },
+  {
+   "data": {
+    "direction": "buy",
+    "entry": 2398.92,
+    "ev_r": 0.74,
+    "grade": null,
+    "instrument": {
+     "id": "<instrument>",
+     "price_precision": null,
+     "quantity_precision": null,
+     "source": "fxpro",
+     "symbol": "XAU/USD"
+    },
+    "late": false,
+    "probability": 0.58,
+    "profile": "intraday",
+    "r_multiple": 2.0,
+    "realized_r": 2.0,
+    "reason": "tp_hit",
+    "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+    "sl": 2393.92,
+    "state": "CLOSED",
+    "tp": 2408.92,
+    "transition": {
+     "at": "2026-10-19T15:00:00Z",
+     "from": "ACTIVE",
+     "realized_r": 2.0,
+     "reason": "tp_hit",
+     "to": "CLOSED"
+    },
+    "valid_until": null
+   },
+   "frame": {
+    "setup": {
+     "created_at": "2026-10-19T14:15:00Z",
+     "direction": "buy",
+     "entry": 2398.92,
+     "ev_r": 0.74,
+     "ev_r_lower": 0.31,
+     "evidence": {
+      "fake": true
+     },
+     "features": {
+      "step": 2
+     },
+     "grade": null,
+     "horizon_until": null,
+     "probability": 0.58,
+     "r_multiple": 2.0,
+     "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+     "sl": 2393.92,
+     "state": "CLOSED",
+     "tp": 2408.92,
+     "valid_until": null
+    },
+    "transition": {
+     "at": "2026-10-19T15:00:00Z",
+     "from": "ACTIVE",
+     "realized_r": 2.0,
+     "reason": "tp_hit",
+     "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+     "to": "CLOSED"
+    },
+    "type": "ai_setup"
+   },
+   "texts": {
+    "ar": [
+     "أُغلق الإعداد: شراء XAU/USD +2.00R",
+     "السبب: tp_hit"
+    ],
+    "en": [
+     "Setup closed: BUY XAU/USD +2.00R",
+     "Reason: tp_hit"
+    ]
+   }
+  }
+ ],
+ "events": [
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   null,
+   "DEVELOPING",
+   "2026-10-19T14:15:00+00:00",
+   null,
+   null,
+   "xauusd-intraday-2026-10-19T14:15:00Z"
+  ],
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "DEVELOPING",
+   "ARMED",
+   "2026-10-19T14:30:00+00:00",
+   "trigger",
+   null,
+   "xauusd-intraday-2026-10-19T14:30:00Z"
+  ],
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "ARMED",
+   "ACTIVE",
+   "2026-10-19T14:45:00+00:00",
+   "entry_filled",
+   null,
+   "xauusd-intraday-2026-10-19T14:45:00Z"
+  ],
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "ACTIVE",
+   "CLOSED",
+   "2026-10-19T15:00:00+00:00",
+   "tp_hit",
+   2.0,
+   "xauusd-intraday-2026-10-19T15:00:00Z"
+  ]
+ ],
+ "explains": [
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "ar"
+  ],
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "en"
+  ]
+ ],
+ "outbox": [
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "DEVELOPING",
+   "ARMED",
+   "2026-10-19T14:30:00+00:00",
+   "trigger",
+   null
+  ],
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "ARMED",
+   "ACTIVE",
+   "2026-10-19T14:45:00+00:00",
+   "entry_filled",
+   null
+  ],
+  [
+   "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "ACTIVE",
+   "CLOSED",
+   "2026-10-19T15:00:00+00:00",
+   "tp_hit",
+   2.0
+  ]
+ ],
+ "requests": [
+  "{\"request_id\": \"xauusd-intraday-2026-10-19T14:15:00Z\", \"instrument\": \"XAUUSD\", \"profile\": \"intraday\", \"bar_close_ts\": \"2026-10-19T14:15:00Z\", \"bars\": {\"15m\": [{\"ts\": \"2026-10-19T09:15:00Z\", \"o\": 2398.05, \"h\": 2398.3500000000004, \"l\": 2397.2, \"c\": 2397.6, \"spread\": 0.25}, {\"ts\": \"2026-10-19T09:30:00Z\", \"o\": 2397.47, \"h\": 2397.77, \"l\": 2396.8199999999997, \"c\": 2397.22, \"spread\": 0.25}, {\"ts\": \"2026-10-19T09:45:00Z\", \"o\": 2397.1, \"h\": 2397.4, \"l\": 2396.7, \"c\": 2397.1, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:00:00Z\", \"o\": 2397.0, \"h\": 2397.4500000000003, \"l\": 2396.7, \"c\": 2397.25, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:15:00Z\", \"o\": 2397.17, \"h\": 2397.8500000000004, \"l\": 2396.87, \"c\": 2397.65, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:30:00Z\", \"o\": 2397.59, \"h\": 2398.4700000000003, \"l\": 2397.29, \"c\": 2398.27, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:45:00Z\", \"o\": 2398.22, \"h\": 2399.26, \"l\": 2397.9199999999996, \"c\": 2399.06, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:00:00Z\", \"o\": 2399.01, \"h\": 2400.13, \"l\": 2398.71, \"c\": 2399.93, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:15:00Z\", \"o\": 2399.89, \"h\": 2401.03, \"l\": 2399.5899999999997, \"c\": 2400.83, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:30:00Z\", \"o\": 2400.78, \"h\": 2401.8500000000004, \"l\": 2400.48, \"c\": 2401.65, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:45:00Z\", \"o\": 2401.6, \"h\": 2402.54, \"l\": 2401.2999999999997, \"c\": 2402.3399999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:00:00Z\", \"o\": 2402.28, \"h\": 2403.03, \"l\": 2401.98, \"c\": 2402.83, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:15:00Z\", \"o\": 2402.76, \"h\": 2403.28, \"l\": 2402.46, \"c\": 2403.08, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:30:00Z\", \"o\": 2402.98, \"h\": 2403.3, \"l\": 2402.6499999999996, \"c\": 2403.0499999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:45:00Z\", \"o\": 2402.94, \"h\": 2403.2400000000002, \"l\": 2402.37, \"c\": 2402.77, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:00:00Z\", \"o\": 2402.64, \"h\": 2402.94, \"l\": 2401.85, \"c\": 2402.25, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:15:00Z\", \"o\": 2402.1, \"h\": 2402.4, \"l\": 2401.1299999999997, \"c\": 2401.5299999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:30:00Z\", \"o\": 2401.38, \"h\": 2401.6800000000003, \"l\": 2400.29, \"c\": 2400.69, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:45:00Z\", \"o\": 2400.53, \"h\": 2400.8300000000004, \"l\": 2399.39, \"c\": 2399.79, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:00:00Z\", \"o\": 2399.63, \"h\": 2399.9300000000003, \"l\": 2398.52, \"c\": 2398.92, \"spread\": 0.25}], \"1h\": [{\"ts\": \"2026-10-19T09:00:00Z\", \"o\": 2398.82, \"h\": 2399.1200000000003, \"l\": 2396.7, \"c\": 2397.1, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:00:00Z\", \"o\": 2397.0, \"h\": 2399.26, \"l\": 2396.7, \"c\": 2399.06, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:00:00Z\", \"o\": 2399.01, \"h\": 2402.54, \"l\": 2398.71, \"c\": 2402.3399999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:00:00Z\", \"o\": 2402.28, \"h\": 2403.3, \"l\": 2401.98, \"c\": 2402.77, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:00:00Z\", \"o\": 2402.64, \"h\": 2402.94, \"l\": 2399.39, \"c\": 2399.79, \"spread\": 0.25}], \"4h\": [{\"ts\": \"2026-10-19T00:00:00Z\", \"o\": 2397.53, \"h\": 2403.3, \"l\": 2397.23, \"c\": 2398.24, \"spread\": 0.25}, {\"ts\": \"2026-10-19T04:00:00Z\", \"o\": 2398.09, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2402.2799999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T08:00:00Z\", \"o\": 2402.14, \"h\": 2402.54, \"l\": 2396.7, \"c\": 2402.3399999999997, \"spread\": 0.25}], \"1d\": [{\"ts\": \"2026-10-16T21:00:00Z\", \"o\": 2401.85, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2397.3399999999997, \"spread\": null}, {\"ts\": \"2026-10-17T21:00:00Z\", \"o\": 2397.22, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2403.08, \"spread\": null}]}, \"open_setups\": [], \"calendar\": [{\"ts\": \"2026-10-19T13:30:00Z\", \"currency\": \"USD\", \"impact\": \"high\", \"title\": \"CPI m/m\"}, {\"ts\": \"2026-10-19T15:15:00Z\", \"currency\": \"USD\", \"impact\": \"medium\", \"title\": \"Retail Sales\"}], \"instrument_spec\": {\"contract_size\": 100.0, \"tick_size\": 0.01, \"lot_step\": 0.01, \"min_lot\": 0.01, \"max_lot\": 100.0, \"price_basis\": \"bid\", \"session_calendar\": null, \"quote_currency\": \"USD\", \"margin_rate\": null}}",
+  "{\"request_id\": \"xauusd-intraday-2026-10-19T14:30:00Z\", \"instrument\": \"XAUUSD\", \"profile\": \"intraday\", \"bar_close_ts\": \"2026-10-19T14:30:00Z\", \"bars\": {\"15m\": [{\"ts\": \"2026-10-19T09:30:00Z\", \"o\": 2397.47, \"h\": 2397.77, \"l\": 2396.8199999999997, \"c\": 2397.22, \"spread\": 0.25}, {\"ts\": \"2026-10-19T09:45:00Z\", \"o\": 2397.1, \"h\": 2397.4, \"l\": 2396.7, \"c\": 2397.1, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:00:00Z\", \"o\": 2397.0, \"h\": 2397.4500000000003, \"l\": 2396.7, \"c\": 2397.25, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:15:00Z\", \"o\": 2397.17, \"h\": 2397.8500000000004, \"l\": 2396.87, \"c\": 2397.65, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:30:00Z\", \"o\": 2397.59, \"h\": 2398.4700000000003, \"l\": 2397.29, \"c\": 2398.27, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:45:00Z\", \"o\": 2398.22, \"h\": 2399.26, \"l\": 2397.9199999999996, \"c\": 2399.06, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:00:00Z\", \"o\": 2399.01, \"h\": 2400.13, \"l\": 2398.71, \"c\": 2399.93, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:15:00Z\", \"o\": 2399.89, \"h\": 2401.03, \"l\": 2399.5899999999997, \"c\": 2400.83, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:30:00Z\", \"o\": 2400.78, \"h\": 2401.8500000000004, \"l\": 2400.48, \"c\": 2401.65, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:45:00Z\", \"o\": 2401.6, \"h\": 2402.54, \"l\": 2401.2999999999997, \"c\": 2402.3399999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:00:00Z\", \"o\": 2402.28, \"h\": 2403.03, \"l\": 2401.98, \"c\": 2402.83, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:15:00Z\", \"o\": 2402.76, \"h\": 2403.28, \"l\": 2402.46, \"c\": 2403.08, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:30:00Z\", \"o\": 2402.98, \"h\": 2403.3, \"l\": 2402.6499999999996, \"c\": 2403.0499999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:45:00Z\", \"o\": 2402.94, \"h\": 2403.2400000000002, \"l\": 2402.37, \"c\": 2402.77, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:00:00Z\", \"o\": 2402.64, \"h\": 2402.94, \"l\": 2401.85, \"c\": 2402.25, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:15:00Z\", \"o\": 2402.1, \"h\": 2402.4, \"l\": 2401.1299999999997, \"c\": 2401.5299999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:30:00Z\", \"o\": 2401.38, \"h\": 2401.6800000000003, \"l\": 2400.29, \"c\": 2400.69, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:45:00Z\", \"o\": 2400.53, \"h\": 2400.8300000000004, \"l\": 2399.39, \"c\": 2399.79, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:00:00Z\", \"o\": 2399.63, \"h\": 2399.9300000000003, \"l\": 2398.52, \"c\": 2398.92, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:15:00Z\", \"o\": 2398.77, \"h\": 2399.07, \"l\": 2397.7599999999998, \"c\": 2398.16, \"spread\": 0.25}], \"1h\": [{\"ts\": \"2026-10-19T09:00:00Z\", \"o\": 2398.82, \"h\": 2399.1200000000003, \"l\": 2396.7, \"c\": 2397.1, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:00:00Z\", \"o\": 2397.0, \"h\": 2399.26, \"l\": 2396.7, \"c\": 2399.06, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:00:00Z\", \"o\": 2399.01, \"h\": 2402.54, \"l\": 2398.71, \"c\": 2402.3399999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:00:00Z\", \"o\": 2402.28, \"h\": 2403.3, \"l\": 2401.98, \"c\": 2402.77, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:00:00Z\", \"o\": 2402.64, \"h\": 2402.94, \"l\": 2399.39, \"c\": 2399.79, \"spread\": 0.25}], \"4h\": [{\"ts\": \"2026-10-19T00:00:00Z\", \"o\": 2397.53, \"h\": 2403.3, \"l\": 2397.23, \"c\": 2398.24, \"spread\": 0.25}, {\"ts\": \"2026-10-19T04:00:00Z\", \"o\": 2398.09, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2402.2799999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T08:00:00Z\", \"o\": 2402.14, \"h\": 2402.54, \"l\": 2396.7, \"c\": 2402.3399999999997, \"spread\": 0.25}], \"1d\": [{\"ts\": \"2026-10-16T21:00:00Z\", \"o\": 2401.85, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2397.3399999999997, \"spread\": null}, {\"ts\": \"2026-10-17T21:00:00Z\", \"o\": 2397.22, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2403.08, \"spread\": null}]}, \"open_setups\": [{\"sl\": null, \"tp\": null, \"ev_r\": 0.74, \"entry\": null, \"grade\": null, \"state\": \"DEVELOPING\", \"evidence\": {\"fake\": true}, \"features\": {\"step\": 0}, \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"direction\": \"buy\", \"created_at\": \"2026-10-19T14:15:00Z\", \"ev_r_lower\": 0.31, \"r_multiple\": 2.0, \"probability\": 0.58, \"valid_until\": null, \"horizon_until\": null}], \"calendar\": [{\"ts\": \"2026-10-19T13:30:00Z\", \"currency\": \"USD\", \"impact\": \"high\", \"title\": \"CPI m/m\"}, {\"ts\": \"2026-10-19T15:15:00Z\", \"currency\": \"USD\", \"impact\": \"medium\", \"title\": \"Retail Sales\"}], \"instrument_spec\": {\"contract_size\": 100.0, \"tick_size\": 0.01, \"lot_step\": 0.01, \"min_lot\": 0.01, \"max_lot\": 100.0, \"price_basis\": \"bid\", \"session_calendar\": null, \"quote_currency\": \"USD\", \"margin_rate\": null}}",
+  "{\"request_id\": \"xauusd-intraday-2026-10-19T14:45:00Z\", \"instrument\": \"XAUUSD\", \"profile\": \"intraday\", \"bar_close_ts\": \"2026-10-19T14:45:00Z\", \"bars\": {\"15m\": [{\"ts\": \"2026-10-19T09:45:00Z\", \"o\": 2397.1, \"h\": 2397.4, \"l\": 2396.7, \"c\": 2397.1, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:00:00Z\", \"o\": 2397.0, \"h\": 2397.4500000000003, \"l\": 2396.7, \"c\": 2397.25, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:15:00Z\", \"o\": 2397.17, \"h\": 2397.8500000000004, \"l\": 2396.87, \"c\": 2397.65, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:30:00Z\", \"o\": 2397.59, \"h\": 2398.4700000000003, \"l\": 2397.29, \"c\": 2398.27, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:45:00Z\", \"o\": 2398.22, \"h\": 2399.26, \"l\": 2397.9199999999996, \"c\": 2399.06, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:00:00Z\", \"o\": 2399.01, \"h\": 2400.13, \"l\": 2398.71, \"c\": 2399.93, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:15:00Z\", \"o\": 2399.89, \"h\": 2401.03, \"l\": 2399.5899999999997, \"c\": 2400.83, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:30:00Z\", \"o\": 2400.78, \"h\": 2401.8500000000004, \"l\": 2400.48, \"c\": 2401.65, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:45:00Z\", \"o\": 2401.6, \"h\": 2402.54, \"l\": 2401.2999999999997, \"c\": 2402.3399999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:00:00Z\", \"o\": 2402.28, \"h\": 2403.03, \"l\": 2401.98, \"c\": 2402.83, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:15:00Z\", \"o\": 2402.76, \"h\": 2403.28, \"l\": 2402.46, \"c\": 2403.08, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:30:00Z\", \"o\": 2402.98, \"h\": 2403.3, \"l\": 2402.6499999999996, \"c\": 2403.0499999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:45:00Z\", \"o\": 2402.94, \"h\": 2403.2400000000002, \"l\": 2402.37, \"c\": 2402.77, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:00:00Z\", \"o\": 2402.64, \"h\": 2402.94, \"l\": 2401.85, \"c\": 2402.25, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:15:00Z\", \"o\": 2402.1, \"h\": 2402.4, \"l\": 2401.1299999999997, \"c\": 2401.5299999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:30:00Z\", \"o\": 2401.38, \"h\": 2401.6800000000003, \"l\": 2400.29, \"c\": 2400.69, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:45:00Z\", \"o\": 2400.53, \"h\": 2400.8300000000004, \"l\": 2399.39, \"c\": 2399.79, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:00:00Z\", \"o\": 2399.63, \"h\": 2399.9300000000003, \"l\": 2398.52, \"c\": 2398.92, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:15:00Z\", \"o\": 2398.77, \"h\": 2399.07, \"l\": 2397.7599999999998, \"c\": 2398.16, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:30:00Z\", \"o\": 2398.02, \"h\": 2398.32, \"l\": 2397.1699999999996, \"c\": 2397.5699999999997, \"spread\": 0.25}], \"1h\": [{\"ts\": \"2026-10-19T09:00:00Z\", \"o\": 2398.82, \"h\": 2399.1200000000003, \"l\": 2396.7, \"c\": 2397.1, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:00:00Z\", \"o\": 2397.0, \"h\": 2399.26, \"l\": 2396.7, \"c\": 2399.06, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:00:00Z\", \"o\": 2399.01, \"h\": 2402.54, \"l\": 2398.71, \"c\": 2402.3399999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:00:00Z\", \"o\": 2402.28, \"h\": 2403.3, \"l\": 2401.98, \"c\": 2402.77, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:00:00Z\", \"o\": 2402.64, \"h\": 2402.94, \"l\": 2399.39, \"c\": 2399.79, \"spread\": 0.25}], \"4h\": [{\"ts\": \"2026-10-19T00:00:00Z\", \"o\": 2397.53, \"h\": 2403.3, \"l\": 2397.23, \"c\": 2398.24, \"spread\": 0.25}, {\"ts\": \"2026-10-19T04:00:00Z\", \"o\": 2398.09, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2402.2799999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T08:00:00Z\", \"o\": 2402.14, \"h\": 2402.54, \"l\": 2396.7, \"c\": 2402.3399999999997, \"spread\": 0.25}], \"1d\": [{\"ts\": \"2026-10-16T21:00:00Z\", \"o\": 2401.85, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2397.3399999999997, \"spread\": null}, {\"ts\": \"2026-10-17T21:00:00Z\", \"o\": 2397.22, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2403.08, \"spread\": null}]}, \"open_setups\": [{\"sl\": 2393.92, \"tp\": 2408.92, \"ev_r\": 0.74, \"entry\": 2398.92, \"grade\": null, \"state\": \"ARMED\", \"evidence\": {\"fake\": true}, \"features\": {\"step\": 1}, \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"direction\": \"buy\", \"created_at\": \"2026-10-19T14:15:00Z\", \"ev_r_lower\": 0.31, \"r_multiple\": 2.0, \"probability\": 0.58, \"valid_until\": null, \"horizon_until\": null}], \"calendar\": [{\"ts\": \"2026-10-19T13:30:00Z\", \"currency\": \"USD\", \"impact\": \"high\", \"title\": \"CPI m/m\"}, {\"ts\": \"2026-10-19T15:15:00Z\", \"currency\": \"USD\", \"impact\": \"medium\", \"title\": \"Retail Sales\"}], \"instrument_spec\": {\"contract_size\": 100.0, \"tick_size\": 0.01, \"lot_step\": 0.01, \"min_lot\": 0.01, \"max_lot\": 100.0, \"price_basis\": \"bid\", \"session_calendar\": null, \"quote_currency\": \"USD\", \"margin_rate\": null}}",
+  "{\"request_id\": \"xauusd-intraday-2026-10-19T15:00:00Z\", \"instrument\": \"XAUUSD\", \"profile\": \"intraday\", \"bar_close_ts\": \"2026-10-19T15:00:00Z\", \"bars\": {\"15m\": [{\"ts\": \"2026-10-19T10:00:00Z\", \"o\": 2397.0, \"h\": 2397.4500000000003, \"l\": 2396.7, \"c\": 2397.25, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:15:00Z\", \"o\": 2397.17, \"h\": 2397.8500000000004, \"l\": 2396.87, \"c\": 2397.65, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:30:00Z\", \"o\": 2397.59, \"h\": 2398.4700000000003, \"l\": 2397.29, \"c\": 2398.27, \"spread\": 0.25}, {\"ts\": \"2026-10-19T10:45:00Z\", \"o\": 2398.22, \"h\": 2399.26, \"l\": 2397.9199999999996, \"c\": 2399.06, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:00:00Z\", \"o\": 2399.01, \"h\": 2400.13, \"l\": 2398.71, \"c\": 2399.93, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:15:00Z\", \"o\": 2399.89, \"h\": 2401.03, \"l\": 2399.5899999999997, \"c\": 2400.83, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:30:00Z\", \"o\": 2400.78, \"h\": 2401.8500000000004, \"l\": 2400.48, \"c\": 2401.65, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:45:00Z\", \"o\": 2401.6, \"h\": 2402.54, \"l\": 2401.2999999999997, \"c\": 2402.3399999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:00:00Z\", \"o\": 2402.28, \"h\": 2403.03, \"l\": 2401.98, \"c\": 2402.83, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:15:00Z\", \"o\": 2402.76, \"h\": 2403.28, \"l\": 2402.46, \"c\": 2403.08, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:30:00Z\", \"o\": 2402.98, \"h\": 2403.3, \"l\": 2402.6499999999996, \"c\": 2403.0499999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:45:00Z\", \"o\": 2402.94, \"h\": 2403.2400000000002, \"l\": 2402.37, \"c\": 2402.77, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:00:00Z\", \"o\": 2402.64, \"h\": 2402.94, \"l\": 2401.85, \"c\": 2402.25, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:15:00Z\", \"o\": 2402.1, \"h\": 2402.4, \"l\": 2401.1299999999997, \"c\": 2401.5299999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:30:00Z\", \"o\": 2401.38, \"h\": 2401.6800000000003, \"l\": 2400.29, \"c\": 2400.69, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:45:00Z\", \"o\": 2400.53, \"h\": 2400.8300000000004, \"l\": 2399.39, \"c\": 2399.79, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:00:00Z\", \"o\": 2399.63, \"h\": 2399.9300000000003, \"l\": 2398.52, \"c\": 2398.92, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:15:00Z\", \"o\": 2398.77, \"h\": 2399.07, \"l\": 2397.7599999999998, \"c\": 2398.16, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:30:00Z\", \"o\": 2398.02, \"h\": 2398.32, \"l\": 2397.1699999999996, \"c\": 2397.5699999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:45:00Z\", \"o\": 2397.44, \"h\": 2397.7400000000002, \"l\": 2396.81, \"c\": 2397.21, \"spread\": 0.25}], \"1h\": [{\"ts\": \"2026-10-19T10:00:00Z\", \"o\": 2397.0, \"h\": 2399.26, \"l\": 2396.7, \"c\": 2399.06, \"spread\": 0.25}, {\"ts\": \"2026-10-19T11:00:00Z\", \"o\": 2399.01, \"h\": 2402.54, \"l\": 2398.71, \"c\": 2402.3399999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T12:00:00Z\", \"o\": 2402.28, \"h\": 2403.3, \"l\": 2401.98, \"c\": 2402.77, \"spread\": 0.25}, {\"ts\": \"2026-10-19T13:00:00Z\", \"o\": 2402.64, \"h\": 2402.94, \"l\": 2399.39, \"c\": 2399.79, \"spread\": 0.25}, {\"ts\": \"2026-10-19T14:00:00Z\", \"o\": 2399.63, \"h\": 2399.9300000000003, \"l\": 2396.81, \"c\": 2397.21, \"spread\": 0.25}], \"4h\": [{\"ts\": \"2026-10-19T00:00:00Z\", \"o\": 2397.53, \"h\": 2403.3, \"l\": 2397.23, \"c\": 2398.24, \"spread\": 0.25}, {\"ts\": \"2026-10-19T04:00:00Z\", \"o\": 2398.09, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2402.2799999999997, \"spread\": 0.25}, {\"ts\": \"2026-10-19T08:00:00Z\", \"o\": 2402.14, \"h\": 2402.54, \"l\": 2396.7, \"c\": 2402.3399999999997, \"spread\": 0.25}], \"1d\": [{\"ts\": \"2026-10-16T21:00:00Z\", \"o\": 2401.85, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2397.3399999999997, \"spread\": null}, {\"ts\": \"2026-10-17T21:00:00Z\", \"o\": 2397.22, \"h\": 2403.3, \"l\": 2396.7, \"c\": 2403.08, \"spread\": null}]}, \"open_setups\": [{\"sl\": 2393.92, \"tp\": 2408.92, \"ev_r\": 0.74, \"entry\": 2398.92, \"grade\": null, \"state\": \"ACTIVE\", \"evidence\": {\"fake\": true}, \"features\": {\"step\": 2}, \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"direction\": \"buy\", \"created_at\": \"2026-10-19T14:15:00Z\", \"ev_r_lower\": 0.31, \"r_multiple\": 2.0, \"probability\": 0.58, \"valid_until\": null, \"horizon_until\": null}], \"calendar\": [{\"ts\": \"2026-10-19T13:30:00Z\", \"currency\": \"USD\", \"impact\": \"high\", \"title\": \"CPI m/m\"}, {\"ts\": \"2026-10-19T15:15:00Z\", \"currency\": \"USD\", \"impact\": \"medium\", \"title\": \"Retail Sales\"}], \"instrument_spec\": {\"contract_size\": 100.0, \"tick_size\": 0.01, \"lot_step\": 0.01, \"min_lot\": 0.01, \"max_lot\": 100.0, \"price_basis\": \"bid\", \"session_calendar\": null, \"quote_currency\": \"USD\", \"margin_rate\": null}}"
+ ],
+ "responses": [
+  "{\"abstentions\": [], \"new_setups\": [{\"created_at\": \"2026-10-19T14:15:00Z\", \"direction\": \"buy\", \"entry\": null, \"ev_r\": 0.74, \"ev_r_lower\": 0.31, \"evidence\": {\"fake\": true}, \"features\": {\"step\": 0}, \"grade\": null, \"horizon_until\": null, \"probability\": 0.58, \"r_multiple\": 2.0, \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"sl\": null, \"state\": \"DEVELOPING\", \"tp\": null, \"valid_until\": null}], \"request_id\": \"xauusd-intraday-2026-10-19T14:15:00Z\", \"status\": \"ok\", \"transitions\": [], \"versions\": {\"features\": \"fake-f1\", \"model\": \"fake-model-1\", \"strategy\": \"fake-1.0.0\"}}",
+  "{\"abstentions\": [], \"new_setups\": [{\"created_at\": \"2026-10-19T14:15:00Z\", \"direction\": \"buy\", \"entry\": 2398.92, \"ev_r\": 0.74, \"ev_r_lower\": 0.31, \"evidence\": {\"fake\": true}, \"features\": {\"step\": 1}, \"grade\": null, \"horizon_until\": null, \"probability\": 0.58, \"r_multiple\": 2.0, \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"sl\": 2393.92, \"state\": \"ARMED\", \"tp\": 2408.92, \"valid_until\": null}], \"request_id\": \"xauusd-intraday-2026-10-19T14:30:00Z\", \"status\": \"ok\", \"transitions\": [{\"at\": \"2026-10-19T14:30:00Z\", \"from\": \"DEVELOPING\", \"realized_r\": null, \"reason\": \"trigger\", \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"to\": \"ARMED\"}], \"versions\": {\"features\": \"fake-f1\", \"model\": \"fake-model-1\", \"strategy\": \"fake-1.0.0\"}}",
+  "{\"abstentions\": [], \"new_setups\": [{\"created_at\": \"2026-10-19T14:15:00Z\", \"direction\": \"buy\", \"entry\": 2398.92, \"ev_r\": 0.74, \"ev_r_lower\": 0.31, \"evidence\": {\"fake\": true}, \"features\": {\"step\": 2}, \"grade\": null, \"horizon_until\": null, \"probability\": 0.58, \"r_multiple\": 2.0, \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"sl\": 2393.92, \"state\": \"ACTIVE\", \"tp\": 2408.92, \"valid_until\": null}], \"request_id\": \"xauusd-intraday-2026-10-19T14:45:00Z\", \"status\": \"ok\", \"transitions\": [{\"at\": \"2026-10-19T14:30:00Z\", \"from\": \"DEVELOPING\", \"realized_r\": null, \"reason\": \"trigger\", \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"to\": \"ARMED\"}, {\"at\": \"2026-10-19T14:45:00Z\", \"from\": \"ARMED\", \"realized_r\": null, \"reason\": \"entry_filled\", \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"to\": \"ACTIVE\"}], \"versions\": {\"features\": \"fake-f1\", \"model\": \"fake-model-1\", \"strategy\": \"fake-1.0.0\"}}",
+  "{\"abstentions\": [], \"new_setups\": [{\"created_at\": \"2026-10-19T14:15:00Z\", \"direction\": \"buy\", \"entry\": 2398.92, \"ev_r\": 0.74, \"ev_r_lower\": 0.31, \"evidence\": {\"fake\": true}, \"features\": {\"step\": 3}, \"grade\": null, \"horizon_until\": null, \"probability\": 0.58, \"r_multiple\": 2.0, \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"sl\": 2393.92, \"state\": \"CLOSED\", \"tp\": 2408.92, \"valid_until\": null}], \"request_id\": \"xauusd-intraday-2026-10-19T15:00:00Z\", \"status\": \"ok\", \"transitions\": [{\"at\": \"2026-10-19T14:30:00Z\", \"from\": \"DEVELOPING\", \"realized_r\": null, \"reason\": \"trigger\", \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"to\": \"ARMED\"}, {\"at\": \"2026-10-19T14:45:00Z\", \"from\": \"ARMED\", \"realized_r\": null, \"reason\": \"entry_filled\", \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"to\": \"ACTIVE\"}, {\"at\": \"2026-10-19T15:00:00Z\", \"from\": \"ACTIVE\", \"realized_r\": 2.0, \"reason\": \"tp_hit\", \"setup_id\": \"fake-xauusd-intraday-2026-10-19T14:15:00Z-buy\", \"to\": \"CLOSED\"}], \"versions\": {\"features\": \"fake-f1\", \"model\": \"fake-model-1\", \"strategy\": \"fake-1.0.0\"}}"
+ ],
+ "runs": [
+  {
+   "bar_close_ts": "2026-10-19T14:15:00+00:00",
+   "coverage": {
+    "15m": {
+     "from": "2026-10-19T09:15:00Z",
+     "requested": 20,
+     "sent": 20,
+     "short": false
+    },
+    "1d": {
+     "from": "2026-10-16T21:00:00Z",
+     "requested": 2,
+     "sent": 2,
+     "short": false
+    },
+    "1h": {
+     "from": "2026-10-19T09:00:00Z",
+     "requested": 5,
+     "sent": 5,
+     "short": false
+    },
+    "4h": {
+     "from": "2026-10-19T00:00:00Z",
+     "requested": 3,
+     "sent": 3,
+     "short": false
+    }
+   },
+   "detail": {
+    "abstentions": [],
+    "contract_errors": [],
+    "inserted": 1,
+    "new_setups": 1,
+    "rejected": [],
+    "response_status": "ok",
+    "state_changes": [
+     {
+      "at": "2026-10-19T14:15:00Z",
+      "from": null,
+      "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+      "to": "DEVELOPING"
+     }
+    ],
+    "transitions": 0,
+    "transitions_applied": 0,
+    "updated": 0,
+    "versions": {
+     "features": "fake-f1",
+     "model": "fake-model-1",
+     "strategy": "fake-1.0.0"
+    }
+   },
+   "reason": null,
+   "request_bytes": 3961,
+   "request_id": "xauusd-intraday-2026-10-19T14:15:00Z",
+   "status": "ok"
+  },
+  {
+   "bar_close_ts": "2026-10-19T14:30:00+00:00",
+   "coverage": {
+    "15m": {
+     "from": "2026-10-19T09:30:00Z",
+     "requested": 20,
+     "sent": 20,
+     "short": false
+    },
+    "1d": {
+     "from": "2026-10-16T21:00:00Z",
+     "requested": 2,
+     "sent": 2,
+     "short": false
+    },
+    "1h": {
+     "from": "2026-10-19T09:00:00Z",
+     "requested": 5,
+     "sent": 5,
+     "short": false
+    },
+    "4h": {
+     "from": "2026-10-19T00:00:00Z",
+     "requested": 3,
+     "sent": 3,
+     "short": false
+    }
+   },
+   "detail": {
+    "abstentions": [],
+    "contract_errors": [],
+    "inserted": 0,
+    "new_setups": 1,
+    "rejected": [],
+    "response_status": "ok",
+    "state_changes": [
+     {
+      "at": "2026-10-19T14:30:00Z",
+      "from": "DEVELOPING",
+      "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+      "to": "ARMED"
+     }
+    ],
+    "transitions": 1,
+    "transitions_applied": 1,
+    "updated": 1,
+    "versions": {
+     "features": "fake-f1",
+     "model": "fake-model-1",
+     "strategy": "fake-1.0.0"
+    }
+   },
+   "reason": null,
+   "request_bytes": 4330,
+   "request_id": "xauusd-intraday-2026-10-19T14:30:00Z",
+   "status": "ok"
+  },
+  {
+   "bar_close_ts": "2026-10-19T14:45:00+00:00",
+   "coverage": {
+    "15m": {
+     "from": "2026-10-19T09:45:00Z",
+     "requested": 20,
+     "sent": 20,
+     "short": false
+    },
+    "1d": {
+     "from": "2026-10-16T21:00:00Z",
+     "requested": 2,
+     "sent": 2,
+     "short": false
+    },
+    "1h": {
+     "from": "2026-10-19T09:00:00Z",
+     "requested": 5,
+     "sent": 5,
+     "short": false
+    },
+    "4h": {
+     "from": "2026-10-19T00:00:00Z",
+     "requested": 3,
+     "sent": 3,
+     "short": false
+    }
+   },
+   "detail": {
+    "abstentions": [],
+    "contract_errors": [],
+    "inserted": 0,
+    "new_setups": 1,
+    "rejected": [],
+    "response_status": "ok",
+    "state_changes": [
+     {
+      "at": "2026-10-19T14:45:00Z",
+      "from": "ARMED",
+      "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+      "to": "ACTIVE"
+     }
+    ],
+    "transitions": 2,
+    "transitions_applied": 1,
+    "updated": 1,
+    "versions": {
+     "features": "fake-f1",
+     "model": "fake-model-1",
+     "strategy": "fake-1.0.0"
+    }
+   },
+   "reason": null,
+   "request_bytes": 4345,
+   "request_id": "xauusd-intraday-2026-10-19T14:45:00Z",
+   "status": "ok"
+  },
+  {
+   "bar_close_ts": "2026-10-19T15:00:00+00:00",
+   "coverage": {
+    "15m": {
+     "from": "2026-10-19T10:00:00Z",
+     "requested": 20,
+     "sent": 20,
+     "short": false
+    },
+    "1d": {
+     "from": "2026-10-16T21:00:00Z",
+     "requested": 2,
+     "sent": 2,
+     "short": false
+    },
+    "1h": {
+     "from": "2026-10-19T10:00:00Z",
+     "requested": 5,
+     "sent": 5,
+     "short": false
+    },
+    "4h": {
+     "from": "2026-10-19T00:00:00Z",
+     "requested": 3,
+     "sent": 3,
+     "short": false
+    }
+   },
+   "detail": {
+    "abstentions": [],
+    "contract_errors": [],
+    "inserted": 0,
+    "new_setups": 1,
+    "rejected": [],
+    "response_status": "ok",
+    "state_changes": [
+     {
+      "at": "2026-10-19T15:00:00Z",
+      "from": "ACTIVE",
+      "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+      "to": "CLOSED"
+     }
+    ],
+    "transitions": 3,
+    "transitions_applied": 1,
+    "updated": 0,
+    "versions": {
+     "features": "fake-f1",
+     "model": "fake-model-1",
+     "strategy": "fake-1.0.0"
+    }
+   },
+   "reason": null,
+   "request_bytes": 4363,
+   "request_id": "xauusd-intraday-2026-10-19T15:00:00Z",
+   "status": "ok"
+  }
+ ],
+ "setups": [
+  {
+   "direction": "buy",
+   "entry": 2398.92,
+   "ev_r": 0.74,
+   "ev_r_lower": 0.31,
+   "evidence": {
+    "fake": true
+   },
+   "features": {
+    "step": 2
+   },
+   "features_version": "fake-f1",
+   "first_request_id": "xauusd-intraday-2026-10-19T14:15:00Z",
+   "grade": null,
+   "horizon_until": null,
+   "last_payload": {
+    "created_at": "2026-10-19T14:15:00Z",
+    "direction": "buy",
+    "entry": 2398.92,
+    "ev_r": 0.74,
+    "ev_r_lower": 0.31,
+    "evidence": {
+     "fake": true
+    },
+    "features": {
+     "step": 2
+    },
+    "grade": null,
+    "horizon_until": null,
+    "probability": 0.58,
+    "r_multiple": 2.0,
+    "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+    "sl": 2393.92,
+    "state": "CLOSED",
+    "tp": 2408.92,
+    "valid_until": null
+   },
+   "last_request_id": "xauusd-intraday-2026-10-19T15:00:00Z",
+   "model_version": "fake-model-1",
+   "probability": 0.58,
+   "profile": "intraday",
+   "r_multiple": 2.0,
+   "realized_r": 2.0,
+   "setup_id": "fake-xauusd-intraday-2026-10-19T14:15:00Z-buy",
+   "sl": 2393.92,
+   "state": "CLOSED",
+   "strategy_version": "fake-1.0.0",
+   "tp": 2408.92,
+   "valid_until": null
+  }
+ ]
+}

@@ -18,7 +18,11 @@ def encode(topic: str, payload: dict[str, Any]) -> str:
     )
 
 
-async def publish(topic: str, payload: dict[str, Any], redis: Redis | None = None) -> int:
-    """Publish ``payload`` to ``topic``. Returns the number of API processes that received it."""
+async def publish(
+    topic: str, payload: dict[str, Any], redis: Redis | None = None, *, via: str | None = None
+) -> int:
+    """Publish ``payload`` to ``topic``. Returns the number of API processes that received it.
+    ``via``: deliver through that topic's channel instead (the frame still says ``topic``),
+    e.g. a private signal through ``private_signals_topic``."""
     redis = redis or get_redis()
-    return await redis.publish(channel_for(topic), encode(topic, payload))
+    return await redis.publish(channel_for(via or topic), encode(topic, payload))

@@ -23,6 +23,14 @@ from trading_backtest.risk import (
     risk_json_schema,
     validate_risk_config,
 )
+from trading_backtest.sizing import (
+    ContractSpec,
+    LotSize,
+    direct_rate,
+    lots_for_risk,
+    round_lots,
+    value_per_price_unit,
+)
 
 __version__ = "0.1.0"
 
@@ -34,8 +42,10 @@ __all__ = [
     "BacktestConfigIn",
     "BacktestResult",
     "ConfigError",
+    "ContractSpec",
     "ExitRules",
     "Guards",
+    "LotSize",
     "RiskConfigIn",
     "RiskContext",
     "Sizer",
@@ -46,10 +56,14 @@ __all__ = [
     "TrailingRule",
     "__version__",
     "backtest",
+    "direct_rate",
     "downsample_indices",
+    "lots_for_risk",
     "periods_per_year",
     "plan_trade",
     "risk_json_schema",
+    "round_lots",
     "run_backtest",
     "validate_risk_config",
+    "value_per_price_unit",
 ]

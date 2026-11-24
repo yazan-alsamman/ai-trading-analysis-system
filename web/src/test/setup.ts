@@ -4,7 +4,8 @@ import { afterEach } from 'vitest';
 
 // jsdom gaps -------------------------------------------------------------
 
-if (!window.matchMedia) {
+// (Live suites run in the Node environment, where there is no window.)
+if (typeof window !== 'undefined' && !window.matchMedia) {
   window.matchMedia = (query: string) =>
     ({
       matches: query.includes('dark'),
@@ -30,5 +31,5 @@ if (typeof HTMLDialogElement !== 'undefined' && !HTMLDialogElement.prototype.sho
 
 afterEach(() => {
   cleanup();
-  window.localStorage.clear();
+  if (typeof window !== 'undefined') window.localStorage.clear();
 });

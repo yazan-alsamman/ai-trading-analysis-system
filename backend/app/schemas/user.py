@@ -41,6 +41,8 @@ class UserRead(BaseModel):
     full_name: str | None
     role: UserRole
     is_active: bool
+    phone_e164: str | None = None  # verified WhatsApp number (docs/otp.md)
+    phone_verified_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

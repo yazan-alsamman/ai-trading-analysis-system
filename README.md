@@ -97,8 +97,9 @@ docker compose exec backend python -m app.cli create-admin --email admin@example
   `GET /api/v1/market/instruments/{id}/candles?timeframe=1h&start=...&end=...&limit=500`
   يعيد `{instrument_id, timeframe, candles: [{time, open, high, low, close, volume}]}`
   حيث `time` بالثواني (unix) مناسب مباشرة لـ Lightweight Charts. بدون `start` يعيد آخر `limit` شمعة.
+  شموع `1m` تحمل أيضاً `spread` عندما يكون معروفاً (لا يظهر في الأطر الأعلى).
 - الكتابة (admin، للـ backfill): `POST /api/v1/admin/instruments/{id}/candles` بجسم
-  `{"candles": [{"ts": "...Z" أو unix seconds, "open", "high", "low", "close", "volume", "trades"?}]}`
+  `{"candles": [{"ts": "...Z" أو unix seconds, "open", "high", "low", "close", "volume", "trades"?, "spread"?, "source"?, "received_at"?}]}`
   (حتى 5000 شمعة 1m في الطلب، upsert). الـ collectors داخل الخادم تستدعي
   `market_service.upsert_candles()` مباشرة.
 - سياسات التحديث تعيد حساب نافذة حديثة فقط (أقدمها لـ `5m`: آخر ساعتين). عند كتابة بيانات أقدم من ساعة
@@ -107,14 +108,18 @@ docker compose exec backend python -m app.cli create-admin --email admin@example
 
 ```bash
 cd backend
-python -m app.cli seed-instruments                       # 5 أزواج Binance + 4 من Twelve Data
+python -m app.cli seed-instruments                       # 5 Binance + 4 Twelve Data + XAU/USD من FxPro
 python -m app.cli seed-demo-candles --symbol BTC/USDT --source binance --days 30
 # داخل Docker:
 docker compose exec backend python -m app.cli seed-instruments
 docker compose exec backend python -m app.cli seed-demo-candles --symbol BTC/USDT --source binance --days 30
 ```
 
-`seed-demo-candles` يولّد **بيانات وهمية** (random walk) لتطوير الرسوم البيانية فقط، وليست أسعاراً حقيقية.
+`seed-demo-candles` يولّد **بيانات وهمية** (random walk) لتطوير الرسوم البيانية فقط، وليست أسعاراً حقيقية
+(وترفضه أداة `fxpro:XAU/USD`: شموعها تأتي من التغذية الحقيقية فقط).
+
+مواصفات العقد (حجم العقد، خطوة اللوت، الحدود، تقويم الجلسات) وحساب حجم الصفقة باللوت:
+[docs/instruments.md](docs/instruments.md).
 
 ## المؤشرات الفنية
 

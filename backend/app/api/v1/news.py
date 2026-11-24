@@ -7,17 +7,23 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.deps import AdminUser, CurrentUser, NewsReader, NewsWriter, SessionDep
+from app.api.limits import COST_KEY
+from app.core.config import get_settings
 from app.core.redis import get_redis
 from app.models.news import NewsSource, SentimentLabel
-from app.news import service
+from app.news import comments, service
 from app.schemas.common import Page
 from app.schemas.news import (
     ArticleRead,
     IngestRequest,
     IngestResult,
+    NewsCommentCreate,
+    NewsCommentModeration,
+    NewsCommentRead,
+    NewsCommentUpdate,
     SentimentAggregate,
     SentimentRequest,
     SentimentResult,
@@ -86,6 +92,77 @@ async def get_news(article_id: uuid.UUID, _: NewsReader, session: SessionDep):
     if article is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Article not found")
     return article
+
+
+# --- reader comments (docs/news-comments.md) ----------------------------------------------------
+
+COMMENT_COST = {COST_KEY: get_settings().content_create_cost}
+
+
+@router.get("/{article_id}/comments", response_model=Page[NewsCommentRead])
+async def list_article_comments(
+    article_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    parent_id: Annotated[
+        uuid.UUID | None, Query(description="only the replies of this comment, oldest first")
+    ] = None,
+):
+    """Comments of an article, newest first (top-level comments and replies; a reply has
+    ``parent_id``). Deleted comments are left out."""
+    comments.require_enabled()
+    article = await comments.article_or_404(session, article_id)
+    items, total = await comments.list_comments(
+        session, user, article, limit=limit, offset=offset, parent_id=parent_id
+    )
+    return Page[NewsCommentRead](items=items, total=total, limit=limit, offset=offset)
+
+
+@router.post(
+    "/{article_id}/comments",
+    response_model=NewsCommentRead,
+    status_code=status.HTTP_201_CREATED,
+    openapi_extra=COMMENT_COST,
+)
+async def create_article_comment(
+    article_id: uuid.UUID, data: NewsCommentCreate, user: CurrentUser, session: SessionDep
+):
+    """Comment on an article (or reply with ``parent_id``). The article's ``comments_count``
+    goes up at once. 429 + Retry-After over ``COMMENTS_PER_HOUR``."""
+    comments.require_enabled()
+    article = await comments.article_or_404(session, article_id)
+    return await comments.create(session, user, article, data.body, data.parent_id)
+
+
+@router.patch("/comments/{comment_id}", response_model=NewsCommentRead)
+async def update_article_comment(
+    comment_id: uuid.UUID, data: NewsCommentUpdate, user: CurrentUser, session: SessionDep
+):
+    """Only the author edits a published comment."""
+    comment = await comments.own_or_404(session, comment_id)
+    return await comments.edit(session, user, comment, data.body)
+
+
+@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_article_comment(
+    comment_id: uuid.UUID, user: CurrentUser, session: SessionDep
+) -> Response:
+    """The author or an admin. Soft delete: replies stay."""
+    comment = await comments.own_or_404(session, comment_id)
+    await comments.delete(session, user, comment)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@admin_router.post("/comments/{comment_id}/moderate", status_code=status.HTTP_204_NO_CONTENT)
+async def moderate_article_comment(
+    comment_id: uuid.UUID, data: NewsCommentModeration, _: AdminUser, session: SessionDep
+) -> Response:
+    """Hide a comment (only its author still sees it) or publish it again."""
+    comment = await comments.own_or_404(session, comment_id)
+    await comments.hide(session, comment, data.hidden)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @admin_router.patch("/sources/{source_id}", response_model=SourceRead)

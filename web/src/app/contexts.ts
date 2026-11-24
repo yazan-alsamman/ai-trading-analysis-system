@@ -40,9 +40,16 @@ export const usePreferences = () => useRequired(PreferencesContext, 'usePreferen
 /* --------------------------------------------------------------- auth */
 export interface AuthApi {
   session: Session | null;
+  /**
+   * 'restoring' while a stored backend session is being validated on start-up;
+   * protected routes wait for 'ready' before deciding to redirect.
+   */
+  status: 'restoring' | 'ready';
   login(input: LoginInput): Promise<void>;
   register(input: RegisterInput): Promise<void>;
   logout(): Promise<void>;
+  /** Replace the signed-in user's details after a profile update. */
+  updateUser(user: Session['user']): void;
 }
 export const AuthContext = createContext<AuthApi | null>(null);
 export const useAuth = () => useRequired(AuthContext, 'useAuth');

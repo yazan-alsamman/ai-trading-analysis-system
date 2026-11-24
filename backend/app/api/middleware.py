@@ -74,13 +74,16 @@ class RequestContextMiddleware:
         finally:
             code = status["code"]
             path = scope.get("path", "")
-            if code >= 500:
+            # a probe answering 503 (/health/data: bad market data) is a result, not a crash
+            probe_503 = code == 503 and path.startswith(QUIET_PREFIX)
+            if code >= 500 and not probe_503:
                 await ops.count_error(get_redis())
             if code >= 400 or not path.startswith(QUIET_PREFIX):
                 route = route_template(scope)
                 client = scope.get("client")
+                level = logging.ERROR if code >= 500 else logging.INFO
                 logger.log(
-                    logging.ERROR if code >= 500 else logging.INFO,
+                    logging.WARNING if probe_503 else level,
                     "%s %s %s",
                     scope.get("method"),
                     route,

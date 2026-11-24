@@ -1,0 +1,213 @@
+"""Commands of the signal strategies (docs/strategies/PREREG.md).
+
+    python -m app strategies count                           # every instrument in the store
+    python -m app strategies count --symbol XAUUSD --swaps swaps.json
+
+``count`` gives the pre-approval candidate counts of section 12 on the rules frozen at the commit
+in the preregistration ("Rules frozen at commit"). It refuses to run while that field is empty,
+or when any rule file (``RULE_PATHS``) differs from the frozen commit: changed since, uncommitted
+or untracked. Bars from 2012-01-01 that closed by the lockbox start; an end past it is refused
+before anything is read, and the lockbox is never read. Candidates use bars up to and including
+the signal bar only: nothing is resolved, managed or replayed, and no outcome is computed
+(``app.strategies.counts``). The swap export of section 6a (``--swaps``, JSON: symbol -> the
+``SwapSpec`` fields) is needed only for S3's a_S; scalp and intraday a_S need none.
+
+Writes ``docs/strategies/counts.md`` (summary, rejections, types, instruments, a_S and delta*_S)
+and ``docs/strategies/counts_by_year.csv`` (strategy x instrument x period x year). Descriptive
+only: no count is a gate, and no count may change a rule (sections 12 and 15)."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from datetime import date
+from pathlib import Path
+
+import pandas as pd
+
+from app.config import instruments, signal_specs, splits
+from app.data.importer import DEFAULT_OUT as STORE
+from app.strategies import counts, swap
+
+ROOT = Path(__file__).resolve().parents[2]
+PREREG = ROOT / "docs" / "strategies" / "PREREG.md"
+OUT_DIR = ROOT / "docs" / "strategies"
+START = pd.Timestamp("2012-01-01", tz="UTC")
+# Everything a candidate count depends on, relative to the repository root.
+RULE_PATHS = (
+    "ai-service/app/strategies",
+    "ai-service/app/config",
+    "ai-service/app/setups/costs.py",
+    "ai-service/app/setups/builder.py",
+    "ai-service/app/data/sessions.py",
+    "ai-service/app/research/decide.py",
+    "libs/indicators",
+)
+SHARES = ["days_0", "days_1", "days_2plus", "weeks_0", "weeks_1_to_9", "weeks_10plus"]
+
+
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+
+
+def frozen_commit(prereg: Path = PREREG, repo: Path = ROOT.parent) -> tuple[str, str]:
+    """The frozen commit of the preregistration and HEAD, or ValueError: the field is empty, the
+    commit is unknown, or a rule file differs from it in the working tree."""
+    m = re.search(
+        r"^\| Rules frozen at commit \| (.+?) \|$", prereg.read_text(encoding="utf-8"), re.M
+    )
+    value = m.group(1).strip() if m else ""
+    if not re.fullmatch(r"[0-9a-f]{7,40}", value):
+        raise ValueError("the rules are not frozen: no commit in PREREG.md ('Rules frozen at')")
+    full = _git(repo, "rev-parse", "--verify", "--quiet", f"{value}^{{commit}}")
+    if full.returncode != 0:
+        raise ValueError(f"the frozen commit {value} is not in this repository")
+    commit = full.stdout.strip()
+    changed = _git(repo, "diff", "--name-only", commit, "--", *RULE_PATHS).stdout.split()
+    changed += _git(
+        repo, "ls-files", "--others", "--exclude-standard", "--", *RULE_PATHS
+    ).stdout.split()
+    if changed:
+        raise ValueError(f"rule files differ from the frozen commit {commit[:12]}: {changed}")
+    return commit, _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+
+def load_swaps(path: Path | None) -> dict[str, swap.SwapSpec] | None:
+    if path is None:
+        return None
+    out = {}
+    for symbol, d in json.loads(path.read_text(encoding="utf-8")).items():
+        if d.get("day_multipliers") is not None:
+            d["day_multipliers"] = {int(k): float(v) for k, v in d["day_multipliers"].items()}
+        out[symbol] = swap.SwapSpec(symbol=symbol, **{k: v for k, v in d.items() if k != "symbol"})
+    return out
+
+
+def _cell(v) -> str:
+    if isinstance(v, float):
+        return "" if pd.isna(v) else f"{v:.3f}"
+    return str(v)
+
+
+def _table(df: pd.DataFrame, cols: list[str]) -> list[str]:
+    return [
+        "| " + " | ".join(cols) + " |",
+        "|" + " --- |" * len(cols),
+        *["| " + " | ".join(_cell(v) for v in r) + " |" for r in df[cols].itertuples(index=False)],
+    ]
+
+
+def render(
+    tables: dict[str, pd.DataFrame],
+    commit: str,
+    head: str,
+    symbols: list[str],
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    swaps: dict[str, swap.SwapSpec] | None,
+    run_date: date,
+) -> str:
+    s = tables["summary"]
+    every = s[s["symbol"] == "all"]
+    per_symbol = s[s["symbol"] != "all"]
+    rejected = [c for c in s.columns if c.startswith("rejected_")]
+    have_swap = "none" if not swaps else ", ".join(sorted(swaps))
+    lines = [
+        "# Stage B: pre-approval candidate counts",
+        "",
+        f"_Generated by `python -m app strategies count` on {run_date.isoformat()}. **Descriptive"
+        " only:** no count is a gate, and no count may change a strategy, parameter, filter,"
+        " bundle, statistic, delta* or decision rule (`PREREG.md`, sections 12 and 15). Candidates"
+        " use bars up to and including the signal bar only; nothing is resolved or managed and no"
+        " outcome is computed. The lockbox is not read._",
+        "",
+        "| Field | Value |",
+        "| --- | --- |",
+        f"| Rules frozen at commit | `{commit}` |",
+        f"| Code at run (HEAD) | `{head}` |",
+        f"| Bars | opened from {start.date()}, closed by {end.date()} (the lockbox start) |",
+        f"| Instruments | {', '.join(symbols)} |",
+        f"| Swap export (section 6a) | {have_swap}; without it S3's a_S and delta*_S are not"
+        " computed |",
+        "",
+        "The tables below cover 2018-01-01 to the lockbox start, so they include the holdout"
+        f" (2024-07-01 to 2026-01-09): **{counts.HOLDOUT_LABEL}**. Per year and period:"
+        " `counts_by_year.csv`.",
+        "",
+        "## Armed candidates per strategy, all instruments",
+        "",
+        *_table(
+            every,
+            [
+                "strategy",
+                "family",
+                "type",
+                "candidates",
+                "armed",
+                "days",
+                "per_day_mean",
+                "per_day_median",
+                *SHARES,
+            ],
+        ),  # fmt: skip
+        "",
+        "## Rejections by signal-time reason, all instruments",
+        "",
+        *_table(every, ["strategy", *rejected]),
+        "",
+        "## By type, all instruments",
+        "",
+        *_table(tables["by_type"], ["type", "candidates", "armed", "per_day_mean", *SHARES]),
+        "",
+        "## Per instrument",
+        "",
+        *_table(
+            per_symbol,
+            ["strategy", "symbol", "candidates", "armed", "per_day_mean", "days_0", "weeks_0"],
+        ),
+        "",
+        "## Allowance a_S and delta*_S (armed candidates of the primary period, section 8)",
+        "",
+        *_table(tables["allowance"], ["strategy", "armed_primary", "a_S", "delta_star"]),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def count(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="python -m app strategies count")
+    ap.add_argument("--symbol", action="append")
+    ap.add_argument("--store", type=Path, default=STORE)
+    ap.add_argument("--out", type=Path, default=OUT_DIR)
+    ap.add_argument("--swaps", type=Path, help="JSON: symbol -> SwapSpec fields (section 6a)")
+    ap.add_argument("--end", type=pd.Timestamp, help="UTC; default and maximum: the lockbox start")
+    args = ap.parse_args(argv)
+    end = pd.Timestamp(splits().lockbox_start, tz="UTC")
+    if args.end is not None:
+        end = args.end.tz_localize("UTC") if args.end.tzinfo is None else args.end
+    try:
+        commit, head = frozen_commit()
+    except ValueError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    symbols = args.symbol or sorted(s for s in instruments() if (args.store / s).is_dir())
+    swaps = load_swaps(args.swaps)
+    tables = counts.run(symbols, START, end, args.store, swaps)
+    args.out.mkdir(parents=True, exist_ok=True)
+    md = render(tables, commit, head, symbols, START, end, swaps, date.today())
+    (args.out / "counts.md").write_text(md, encoding="utf-8", newline="\n")
+    tables["by_year"].to_csv(args.out / "counts_by_year.csv", index=False, lineterminator="\n")
+    print(f"wrote {args.out / 'counts.md'} ({len(symbols)} instruments, {len(signal_specs())}"
+          " strategies)")  # fmt: skip
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "count":
+        return count(argv[1:])
+    print(__doc__, file=sys.stderr)
+    return 2
